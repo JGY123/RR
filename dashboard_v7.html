@@ -626,9 +626,9 @@ function rFCorr(fcorr){
   if(!fcorr)return'';
   let hdr=FACS.map(f=>`<th class="r" style="font-size:9px">${f.slice(0,4)}</th>`).join('');
   let rows=FACS.map(f1=>{
-    let cells=FACS.map(f2=>{
-      let v=fcorr[f1]?fcorr[f1][f2]:0;
-      let bg=f1===f2?'var(--pri)':v>0.5?'rgba(16,185,129,.3)':v<-0.5?'rgba(239,68,68,.3)':'transparent';
+    let cells=FACS.map(fn=>{
+      let v=fcorr[f1]?fcorr[f1][fn]:0;
+      let bg=f1===fn?'var(--pri)':v>0.5?'rgba(16,185,129,.3)':v<-0.5?'rgba(239,68,68,.3)':'transparent';
       return`<td class="r" style="background:${bg};font-size:10px">${f2(v,2)}</td>`;
     }).join('');
     return`<tr><td style="font-weight:600;font-size:10px">${f1}</td>${cells}</tr>`;

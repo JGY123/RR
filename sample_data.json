@@ -1,0 +1,240 @@
+{
+  "generated": "2026-03-05T18:00:00",
+  "version": "2.0",
+  "freq": "monthly",
+  "strategies": {
+    "ISC": {
+      "id": "ISC",
+      "name": "International Small Cap",
+      "benchmark": "MSCI World ex USA Small Cap",
+      "sum": {
+        "te": 5.93,
+        "as": 95.01,
+        "beta": 0.971,
+        "h": 47,
+        "bh": 2224,
+        "sr": 71.67,
+        "cash": 3.41
+      },
+      "sectors": [
+        {"n": "Industrials", "p": 28.28, "b": 14.05, "a": 14.23, "s": 4.85, "t": 5.24},
+        {"n": "Financials", "p": 15.47, "b": 18.35, "a": -2.88, "s": 13.49, "t": 2.65},
+        {"n": "Info Technology", "p": 12.84, "b": 11.06, "a": 1.78, "s": 4.06, "t": 10.6},
+        {"n": "Consumer Disc.", "p": 9.05, "b": 9.4, "a": -0.35, "s": 10.1, "t": 11.35},
+        {"n": "Materials", "p": 8.44, "b": 7.18, "a": 1.26, "s": 12.33, "t": 1.12},
+        {"n": "Health Care", "p": 7.61, "b": 9.4, "a": -1.79, "s": 5.76, "t": 3.95},
+        {"n": "Consumer Staples", "p": 5.91, "b": 7.67, "a": -1.76, "s": 2.3, "t": 2.84},
+        {"n": "Energy", "p": 5.69, "b": 4.21, "a": 1.48, "s": 12.3, "t": 14.86},
+        {"n": "Utilities", "p": 2.07, "b": 6.95, "a": -4.88, "s": 6.3, "t": 11.49},
+        {"n": "Real Estate", "p": 0.66, "b": 5.24, "a": -4.58, "s": 13.06, "t": 11.97},
+        {"n": "Comm Services", "p": 3.41, "b": 5.09, "a": -1.68, "s": 4.19, "t": 6.5}
+      ],
+      "regions": [
+        {"n": "Far East", "p": 32.16, "b": 36.47, "a": -4.31},
+        {"n": "English", "p": 16.2, "b": 11.56, "a": 4.64},
+        {"n": "Northern Europe", "p": 15.27, "b": 13.73, "a": 1.54},
+        {"n": "Western Europe", "p": 15.74, "b": 17.42, "a": -1.68},
+        {"n": "Southern Europe", "p": 10.53, "b": 8.87, "a": 1.66},
+        {"n": "Emerging Market", "p": 3.3, "b": 5.22, "a": -1.92},
+        {"n": "Australia - New Zealand", "p": 0.34, "b": 6.46, "a": -6.12}
+      ],
+      "countries": [
+        {"n": "Japan", "p": 29.33, "b": 33.76, "a": -4.43},
+        {"n": "United Kingdom", "p": 12.98, "b": 8.28, "a": 4.7},
+        {"n": "Italy", "p": 9.11, "b": 4.37, "a": 4.74},
+        {"n": "Germany", "p": 7.69, "b": 6.55, "a": 1.14},
+        {"n": "Israel", "p": 5.46, "b": 1.06, "a": 4.4},
+        {"n": "Canada", "p": 4.63, "b": 3.54, "a": 1.09},
+        {"n": "France", "p": 3.42, "b": 5.89, "a": -2.47},
+        {"n": "Brazil", "p": 3.75, "b": 0.31, "a": 3.44},
+        {"n": "Sweden", "p": 3.31, "b": 2.79, "a": 0.52},
+        {"n": "Austria", "p": 2.83, "b": 0.92, "a": 1.91},
+        {"n": "Denmark", "p": 2.53, "b": 1.49, "a": 1.04},
+        {"n": "Switzerland", "p": 2.12, "b": 3.53, "a": -1.41},
+        {"n": "Belgium", "p": 2.17, "b": 1.8, "a": 0.37},
+        {"n": "Australia", "p": 0.8, "b": 4.44, "a": -3.64},
+        {"n": "Hong Kong", "p": 2.0, "b": 2.02, "a": -0.02},
+        {"n": "Spain", "p": 1.18, "b": 0.09, "a": 1.09}
+      ],
+      "factors": [
+        {"n": "Momentum", "a": 0.111, "bm": 0, "e": 0.111, "c": 2.88, "ret": 3.99, "imp": 0.47},
+        {"n": "Value", "a": -0.614, "bm": 0, "e": -0.614, "c": 1.43, "ret": 1.6, "imp": -0.69},
+        {"n": "Size", "a": 0.107, "bm": 0, "e": 0.107, "c": 4.92, "ret": 1.21, "imp": 0.19},
+        {"n": "Volatility", "a": 0.248, "bm": 0, "e": 0.248, "c": 5.22, "ret": -0.83, "imp": -0.04},
+        {"n": "Quality", "a": 0.271, "bm": 0, "e": 0.271, "c": 1.76, "ret": 0.75, "imp": 0.48},
+        {"n": "Growth", "a": 0.548, "bm": 0, "e": 0.548, "c": 0.86, "ret": -1.8, "imp": -1.13},
+        {"n": "Liquidity", "a": 0.081, "bm": 0, "e": 0.081, "c": 1.62, "ret": 0.8, "imp": 0.11}
+      ],
+      "hold": [
+        {"t": "ABCD", "n": "Apex Manufacturing Co", "sec": "Industrials", "co": "Japan", "p": 3.34, "b": 0.06, "a": 3.33, "mcr": 1.71, "tr": 9.56, "r": 4, "over": 5.0, "rev": 5.0, "val": 3.0, "qual": 3.0, "mom": 1.0, "stab": 2.0},
+        {"t": "EFGH", "n": "Beacon Financial Ltd", "sec": "Financials", "co": "United Kingdom", "p": 3.05, "b": 0.04, "a": 3.05, "mcr": 4.76, "tr": 1.25, "r": 2, "over": 4.0, "rev": 4.0, "val": 5.0, "qual": 3.0, "mom": 2.0, "stab": 4.0},
+        {"t": "IJKL", "n": "Cerulean Tech Corp", "sec": "Info Technology", "co": "Germany", "p": 2.93, "b": 0.24, "a": 2.76, "mcr": 5.05, "tr": 9.66, "r": 3, "over": 5.0, "rev": 4.0, "val": 4.0, "qual": 4.0, "mom": 3.0, "stab": 4.0},
+        {"t": "MNOP", "n": "Delphi Healthcare AS", "sec": "Health Care", "co": "Denmark", "p": 2.89, "b": 0.08, "a": 2.82, "mcr": 1.41, "tr": 2.63, "r": 2, "over": 2.0, "rev": 3.0, "val": 2.0, "qual": 2.0, "mom": 1.0, "stab": 4.0},
+        {"t": "QRST", "n": "Emerald Foods PLC", "sec": "Consumer Staples", "co": "United Kingdom", "p": 2.81, "b": 0.03, "a": 2.85, "mcr": 2.98, "tr": 5.38, "r": 2, "over": 2.0, "rev": 3.0, "val": 3.0, "qual": 4.0, "mom": 5.0, "stab": 3.0},
+        {"t": "UVWX", "n": "Forge Industries SpA", "sec": "Consumer Disc.", "co": "Italy", "p": 2.86, "b": 0.07, "a": 2.74, "mcr": 1.93, "tr": 1.42, "r": 2, "over": 3.0, "rev": 3.0, "val": 3.0, "qual": 4.0, "mom": 4.0, "stab": 5.0},
+        {"t": "YZ01", "n": "Granite Energy SA", "sec": "Energy", "co": "France", "p": 2.71, "b": 0.16, "a": 2.65, "mcr": 6.5, "tr": 1.54, "r": 1, "over": 2.0, "rev": 3.0, "val": 2.0, "qual": 2.0, "mom": 3.0, "stab": 4.0},
+        {"t": "AB02", "n": "Helix Precision KK", "sec": "Industrials", "co": "Japan", "p": 2.69, "b": 0.05, "a": 2.66, "mcr": 4.63, "tr": 0.98, "r": 1, "over": 5.0, "rev": 4.0, "val": 5.0, "qual": 5.0, "mom": 4.0, "stab": 2.0},
+        {"t": "CD03", "n": "Ironside Materials AG", "sec": "Materials", "co": "Austria", "p": 2.7, "b": 0.09, "a": 2.62, "mcr": 7.27, "tr": 2.06, "r": 3, "over": 1.0, "rev": 3.0, "val": 5.0, "qual": 4.0, "mom": 2.0, "stab": 4.0},
+        {"t": "EF04", "n": "Jade Semiconductor", "sec": "Info Technology", "co": "Israel", "p": 2.63, "b": 0.03, "a": 2.57, "mcr": 1.92, "tr": 2.57, "r": 3, "over": 1.0, "rev": 4.0, "val": 1.0, "qual": 2.0, "mom": 1.0, "stab": 3.0},
+        {"t": "GH05", "n": "Kestrel Aviation SA", "sec": "Industrials", "co": "Brazil", "p": 2.53, "b": 0.02, "a": 2.6, "mcr": 1.1, "tr": 2.27, "r": 3, "over": 3.0, "rev": 4.0, "val": 2.0, "qual": 1.0, "mom": 5.0, "stab": 2.0},
+        {"t": "IJ06", "n": "Lumina Biotech AB", "sec": "Health Care", "co": "Sweden", "p": 2.41, "b": 0.04, "a": 2.44, "mcr": 5.43, "tr": 5.87, "r": 4, "over": 2.0, "rev": 2.0, "val": 4.0, "qual": 2.0, "mom": 2.0, "stab": 2.0},
+        {"t": "KL07", "n": "Meridian Transport", "sec": "Industrials", "co": "Canada", "p": 2.39, "b": 0.09, "a": 2.33, "mcr": 7.52, "tr": 0.59, "r": 2, "over": 3.0, "rev": 3.0, "val": 1.0, "qual": 3.0, "mom": 3.0, "stab": 2.0},
+        {"t": "MN08", "n": "Nordic Digital ASA", "sec": "Info Technology", "co": "Sweden", "p": 2.38, "b": 0.06, "a": 2.26, "mcr": 3.27, "tr": 2.0, "r": 2, "over": 4.0, "rev": 4.0, "val": 3.0, "qual": 5.0, "mom": 4.0, "stab": 1.0},
+        {"t": "OP09", "n": "Orion Glass Co Ltd", "sec": "Materials", "co": "Japan", "p": 2.26, "b": 0.08, "a": 2.23, "mcr": 7.54, "tr": 1.78, "r": 3, "over": 1.0, "rev": 1.0, "val": 3.0, "qual": 2.0, "mom": 3.0, "stab": 4.0},
+        {"t": "QR10", "n": "Pacific Holdings Ltd", "sec": "Financials", "co": "Hong Kong", "p": 2.24, "b": 0.05, "a": 2.16, "mcr": 4.29, "tr": 2.89, "r": 2, "over": 5.0, "rev": 1.0, "val": 4.0, "qual": 4.0, "mom": 1.0, "stab": 2.0},
+        {"t": "ST11", "n": "Quartz Engineering", "sec": "Industrials", "co": "Germany", "p": 2.13, "b": 0.04, "a": 2.05, "mcr": 6.06, "tr": 5.74, "r": 2, "over": 3.0, "rev": 1.0, "val": 1.0, "qual": 5.0, "mom": 5.0, "stab": 3.0},
+        {"t": "UV12", "n": "Redstone Bank Ltd", "sec": "Financials", "co": "Israel", "p": 2.12, "b": 0.08, "a": 2.01, "mcr": 1.46, "tr": 3.43, "r": 2, "over": 5.0, "rev": 4.0, "val": 4.0, "qual": 5.0, "mom": 2.0, "stab": 2.0},
+        {"t": "WX13", "n": "Summit Logistics NV", "sec": "Industrials", "co": "Belgium", "p": 1.97, "b": 0.03, "a": 1.97, "mcr": 7.06, "tr": 9.75, "r": 1, "over": 4.0, "rev": 5.0, "val": 2.0, "qual": 2.0, "mom": 4.0, "stab": 2.0},
+        {"t": "YZ14", "n": "Titan Electronics KK", "sec": "Info Technology", "co": "Japan", "p": 1.9, "b": 0.03, "a": 1.98, "mcr": 2.99, "tr": 9.34, "r": 3, "over": 4.0, "rev": 4.0, "val": 4.0, "qual": 2.0, "mom": 4.0, "stab": 1.0},
+        {"t": "AB15", "n": "Unity Pharma PLC", "sec": "Health Care", "co": "United Kingdom", "p": 1.97, "b": 0.11, "a": 1.78, "mcr": 6.62, "tr": 4.87, "r": 1, "over": 2.0, "rev": 4.0, "val": 2.0, "qual": 1.0, "mom": 2.0, "stab": 2.0},
+        {"t": "CD16", "n": "Vertex Solar AG", "sec": "Energy", "co": "Germany", "p": 1.89, "b": 0.03, "a": 1.76, "mcr": 5.31, "tr": 4.3, "r": 1, "over": 5.0, "rev": 3.0, "val": 5.0, "qual": 1.0, "mom": 5.0, "stab": 2.0},
+        {"t": "EF17", "n": "Westland REIT", "sec": "Real Estate", "co": "Australia", "p": 1.61, "b": 0.15, "a": 1.55, "mcr": 3.09, "tr": 7.97, "r": 2, "over": 3.0, "rev": 5.0, "val": 1.0, "qual": 5.0, "mom": 2.0, "stab": 1.0},
+        {"t": "GH18", "n": "Xenon Chemicals SA", "sec": "Materials", "co": "France", "p": 1.5, "b": 0.1, "a": 1.52, "mcr": 4.54, "tr": 7.33, "r": 3, "over": 4.0, "rev": 4.0, "val": 2.0, "qual": 1.0, "mom": 4.0, "stab": 2.0},
+        {"t": "IJ19", "n": "Yamato Systems KK", "sec": "Industrials", "co": "Japan", "p": 1.63, "b": 0.01, "a": 1.57, "mcr": 7.25, "tr": 5.32, "r": 2, "over": 4.0, "rev": 2.0, "val": 4.0, "qual": 3.0, "mom": 2.0, "stab": 4.0},
+        {"t": "KL20", "n": "Zenith Insurance SE", "sec": "Financials", "co": "Italy", "p": 1.54, "b": 0.08, "a": 1.44, "mcr": 5.12, "tr": 3.36, "r": 3, "over": 3.0, "rev": 1.0, "val": 2.0, "qual": 3.0, "mom": 3.0, "stab": 4.0},
+        {"t": "MN21", "n": "Alpha Defense Ltd", "sec": "Industrials", "co": "Israel", "p": 1.49, "b": 0.03, "a": 1.48, "mcr": 4.33, "tr": 8.04, "r": 3, "over": 5.0, "rev": 4.0, "val": 4.0, "qual": 2.0, "mom": 4.0, "stab": 3.0},
+        {"t": "OP22", "n": "Bravo Telecom SpA", "sec": "Comm Services", "co": "Italy", "p": 1.46, "b": 0.05, "a": 1.36, "mcr": 5.55, "tr": 2.63, "r": 1, "over": 2.0, "rev": 1.0, "val": 2.0, "qual": 3.0, "mom": 4.0, "stab": 1.0},
+        {"t": "QR23", "n": "Cedar Resources", "sec": "Materials", "co": "Canada", "p": 1.38, "b": 0.05, "a": 1.25, "mcr": 5.89, "tr": 4.15, "r": 3, "over": 3.0, "rev": 2.0, "val": 4.0, "qual": 5.0, "mom": 4.0, "stab": 5.0},
+        {"t": "ST24", "n": "Delta Robotics AB", "sec": "Info Technology", "co": "Sweden", "p": 1.24, "b": 0.04, "a": 1.27, "mcr": 5.72, "tr": 4.91, "r": 3, "over": 3.0, "rev": 5.0, "val": 1.0, "qual": 2.0, "mom": 3.0, "stab": 3.0},
+        {"t": "UV25", "n": "Echo Services GmbH", "sec": "Industrials", "co": "Austria", "p": 1.22, "b": 0.04, "a": 1.18, "mcr": 7.19, "tr": 6.32, "r": 3, "over": 4.0, "rev": 3.0, "val": 4.0, "qual": 3.0, "mom": 5.0, "stab": 4.0},
+        {"t": "WX26", "n": "Falcon Micro Ltd", "sec": "Info Technology", "co": "Israel", "p": 1.19, "b": 0.02, "a": 1.19, "mcr": 6.8, "tr": 3.13, "r": 3, "over": 4.0, "rev": 3.0, "val": 2.0, "qual": 3.0, "mom": 4.0, "stab": 2.0},
+        {"t": "YZ27", "n": "Globe Retail PLC", "sec": "Consumer Disc.", "co": "United Kingdom", "p": 1.06, "b": 0.08, "a": 1.02, "mcr": 1.54, "tr": 2.7, "r": 2, "over": 4.0, "rev": 4.0, "val": 1.0, "qual": 3.0, "mom": 3.0, "stab": 3.0},
+        {"t": "AB28", "n": "Harbor Shipping AS", "sec": "Industrials", "co": "Denmark", "p": 1.17, "b": 0.03, "a": 1.07, "mcr": 6.27, "tr": 9.49, "r": 2, "over": 1.0, "rev": 5.0, "val": 3.0, "qual": 3.0, "mom": 5.0, "stab": 2.0},
+        {"t": "CD29", "n": "Indigo Textiles", "sec": "Consumer Disc.", "co": "Italy", "p": 1.07, "b": 0.04, "a": 0.98, "mcr": 3.64, "tr": 7.6, "r": 3, "over": 3.0, "rev": 3.0, "val": 2.0, "qual": 2.0, "mom": 3.0, "stab": 1.0},
+        {"t": "EF30", "n": "Jupiter Mining SA", "sec": "Materials", "co": "Brazil", "p": 1.03, "b": 0.02, "a": 1.0, "mcr": 5.93, "tr": 8.48, "r": 2, "over": 5.0, "rev": 5.0, "val": 3.0, "qual": 5.0, "mom": 3.0, "stab": 4.0},
+        {"t": "GH31", "n": "Keystone Brands AG", "sec": "Consumer Staples", "co": "Switzerland", "p": 0.93, "b": 0.13, "a": 0.76, "mcr": 3.96, "tr": 0.98, "r": 1, "over": 3.0, "rev": 2.0, "val": 2.0, "qual": 4.0, "mom": 3.0, "stab": 4.0},
+        {"t": "IJ32", "n": "Lancer Instruments", "sec": "Industrials", "co": "Japan", "p": 0.85, "b": 0.0, "a": 0.88, "mcr": 0.65, "tr": 5.62, "r": 3, "over": 5.0, "rev": 2.0, "val": 4.0, "qual": 4.0, "mom": 4.0, "stab": 4.0},
+        {"t": "KL33", "n": "Magellan Power NV", "sec": "Utilities", "co": "Belgium", "p": 0.74, "b": 0.03, "a": 0.75, "mcr": 1.64, "tr": 1.7, "r": 2, "over": 4.0, "rev": 3.0, "val": 2.0, "qual": 4.0, "mom": 4.0, "stab": 2.0},
+        {"t": "MN34", "n": "Nova Diagnostics", "sec": "Health Care", "co": "France", "p": 0.89, "b": 0.04, "a": 0.77, "mcr": 6.33, "tr": 2.06, "r": 4, "over": 2.0, "rev": 3.0, "val": 5.0, "qual": 3.0, "mom": 5.0, "stab": 3.0},
+        {"t": "OP35", "n": "Omega Capital SE", "sec": "Financials", "co": "Spain", "p": 0.62, "b": 0.07, "a": 0.64, "mcr": 5.2, "tr": 1.47, "r": 2, "over": 4.0, "rev": 4.0, "val": 3.0, "qual": 1.0, "mom": 5.0, "stab": 4.0},
+        {"t": "QR36", "n": "Prism Photonics KK", "sec": "Info Technology", "co": "Japan", "p": 0.71, "b": 0.02, "a": 0.69, "mcr": 1.02, "tr": 6.65, "r": 2, "over": 1.0, "rev": 3.0, "val": 3.0, "qual": 3.0, "mom": 2.0, "stab": 5.0},
+        {"t": "ST37", "n": "Quantum Alloys Ltd", "sec": "Materials", "co": "United Kingdom", "p": 0.64, "b": 0.04, "a": 0.56, "mcr": 6.0, "tr": 9.67, "r": 3, "over": 2.0, "rev": 4.0, "val": 3.0, "qual": 3.0, "mom": 3.0, "stab": 4.0},
+        {"t": "UV38", "n": "Ridge Automation", "sec": "Industrials", "co": "Canada", "p": 0.56, "b": 0.01, "a": 0.58, "mcr": 7.51, "tr": 3.15, "r": 2, "over": 3.0, "rev": 4.0, "val": 3.0, "qual": 4.0, "mom": 2.0, "stab": 3.0},
+        {"t": "WX39", "n": "Stellar Foods AB", "sec": "Consumer Staples", "co": "Sweden", "p": 0.44, "b": 0.02, "a": 0.47, "mcr": 6.48, "tr": 3.73, "r": 2, "over": 5.0, "rev": 4.0, "val": 2.0, "qual": 1.0, "mom": 5.0, "stab": 1.0},
+        {"t": "YZ40", "n": "Trident Group PLC", "sec": "Financials", "co": "United Kingdom", "p": 0.5, "b": 0.08, "a": 0.43, "mcr": 5.68, "tr": 6.64, "r": 3, "over": 3.0, "rev": 4.0, "val": 1.0, "qual": 2.0, "mom": 4.0, "stab": 2.0},
+        {"t": "AB41", "n": "Vanguard Sensors", "sec": "Info Technology", "co": "Israel", "p": 0.37, "b": 0.02, "a": 0.39, "mcr": 3.08, "tr": 9.97, "r": 4, "over": 3.0, "rev": 2.0, "val": 3.0, "qual": 2.0, "mom": 2.0, "stab": 4.0}
+      ],
+      "ranks": [
+        {"r": 1, "l": "R1 (Best)", "ct": 7, "p": 13.62, "a": 12.94},
+        {"r": 2, "l": "R2", "ct": 19, "p": 32.44, "a": 31.61},
+        {"r": 3, "l": "R3", "ct": 17, "p": 27.57, "a": 26.94},
+        {"r": 4, "l": "R4", "ct": 4, "p": 7.01, "a": 6.93},
+        {"r": 5, "l": "R5 (Worst)", "ct": 0, "p": 0, "a": 0}
+      ],
+      "chars": [
+        {"m": "Market Cap ($B)", "p": 5241.77, "b": 4542.88},
+        {"m": "ROE (%)", "p": 25.61, "b": 13.76},
+        {"m": "FCF Yield (%)", "p": 3.79, "b": 5.46},
+        {"m": "Div Yield (%)", "p": 1.22, "b": 2.55},
+        {"m": "EPS Growth 3Y (%)", "p": 25.6, "b": 9.98},
+        {"m": "Op. Margin (%)", "p": 23.88, "b": 25.0}
+      ],
+      "groups": [
+        {"g": "CYCLICALS", "sg": "HARD CYCLICAL", "p": 13.89, "b": 12.08, "a": 1.81},
+        {"g": "CYCLICALS", "sg": "GROWTH CYCLICAL", "p": 12.91, "b": 12.12, "a": 0.79},
+        {"g": "CYCLICALS", "sg": "SOFT CYCLICAL", "p": 6.38, "b": 8.14, "a": -1.76},
+        {"g": "DEFENSIVE", "sg": "DEFENSIVE", "p": 11.16, "b": 9.88, "a": 1.28},
+        {"g": "GROWTH", "sg": "GROWTH", "p": 12.83, "b": 7.91, "a": 4.92},
+        {"g": "COMMODITY", "sg": "COMMODITY", "p": 10.26, "b": 9.31, "a": 0.95},
+        {"g": "RATE SENSITIVE", "sg": "BANKS", "p": 5.02, "b": 8.85, "a": -3.83},
+        {"g": "RATE SENSITIVE", "sg": "BOND PROXIES", "p": 1.48, "b": 6.02, "a": -4.54}
+      ],
+      "unowned": [
+        {"t": "UNH01", "n": "Phantom Mining Corp", "reg": "Far East", "b": 0.59, "tr": -1.25},
+        {"t": "UNH02", "n": "Shadow Electronics KK", "reg": "Far East", "b": 0.46, "tr": -1.11},
+        {"t": "UNH03", "n": "Ghost Automotive AG", "reg": "Western Europe", "b": 0.21, "tr": -0.66},
+        {"t": "UNH04", "n": "Wraith Industries Ltd", "reg": "English", "b": 0.27, "tr": -0.39},
+        {"t": "UNH05", "n": "Shade Financial SE", "reg": "Northern Europe", "b": 0.13, "tr": -0.29},
+        {"t": "UNH06", "n": "Mist Telecom SA", "reg": "Southern Europe", "b": 0.24, "tr": -0.47},
+        {"t": "UNH07", "n": "Fog Chemicals PLC", "reg": "English", "b": 0.12, "tr": -0.28},
+        {"t": "UNH08", "n": "Vapor Holdings KK", "reg": "Far East", "b": 0.14, "tr": -0.22}
+      ],
+      "hist": {
+        "summary": [
+          {"d": "2023-04-30", "te": 5.57, "as": 96.78, "beta": 0.974, "h": 47, "sr": 70.78},
+          {"d": "2023-07-31", "te": 5.29, "as": 96.24, "beta": 0.99, "h": 45, "sr": 69.02},
+          {"d": "2023-10-31", "te": 5.76, "as": 96.63, "beta": 1.0, "h": 45, "sr": 71.55},
+          {"d": "2024-01-31", "te": 5.51, "as": 96.12, "beta": 1.002, "h": 49, "sr": 71.42},
+          {"d": "2024-04-30", "te": 5.78, "as": 96.86, "beta": 0.993, "h": 44, "sr": 75.0},
+          {"d": "2024-07-31", "te": 5.91, "as": 96.97, "beta": 0.982, "h": 47, "sr": 71.0},
+          {"d": "2024-10-31", "te": 5.66, "as": 96.32, "beta": 1.027, "h": 47, "sr": 74.19},
+          {"d": "2025-01-31", "te": 5.55, "as": 96.27, "beta": 0.952, "h": 46, "sr": 71.63},
+          {"d": "2025-04-30", "te": 6.16, "as": 96.91, "beta": 0.982, "h": 44, "sr": 72.89},
+          {"d": "2025-07-31", "te": 5.72, "as": 96.6, "beta": 1.007, "h": 45, "sr": 74.18},
+          {"d": "2025-10-31", "te": 6.05, "as": 96.87, "beta": 0.98, "h": 47, "sr": 71.07},
+          {"d": "2026-01-31", "te": 6.3, "as": 96.79, "beta": 0.999, "h": 45, "sr": 71.97}
+        ],
+        "sectors": {
+          "Industrials": [
+            {"d": "2023-04-30", "p": 29.66, "b": 13.65, "a": 16.01},
+            {"d": "2024-01-31", "p": 30.1, "b": 14.04, "a": 16.06},
+            {"d": "2024-07-31", "p": 27.13, "b": 13.72, "a": 13.41},
+            {"d": "2025-01-31", "p": 27.61, "b": 14.16, "a": 13.45},
+            {"d": "2025-07-31", "p": 28.24, "b": 14.1, "a": 14.14},
+            {"d": "2026-02-28", "p": 30.13, "b": 13.57, "a": 16.56}
+          ],
+          "Financials": [
+            {"d": "2023-04-30", "p": 16.79, "b": 18.25, "a": -1.46},
+            {"d": "2024-01-31", "p": 16.46, "b": 17.99, "a": -1.53},
+            {"d": "2024-07-31", "p": 14.72, "b": 18.64, "a": -3.92},
+            {"d": "2025-01-31", "p": 17.32, "b": 18.32, "a": -1.0},
+            {"d": "2025-07-31", "p": 15.34, "b": 17.97, "a": -2.63},
+            {"d": "2026-02-28", "p": 16.38, "b": 18.55, "a": -2.17}
+          ]
+        },
+        "regions": {
+          "Far East": [
+            {"d": "2023-04-30", "p": 31.78, "b": 36.42, "a": -4.64},
+            {"d": "2024-01-31", "p": 31.96, "b": 36.11, "a": -4.15},
+            {"d": "2024-07-31", "p": 30.8, "b": 36.97, "a": -6.17},
+            {"d": "2025-01-31", "p": 32.55, "b": 36.81, "a": -4.26},
+            {"d": "2025-07-31", "p": 32.41, "b": 36.33, "a": -3.92},
+            {"d": "2026-02-28", "p": 32.57, "b": 36.37, "a": -3.8}
+          ],
+          "English": [
+            {"d": "2023-04-30", "p": 14.36, "b": 11.1, "a": 3.26},
+            {"d": "2024-01-31", "p": 16.1, "b": 11.08, "a": 5.02},
+            {"d": "2024-07-31", "p": 18.09, "b": 11.64, "a": 6.45},
+            {"d": "2025-01-31", "p": 17.0, "b": 11.25, "a": 5.75},
+            {"d": "2025-07-31", "p": 16.27, "b": 11.62, "a": 4.65},
+            {"d": "2026-02-28", "p": 15.32, "b": 11.36, "a": 3.96}
+          ]
+        },
+        "factors": {
+          "Momentum": [
+            {"d": "2023-04-30", "e": 0.111, "b": 0, "a": 0.111},
+            {"d": "2024-01-31", "e": 0.061, "b": 0, "a": 0.061},
+            {"d": "2024-07-31", "e": 0.06, "b": 0, "a": 0.06},
+            {"d": "2025-01-31", "e": 0.141, "b": 0, "a": 0.141},
+            {"d": "2025-07-31", "e": 0.152, "b": 0, "a": 0.152},
+            {"d": "2026-02-28", "e": 0.195, "b": 0, "a": 0.195}
+          ],
+          "Value": [
+            {"d": "2023-04-30", "e": -0.668, "b": 0, "a": -0.668},
+            {"d": "2024-01-31", "e": -0.582, "b": 0, "a": -0.582},
+            {"d": "2024-07-31", "e": -0.55, "b": 0, "a": -0.55},
+            {"d": "2025-01-31", "e": -0.544, "b": 0, "a": -0.544},
+            {"d": "2025-07-31", "e": -0.576, "b": 0, "a": -0.576},
+            {"d": "2026-02-28", "e": -0.591, "b": 0, "a": -0.591}
+          ],
+          "Growth": [
+            {"d": "2023-04-30", "e": 0.568, "b": 0, "a": 0.568},
+            {"d": "2024-01-31", "e": 0.61, "b": 0, "a": 0.61},
+            {"d": "2024-07-31", "e": 0.481, "b": 0, "a": 0.481},
+            {"d": "2025-01-31", "e": 0.514, "b": 0, "a": 0.514},
+            {"d": "2025-07-31", "e": 0.56, "b": 0, "a": 0.56},
+            {"d": "2026-02-28", "e": 0.648, "b": 0, "a": 0.648}
+          ],
+          "Quality": [
+            {"d": "2023-04-30", "e": 0.292, "b": 0, "a": 0.292},
+            {"d": "2024-01-31", "e": 0.327, "b": 0, "a": 0.327},
+            {"d": "2024-07-31", "e": 0.211, "b": 0, "a": 0.211},
+            {"d": "2025-01-31", "e": 0.36, "b": 0, "a": 0.36},
+            {"d": "2025-07-31", "e": 0.33, "b": 0, "a": 0.33},
+            {"d": "2026-02-28", "e": 0.261, "b": 0, "a": 0.261}
+          ]
+        }
+      }
+    }
+  }
+}

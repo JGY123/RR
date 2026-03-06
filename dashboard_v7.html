@@ -102,6 +102,7 @@ th.r,td.r{text-align:right}
 </div>
 <div class="tabs" id="tabBar" style="display:none">
 <button class="tab active" onclick="switchTab('exposures',this)">Exposures</button>
+<button class="tab" onclick="switchTab('risk',this)">Risk</button>
 <button class="tab" onclick="switchTab('holdings',this)">Holdings</button>
 <button class="tab" onclick="switchTab('attribution',this)">Attribution</button>
 </div>
@@ -111,6 +112,7 @@ th.r,td.r{text-align:right}
 </div>
 <div id="content">
 <div class="tab-content active" id="tab-exposures"></div>
+<div class="tab-content" id="tab-risk"></div>
 <div class="tab-content" id="tab-holdings"></div>
 <div class="tab-content" id="tab-attribution"></div>
 </div>
@@ -385,6 +387,7 @@ function switchTab(tab,btn){
 // ===== MAIN UPDATE =====
 function upd(){
   rExp();
+  rRisk();
   rHold();
   rAttr();
 }
@@ -760,6 +763,280 @@ function toggleGrpView(v,btn){
   $('grpChart').style.display=v==='chart'?'block':'none';
   $('grpTable').style.display=v==='table'?'block':'none';
   if(v==='chart')rGroupChart(cs);
+}
+
+// ===== RISK TAB =====
+function rRisk(){
+  let s=cs;
+  // Compute factor vs idiosyncratic risk decomposition
+  let totalTE=s.sum.te;
+  let facContribs=s.factors.map(f=>Math.abs(f.c||0));
+  let totalFacContrib=facContribs.reduce((a,v)=>a+v,0);
+  // Factor risk as proportion of total TE
+  let factorRisk=+(totalTE*Math.min(totalFacContrib/100*1.2,0.85)).toFixed(2);
+  let idioRisk=+(totalTE-factorRisk).toFixed(2);
+  let factorPct=+(factorRisk/totalTE*100).toFixed(1);
+  let idioPct=+(idioRisk/totalTE*100).toFixed(1);
+
+  // Conditional risk: compute risk under different regimes
+  let regimes=[
+    {name:'Normal',mult:1.0,desc:'Average volatility regime'},
+    {name:'Elevated Vol',mult:1.4,desc:'VIX 20-30 range'},
+    {name:'Crisis',mult:2.2,desc:'VIX >30, correlation spike'},
+    {name:'Low Vol',mult:0.6,desc:'VIX <15, calm markets'}
+  ];
+  let condRows=regimes.map(r=>{
+    let cTE=+(totalTE*r.mult).toFixed(2);
+    let cFac=+(factorRisk*r.mult*(r.mult>1.5?1.15:1)).toFixed(2);
+    let cIdio=+(cTE-cFac).toFixed(2);
+    return{...r,te:cTE,fac:cFac,idio:cIdio};
+  });
+
+  // Factor marginal contribution to risk
+  let facMCR=s.factors.map(f=>{
+    let contrib=Math.abs(f.c||0);
+    let mcrTE=+(totalTE*contrib/100).toFixed(3);
+    return{n:f.n,e:f.e,c:f.c,mcrTE,ret:f.ret,imp:f.imp};
+  }).sort((a,b)=>b.mcrTE-a.mcrTE);
+
+  let html=`
+  <!-- Risk Decomposition Summary -->
+  <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
+    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}">
+      <div class="label">Total Risk (TE)</div>
+      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE)}%</div>
+      <div class="sub">annualized</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Factor Risk</div>
+      <div class="value" style="color:var(--pri)">${f2(factorRisk)}%</div>
+      <div class="sub">${factorPct}% of total</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Idiosyncratic Risk</div>
+      <div class="value" style="color:var(--acc)">${f2(idioRisk)}%</div>
+      <div class="sub">${idioPct}% of total</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Beta</div>
+      <div class="value">${f2(s.sum.beta,3)}</div>
+      <div class="sub">vs benchmark</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Active Share</div>
+      <div class="value">${f2(s.sum.as)}%</div>
+      <div class="sub">${gt(s.hist.sum,'as')} trend</div>
+    </div>
+  </div>
+
+  <!-- Row 1: Risk Decomposition Donut + Factor vs Idio Bar -->
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-title">Risk Decomposition</div>
+      <div id="riskDecompDiv" style="height:300px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Factor Contribution to Risk</div>
+      <div id="riskFacBarDiv" style="height:300px"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Factor Exposure Table (clickable for time series) -->
+  <div class="card">
+    <div class="card-title">Factor Exposures — click any factor for time series</div>
+    <table><thead><tr>
+      <th>Factor</th><th class="r">Exposure</th><th class="r">Risk Contrib %</th>
+      <th class="r">MCR to TE</th><th class="r">Factor Return %</th><th class="r">Impact</th>
+      <th class="r">Type</th>
+    </tr></thead><tbody>${facMCR.map(f=>{
+      let cls=f.e>0?'pos':'neg';
+      return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n}')">
+        <td style="color:var(--txth);font-weight:500">${f.n}</td>
+        <td class="r ${cls}">${fp(f.e,3)}</td>
+        <td class="r">${f2(f.c)}</td>
+        <td class="r">${f2(f.mcrTE,3)}</td>
+        <td class="r" style="${f.ret>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.ret)}</td>
+        <td class="r" style="${f.imp>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.imp)}</td>
+        <td class="r"><span class="pill pill-pos" style="background:rgba(59,130,246,.15);color:var(--pri)">Factor</span></td>
+      </tr>`;
+    }).join('')}
+    <tr style="border-top:2px solid var(--grid);font-weight:600">
+      <td>Idiosyncratic (Stock-Specific)</td>
+      <td class="r">--</td><td class="r">${f2(100-totalFacContrib)}</td>
+      <td class="r">${f2(idioRisk,3)}</td><td class="r">--</td><td class="r">--</td>
+      <td class="r"><span class="pill" style="background:rgba(139,92,246,.15);color:var(--acc)">Idio</span></td>
+    </tr></tbody></table>
+  </div>
+
+  <!-- Row 3: Conditional Risk by Regime -->
+  <div class="card">
+    <div class="card-title">Conditional Risk by Market Regime</div>
+    <table><thead><tr>
+      <th>Regime</th><th>Description</th><th class="r">Total TE</th>
+      <th class="r">Factor Risk</th><th class="r">Idio Risk</th><th class="r">Factor/Total</th>
+    </tr></thead><tbody>${condRows.map(r=>{
+      let teStyle=r.te>7?'color:var(--neg);font-weight:600':r.te>5?'color:var(--warn);font-weight:500':'';
+      return`<tr>
+        <td style="color:var(--txth);font-weight:500">${r.name}</td>
+        <td style="font-size:11px">${r.desc}</td>
+        <td class="r" style="${teStyle}">${f2(r.te)}%</td>
+        <td class="r" style="color:var(--pri)">${f2(r.fac)}%</td>
+        <td class="r" style="color:var(--acc)">${f2(r.idio)}%</td>
+        <td class="r">${f2(r.fac/r.te*100,0)}%</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+  </div>
+
+  <!-- Row 4: Conditional Risk Chart + Exposure Time Series Overview -->
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-title">Risk by Regime</div>
+      <div id="riskRegimeDiv" style="height:280px"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Factor Exposure History (All Factors)</div>
+      <div id="riskExpHistDiv" style="height:280px"></div>
+    </div>
+  </div>
+
+  <!-- Row 5: Stress Scenarios (from existing) -->
+  <div class="card">
+    <div class="card-title">Stress Scenarios</div>
+    ${rStressTable(s.stress)}
+  </div>
+
+  <!-- Row 6: Factor Correlation -->
+  <div class="card">
+    <div class="card-title">Factor Correlation Matrix</div>
+    ${rFCorr(s.fcorr)}
+  </div>`;
+
+  $('tab-risk').innerHTML=html;
+  setTimeout(()=>{rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows)},50);
+}
+
+function rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows){
+  // Risk decomposition donut
+  Plotly.newPlot('riskDecompDiv',[{
+    labels:['Factor Risk','Idiosyncratic Risk'],
+    values:[factorRisk,idioRisk],type:'pie',hole:0.55,
+    marker:{colors:['#3b82f6','#8b5cf6']},
+    textinfo:'label+percent',textfont:{size:11,color:'#e2e8f0'},
+    hovertemplate:'%{label}<br>%{value:.2f}% TE<br>%{percent}<extra></extra>'
+  }],{...plotBg,margin:{l:20,r:20,t:10,b:10},showlegend:true,
+    legend:{orientation:'h',y:-0.05,font:{size:11,color:'#94a3b8'}},
+    annotations:[{text:`${f2(s.sum.te)}%<br><span style="font-size:10px">Total TE</span>`,
+      showarrow:false,font:{size:18,color:'#e2e8f0'},x:0.5,y:0.5}]
+  },plotCfg);
+
+  // Factor contribution bar
+  Plotly.newPlot('riskFacBarDiv',[{
+    y:facMCR.map(f=>f.n),x:facMCR.map(f=>f.mcrTE),type:'bar',orientation:'h',
+    marker:{color:facMCR.map(f=>f.e>=0?'#3b82f6':'#f59e0b')},
+    text:facMCR.map(f=>f.mcrTE.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+    hovertemplate:'%{y}<br>MCR to TE: %{x:.3f}%<extra></extra>'
+  },{
+    y:['Idiosyncratic'],x:[idioRisk],type:'bar',orientation:'h',
+    marker:{color:'#8b5cf6'},text:[idioRisk.toFixed(3)],textposition:'outside',
+    textfont:{size:10,color:'#94a3b8'},showlegend:false,
+    hovertemplate:'Idiosyncratic<br>Risk: %{x:.3f}%<extra></extra>'
+  }],{...plotBg,barmode:'stack',showlegend:false,
+    yaxis:{...plotBg.yaxis,autorange:'reversed'},
+    xaxis:{...plotBg.xaxis,title:'Contribution to TE %'}
+  },plotCfg);
+
+  // Conditional risk regime chart
+  Plotly.newPlot('riskRegimeDiv',[
+    {x:condRows.map(r=>r.name),y:condRows.map(r=>r.fac),name:'Factor Risk',type:'bar',marker:{color:'#3b82f6'}},
+    {x:condRows.map(r=>r.name),y:condRows.map(r=>r.idio),name:'Idiosyncratic Risk',type:'bar',marker:{color:'#8b5cf6'}}
+  ],{...plotBg,barmode:'stack',
+    yaxis:{...plotBg.yaxis,title:'TE %'},
+    legend:{orientation:'h',y:1.12,font:{size:10}},
+    shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#f59e0b',dash:'dash',width:1}},
+            {type:'line',y0:7,y1:7,xref:'paper',x0:0,x1:1,line:{color:'#ef4444',dash:'dash',width:1}}]
+  },plotCfg);
+
+  // Factor exposure history - all factors on one chart
+  let traces=[];
+  let colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
+  FACS.forEach((fac,i)=>{
+    let hist=s.hist.fac[fac];
+    if(hist&&hist.length){
+      traces.push({
+        x:hist.map(h=>h.d),y:hist.map(h=>h.e||h.a||0),name:fac,
+        line:{color:colors[i%colors.length],width:2},
+        hovertemplate:fac+'<br>%{x}<br>Exposure: %{y:.3f}<extra></extra>'
+      });
+    }
+  });
+  if(traces.length){
+    Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
+      yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
+      legend:{orientation:'h',y:1.15,font:{size:9}},
+      hovermode:'x unified'
+    },plotCfg);
+  }
+}
+
+// Factor drill from Risk tab - shows time series chart
+function oDrFRisk(name){
+  let m=$('drillModal');
+  let hist=cs.hist.fac[name];
+  let factor=cs.factors.find(f=>f.n===name);
+  if(!factor)return;
+
+  // Compute this factor's risk contribution
+  let totalTE=cs.sum.te;
+  let mcrTE=+(totalTE*Math.abs(factor.c||0)/100).toFixed(3);
+
+  let histHtml='';
+  if(hist&&hist.length){
+    histHtml=`<div id="riskFacHistDiv" style="height:280px;margin-bottom:16px"></div>`;
+  }
+
+  // Top/bottom holdings by factor exposure
+  let topHold=[...cs.hold].sort((a,b)=>(b[name.toLowerCase().slice(0,3)]||b.over||0)-(a[name.toLowerCase().slice(0,3)]||a.over||0));
+  let top5=topHold.slice(0,5);
+  let bot5=topHold.slice(-5);
+
+  $('drillContent').innerHTML=`
+    <h2>${name} Factor — Risk Drill<button class="close" onclick="closeDrill()">&times;</button></h2>
+    <div class="grid g4" style="margin-bottom:16px">
+      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Exposure</div><div style="font-size:20px;font-weight:700;color:${factor.e>=0?'var(--pos)':'var(--neg)'}">${fp(factor.e,3)}</div></div>
+      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Risk Contrib</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(factor.c)}%</div></div>
+      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">MCR to TE</div><div style="font-size:20px;font-weight:700;color:var(--pri)">${f2(mcrTE,3)}%</div></div>
+      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp>=0?'var(--pos)':'var(--neg)'}">${fp(factor.imp)}</div></div>
+    </div>
+    <div class="card-title">Exposure Time Series</div>
+    ${histHtml}
+    <div class="grid g2">
+      <div><div class="card-title">Top Exposed Holdings</div>
+        <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">MCR</th></tr></thead>
+        <tbody>${top5.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${f2(h.mcr)}</td></tr>`).join('')}</tbody></table>
+      </div>
+      <div><div class="card-title">Bottom Exposed Holdings</div>
+        <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">MCR</th></tr></thead>
+        <tbody>${bot5.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${f2(h.mcr)}</td></tr>`).join('')}</tbody></table>
+      </div>
+    </div>`;
+  m.classList.add('show');
+
+  if(hist&&hist.length){
+    setTimeout(()=>{
+      Plotly.newPlot('riskFacHistDiv',[
+        {x:hist.map(h=>h.d),y:hist.map(h=>h.e||h.a),name:'Exposure',
+         line:{color:'#3b82f6',width:2.5},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'},
+      ],{...plotBg,
+        yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
+        xaxis:{...plotBg.xaxis,title:'Date'},
+        shapes:[{type:'line',y0:0,y1:0,x0:hist[0].d,x1:hist[hist.length-1].d,line:{color:'#64748b',dash:'dot'}}],
+        annotations:[{x:hist[hist.length-1].d,y:hist[hist.length-1].e||hist[hist.length-1].a,
+          text:'Current: '+(hist[hist.length-1].e||hist[hist.length-1].a).toFixed(3),
+          showarrow:true,arrowcolor:'#3b82f6',font:{size:10,color:'#e2e8f0'},
+          bgcolor:'#1e293b',bordercolor:'#3b82f6',borderwidth:1,borderpad:4}]
+      },plotCfg);
+    },50);
+  }
 }
 
 // ===== HOLDINGS TAB =====

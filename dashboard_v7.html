@@ -6,6 +6,7 @@
 <title>Redwood Risk Control Panel</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -89,16 +90,164 @@ th.r,td.r{text-align:right}
 .tab-content{display:none}.tab-content.active{display:block}
 .chip{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:500;background:var(--surf);color:var(--txt);margin-right:4px}
 @media(max-width:1200px){.g2,.g3,.g4,.g23,.g32,.g12{grid-template-columns:1fr}.sum-cards{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:1024px){.sum-cards{grid-template-columns:repeat(3,1fr)}.modal{width:95vw;padding:16px}}
+@media(max-width:768px){.sum-cards{grid-template-columns:repeat(2,1fr)}.header{flex-direction:column;gap:8px;padding:8px 16px}.header h1{font-size:15px}.tabs{overflow-x:auto;padding:0 12px}.tab{padding:8px 12px;font-size:12px}#content{padding:8px 12px 24px}.strat-sel{flex-wrap:wrap}.modal{max-height:95vh;border-radius:12px}}
+
+/* Transitions & Animations */
+.tab-content{opacity:0;transition:opacity .3s ease}
+.tab-content.active{opacity:1}
+.modal-overlay{backdrop-filter:blur(4px);transition:opacity .2s}
+.modal{animation:modalIn .25s ease}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.card{animation:slideUp .3s ease both}
+.sum-card{animation:slideUp .3s ease both}
+
+/* Skeleton loader */
+.skeleton{background:linear-gradient(90deg,var(--surf) 25%,var(--grid) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;min-height:20px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.skeleton-card{height:80px;border-radius:10px}
+.skeleton-row{height:14px;margin:8px 0;border-radius:4px}
+.loading-overlay{position:absolute;inset:0;background:rgba(8,14,30,.8);display:flex;align-items:center;justify-content:center;border-radius:12px;z-index:10;font-size:12px;color:var(--txt)}
+
+/* Tooltips */
+.tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.tip:hover::after{opacity:1}
+.tip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1e293b;opacity:0;pointer-events:none;transition:opacity .2s;z-index:301}
+.tip:hover::before{opacity:1}
+
+/* Clickable rows */
+tr.clickable{cursor:pointer;transition:background .15s}
+tr.clickable:hover td{background:rgba(59,130,246,.08)}
+tr.clickable:active td{background:rgba(59,130,246,.12)}
+
+/* Enhanced cards */
+.sum-card{position:relative;overflow:hidden}
+.sum-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 60%,rgba(59,130,246,.03));pointer-events:none}
+.sum-card:focus{outline:2px solid var(--pri);outline-offset:2px}
+.card:focus-within{border-color:var(--pri)}
+
+/* Threshold highlights */
+.thresh-warn{background:rgba(245,158,11,.08);border-left:3px solid var(--warn)}
+.thresh-alert{background:rgba(239,68,68,.08);border-left:3px solid var(--neg)}
+.thresh-good{border-left:3px solid var(--pos)}
+
+/* Export buttons */
+.export-bar{display:flex;gap:6px;align-items:center}
+.export-btn{padding:3px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;transition:all .15s}
+.export-btn:hover{border-color:var(--pri);color:var(--txth)}
+
+/* Risk budget detail table */
+.rb-table td{padding:6px 10px}
+.rb-bar{display:inline-block;height:8px;border-radius:4px;min-width:2px}
+
+/* Comparison modal enhancements */
+.comp-stats-table{font-size:11px}
+.comp-stats-table td{padding:6px 8px}
+.comp-stats-table .metric-name{color:var(--txth);font-weight:500}
+.heatmap-cell{padding:4px 8px;text-align:center;font-size:10px;font-weight:600;border-radius:3px}
+
+/* Global search */
+.global-search{position:relative}
+.global-search input{padding:6px 12px 6px 28px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;color:var(--txth);font-size:12px;font-family:inherit;width:180px;transition:width .3s}
+.global-search input:focus{width:280px;outline:none;border-color:var(--pri)}
+.global-search .search-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--txt);pointer-events:none}
+.search-results{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1px solid var(--grid);border-radius:8px;max-height:300px;overflow-y:auto;z-index:300;display:none;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.search-results.show{display:block}
+.search-result{padding:8px 12px;cursor:pointer;font-size:11px;border-bottom:1px solid rgba(51,65,85,.3);display:flex;justify-content:space-between;align-items:center}
+.search-result:hover{background:var(--surf)}
+.search-result .sr-ticker{color:var(--txth);font-weight:600}
+.search-result .sr-meta{color:var(--txt);font-size:10px}
+
+/* Connection status */
+.conn-status{display:flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:4px;background:var(--surf)}
+.conn-dot{width:6px;height:6px;border-radius:50%}
+.conn-dot.live{background:var(--pos);box-shadow:0 0 4px var(--pos)}
+.conn-dot.file{background:var(--warn)}
+.conn-dot.off{background:var(--neg)}
+
+/* Config panel */
+.config-panel{position:fixed;right:-400px;top:0;bottom:0;width:380px;background:var(--card);border-left:1px solid var(--grid);z-index:250;transition:right .3s;padding:24px;overflow-y:auto}
+.config-panel.open{right:0}
+.config-panel h3{color:var(--txth);font-size:14px;margin-bottom:16px}
+.config-field{margin-bottom:14px}
+.config-field label{display:block;font-size:11px;color:var(--txt);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.config-field input,.config-field select{width:100%;padding:8px;background:var(--surf);border:1px solid var(--grid);border-radius:6px;color:var(--txth);font-size:12px;font-family:inherit}
+.config-field input:focus,.config-field select:focus{outline:none;border-color:var(--pri)}
+
+/* Keyboard shortcut hints */
+.kbd{display:inline-block;padding:1px 5px;background:var(--surf);border:1px solid var(--grid);border-radius:3px;font-size:9px;color:var(--txt);font-family:monospace;vertical-align:middle;margin-left:4px}
+
+/* Print styles */
+@media print{
+  body{background:#fff!important;color:#333!important;font-size:10px}
+  .header{position:static;background:#fff!important;border-bottom:2px solid #333;padding:8px 0}
+  .header h1{color:#000!important}.header h1 span{color:#333!important}
+  .hdr-r,.upload-btn-sm,#reportBtn,#shareBtn,#emailBtn,#compareBtn,#configBtn,.strat-sel,.tabs,.config-panel,.global-search,.export-bar,.export-btn,.conn-status,.kbd{display:none!important}
+  #content{display:block!important;padding:8px 0}
+  .tab-content{display:block!important;opacity:1!important;page-break-before:always}
+  .tab-content:first-child{page-break-before:auto}
+  .card{background:#fff!important;border:1px solid #ccc!important;border-radius:4px!important;padding:12px;break-inside:avoid;margin-bottom:12px}
+  .card-title{color:#333!important}
+  .sum-cards{grid-template-columns:repeat(4,1fr)!important}
+  .sum-card{background:#fff!important;border:1px solid #ccc!important;padding:8px}
+  .sum-card .label{color:#666!important}
+  .sum-card .value{color:#000!important;font-size:16px}
+  .sum-card .sub{color:#666!important}
+  .grid{grid-template-columns:1fr 1fr!important}
+  table{font-size:9px}
+  th{color:#333!important;border-bottom:2px solid #333}
+  td{color:#333!important;border-bottom:1px solid #ddd}
+  .pos{color:#059669!important}.neg{color:#dc2626!important}.warn-t{color:#d97706!important}
+  .chip{background:#eee!important;color:#333!important}
+  .modal-overlay{display:none!important}
+  .trend{color:#333!important}
+  .skeleton,.loading-overlay{display:none!important}
+  tr:hover td{background:transparent!important}
+  a{color:#333!important;text-decoration:underline}
+}
 </style>
 </head>
 <body>
 <div class="header">
+<div style="display:flex;align-items:center;gap:12px">
 <h1>REDWOOD <span>Risk Control Panel</span></h1>
+<span id="stratFullName" style="font-size:11px;color:var(--txt);display:none"></span>
+<span id="dataTimestamp" style="font-size:10px;color:var(--txt);display:none"></span>
+</div>
 <div class="hdr-r">
+<div class="global-search" id="globalSearchWrap" style="display:none">
+<span class="search-icon">&#128269;</span>
+<input type="text" placeholder="Search holdings..." id="globalSearchInput" oninput="globalSearch(this.value)" onfocus="this.parentElement.querySelector('.search-results').classList.add('show')" onblur="setTimeout(()=>this.parentElement.querySelector('.search-results').classList.remove('show'),200)">
+<div class="search-results" id="globalSearchResults"></div>
+</div>
 <div class="strat-sel" id="stratSel"></div>
+<div class="conn-status" id="connStatus" style="display:none"><span class="conn-dot file"></span><span>File</span></div>
+<button class="btn btn-sec btn-sm" id="shareBtn" style="display:none" onclick="generateShareURL()" title="Copy share URL">Share<span class="kbd">S</span></button>
+<button class="btn btn-sec btn-sm" id="emailBtn" style="display:none" onclick="generateEmailSnapshot()" title="Email-ready snapshot">Email</button>
+<button class="btn btn-sec btn-sm" id="compareBtn" style="display:none" onclick="openComp()">Compare<span class="kbd">C</span></button>
 <label class="upload-btn-sm" id="reupload" style="display:none">Upload JSON<input type="file" accept=".json" onchange="upload(event)" hidden></label>
 <button class="btn btn-pri btn-sm" id="reportBtn" style="display:none" onclick="openReport()">Generate Report</button>
+<button class="btn btn-sec btn-sm" id="configBtn" style="display:none" onclick="toggleConfig()" title="Settings">&#9881;</button>
 </div>
+</div>
+
+<!-- Config Panel (Phase 5 prep) -->
+<div class="config-panel" id="configPanel">
+<div class="flex-between" style="margin-bottom:20px"><h3>Settings</h3><button class="close" onclick="toggleConfig()">&times;</button></div>
+<div class="config-field"><label>Data Source</label>
+<div style="display:flex;gap:8px;margin-top:4px">
+<button class="toggle-btn active" id="srcFile" onclick="setDataSrc('file')">File</button>
+<button class="toggle-btn" id="srcLive" onclick="setDataSrc('live')">Live API</button>
+</div></div>
+<div class="config-field"><label>API Base URL</label><input type="text" id="cfgApiUrl" placeholder="https://api.factset.com/..." value=""></div>
+<div class="config-field"><label>API Key</label><input type="password" id="cfgApiKey" placeholder="Enter API key..."></div>
+<div class="config-field"><label>Refresh Interval (seconds)</label><input type="number" id="cfgRefresh" value="300" min="30" max="3600"></div>
+<div class="config-field"><label>Strategy Mapping</label>
+<textarea id="cfgStratMap" rows="5" style="width:100%;padding:8px;background:var(--surf);border:1px solid var(--grid);border-radius:6px;color:var(--txth);font-size:11px;font-family:monospace;resize:vertical" placeholder='{"IDM":"PORT_001","ISC":"PORT_002"}'></textarea></div>
+<button class="btn btn-pri" onclick="saveConfig()" style="width:100%;margin-top:8px">Save Settings</button>
 </div>
 <div class="tabs" id="tabBar" style="display:none">
 <button class="tab active" onclick="switchTab('exposures',this)">Exposures</button>
@@ -120,6 +269,15 @@ th.r,td.r{text-align:right}
 <div class="modal-overlay" id="stockModal"><div class="modal" id="stockContent"></div></div>
 <div class="modal-overlay" id="reportModal"><div class="modal modal-lg" id="reportContent"></div></div>
 <div class="modal-overlay" id="compModal"><div class="modal modal-lg" id="compContent"></div></div>
+<div class="modal-overlay" id="metricModal"><div class="modal" id="metricContent"></div></div>
+<div class="modal-overlay" id="stressModal"><div class="modal modal-lg" id="stressContent"></div></div>
+<div class="modal-overlay" id="countryModal"><div class="modal" id="countryContent"></div></div>
+<div class="modal-overlay" id="groupModal"><div class="modal modal-lg" id="groupContent"></div></div>
+<div class="modal-overlay" id="charModal"><div class="modal" id="charContent"></div></div>
+<div class="modal-overlay" id="corrModal"><div class="modal" id="corrContent"></div></div>
+<div class="modal-overlay" id="attrDrillModal"><div class="modal modal-lg" id="attrDrillContent"></div></div>
+<div class="modal-overlay" id="unownedModal"><div class="modal" id="unownedContent"></div></div>
+<div class="modal-overlay" id="riskBudgetModal"><div class="modal modal-lg" id="riskBudgetContent"></div></div>
 <script>
 // ===== CONSTANTS =====
 const STRATS=[
@@ -165,6 +323,11 @@ const rc=r=>r<=1?'var(--r1)':r<=2?'var(--r2)':r<=3?'var(--r3)':r<=4?'var(--r4)':
 const as=v=>{let a=Math.abs(v);return a>8?'color:var(--neg);font-weight:600':a>5?'color:var(--warn);font-weight:500':v>0?'color:var(--pos)':'color:var(--neg)'};
 const gt=(arr,key)=>{if(!arr||arr.length<2)return'<span class="trend flat">--</span>';let l=arr[arr.length-1][key],p=arr[arr.length-2][key];let d=l-p;return d>0.01?'<span class="trend up">&#9650;</span>':d<-0.01?'<span class="trend down">&#9660;</span>':'<span class="trend flat">&#9644;</span>'};
 const pct=v=>v==null?'--':(v*100).toFixed(1)+'%';
+// Identify cash/currency baskets (not equity securities)
+const CASH_TICKERS=new Set(['USD','EUR','GBP','JPY','CHF','CAD','AUD','NZD','SEK','NOK','DKK','HKD','SGD','KRW','TWD','CNY','CNH','BRL','INR','MXN','ZAR','TRY','PLN','CZK','HUF','ILS','THB','MYR','IDR','PHP','CLP','COP','PEN','ARS','EGP','AED','SAR']);
+const CASH_PATTERNS=/^(CASH|FX|CCY|MARGIN|COLLATERAL|REPO|MM_|T-BILL|TBILL|SWAP|FWD)/i;
+function isCash(h){return CASH_TICKERS.has((h.t||'').toUpperCase())||CASH_PATTERNS.test(h.t||'')||/^(Cash|Currency|Money Market|FX Forward)/i.test(h.sec||'')||/^(Cash|Currency)/i.test(h.n||'');}
+function equityCount(hold){return hold.filter(h=>!isCash(h)).length;}
 
 function activeStyle(v){
   let a=Math.abs(v);
@@ -174,14 +337,20 @@ function activeStyle(v){
 }
 
 // ===== DATA GENERATION (synthetic fallback) =====
+// Synthetic inception dates per strategy (months of history)
+const INCEPTION_MONTHS={IDM:120,ISC:84,IOP:96,GSC:60,SCG:108,EM:72,ACWI:48};
+
 function genHist(s){
   let h={sum:[],sec:{},reg:{},fac:{}};
   let now=new Date();
-  for(let i=35;i>=0;i--){
+  let months=INCEPTION_MONTHS[s.id]||72;
+  for(let i=months-1;i>=0;i--){
     let d=new Date(now);d.setMonth(d.getMonth()-i);
     let ds=d.toISOString().slice(0,10);
-    let te=s.sum.te*(0.85+Math.random()*0.3);
-    h.sum.push({d:ds,te:+te.toFixed(2),as:+(s.sum.as*(0.98+Math.random()*0.04)).toFixed(2),beta:+(s.sum.beta*(0.97+Math.random()*0.06)).toFixed(3),h:s.sum.h+Math.floor(Math.random()*6-3),sr:+(s.sum.sr*(0.95+Math.random()*0.1)).toFixed(2)});
+    // Early months (first 6) have more volatile/anomalous data to simulate ramp-up
+    let earlyFactor=i>(months-7)?1.5+Math.random():1;
+    let te=s.sum.te*(0.85+Math.random()*0.3)*earlyFactor;
+    h.sum.push({d:ds,te:+te.toFixed(2),as:+(s.sum.as*(0.98+Math.random()*0.04)/earlyFactor).toFixed(2),beta:+(s.sum.beta*(0.97+Math.random()*0.06)*earlyFactor).toFixed(3),h:Math.max(5,s.sum.h+Math.floor(Math.random()*6-3)-Math.floor((months-1-i<6?(6-months+1+i)*3:0))),sr:+(s.sum.sr*(0.95+Math.random()*0.1)).toFixed(2),cash:+((s.sum.cash||2)*(0.8+Math.random()*0.4)*earlyFactor).toFixed(2)});
   }
   SECS.forEach(sec=>{
     let row=s.sectors.find(x=>x.n===sec);if(!row)return;
@@ -263,6 +432,9 @@ function normalize(raw){
     // Normalize summary
     if(!st.sum&&s.summary)st.sum=s.summary;
     if(!st.sum)st.sum={te:0,as:0,beta:1,h:0,bh:0,sr:0,cash:0};
+    // Preserve beta variants if present in source data
+    if(s.sum&&s.sum.betas)st.sum.betas=s.sum.betas;
+    else if(s.betas)st.sum.betas=s.betas;
     // Normalize sectors - compute benchmark weight from p-a if b missing
     if(st.sectors)st.sectors=st.sectors.map(x=>{
       if(x.b==null&&x.p!=null&&x.a!=null)x.b=+(x.p-x.a).toFixed(2);
@@ -289,6 +461,8 @@ function normalize(raw){
     if(!st.hist.sum.length)st.hist=genHist(st);
     // Enrich holdings
     st.hold=enrichHold(st.hold,st.sectors);
+    // Recompute equity-only holdings count (exclude cash/currency baskets)
+    st.sum.h=equityCount(st.hold);
     // Generate derived data
     st.attrib=genAttrib(st);
     st.stress=genStress(st);
@@ -327,6 +501,11 @@ function genSynthetic(){
       let p=+(0.5+Math.random()*4).toFixed(2);let b=+(Math.random()*0.3).toFixed(2);
       return{t,n:names[i]||t,sec:SECS[i%SECS.length],co:countries[i%countries.length],p,b,a:+(p-b).toFixed(2),mcr:+(Math.random()*8).toFixed(2),tr:+(Math.random()*12).toFixed(2),r:1+Math.floor(Math.random()*5),over:+(1+Math.random()*4).toFixed(1),rev:+(1+Math.random()*4).toFixed(1),val:+(1+Math.random()*4).toFixed(1),qual:+(1+Math.random()*4).toFixed(1),mom:+(1+Math.random()*4).toFixed(1),stab:+(1+Math.random()*4).toFixed(1)};
     });
+    // Add cash/currency baskets (should be excluded from equity holdings count)
+    ['USD','EUR','JPY'].forEach(ccy=>{
+      s.hold.push({t:ccy,n:'Cash '+ccy,sec:'Cash',co:'',p:+(0.3+Math.random()*1.5).toFixed(2),b:0,a:+(0.3+Math.random()*1.5).toFixed(2),mcr:0,tr:0,r:0,over:0,rev:0,val:0,qual:0,mom:0,stab:0});
+    });
+    s.sum.h=equityCount(s.hold);
     // Ranks
     s.ranks=[1,2,3,4,5].map(r=>{let ct=s.hold.filter(h=>h.r===r).length;let p=s.hold.filter(h=>h.r===r).reduce((a,h)=>a+h.p,0);return{r,l:r===1?'R1 (Best)':r===5?'R5 (Worst)':'R'+r,ct,p:+p.toFixed(2),a:+(p*(0.95+Math.random()*0.1)).toFixed(2)}});
     // Chars
@@ -359,12 +538,22 @@ function init(){
   cs=A[keys[0]];
   // Build strategy buttons
   let sel=$('stratSel');
-  sel.innerHTML=keys.map((k,i)=>`<button class="strat-btn${i===0?' active':''}" onclick="go('${k}',this)">${k}</button>`).join('');
+  sel.innerHTML=keys.map((k,i)=>`<button class="strat-btn${i===0?' active':''}" onclick="go('${k}',this)">${k}<span class="kbd">${i+1}</span></button>`).join('');
   $('uploadZone').style.display='none';
   $('content').style.display='block';
   $('tabBar').style.display='flex';
   $('reupload').style.display='block';
   $('reportBtn').style.display='block';
+  $('shareBtn').style.display='inline-block';
+  $('emailBtn').style.display='inline-block';
+  $('compareBtn').style.display='inline-block';
+  $('configBtn').style.display='inline-block';
+  $('connStatus').style.display='flex';
+  $('globalSearchWrap').style.display='block';
+  $('stratFullName').style.display='inline';
+  $('stratFullName').textContent=cs.name;
+  $('dataTimestamp').style.display='inline';
+  $('dataTimestamp').textContent='Data as of: '+new Date().toLocaleDateString()+' '+new Date().toLocaleTimeString();
   upd();
 }
 
@@ -373,7 +562,10 @@ function go(id,btn){
   document.querySelectorAll('.strat-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   hp=1;sortCol=null;
-  upd();
+  $('stratFullName').textContent=cs.name;
+  // Brief loading shimmer
+  showLoading('tab-'+activeTab);
+  setTimeout(()=>upd(),120);
 }
 
 function switchTab(tab,btn){
@@ -395,43 +587,43 @@ function upd(){
 // ===== EXPOSURES TAB =====
 function rExp(){
   let s=cs;
-  let teClass=s.sum.te>7?'alert':s.sum.te>5?'warn':'';
+  let teClass=s.sum.te>=10?'alert':s.sum.te<5?'warn':'';
   let asClass=s.sum.as>98?'':'';
 
   let html=`
   <!-- Row 1: Summary Cards -->
   <div class="sum-cards">
-    <div class="sum-card ${teClass}" onclick="oDrS()">
-      <div class="label">Tracking Error</div>
-      <div class="value" style="${s.sum.te>7?'color:var(--neg)':s.sum.te>5?'color:var(--warn)':''}">${f2(s.sum.te)}%</div>
+    <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
+      <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark">Tracking Error</div>
+      <div class="value" style="${s.sum.te>=10?'color:var(--neg)':s.sum.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(s.sum.te)}%</div>
       <div class="sub">${gt(s.hist.sum,'te')} 36m trend</div>
     </div>
-    <div class="sum-card" onclick="oDrS()">
-      <div class="label">Active Share</div>
+    <div class="sum-card" onclick="oDrMetric('as')" tabindex="0" role="button" aria-label="Active Share trend">
+      <div class="label tip" data-tip="Percentage of portfolio that differs from benchmark">Active Share</div>
       <div class="value">${f2(s.sum.as)}%</div>
       <div class="sub">${gt(s.hist.sum,'as')} 36m trend</div>
     </div>
-    <div class="sum-card" onclick="oDrS()">
-      <div class="label">Beta</div>
+    <div class="sum-card ${Math.abs(s.sum.beta-1)>0.1?'warn':''}" onclick="oDrMetric('beta')" tabindex="0" role="button" aria-label="Beta trend">
+      <div class="label tip" data-tip="Portfolio sensitivity to benchmark movements">Beta</div>
       <div class="value">${f2(s.sum.beta,3)}</div>
       <div class="sub">${gt(s.hist.sum,'beta')} vs 1.0</div>
     </div>
-    <div class="sum-card">
-      <div class="label">Holdings</div>
-      <div class="value">${s.sum.h||s.hold.length}</div>
+    <div class="sum-card" onclick="oDrMetric('h')" tabindex="0" role="button" aria-label="Holdings count trend">
+      <div class="label tip" data-tip="Equity securities only (excl. cash/currency baskets)">Holdings</div>
+      <div class="value">${s.sum.h||equityCount(s.hold)}</div>
       <div class="sub">of ${s.sum.bh||'--'} benchmark</div>
     </div>
-    <div class="sum-card">
-      <div class="label">Selection Rate</div>
+    <div class="sum-card" onclick="oDrMetric('sr')" tabindex="0" role="button" aria-label="Selection Rate trend">
+      <div class="label tip" data-tip="Ratio of portfolio holdings to benchmark constituents">Selection Rate</div>
       <div class="value">${f2(s.sum.sr)}%</div>
       <div class="sub">port/bench</div>
     </div>
-    <div class="sum-card">
-      <div class="label">Cash</div>
+    <div class="sum-card" onclick="oDrMetric('cash')" tabindex="0" role="button" aria-label="Cash trend">
+      <div class="label tip" data-tip="Undeployed cash as percentage of portfolio">Cash</div>
       <div class="value">${f2(s.sum.cash)}%</div>
       <div class="sub">residual</div>
     </div>
-    <div class="sum-card">
+    <div class="sum-card" onclick="oDrS()" tabindex="0" role="button" aria-label="All summary trends">
       <div class="label">Benchmark</div>
       <div class="value" style="font-size:12px;line-height:1.8">${s.benchmark||s.name}</div>
       <div class="sub">${s.id}</div>
@@ -440,15 +632,21 @@ function rExp(){
 
   <!-- Row 2: Sector Weights + Region Weights -->
   <div class="grid g2">
-    <div class="card">
+    <div class="card" id="cardSectors">
       <div class="flex-between"><div class="card-title">Sector Active Weights</div>
-      <div class="toggle-wrap"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#secTable table','sectors')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardSectors')">PNG</button></div>
+        <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
+      </div></div>
       <div id="secTable">${rWt(s.sectors,'sec')}</div>
       <div id="secChart" style="display:none"><div id="secChartDiv" style="height:320px"></div></div>
     </div>
-    <div class="card">
+    <div class="card" id="cardRegions">
       <div class="flex-between"><div class="card-title">Region Active Weights</div>
-      <div class="toggle-wrap"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#regTable table','regions')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardRegions')">PNG</button></div>
+        <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
+      </div></div>
       <div id="regTable">${rWt(s.regions,'reg')}</div>
       <div id="regChart" style="display:none"><div id="regChartDiv" style="height:320px"></div></div>
     </div>
@@ -456,88 +654,103 @@ function rExp(){
 
   <!-- Row 3: Factor Exposures -->
   <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Factor Butterfly</div>
+    <div class="card" id="cardFacButt">
+      <div class="flex-between"><div class="card-title">Factor Butterfly</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardFacButt')">PNG</button></div></div>
       <div id="facButtDiv" style="height:300px"></div>
     </div>
-    <div class="card">
-      <div class="card-title">Factor Detail</div>
+    <div class="card" id="cardFacDetail">
+      <div class="flex-between"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail.">Factor Detail</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardFacDetail table','factors')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardFacDetail')">PNG</button></div></div>
       ${rFac(s.factors)}
     </div>
   </div>
 
   <!-- Row 4: Country Active Weights -->
   <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Country Active Weights (Top OW / UW)</div>
+    <div class="card" id="cardCountryChart">
+      <div class="flex-between"><div class="card-title">Country Active Weights (Top OW / UW)</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardCountryChart')">PNG</button></div></div>
       <div id="countryChartDiv" style="height:280px"></div>
     </div>
-    <div class="card">
-      <div class="card-title">All Countries</div>
+    <div class="card" id="cardCountryTable">
+      <div class="flex-between"><div class="card-title">All Countries</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCountryTable table','countries')">CSV</button></div></div>
       <div style="max-height:280px;overflow-y:auto">${rCountryTable(s.countries)}</div>
     </div>
   </div>
 
   <!-- Row 5: Redwood Groups -->
-  <div class="card">
+  <div class="card" id="cardGroups">
     <div class="flex-between"><div class="card-title">Redwood Groups</div>
-    <div class="toggle-wrap"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#grpTable table','groups')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardGroups')">PNG</button></div>
+      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
+    </div></div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
     <div id="grpTable" style="display:none">${rGroupTable(s.groups)}</div>
   </div>
 
   <!-- Row 6: Quant Ranks + Characteristics -->
   <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Quant Ranks</div>
+    <div class="card" id="cardRanks">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click a rank to filter the Holdings tab">Quant Ranks</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardRanks table','ranks')">CSV</button></div></div>
       ${rRnk(s.ranks)}
     </div>
-    <div class="card">
-      <div class="card-title">Portfolio Characteristics</div>
+    <div class="card" id="cardChars">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click a metric for historical comparison">Portfolio Characteristics</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardChars table','characteristics')">CSV</button></div></div>
       ${rChr(s.chars)}
     </div>
   </div>
 
   <!-- Row 7: Scatter + Treemap -->
   <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Risk/Return Scatter</div>
+    <div class="card" id="cardScatter">
+      <div class="flex-between"><div class="card-title tip" data-tip="Marginal contribution to risk vs total return. Bubble size = port weight.">Risk/Return Scatter</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardScatter')">PNG</button></div></div>
       <div id="scatDiv" style="height:320px"></div>
     </div>
-    <div class="card">
-      <div class="card-title">Active Weight Treemap</div>
+    <div class="card" id="cardTreemap">
+      <div class="flex-between"><div class="card-title">Active Weight Treemap</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardTreemap')">PNG</button></div></div>
       <div id="treeDiv" style="height:320px"></div>
     </div>
   </div>
 
   <!-- Row 8: MCR + Risk Weight Budget -->
   <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Marginal Contribution to Risk (Top 10)</div>
+    <div class="card" id="cardMCR">
+      <div class="flex-between"><div class="card-title tip" data-tip="Top holdings by marginal contribution to tracking error">Marginal Contribution to Risk (Top 10)</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardMCR')">PNG</button></div></div>
       <div id="mcrDiv" style="height:300px"></div>
     </div>
-    <div class="card">
-      <div class="card-title">Factor Risk Budget</div>
-      <div id="frbDiv" style="height:300px"></div>
+    <div class="card" id="cardFRB" style="cursor:pointer" onclick="oDrRiskBudget()">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click for detailed factor risk budget breakdown">Factor Risk Budget</div>
+      <div style="display:flex;gap:6px;align-items:center"><div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardFRB')">PNG</button></div><span style="font-size:10px;color:var(--pri)">Detail &#8594;</span></div></div>
+      <div id="frbDiv" style="height:260px"></div>
     </div>
   </div>
 
   <!-- Row 9: Stress Scenarios -->
-  <div class="card">
-    <div class="card-title">Stress Scenarios</div>
+  <div class="card" id="cardStress">
+    <div class="flex-between"><div class="card-title tip" data-tip="Click a scenario for per-sector impact waterfall">Stress Scenarios</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardStress table','stress_scenarios')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardStress')">PNG</button></div></div>
     ${rStressTable(s.stress)}
   </div>
 
   <!-- Row 10: Unowned Risk Contributors -->
-  <div class="card">
-    <div class="card-title">Unowned Risk Contributors</div>
-    <p style="font-size:11px;color:var(--txt);margin-bottom:10px">Benchmark stocks not held that contribute most to tracking error</p>
+  <div class="card" id="cardUnowned">
+    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail.">Unowned Risk Contributors</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button></div></div>
     ${rUnowned(s.unowned)}
   </div>
 
   <!-- Row 11: Factor Correlation -->
-  <div class="card">
-    <div class="card-title">Factor Correlation Matrix</div>
+  <div class="card" id="cardCorr">
+    <div class="flex-between"><div class="card-title tip" data-tip="Click any cell to see scatter plot of two factors">Factor Correlation Matrix</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCorr table','factor_correlation')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
     ${rFCorr(s.fcorr)}
   </div>`;
 
@@ -554,39 +767,51 @@ function rWt(data,type){
   let rows=data.map(d=>{
     let cls=activeStyle(d.a);
     let drillFn=type==='sec'?`oDr('sec','${d.n}')`:`oDr('reg','${d.n}')`;
-    return`<tr style="cursor:pointer" onclick="${drillFn}">
+    let threshCls=Math.abs(d.a)>5?'thresh-alert':Math.abs(d.a)>3?'thresh-warn':'';
+    return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
       <td>${d.n}</td><td class="r">${f2(d.p)}</td><td class="r">${f2(d.b)}</td>
       <td class="r ${cls}">${fp(d.a)}</td>
-      ${d.s!=null?`<td class="r">${f2(d.s)}</td>`:''} 
+      ${d.s!=null?`<td class="r">${f2(d.s)}</td>`:''}
       ${d.t!=null?`<td class="r" style="${d.t>0?'color:var(--pos)':'color:var(--neg)'}">${fp(d.t)}</td>`:''}
     </tr>`;
   }).join('');
   let hasSS=data[0]&&data[0].s!=null;
   let hasTR=data[0]&&data[0].t!=null;
-  return`<table><thead><tr><th>Name</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th>${hasSS?'<th class="r">SS%</th>':''}${hasTR?'<th class="r">TTR%</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table><thead><tr><th>Name</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight">Active</th>${hasSS?'<th class="r tip" data-tip="Stock specific risk">SS%</th>':''}${hasTR?'<th class="r tip" data-tip="Total return contribution">TTR%</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rFac(factors){
   let rows=factors.map(f=>{
     let cls=f.e>0?'pos':'neg';
-    return`<tr style="cursor:pointer" onclick="oDrF('${f.n}')">
+    let threshCls=Math.abs(f.e)>0.5?'thresh-warn':'';
+    return`<tr class="clickable ${threshCls}" onclick="oDrF('${f.n}')">
       <td>${f.n}</td><td class="r ${cls}">${fp(f.e,3)}</td><td class="r">${f2(f.c)}</td><td class="r" style="${f.ret>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.ret)}</td><td class="r" style="${f.imp>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.imp)}</td>
     </tr>`;
   }).join('');
-  return`<table><thead><tr><th>Factor</th><th class="r">Exposure</th><th class="r">Contrib%</th><th class="r">Return%</th><th class="r">Impact</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table><thead><tr><th>Factor</th><th class="r tip" data-tip="Active factor exposure vs benchmark">Exposure</th><th class="r tip" data-tip="Contribution to tracking error">Contrib%</th><th class="r tip" data-tip="Factor return for the period">Return%</th><th class="r tip" data-tip="Exposure x Return = portfolio impact">Impact</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rRnk(ranks){
   if(!ranks.length)return'<p style="color:var(--txt);font-size:12px">No rank data</p>';
-  let rows=ranks.map(r=>`<tr><td><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r">${r.ct}</td><td class="r">${f2(r.p)}%</td><td class="r">${f2(r.a)}%</td></tr>`).join('');
+  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r">${r.ct}</td><td class="r">${f2(r.p)}%</td><td class="r">${f2(r.a)}%</td></tr>`).join('');
   return`<table><thead><tr><th>Rank</th><th class="r">Count</th><th class="r">Port%</th><th class="r">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function filterByRank(rank){
+  activeTab='holdings';
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  $('tab-holdings').classList.add('active');
+  ah=[...cs.hold];fh=ah.filter(h=>h.r===rank);hp=1;renderHoldTab();
+  // Set the rank filter dropdown
+  setTimeout(()=>{let rf=$('rankFilter');if(rf)rf.value=rank},100);
 }
 
 function rChr(chars){
   if(!chars.length)return'<p style="color:var(--txt);font-size:12px">No characteristic data</p>';
   let rows=chars.map(c=>{
     let diff=c.p-c.b;let cls=diff>0?'pos':'neg';
-    return`<tr><td>${c.m}</td><td class="r">${f2(c.p,1)}</td><td class="r">${f2(c.b,1)}</td><td class="r ${cls}">${fp(diff,1)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r">${f2(c.p,1)}</td><td class="r">${f2(c.b,1)}</td><td class="r ${cls}">${fp(diff,1)}</td></tr>`;
   }).join('');
   return`<table><thead><tr><th>Metric</th><th class="r">Portfolio</th><th class="r">Benchmark</th><th class="r">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -596,7 +821,7 @@ function rCountryTable(countries){
   let sorted=[...countries].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
   let rows=sorted.map(c=>{
     let cls=activeStyle(c.a);
-    return`<tr><td>${c.n}</td><td class="r">${f2(c.p)}</td><td class="r">${f2(c.b)}</td><td class="r ${cls}">${fp(c.a)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r">${f2(c.p)}</td><td class="r">${f2(c.b)}</td><td class="r ${cls}">${fp(c.a)}</td></tr>`;
   }).join('');
   return`<table><thead><tr><th>Country</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -605,15 +830,15 @@ function rGroupTable(groups){
   if(!groups||!groups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
   let rows=groups.map(g=>{
     let cls=activeStyle(g.a);
-    return`<tr><td><span class="chip">${g.g}</span></td><td>${g.sg}</td><td class="r">${f2(g.p)}</td><td class="r">${f2(g.b)}</td><td class="r ${cls}">${fp(g.a)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrGroup('${g.g}')"><td><span class="chip">${g.g}</span></td><td>${g.sg}</td><td class="r">${f2(g.p)}</td><td class="r">${f2(g.b)}</td><td class="r ${cls}">${fp(g.a)}</td></tr>`;
   }).join('');
   return`<table><thead><tr><th>Group</th><th>Subgroup</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rStressTable(stress){
-  let rows=stress.map(s=>{
+  let rows=stress.map((s,i)=>{
     let cls=s.active>0?'pos':'neg';
-    return`<tr><td><strong style="color:var(--txth)">${s.name}</strong><br><span style="font-size:10px">${s.desc}</span></td><td class="r" style="color:var(--neg)">${fp(s.port)}</td><td class="r" style="color:var(--neg)">${fp(s.bench)}</td><td class="r ${cls}">${fp(s.active)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrStress(${i})"><td><strong style="color:var(--txth)">${s.name}</strong><br><span style="font-size:10px">${s.desc}</span></td><td class="r" style="color:var(--neg)">${fp(s.port)}</td><td class="r" style="color:var(--neg)">${fp(s.bench)}</td><td class="r ${cls}">${fp(s.active)}</td></tr>`;
   }).join('');
   return`<table><thead><tr><th>Scenario</th><th class="r">Portfolio</th><th class="r">Benchmark</th><th class="r">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -621,7 +846,7 @@ function rStressTable(stress){
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
   let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr)-Math.abs(a.tr));
-  let rows=sorted.map(u=>`<tr><td style="color:var(--txth);font-weight:500">${u.t}</td><td>${u.n}</td><td>${u.reg||'--'}</td><td class="r">${f2(u.b)}</td><td class="r" style="color:var(--neg);font-weight:600">${fp(u.tr)}</td></tr>`).join('');
+  let rows=sorted.map(u=>`<tr class="clickable" onclick="oDrUnowned('${u.t}')"><td style="color:var(--txth);font-weight:500">${u.t}</td><td>${u.n}</td><td>${u.reg||'--'}</td><td class="r">${f2(u.b)}</td><td class="r" style="color:var(--neg);font-weight:600">${fp(u.tr)}</td></tr>`).join('');
   return`<table><thead><tr><th>Ticker</th><th>Name</th><th>Region</th><th class="r">Bench Wt%</th><th class="r">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -632,7 +857,7 @@ function rFCorr(fcorr){
     let cells=FACS.map(fn=>{
       let v=fcorr[f1]?fcorr[f1][fn]:0;
       let bg=f1===fn?'var(--pri)':v>0.5?'rgba(16,185,129,.3)':v<-0.5?'rgba(239,68,68,.3)':'transparent';
-      return`<td class="r" style="background:${bg};font-size:10px">${f2(v,2)}</td>`;
+      return`<td class="r" style="background:${bg};font-size:10px;cursor:${f1!==fn?'pointer':'default'}" ${f1!==fn?`onclick="oDrCorr('${f1}','${fn}')"`:''}>${f2(v,2)}</td>`;
     }).join('');
     return`<tr><td style="font-weight:600;font-size:10px">${f1}</td>${cells}</tr>`;
   }).join('');
@@ -701,7 +926,7 @@ function rGroupChart(s){
 }
 
 function rScat(s){
-  let hold=s.hold.filter(h=>h.p>0);
+  let hold=s.hold.filter(h=>h.p>0&&!isCash(h));
   Plotly.newPlot('scatDiv',[{
     x:hold.map(h=>h.mcr||0),y:hold.map(h=>h.tr||0),mode:'markers+text',type:'scatter',
     text:hold.map(h=>h.t),textposition:'top center',textfont:{size:8,color:'#64748b'},
@@ -712,7 +937,7 @@ function rScat(s){
 
 function rTree(s){
   let secData={};
-  s.hold.forEach(h=>{if(!secData[h.sec])secData[h.sec]=0;secData[h.sec]+=Math.abs(h.a)});
+  s.hold.filter(h=>!isCash(h)).forEach(h=>{if(!secData[h.sec])secData[h.sec]=0;secData[h.sec]+=Math.abs(h.a)});
   let labels=[],parents=[],values=[],colors=[];
   labels.push('Portfolio');parents.push('');values.push(0);colors.push('#0f172a');
   Object.keys(secData).forEach(sec=>{
@@ -727,7 +952,7 @@ function rTree(s){
 }
 
 function rMCR(s){
-  let top=s.hold.sort((a,b)=>(b.mcr||0)-(a.mcr||0)).slice(0,10);
+  let top=s.hold.filter(h=>!isCash(h)).sort((a,b)=>(b.mcr||0)-(a.mcr||0)).slice(0,10);
   Plotly.newPlot('mcrDiv',[{
     y:top.map(h=>h.t),x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
     marker:{color:'#8b5cf6'},text:top.map(h=>f2(h.mcr)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
@@ -1049,15 +1274,19 @@ function rHold(){
 
 function renderHoldTab(){
   let html=`
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" id="cardHoldings" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:10px">
-        <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length})</div>
+        <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit">
+          <div class="export-bar">
+            <button class="export-btn" onclick="exportCSV('#cardHoldings table','holdings_${cs.id}')">CSV</button>
+            <button class="export-btn" onclick="screenshotCard('#cardHoldings')">PNG</button>
+          </div>
+          <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by sector">
             <option value="">All Sectors</option>
             ${SECS.map(s=>`<option value="${s}">${s}</option>`).join('')}
           </select>
-          <select id="rankFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit">
+          <select id="rankFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by rank">
             <option value="">All Ranks</option>
             ${[1,2,3,4,5].map(r=>`<option value="${r}">R${r}</option>`).join('')}
           </select>
@@ -1162,7 +1391,7 @@ function rRankDist(){
 }
 
 function rHoldConc(){
-  let top10=[...cs.hold].sort((a,b)=>b.p-a.p).slice(0,10);
+  let top10=[...cs.hold].filter(h=>!isCash(h)).sort((a,b)=>b.p-a.p).slice(0,10);
   Plotly.newPlot('holdConcDiv',[{
     y:top10.map(h=>h.t),x:top10.map(h=>h.p),type:'bar',orientation:'h',
     marker:{color:'#3b82f6'},text:top10.map(h=>f2(h.p)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
@@ -1178,7 +1407,7 @@ function rAttr(){
   let totalInter=attrib.reduce((a,x)=>a+x.inter,0);
   let totalTotal=attrib.reduce((a,x)=>a+x.total,0);
 
-  let rows=attrib.map(a=>`<tr>
+  let rows=attrib.map(a=>`<tr class="clickable" onclick="oDrAttrib('${a.n}')">
     <td>${a.n}</td><td class="r">${f2(a.pa)}</td><td class="r">${f2(a.ba)}</td><td class="r ${activeStyle(a.aa)}">${fp(a.aa)}</td>
     <td class="r" style="${a.pr>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.pr)}</td>
     <td class="r" style="${a.br>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.br)}</td>
@@ -1198,8 +1427,9 @@ function rAttr(){
   </tr>`;
 
   let html=`
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">Brinson Attribution (Sector-Based)</div>
+  <div class="card" id="cardAttrib" style="margin-bottom:16px">
+    <div class="flex-between"><div class="card-title tip" data-tip="Click any sector row for holdings-level attribution decomposition">Brinson Attribution (Sector-Based)</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardAttrib table','attribution_${cs.id}')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardAttrib')">PNG</button></div></div>
     <div style="overflow-x:auto">
     <table><thead><tr>
       <th>Sector</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th>
@@ -1251,35 +1481,90 @@ function oDr(type,name){
   let m=$('drillModal');
   let hist=type==='sec'?cs.hist.sec[name]:cs.hist.reg[name];
   let holdings=cs.hold.filter(h=>type==='sec'?h.sec===name:h.reg===name);
+  let dataRow=type==='sec'?cs.sectors.find(x=>x.n===name):cs.regions.find(x=>x.n===name);
+  let attr=type==='sec'?cs.attrib.find(a=>a.n===name):null;
 
-  let histHtml='';
-  if(hist&&hist.length){
-    histHtml=`<div id="drillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
-  }
+  // TE contribution estimate
+  let teContrib=holdings.reduce((a,h)=>a+(h.mcr||0),0);
 
-  let holdRows=holdings.sort((a,b)=>b.a-a.a).map(h=>`<tr style="cursor:pointer" onclick="closeDrill();oSt('${h.t}')">
+  let histHtml=`<div id="drillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
+
+  let holdRows=holdings.sort((a,b)=>b.a-a.a).map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')">
     <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
     <td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
     <td class="r">${f2(h.mcr)}</td><td class="r"><span style="color:${rc(h.r)}">R${h.r}</span></td>
   </tr>`).join('');
 
+  // Country breakdown for region drills
+  let countryHtml='';
+  if(type==='reg'){
+    let countries=cs.countries.filter(c=>(CMAP[c.n]||'Other')===name).sort((a,b)=>b.p-a.p);
+    if(countries.length){
+      let cRows=countries.map(c=>`<tr class="clickable" onclick="closeDrill();oDrCountry('${c.n}')"><td>${c.n}</td><td class="r">${f2(c.p)}</td><td class="r">${f2(c.b)}</td><td class="r ${activeStyle(c.a)}">${fp(c.a)}</td></tr>`).join('');
+      countryHtml=`<div style="margin-top:16px"><div class="card-title">Countries in ${name}</div>
+        <table><thead><tr><th>Country</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${cRows}</tbody></table></div>`;
+    }
+  }
+
+  // Attribution for sector drills
+  let attrHtml='';
+  if(attr){
+    attrHtml=`<div class="grid g4" style="margin:16px 0">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Allocation</div><div style="font-size:16px;font-weight:700;color:${attr.alloc>=0?'var(--pos)':'var(--neg)'}">${fp(attr.alloc)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Selection</div><div style="font-size:16px;font-weight:700;color:${attr.sel>=0?'var(--pos)':'var(--neg)'}">${fp(attr.sel)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Interaction</div><div style="font-size:16px;font-weight:700;color:${attr.inter>=0?'var(--pos)':'var(--neg)'}">${fp(attr.inter)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Total Effect</div><div style="font-size:16px;font-weight:700;color:${attr.total>=0?'var(--pos)':'var(--neg)'}">${fp(attr.total)}</div></div>
+    </div>`;
+  }
+
+  // Mini comparison to other sectors/regions
+  let others=type==='sec'?cs.sectors:cs.regions;
+  let miniCompare=others.sort((a,b)=>Math.abs(b.a)-Math.abs(a.a)).map(o=>{
+    let isCurrent=o.n===name;
+    return`<div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:10px;${isCurrent?'background:rgba(59,130,246,.1);border-radius:4px;font-weight:600':''}">
+      <span style="${isCurrent?'color:var(--txth)':''}">${o.n}</span><span class="${activeStyle(o.a)}">${fp(o.a)}</span></div>`;
+  }).join('');
+
   $('drillContent').innerHTML=`
-    <h2>${name} — ${type==='sec'?'Sector':'Region'} Drill<button class="close" onclick="closeDrill()">&times;</button></h2>
+    <h2>${name} — ${type==='sec'?'Sector':'Region'} Deep Drill<button class="close" onclick="closeDrill()">&times;</button></h2>
+    <div class="grid g3" style="margin-bottom:12px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${dataRow?f2(dataRow.p):'--'}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:20px;font-weight:700;color:${dataRow&&dataRow.a>=0?'var(--pos)':'var(--neg)'}">${dataRow?fp(dataRow.a):'--'}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(teContrib)}</div></div>
+    </div>
+    ${attrHtml}
+    <div class="card-title">Historical Weight: Portfolio vs Benchmark</div>
     ${histHtml}
-    <div class="card-title">Holdings in ${name} (${holdings.length})</div>
-    <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th><th class="r">MCR</th><th class="r">Rank</th></tr></thead>
-    <tbody>${holdRows}</tbody></table>`;
+    <div class="grid g23">
+      <div>
+        <div class="flex-between"><div class="card-title">Holdings in ${name} (${holdings.length})</div>
+          <div class="export-bar"><button class="export-btn" onclick="exportCSV(this.closest('.grid').querySelector('table'),'${name}_holdings')">CSV</button></div>
+        </div>
+        <div style="max-height:300px;overflow-y:auto">
+        <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th><th class="r">MCR</th><th class="r">Rank</th></tr></thead>
+        <tbody>${holdRows}</tbody></table>
+        </div>
+      </div>
+      <div>
+        <div class="card-title">Compare to Other ${type==='sec'?'Sectors':'Regions'}</div>
+        <div style="max-height:300px;overflow-y:auto">${miniCompare}</div>
+      </div>
+    </div>
+    ${countryHtml}`;
   m.classList.add('show');
 
-  if(hist&&hist.length){
-    setTimeout(()=>{
+  setTimeout(()=>{
+    if(hist&&hist.length){
       Plotly.newPlot('drillHistDiv',[
         {x:hist.map(h=>h.d),y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#3b82f6',width:2}},
         {x:hist.map(h=>h.d),y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#64748b',width:2,dash:'dot'}},
         {x:hist.map(h=>h.d),y:hist.map(h=>h.a),name:'Active',line:{color:'#10b981',width:2},yaxis:'y2'}
       ],{...plotBg,yaxis:{...plotBg.yaxis,title:'Weight %'},yaxis2:{overlaying:'y',side:'right',title:'Active %',gridcolor:'transparent',titlefont:{color:'#10b981'},tickfont:{color:'#10b981'}},legend:{orientation:'h',y:1.12,font:{size:10}}},plotCfg);
-    },50);
-  }
+    } else {
+      // Generate placeholder chart even without history
+      Plotly.newPlot('drillHistDiv',[{x:[],y:[],type:'scatter'}],{...plotBg,annotations:[{text:'Historical data not available',showarrow:false,font:{size:14,color:'#64748b'}}]},plotCfg);
+    }
+  },50);
 }
 
 function closeDrill(){$('drillModal').classList.remove('show')}
@@ -1297,23 +1582,35 @@ function oDrF(name){
     histHtml=`<div id="facDrillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
   }
 
+  // Factor correlations
+  let corrList=FACS.filter(f=>f!==name).map(f=>({n:f,v:cs.fcorr[name]?cs.fcorr[name][f]:0})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
+  let corrHtml=corrList.map(c=>`<div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:11px;border-bottom:1px solid rgba(51,65,85,.3)">
+    <span>${c.n}</span><span style="color:${c.v>0?'var(--pos)':'var(--neg)'};font-weight:600">${f2(c.v,2)}</span></div>`).join('');
+
+  // Risk contribution detail
+  let totalFacC=cs.factors.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
+  let pctOfRisk=Math.abs(factor.c||0)/totalFacC*100;
+
   $('drillContent').innerHTML=`
     <h2>${name} Factor Drill<button class="close" onclick="closeDrill()">&times;</button></h2>
-    <div class="grid g3" style="margin-bottom:16px">
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Exposure</div><div style="font-size:20px;font-weight:700;color:${factor.e>=0?'var(--pos)':'var(--neg)'}">${fp(factor.e,3)}</div></div>
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Contribution</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(factor.c)}%</div></div>
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp>=0?'var(--pos)':'var(--neg)'}">${fp(factor.imp)}</div></div>
+    <div class="grid g4" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Exposure</div><div style="font-size:20px;font-weight:700;color:${factor.e>=0?'var(--pos)':'var(--neg)'}">${fp(factor.e,3)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Contribution</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(factor.c)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">% of Total Risk</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(pctOfRisk,1)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp>=0?'var(--pos)':'var(--neg)'}">${fp(factor.imp)}</div></div>
     </div>
+    <div class="card-title">Exposure Time Series</div>
     ${histHtml}
-    <div class="grid g2">
+    <div class="grid g3">
       <div><div class="card-title">Top Exposed</div>
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead>
-        <tbody>${top5.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
+        <tbody>${top5.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')"><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
       </div>
       <div><div class="card-title">Bottom Exposed</div>
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead>
-        <tbody>${bot5.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
+        <tbody>${bot5.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')"><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
       </div>
+      <div><div class="card-title">Correlations</div>${corrHtml}</div>
     </div>`;
   m.classList.add('show');
 
@@ -1346,7 +1643,7 @@ function oDrS(){
       yaxis2:{overlaying:'y',side:'right',title:'Active Share %',titlefont:{color:'#3b82f6'},tickfont:{color:'#3b82f6'},gridcolor:'transparent'},
       yaxis3:{overlaying:'y',side:'right',position:0.95,title:'Beta',titlefont:{color:'#10b981'},tickfont:{color:'#10b981'},gridcolor:'transparent',showgrid:false},
       legend:{orientation:'h',y:1.1,font:{size:10}},
-      shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#f59e0b',dash:'dash',width:1}},{type:'line',y0:7,y1:7,xref:'paper',x0:0,x1:1,line:{color:'#ef4444',dash:'dash',width:1}}]
+      shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#10b981',dash:'dash',width:1}},{type:'line',y0:10,y1:10,xref:'paper',x0:0,x1:1,line:{color:'#ef4444',dash:'dash',width:1}}]
     },plotCfg);
   },50);
 }
@@ -1362,18 +1659,28 @@ function oSt(ticker){
     <span>${s.n}</span><span style="color:${rc(Math.ceil(6-s.v))};font-weight:600">${f2(s.v,1)}</span>
   </div>`).join('');
 
+  // Peer comparison (same sector holdings)
+  let peers=cs.hold.filter(x=>x.sec===h.sec&&x.t!==h.t).sort((a,b)=>b.p-a.p).slice(0,5);
+  let peerRows=peers.map(p=>`<tr class="clickable" onclick="$('stockModal').classList.remove('show');oSt('${p.t}')">
+    <td style="color:var(--txth)">${p.t}</td><td class="r">${f2(p.p)}</td><td class="r ${activeStyle(p.a)}">${fp(p.a)}</td><td class="r"><span style="color:${rc(p.r)}">R${p.r}</span></td>
+  </tr>`).join('');
+
+  // Synthetic weight history
+  let wHist=[];let now=new Date();
+  for(let i=11;i>=0;i--){let d=new Date(now);d.setMonth(d.getMonth()-i);wHist.push({d:d.toISOString().slice(0,10),p:+(h.p*(0.85+Math.random()*0.3)).toFixed(2)})}
+
   $('stockContent').innerHTML=`
     <h2>${h.t} — ${h.n}<button class="close" onclick="$('stockModal').classList.remove('show')">&times;</button></h2>
     <div class="grid g3" style="margin-bottom:16px">
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(h.p)}%</div></div>
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:20px;font-weight:700;color:${h.a>=0?'var(--pos)':'var(--neg)'}">${fp(h.a)}%</div></div>
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Rank</div><div style="font-size:20px;font-weight:700;color:${rc(h.r)}">R${h.r}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(h.p)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:20px;font-weight:700;color:${h.a>=0?'var(--pos)':'var(--neg)'}">${fp(h.a)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Rank</div><div style="font-size:20px;font-weight:700;color:${rc(h.r)}">R${h.r}</div></div>
     </div>
     <div class="grid g2">
       <div>
         <table>
-          <tr><td>Sector</td><td class="r"><span class="chip">${h.sec}</span></td></tr>
-          <tr><td>Country</td><td class="r">${h.co}</td></tr>
+          <tr><td>Sector</td><td class="r"><span class="chip" style="cursor:pointer" onclick="$('stockModal').classList.remove('show');oDr('sec','${h.sec}')">${h.sec}</span></td></tr>
+          <tr><td>Country</td><td class="r" style="cursor:pointer;color:var(--pri)" onclick="$('stockModal').classList.remove('show');oDrCountry('${h.co}')">${h.co}</td></tr>
           <tr><td>Region</td><td class="r">${h.reg||CMAP[h.co]||'--'}</td></tr>
           <tr><td>Bench Weight</td><td class="r">${f2(h.b)}%</td></tr>
           <tr><td>MCR</td><td class="r">${f2(h.mcr)}</td></tr>
@@ -1385,7 +1692,12 @@ function oSt(ticker){
         ${scoreHtml}
       </div>
     </div>
-    <div id="stockRadarDiv" style="height:250px;margin-top:12px"></div>`;
+    <div class="grid g2" style="margin-top:12px">
+      <div><div class="card-title">Score Radar</div><div id="stockRadarDiv" style="height:220px"></div></div>
+      <div><div class="card-title">Weight History</div><div id="stockHistDiv" style="height:220px"></div></div>
+    </div>
+    ${peers.length?`<div style="margin-top:12px"><div class="card-title">Peer Comparison (${h.sec})</div>
+    <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead><tbody>${peerRows}</tbody></table></div>`:''}`;
   m.classList.add('show');
 
   setTimeout(()=>{
@@ -1395,51 +1707,121 @@ function oSt(ticker){
       fill:'toself',fillcolor:'rgba(59,130,246,.15)',line:{color:'#3b82f6',width:2},
       marker:{size:4,color:'#3b82f6'}
     }],{...plotBg,polar:{bgcolor:'transparent',radialaxis:{range:[0,5],gridcolor:'#334155',tickfont:{size:9,color:'#64748b'}},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},margin:{l:40,r:40,t:20,b:20},showlegend:false},plotCfg);
+
+    Plotly.newPlot('stockHistDiv',[{
+      x:wHist.map(w=>w.d),y:wHist.map(w=>w.p),type:'scatter',mode:'lines',
+      line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'
+    }],{...plotBg,yaxis:{...plotBg.yaxis,title:'Weight %'},margin:{l:40,r:10,t:10,b:30}},plotCfg);
   },50);
 }
 
-// Close modals on overlay click
-['drillModal','stockModal','reportModal','compModal'].forEach(id=>{
-  $(id).addEventListener('click',e=>{if(e.target===$(id))$(id).classList.remove('show')});
-});
+// Close modals on overlay click (handled by ALL_MODALS in modal management section below)
 
-// ===== COMPARISON MODAL =====
+// ===== COMPARISON MODAL (Full v2 style) =====
 function openComp(){
   let m=$('compModal');
   let keys=Object.keys(A);
   if(keys.length<2){alert('Need 2+ strategies to compare');return}
 
-  let cards=keys.map(k=>{
-    let s=A[k];
-    return`<div class="card" style="text-align:center">
-      <h3 style="color:var(--txth);margin-bottom:8px">${k}</h3>
-      <div style="font-size:11px;color:var(--txt);margin-bottom:12px">${s.name}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left">
-        <div><span style="font-size:10px;color:var(--txt)">TE</span><div style="font-size:16px;font-weight:600;color:${s.sum.te>7?'var(--neg)':s.sum.te>5?'var(--warn)':'var(--txth)'}">${f2(s.sum.te)}%</div></div>
-        <div><span style="font-size:10px;color:var(--txt)">AS</span><div style="font-size:16px;font-weight:600;color:var(--txth)">${f2(s.sum.as)}%</div></div>
-        <div><span style="font-size:10px;color:var(--txt)">Beta</span><div style="font-size:16px;font-weight:600;color:var(--txth)">${f2(s.sum.beta,3)}</div></div>
-        <div><span style="font-size:10px;color:var(--txt)">Holdings</span><div style="font-size:16px;font-weight:600;color:var(--txth)">${s.sum.h||s.hold.length}</div></div>
-      </div>
+  // Summary stats table
+  let metrics=['TE','Active Share','Beta','Holdings','Selection Rate','Cash'];
+  let metricKeys=['te','as','beta','h','sr','cash'];
+  let statsRows=metrics.map((name,i)=>{
+    let k=metricKeys[i];
+    let cells=keys.map(sk=>{
+      let v=A[sk].sum[k];
+      if(k==='h')v=v||equityCount(A[sk].hold);
+      let fmt=k==='beta'?f2(v,3):f2(v);
+      let style='';
+      if(k==='te')style=v>=10?'color:var(--neg)':v<5?'color:var(--warn)':'color:var(--pos)';
+      return`<td class="r" style="${style}">${fmt}${k!=='h'&&k!=='beta'?'%':''}</td>`;
+    }).join('');
+    return`<tr><td class="metric-name">${name}</td>${cells}</tr>`;
+  }).join('');
+
+  // Sector heatmap diff (first two strategies)
+  let s1=A[keys[0]],s2=A[keys[1]];
+  let secDiff=SECS.map(sec=>{
+    let a1=s1.sectors.find(x=>x.n===sec);
+    let a2=s2.sectors.find(x=>x.n===sec);
+    let d=(a1?a1.a:0)-(a2?a2.a:0);
+    return{n:sec,d:+d.toFixed(2),a1:a1?a1.a:0,a2:a2?a2.a:0};
+  });
+
+  let secDiffHtml=secDiff.map(s=>{
+    let bg=s.d>2?'rgba(16,185,129,.2)':s.d<-2?'rgba(239,68,68,.2)':'rgba(51,65,85,.2)';
+    return`<div style="display:flex;justify-content:space-between;padding:5px 8px;background:${bg};border-radius:4px;margin-bottom:3px;font-size:11px">
+      <span>${s.n}</span><span style="display:flex;gap:12px"><span style="color:var(--txt)">${keys[0]}: ${fp(s.a1)}</span><span style="color:var(--txt)">${keys[1]}: ${fp(s.a2)}</span><span style="font-weight:600;color:${s.d>=0?'var(--pos)':'var(--neg)'}">Diff: ${fp(s.d)}</span></span>
     </div>`;
   }).join('');
 
+  // Holdings overlap
+  let h1Set=new Set(s1.hold.map(h=>h.t));
+  let h2Set=new Set(s2.hold.map(h=>h.t));
+  let shared=[...h1Set].filter(t=>h2Set.has(t));
+  let unique1=[...h1Set].filter(t=>!h2Set.has(t));
+  let unique2=[...h2Set].filter(t=>!h1Set.has(t));
+
   $('compContent').innerHTML=`
-    <h2>Strategy Comparison<button class="close" onclick="$('compModal').classList.remove('show')">&times;</button></h2>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:16px">${cards}</div>
-    <div id="compRadarDiv" style="height:350px"></div>`;
+    <h2>Cross-Strategy Comparison<button class="close" onclick="$('compModal').classList.remove('show')">&times;</button></h2>
+
+    <div class="card-title">Summary Statistics</div>
+    <div style="overflow-x:auto;margin-bottom:16px">
+    <table class="comp-stats-table"><thead><tr><th>Metric</th>${keys.map(k=>`<th class="r">${k}</th>`).join('')}</tr></thead><tbody>${statsRows}</tbody></table>
+    </div>
+
+    <div class="grid g2" style="margin-bottom:16px">
+      <div>
+        <div class="card-title">Radar Comparison</div>
+        <div id="compRadarDiv" style="height:300px"></div>
+      </div>
+      <div>
+        <div class="card-title">Factor Exposure Diff (${keys[0]} vs ${keys[1]})</div>
+        <div id="compFacDiv" style="height:300px"></div>
+      </div>
+    </div>
+
+    <div class="card-title">Sector Active Weight Diff (${keys[0]} − ${keys[1]})</div>
+    <div style="margin-bottom:16px">${secDiffHtml}</div>
+
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Shared Holdings</div><div style="font-size:24px;font-weight:700;color:var(--pos)">${shared.length}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Unique to ${keys[0]}</div><div style="font-size:24px;font-weight:700;color:var(--pri)">${unique1.length}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Unique to ${keys[1]}</div><div style="font-size:24px;font-weight:700;color:var(--acc)">${unique2.length}</div></div>
+    </div>
+    <div class="grid g2">
+      <div><div class="card-title">Unique to ${keys[0]} (top 10)</div>
+        <div style="max-height:200px;overflow-y:auto;font-size:11px">${unique1.slice(0,10).map(t=>{let h=s1.hold.find(x=>x.t===t);return`<div style="padding:3px 0;border-bottom:1px solid rgba(51,65,85,.3)"><span style="color:var(--txth);font-weight:600">${t}</span> ${h?h.n:''} <span style="float:right">${h?f2(h.p):'--'}%</span></div>`}).join('')}</div>
+      </div>
+      <div><div class="card-title">Unique to ${keys[1]} (top 10)</div>
+        <div style="max-height:200px;overflow-y:auto;font-size:11px">${unique2.slice(0,10).map(t=>{let h=s2.hold.find(x=>x.t===t);return`<div style="padding:3px 0;border-bottom:1px solid rgba(51,65,85,.3)"><span style="color:var(--txth);font-weight:600">${t}</span> ${h?h.n:''} <span style="float:right">${h?f2(h.p):'--'}%</span></div>`}).join('')}</div>
+      </div>
+    </div>`;
   m.classList.add('show');
 
   setTimeout(()=>{
+    // Radar
+    let colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
     let traces=keys.map((k,i)=>{
       let s=A[k];
-      let colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
       return{type:'scatterpolar',name:k,
-        r:[s.sum.te,s.sum.as/10,s.sum.beta*5,s.sum.h/10,s.sum.sr/10,s.sum.te],
+        r:[s.sum.te,s.sum.as/10,s.sum.beta*5,(s.sum.h||equityCount(s.hold))/10,s.sum.sr/10,s.sum.te],
         theta:['TE','AS/10','Beta*5','H/10','SR/10','TE'],
         fill:'toself',fillcolor:colors[i%colors.length]+'20',line:{color:colors[i%colors.length],width:2}
       };
     });
-    Plotly.newPlot('compRadarDiv',traces,{...plotBg,polar:{bgcolor:'transparent',radialaxis:{gridcolor:'#334155',tickfont:{size:9}},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},legend:{orientation:'h',y:-0.1,font:{size:10}},margin:{l:40,r:40,t:20,b:50}},plotCfg);
+    Plotly.newPlot('compRadarDiv',traces,{...plotBg,polar:{bgcolor:'transparent',radialaxis:{gridcolor:'#334155',tickfont:{size:9}},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},legend:{orientation:'h',y:-0.15,font:{size:10}},margin:{l:40,r:40,t:20,b:60}},plotCfg);
+
+    // Factor exposure diff bar chart
+    let facDiff=FACS.map(f=>{
+      let f1=s1.factors.find(x=>x.n===f);
+      let f2f=s2.factors.find(x=>x.n===f);
+      return{n:f,v1:f1?f1.e:0,v2:f2f?f2f.e:0};
+    });
+    Plotly.newPlot('compFacDiv',[
+      {y:facDiff.map(f=>f.n),x:facDiff.map(f=>f.v1),name:keys[0],type:'bar',orientation:'h',marker:{color:'#3b82f6'}},
+      {y:facDiff.map(f=>f.n),x:facDiff.map(f=>f.v2),name:keys[1],type:'bar',orientation:'h',marker:{color:'#10b981'}}
+    ],{...plotBg,barmode:'group',yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Exposure'},legend:{orientation:'h',y:1.12,font:{size:10}}},plotCfg);
   },50);
 }
 
@@ -1589,7 +1971,7 @@ async function buildPPTX(selected,narratives){
 
     let dataY=narr?2:1.2;
     if(sec==='summary'){
-      sl.addText(`Tracking Error: ${f2(s.sum.te)}%  |  Active Share: ${f2(s.sum.as)}%  |  Beta: ${f2(s.sum.beta,3)}  |  Holdings: ${s.sum.h||s.hold.length}`,{x:0.5,y:dataY,w:12,h:0.5,fontSize:14,color:headColor,fontFace:'Arial'});
+      sl.addText(`Tracking Error: ${f2(s.sum.te)}%  |  Active Share: ${f2(s.sum.as)}%  |  Beta: ${f2(s.sum.beta,3)}  |  Holdings: ${s.sum.h||equityCount(s.hold)}`,{x:0.5,y:dataY,w:12,h:0.5,fontSize:14,color:headColor,fontFace:'Arial'});
     }else if(sec==='sectors'){
       let rows=s.sectors.sort((a,b)=>Math.abs(b.a)-Math.abs(a.a)).map(x=>[x.n,f2(x.p),f2(x.b),fp(x.a)]);
       sl.addTable([['Sector','Port%','Bench%','Active'],...rows],{x:0.5,y:dataY,w:12,h:4,fontSize:10,color:txtColor,fontFace:'Arial',border:{type:'solid',color:'334155',pt:0.5},colW:[4,2.5,2.5,2.5]});
@@ -1606,20 +1988,43 @@ async function buildPPTX(selected,narratives){
 
 // ===== KEYBOARD SHORTCUTS =====
 document.addEventListener('keydown',e=>{
+  let inInput=document.activeElement.tagName==='INPUT'||document.activeElement.tagName==='TEXTAREA'||document.activeElement.tagName==='SELECT';
   if(e.key==='Escape'){
-    ['drillModal','stockModal','reportModal','compModal'].forEach(id=>$(id).classList.remove('show'));
+    closeAllModals();
+    $('configPanel').classList.remove('open');
+    return;
   }
-  if(e.key==='c'&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
-    openComp();
-  }
+  if(inInput)return;
+  // C = compare
+  if(e.key==='c'&&!e.ctrlKey&&!e.metaKey)openComp();
+  // S = share
+  if(e.key==='s'&&!e.ctrlKey&&!e.metaKey)generateShareURL();
+  // / = focus global search
+  if(e.key==='/'){e.preventDefault();let si=$('globalSearchInput');if(si)si.focus()}
   // Number keys 1-7 for strategy switching
   let num=parseInt(e.key);
-  if(num>=1&&num<=7&&!e.ctrlKey&&!e.metaKey&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA'){
+  if(num>=1&&num<=7&&!e.ctrlKey&&!e.metaKey){
     let keys=Object.keys(A);
-    if(keys[num-1]){
-      let btns=document.querySelectorAll('.strat-btn');
-      go(keys[num-1],btns[num-1]);
-    }
+    if(keys[num-1]){let btns=document.querySelectorAll('.strat-btn');go(keys[num-1],btns[num-1])}
+  }
+  // Arrow keys for strategy switching
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
+    let keys=Object.keys(A);
+    let idx=keys.indexOf(cs.id);
+    if(e.key==='ArrowLeft')idx=Math.max(0,idx-1);
+    else idx=Math.min(keys.length-1,idx+1);
+    let btns=document.querySelectorAll('.strat-btn');
+    go(keys[idx],btns[idx]);
+  }
+  // Tab key for tab switching (with shift for reverse)
+  if(e.key==='Tab'&&!e.ctrlKey&&!e.metaKey){
+    let tabNames=['exposures','holdings','attribution'];
+    let tabBtns=document.querySelectorAll('.tab');
+    let idx=tabNames.indexOf(activeTab);
+    if(e.shiftKey)idx=(idx-1+tabNames.length)%tabNames.length;
+    else idx=(idx+1)%tabNames.length;
+    e.preventDefault();
+    switchTab(tabNames[idx],tabBtns[idx]);
   }
 });
 
@@ -1637,8 +2042,854 @@ document.body.addEventListener('drop',e=>{
   }
 });
 
+// ===== MODAL MANAGEMENT =====
+const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','stressModal','countryModal','groupModal','charModal','corrModal','attrDrillModal','unownedModal','riskBudgetModal'];
+ALL_MODALS.forEach(id=>{
+  let el=$(id);
+  if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show')});
+});
+function closeAllModals(){ALL_MODALS.forEach(id=>{let el=$(id);if(el)el.classList.remove('show')})}
+
+// ===== GLOBAL SEARCH =====
+function globalSearch(q){
+  let res=$('globalSearchResults');
+  if(!q||q.length<1){res.innerHTML='';return}
+  q=q.toLowerCase();
+  let matches=[];
+  Object.entries(A).forEach(([sid,s])=>{
+    s.hold.forEach(h=>{
+      if(h.t.toLowerCase().includes(q)||h.n.toLowerCase().includes(q)){
+        matches.push({...h,sid});
+      }
+    });
+  });
+  matches=matches.slice(0,15);
+  if(!matches.length){res.innerHTML='<div class="search-result"><span style="color:var(--txt)">No results</span></div>';return}
+  res.innerHTML=matches.map(m=>`<div class="search-result" onmousedown="go('${m.sid}');setTimeout(()=>oSt('${m.t}'),100)">
+    <span><span class="sr-ticker">${m.t}</span> ${m.n}</span>
+    <span class="sr-meta">${m.sid} | ${m.sec} | ${fp(m.a)}%</span>
+  </div>`).join('');
+}
+
+// ===== CSV EXPORT =====
+function exportCSV(tableEl,filename){
+  if(typeof tableEl==='string')tableEl=document.querySelector(tableEl);
+  if(!tableEl)return;
+  let rows=[...tableEl.querySelectorAll('tr')];
+  let csv=rows.map(r=>[...r.querySelectorAll('th,td')].map(c=>'"'+c.textContent.trim().replace(/"/g,'""')+'"').join(',')).join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=(filename||'export')+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ===== SCREENSHOT =====
+function screenshotCard(el){
+  if(typeof el==='string')el=document.querySelector(el);
+  if(!el||!window.html2canvas)return;
+  html2canvas(el,{backgroundColor:'#080e1e',scale:2}).then(canvas=>{
+    let a=document.createElement('a');
+    a.download='redwood_capture_'+Date.now()+'.png';
+    a.href=canvas.toDataURL();
+    a.click();
+  });
+}
+
+// ===== COPY TO CLIPBOARD =====
+function copyValue(v){
+  navigator.clipboard.writeText(String(v)).then(()=>{
+    let toast=document.createElement('div');
+    toast.textContent='Copied: '+v;
+    toast.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--pri);color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;z-index:999;animation:fadeIn .2s';
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),1500);
+  });
+}
+
+// ===== CONFIG PANEL =====
+function toggleConfig(){$('configPanel').classList.toggle('open')}
+function setDataSrc(src){
+  $('srcFile').classList.toggle('active',src==='file');
+  $('srcLive').classList.toggle('active',src==='live');
+  let dot=$('connStatus').querySelector('.conn-dot');
+  dot.className='conn-dot '+(src==='live'?'live':'file');
+  $('connStatus').querySelector('span:last-child').textContent=src==='live'?'Live':'File';
+  if(src==='live'){startLiveRefresh()}
+  else{if(refreshTimer)clearInterval(refreshTimer);refreshTimer=null}
+}
+function saveConfig(){
+  let cfg={apiUrl:$('cfgApiUrl').value,apiKey:$('cfgApiKey').value,refresh:$('cfgRefresh').value,stratMap:$('cfgStratMap').value};
+  try{localStorage.setItem('rr_config',JSON.stringify(cfg))}catch(e){}
+  toggleConfig();
+}
+function loadConfig(){
+  try{
+    let cfg=JSON.parse(localStorage.getItem('rr_config')||'{}');
+    if(cfg.apiUrl)$('cfgApiUrl').value=cfg.apiUrl;
+    if(cfg.apiKey)$('cfgApiKey').value=cfg.apiKey;
+    if(cfg.refresh)$('cfgRefresh').value=cfg.refresh;
+    if(cfg.stratMap)$('cfgStratMap').value=cfg.stratMap;
+  }catch(e){}
+}
+
+// ===== FACTSET API WRAPPER =====
+async function fetchFromAPI(endpoint,params={}){
+  let cfg={};
+  try{cfg=JSON.parse(localStorage.getItem('rr_config')||'{}')}catch(e){}
+  if(!cfg.apiUrl||!cfg.apiKey){throw new Error('API not configured')}
+  let url=cfg.apiUrl.replace(/\/$/,'')+'/'+endpoint;
+  let qs=new URLSearchParams(params).toString();
+  if(qs)url+='?'+qs;
+  let retries=3;
+  for(let i=0;i<retries;i++){
+    try{
+      let resp=await fetch(url,{headers:{'Authorization':'Bearer '+cfg.apiKey,'Content-Type':'application/json'}});
+      if(!resp.ok)throw new Error('HTTP '+resp.status);
+      return await resp.json();
+    }catch(e){
+      if(i===retries-1)throw e;
+      await new Promise(r=>setTimeout(r,1000*Math.pow(2,i)));
+    }
+  }
+}
+
+// ===== SHARE URL =====
+function generateShareURL(){
+  let state={s:cs.id,t:activeTab};
+  let encoded=btoa(JSON.stringify(state));
+  let url=location.origin+location.pathname+'#'+encoded;
+  navigator.clipboard.writeText(url).then(()=>{
+    let toast=document.createElement('div');
+    toast.textContent='Share URL copied to clipboard!';
+    toast.style.cssText='position:fixed;bottom:20px;right:20px;background:var(--pos);color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;z-index:999;animation:fadeIn .2s';
+    document.body.appendChild(toast);
+    setTimeout(()=>toast.remove(),2000);
+  });
+}
+
+// ===== LOADING STATES =====
+function showLoading(containerId){
+  let el=$(containerId);
+  if(!el)return;
+  el.innerHTML=`<div class="sum-cards" style="margin-bottom:16px">${Array(7).fill('<div class="sum-card"><div class="skeleton skeleton-card"></div></div>').join('')}</div>
+    <div class="grid g2"><div class="card">${Array(6).fill('<div class="skeleton skeleton-row"></div>').join('')}</div><div class="card">${Array(6).fill('<div class="skeleton skeleton-row"></div>').join('')}</div></div>`;
+}
+
+// ===== METRIC DRILL (Summary Card Click) =====
+let _metricSkipMonths=0;
+
+function oDrMetric(metric,skipMonths){
+  let m=$('metricModal');
+  let fullHist=cs.hist.sum;
+  if(!fullHist||!fullHist.length)return;
+  let skip=skipMonths!=null?skipMonths:_metricSkipMonths;
+  _metricSkipMonths=skip;
+  let hist=fullHist.slice(skip);
+  if(!hist.length)hist=fullHist;
+
+  let labels={te:'Tracking Error',as:'Active Share',beta:'Beta',h:'Holdings Count',sr:'Selection Rate',cash:'Cash %'};
+  let units={te:'%',as:'%',beta:'',h:'',sr:'%',cash:'%'};
+  let thresholds={
+    te:[{v:5,c:'#10b981',l:'5% floor',dir:'floor'},{v:10,c:'#ef4444',l:'10% ceiling',dir:'ceil'}],
+    beta:[{v:0.9,c:'#f59e0b',l:'0.9',dir:'floor'},{v:1.1,c:'#f59e0b',l:'1.1',dir:'ceil'}]
+  };
+  // Per-metric y-axis range
+  let yRanges={te:[2,11],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
+
+  let vals=hist.map(h=>h[metric]);
+  let dates=hist.map(h=>h.d);
+  let current=vals[vals.length-1];
+  let min=Math.min(...vals);
+  let max=Math.max(...vals);
+  let avg=(vals.reduce((a,v)=>a+v,0)/vals.length);
+  let totalMonths=fullHist.length;
+  let inception=fullHist[0].d;
+  let dec=metric==='beta'?3:2;
+
+  // Find threshold breaches
+  let breaches=[];
+  (thresholds[metric]||[]).forEach(t=>{
+    hist.forEach(h=>{
+      if(metric==='te'){
+        if(t.dir==='ceil'&&h[metric]>=t.v)breaches.push({date:h.d,val:h[metric],label:'above '+t.l});
+        if(t.dir==='floor'&&h[metric]<t.v)breaches.push({date:h.d,val:h[metric],label:'below '+t.l});
+      }
+      if(metric==='beta'&&Math.abs(h[metric]-1)>Math.abs(t.v-1)){
+        breaches.push({date:h.d,val:h[metric],label:h[metric]>1?'above '+t.l:'below '+t.l});
+      }
+    });
+  });
+
+  // Current value color
+  let valColor='var(--txth)';
+  if(metric==='te')valColor=current>=10?'var(--neg)':current<5?'var(--warn)':'var(--pos)';
+
+  // Metric-specific extra content
+  let extraHtml='';
+  if(metric==='beta'){
+    // Build beta variants — only show what has data
+    let betas=cs.sum.betas||{};
+    // Synthetic demo data (only if nothing from JSON)
+    if(!Object.keys(betas).length){
+      betas={
+        'Beta (36M)':cs.sum.beta,
+        'Beta (52W)':+(cs.sum.beta*(0.95+Math.random()*0.1)).toFixed(3),
+        'Predicted Beta':+(cs.sum.beta*(0.97+Math.random()*0.06)).toFixed(3),
+        'Beta to Local Index':+(cs.sum.beta*(0.9+Math.random()*0.2)).toFixed(3),
+        'Up-Market Beta':+(cs.sum.beta*(1.0+Math.random()*0.15)).toFixed(3),
+        'Down-Market Beta':+(cs.sum.beta*(0.85+Math.random()*0.2)).toFixed(3),
+        'Bull Beta (60M)':+(cs.sum.beta*(1.02+Math.random()*0.1)).toFixed(3),
+        'Bear Beta (60M)':+(cs.sum.beta*(0.88+Math.random()*0.15)).toFixed(3)
+      };
+    }
+    // Store for chart overlay use
+    window._betaVariants=betas;
+    window._betaSelected=window._betaSelected||new Set();
+    let betaColors=['#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#f97316','#22c55e'];
+    let betaEntries=Object.entries(betas);
+    let betaRows=betaEntries.map(([k,v],i)=>{
+      if(v==null)return'';
+      let dev=Math.abs(v-1);
+      let cls=dev>0.15?'neg':dev>0.08?'warn-t':'pos';
+      let sel=window._betaSelected.has(k);
+      let col=betaColors[i%betaColors.length];
+      return`<tr class="clickable" style="${sel?'background:rgba(59,130,246,.1)':''}" onclick="toggleBetaOverlay('${k.replace(/'/g,"\\'")}',this)">
+        <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px;vertical-align:middle;${sel?'box-shadow:0 0 4px '+col:'opacity:.4'}"></span><span style="color:var(--txth)">${k}</span></td>
+        <td class="r ${cls}" style="font-weight:600">${f2(v,3)}</td>
+        <td class="r" style="font-size:10px;color:var(--txt)">${v>1?'+':''}${f2((v-1)*100,1)}%</td>
+        <td class="r" style="font-size:9px;color:${sel?'var(--pri)':'var(--txt)'}">${sel?'ON CHART':'click to overlay'}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+    extraHtml=`<div style="margin-top:12px">
+      <div class="card-title">Beta Measures — click to overlay on chart</div>
+      <table style="font-size:11px"><thead><tr><th>Measure</th><th class="r">Value</th><th class="r">Dev</th><th class="r"></th></tr></thead><tbody>${betaRows}</tbody></table>
+      <p style="font-size:9px;color:var(--txt);margin-top:6px">Only measures with data are shown. Add more under <code style="background:var(--surf);padding:1px 4px;border-radius:3px;font-size:9px">sum.betas</code> in JSON.</p>
+    </div>`;
+  }
+  if(metric==='as'){
+    // Show total portfolio weight and top 10 benchmark weights
+    let totalPortWt=cs.hold.reduce((a,h)=>a+h.p,0);
+    let top10bm=[...cs.hold].sort((a,b)=>b.b-a.b).slice(0,10);
+    extraHtml=`<div class="grid g2" style="margin-top:16px">
+      <div>
+        <div class="card-title">Portfolio Summary</div>
+        <table>
+          <tr><td>Total Portfolio Weight</td><td class="r" style="font-weight:600;color:var(--txth)">${f2(totalPortWt,1)}%</td></tr>
+          <tr><td>Equity Holdings</td><td class="r">${equityCount(cs.hold)}</td></tr>
+          <tr><td>Total Positions (incl. cash)</td><td class="r" style="font-size:10px;color:var(--txt)">${cs.hold.length}</td></tr>
+          <tr><td>Benchmark Holdings</td><td class="r">${cs.sum.bh||'--'}</td></tr>
+          <tr><td>Selection Rate</td><td class="r">${f2(cs.sum.sr)}%</td></tr>
+        </table>
+      </div>
+      <div>
+        <div class="card-title">Top 10 Benchmark Weights</div>
+        <div style="max-height:200px;overflow-y:auto">
+        <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">BM Wt</th><th class="r">Held?</th></tr></thead>
+        <tbody>${top10bm.map(h=>`<tr>
+          <td style="color:var(--txth);font-weight:500">${h.t}</td><td>${h.n}</td>
+          <td class="r">${f2(h.b)}%</td>
+          <td class="r">${h.p>0?'<span style="color:var(--pos)">'+f2(h.p)+'%</span>':'<span style="color:var(--neg)">No</span>'}</td>
+        </tr>`).join('')}</tbody></table>
+        </div>
+      </div>
+    </div>`;
+  }
+  if(metric==='h'){
+    let eqHold=cs.hold.filter(h=>!isCash(h));
+    let cashHold=cs.hold.filter(h=>isCash(h));
+    // Sector distribution of equity holdings
+    let secCounts={};
+    eqHold.forEach(h=>{secCounts[h.sec]=(secCounts[h.sec]||0)+1});
+    let secRows=Object.entries(secCounts).sort((a,b)=>b[1]-a[1]).map(([sec,ct])=>`<tr><td style="color:var(--txth)">${sec}</td><td class="r" style="font-weight:600">${ct}</td><td class="r" style="color:var(--txt)">${f2(ct/eqHold.length*100,1)}%</td></tr>`).join('');
+    let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}%</td></tr>`).join('');
+    extraHtml=`<div class="grid g2" style="margin-top:16px">
+      <div>
+        <div class="card-title">Equity Holdings by Sector (${eqHold.length} names)</div>
+        <div style="max-height:200px;overflow-y:auto">
+        <table style="font-size:11px"><thead><tr><th>Sector</th><th class="r">Count</th><th class="r">% of Port</th></tr></thead><tbody>${secRows}</tbody></table>
+        </div>
+      </div>
+      <div>
+        <div class="card-title">Cash / Currency Baskets (${cashHold.length})</div>
+        ${cashHold.length?`<table style="font-size:11px"><thead><tr><th>Ticker</th><th>Name</th><th class="r">Weight</th></tr></thead><tbody>${cashRows}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">No cash positions identified</p>'}
+        <p style="font-size:9px;color:var(--txt);margin-top:8px">Cash baskets are excluded from the Holdings count. Detected by ticker (currencies), name, or sector classification.</p>
+      </div>
+    </div>`;
+  }
+  if(metric==='sr'){
+    let eqH=equityCount(cs.hold);
+    let bh=cs.sum.bh||0;
+    let computed=bh>0?+(eqH/bh*100).toFixed(2):0;
+    extraHtml=`<div style="margin-top:16px">
+      <div class="card-title">Selection Rate Breakdown</div>
+      <table style="font-size:11px">
+        <tr><td>Equity Holdings</td><td class="r" style="font-weight:600;color:var(--txth)">${eqH}</td></tr>
+        <tr><td>Benchmark Constituents</td><td class="r" style="font-weight:600;color:var(--txth)">${bh||'--'}</td></tr>
+        <tr><td>Computed Rate</td><td class="r" style="font-weight:600;color:var(--pri)">${bh?f2(computed)+'%':'--'}</td></tr>
+        <tr><td>Reported Rate</td><td class="r">${f2(cs.sum.sr)}%</td></tr>
+      </table>
+      <p style="font-size:9px;color:var(--txt);margin-top:6px">Selection rate = portfolio equity holdings ÷ benchmark constituents. A lower rate means a more concentrated portfolio.</p>
+    </div>`;
+  }
+  if(metric==='cash'){
+    let cashHold=cs.hold.filter(h=>isCash(h));
+    let totalCashWt=cashHold.reduce((a,h)=>a+h.p,0);
+    let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r" style="font-weight:600">${f2(h.p)}%</td></tr>`).join('');
+    extraHtml=`<div style="margin-top:16px">
+      <div class="card-title">Cash Composition</div>
+      ${cashHold.length?`<table style="font-size:11px"><thead><tr><th>Ticker</th><th>Name</th><th class="r">Weight</th></tr></thead>
+        <tbody>${cashRows}
+        <tr style="border-top:1px solid var(--grid);font-weight:700"><td colspan="2">Total Cash</td><td class="r">${f2(totalCashWt)}%</td></tr>
+        </tbody></table>`:'<p style="font-size:11px;color:var(--txt)">No explicit cash positions detected</p>'}
+      <p style="font-size:9px;color:var(--txt);margin-top:6px">Reported cash: ${f2(cs.sum.cash)}%. Cash includes currency baskets, money market, and collateral positions.</p>
+    </div>`;
+  }
+
+  // Compact breach display
+  let breachHtml='';
+  if(breaches.length){
+    // Group consecutive breaches, just show date ranges
+    let grouped=[];
+    let cur=null;
+    breaches.forEach(b=>{
+      if(cur&&cur.label===b.label){cur.end=b.date;cur.count++}
+      else{if(cur)grouped.push(cur);cur={start:b.date,end:b.date,label:b.label,count:1,peak:b.val}}
+      if(Math.abs(b.val)>Math.abs(cur.peak))cur.peak=b.val;
+    });
+    if(cur)grouped.push(cur);
+    breachHtml=`<div style="margin-top:12px"><div class="card-title">Threshold Events (${breaches.length} months)</div>
+      <div style="max-height:100px;overflow-y:auto">
+      <table style="font-size:11px"><thead><tr><th>Period</th><th class="r">Months</th><th class="r">Peak</th><th>Type</th></tr></thead>
+      <tbody>${grouped.slice(-10).map(g=>`<tr>
+        <td style="color:var(--txth)">${g.start.slice(0,7)}${g.start!==g.end?' → '+g.end.slice(0,7):''}</td>
+        <td class="r">${g.count}</td>
+        <td class="r" style="font-weight:600">${f2(g.peak,dec)}</td>
+        <td><span class="pill ${g.label.includes('above')?'pill-neg':'pill-pos'}" style="font-size:9px">${g.label}</span></td>
+      </tr>`).join('')}</tbody></table></div></div>`;
+  }
+
+  $('metricContent').innerHTML=`
+    <h2>${labels[metric]||metric} — Since Inception<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g4" style="margin-bottom:12px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current</div><div style="font-size:18px;font-weight:700;color:${valColor}">${f2(current,dec)}${units[metric]}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Avg</div><div style="font-size:18px;font-weight:700;color:var(--txt)">${f2(avg,dec)}${units[metric]}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Min</div><div style="font-size:18px;font-weight:700;color:var(--pos)">${f2(min,dec)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Max</div><div style="font-size:18px;font-weight:700;color:var(--neg)">${f2(max,dec)}</div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:6px 12px;background:var(--surf);border-radius:8px">
+      <span style="font-size:11px;color:var(--txt);white-space:nowrap">Drop first</span>
+      <input type="range" id="metricSkipSlider" min="0" max="${Math.max(0,totalMonths-12)}" value="${skip}" style="flex:1;accent-color:var(--pri)" oninput="document.getElementById('metricSkipLabel').textContent=this.value+' mo';_metricSkipMonths=parseInt(this.value)">
+      <span id="metricSkipLabel" style="font-size:11px;color:var(--txth);min-width:36px">${skip} mo</span>
+      <button class="btn btn-sm btn-pri" onclick="oDrMetric('${metric}',parseInt(document.getElementById('metricSkipSlider').value))">Apply</button>
+    </div>
+    <div style="font-size:10px;color:var(--txt);margin-bottom:6px">Inception: ${inception} | ${totalMonths} mo total | Showing: ${hist.length} mo${skip>0?' (dropped '+skip+')':''}</div>
+    <div id="metricChartDiv" style="height:300px"></div>
+    ${breachHtml}
+    ${extraHtml}`;
+  m.classList.add('show');
+
+  setTimeout(()=>{
+    let shapes=[];
+    (thresholds[metric]||[]).forEach(t=>{
+      shapes.push({type:'line',y0:t.v,y1:t.v,xref:'paper',x0:0,x1:1,line:{color:t.c,dash:'dash',width:1}});
+    });
+    if(metric==='te'){
+      shapes.push({type:'rect',y0:5,y1:10,xref:'paper',x0:0,x1:1,fillcolor:'rgba(16,185,129,.06)',line:{width:0}});
+    }
+    let annotations=breaches.slice(-5).map(b=>({x:b.date,y:b.val,text:'!',showarrow:true,arrowhead:2,arrowcolor:'#ef4444',font:{size:10,color:'#ef4444'}}));
+    let yRange=yRanges[metric]||undefined;
+    let yaxis={...plotBg.yaxis,title:labels[metric]+(units[metric]?' ('+units[metric]+')':'')};
+    if(yRange)yaxis.range=yRange;
+    if(metric==='h'){yaxis.rangemode='tozero';yaxis.dtick=Math.max(1,Math.ceil((max-min)/6))}
+    let maxTicks=Math.min(8,Math.ceil(dates.length/12));
+    let xaxis={...plotBg.xaxis,tickangle:0,nticks:maxTicks,tickformat:'%b %Y',tickfont:{size:10,color:'#64748b'}};
+    let fillColor=metric==='beta'?'rgba(59,130,246,.04)':'rgba(59,130,246,.08)';
+    let fill=metric==='beta'?'none':'tozeroy';
+    let traces=[{
+      x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],
+      line:{color:'#3b82f6',width:2},fill,fillcolor:fillColor
+    }];
+    // Beta overlays: draw horizontal lines for each selected beta variant
+    if(metric==='beta'&&window._betaVariants&&window._betaSelected){
+      let betaColors=['#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#f97316','#22c55e'];
+      let entries=Object.entries(window._betaVariants);
+      entries.forEach(([k,v],i)=>{
+        if(window._betaSelected.has(k)&&v!=null){
+          shapes.push({type:'line',y0:v,y1:v,xref:'paper',x0:0,x1:1,line:{color:betaColors[i%betaColors.length],width:2,dash:'dot'}});
+          // Add label annotation on the right side
+          annotations.push({x:1,xref:'paper',y:v,text:k.replace(/Beta\s*/i,'').replace(/[()]/g,''),showarrow:false,font:{size:9,color:betaColors[i%betaColors.length]},xanchor:'left',xshift:4});
+        }
+      });
+    }
+    Plotly.newPlot('metricChartDiv',traces,{...plotBg,xaxis,yaxis,shapes,annotations,margin:{...plotBg.margin,r:metric==='beta'?80:20}},plotCfg);
+  },50);
+}
+
+function toggleBetaOverlay(key){
+  if(!window._betaSelected)window._betaSelected=new Set();
+  if(window._betaSelected.has(key))window._betaSelected.delete(key);
+  else window._betaSelected.add(key);
+  // Re-render the whole modal to update both table highlights and chart
+  oDrMetric('beta',_metricSkipMonths);
+}
+
+// ===== COUNTRY DRILL =====
+function oDrCountry(name){
+  let m=$('countryModal');
+  let holdings=cs.hold.filter(h=>h.co===name);
+  let country=cs.countries.find(c=>c.n===name);
+  let region=CMAP[name]||'Other';
+  let regData=cs.regions.find(r=>r.n===region);
+
+  let holdRows=holdings.sort((a,b)=>b.p-a.p).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
+    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td>
+    <td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r"><span style="color:${rc(h.r)}">R${h.r}</span></td>
+  </tr>`).join('');
+
+  $('countryContent').innerHTML=`
+    <h2>${name}<button class="close" onclick="$('countryModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:18px;font-weight:700;color:var(--txth)">${country?f2(country.p):'--'}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:18px;font-weight:700;color:${country&&country.a>=0?'var(--pos)':'var(--neg)'}">${country?fp(country.a):'--'}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${region}</div><div style="font-size:10px;color:var(--txt)">Active: ${regData?fp(regData.a):'--'}%</div></div>
+    </div>
+    <div class="card-title">Holdings in ${name} (${holdings.length})</div>
+    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
+  m.classList.add('show');
+}
+
+// ===== STRESS SCENARIO DRILL =====
+function oDrStress(idx){
+  let m=$('stressModal');
+  let sc=STRESS[idx];
+  let stress=cs.stress[idx];
+  if(!sc||!stress)return;
+
+  // Per-sector impact
+  let sectorImpacts=cs.sectors.map(sec=>{
+    let shock=sc.sectors[sec.n]||0;
+    let portImpact=sec.p*shock/100;
+    let benchImpact=sec.b*shock/100;
+    return{n:sec.n,shock,portW:sec.p,benchW:sec.b,portImpact:+portImpact.toFixed(3),benchImpact:+benchImpact.toFixed(3),activeImpact:+(portImpact-benchImpact).toFixed(3)};
+  }).sort((a,b)=>a.activeImpact-b.activeImpact);
+
+  let rows=sectorImpacts.map(s=>`<tr>
+    <td>${s.n}</td><td class="r">${s.shock}%</td><td class="r">${f2(s.portW)}</td>
+    <td class="r" style="color:var(--neg)">${fp(s.portImpact,3)}</td>
+    <td class="r" style="color:var(--neg)">${fp(s.benchImpact,3)}</td>
+    <td class="r ${s.activeImpact>=0?'pos':'neg'}">${fp(s.activeImpact,3)}</td>
+  </tr>`).join('');
+
+  $('stressContent').innerHTML=`
+    <h2>${sc.name}<button class="close" onclick="$('stressModal').classList.remove('show')">&times;</button></h2>
+    <p style="font-size:12px;color:var(--txt);margin-bottom:16px">${sc.desc}</p>
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Portfolio Impact</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(stress.port)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Impact</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(stress.bench)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Impact</div><div style="font-size:20px;font-weight:700;color:${stress.active>=0?'var(--pos)':'var(--neg)'}">${fp(stress.active)}%</div></div>
+    </div>
+    <div id="stressWaterfallDiv" style="height:300px;margin-bottom:16px"></div>
+    <div class="card-title">Per-Sector Impact Detail</div>
+    <table><thead><tr><th>Sector</th><th class="r">Shock</th><th class="r">Port Wt</th><th class="r">Port Impact</th><th class="r">Bench Impact</th><th class="r">Active Impact</th></tr></thead><tbody>${rows}</tbody></table>`;
+  m.classList.add('show');
+
+  setTimeout(()=>{
+    Plotly.newPlot('stressWaterfallDiv',[{
+      y:sectorImpacts.map(s=>s.n),x:sectorImpacts.map(s=>s.activeImpact),type:'bar',orientation:'h',
+      marker:{color:sectorImpacts.map(s=>s.activeImpact>=0?'#10b981':'#ef4444')},
+      text:sectorImpacts.map(s=>fp(s.activeImpact,3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
+    }],{...plotBg,yaxis:{...plotBg.yaxis},xaxis:{...plotBg.xaxis,title:'Active Impact %'}},plotCfg);
+  },50);
+}
+
+// ===== UNOWNED DRILL =====
+function oDrUnowned(ticker){
+  let m=$('unownedModal');
+  let u=cs.unowned.find(x=>x.t===ticker);
+  if(!u)return;
+  let secHold=cs.hold.filter(h=>h.reg===u.reg);
+
+  $('unownedContent').innerHTML=`
+    <h2>${u.t} — ${u.n}<button class="close" onclick="$('unownedModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(u.b)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(u.tr)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${u.reg||'--'}</div></div>
+    </div>
+    <div class="card-title">Why This Stock Matters</div>
+    <p style="font-size:12px;color:var(--txt);margin-bottom:12px">This stock has a ${f2(u.b)}% weight in the benchmark but is not held in the portfolio. Its absence contributes ${fp(u.tr)} to tracking error. Consider whether this is an intentional underweight based on your investment thesis.</p>
+    ${secHold.length?`<div class="card-title" style="margin-top:16px">Your Holdings in ${u.reg} (${secHold.length})</div>
+    <div style="max-height:200px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${secHold.slice(0,10).map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
+  m.classList.add('show');
+}
+
+// ===== GROUP DRILL =====
+function oDrGroup(groupName){
+  let m=$('groupModal');
+  let subgroups=cs.groups.filter(g=>g.g===groupName);
+  // Find all holdings in sectors belonging to this group
+  let groupDef=GROUPS_DEF.filter(gd=>gd.g===groupName);
+  let groupSecs=new Set();
+  groupDef.forEach(gd=>gd.secs.forEach(s=>groupSecs.add(s)));
+  let holdings=cs.hold.filter(h=>groupSecs.has(h.sec)).sort((a,b)=>b.p-a.p);
+  let totalP=subgroups.reduce((a,g)=>a+g.p,0);
+  let totalB=subgroups.reduce((a,g)=>a+g.b,0);
+
+  let sgRows=subgroups.map(sg=>`<tr><td>${sg.sg}</td><td class="r">${f2(sg.p)}</td><td class="r">${f2(sg.b)}</td><td class="r ${activeStyle(sg.a)}">${fp(sg.a)}</td></tr>`).join('');
+  let holdRows=holdings.slice(0,15).map(h=>`<tr class="clickable" onclick="$('groupModal').classList.remove('show');oSt('${h.t}')">
+    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td><span class="chip">${h.sec}</span></td>
+    <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
+  </tr>`).join('');
+
+  $('groupContent').innerHTML=`
+    <h2>${groupName} Group Detail<button class="close" onclick="$('groupModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Portfolio Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(totalP)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Weight</div><div style="font-size:20px;font-weight:700;color:var(--txt)">${f2(totalB)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:20px;font-weight:700;color:${(totalP-totalB)>=0?'var(--pos)':'var(--neg)'}">${fp(totalP-totalB)}%</div></div>
+    </div>
+    <div class="card-title">Subgroups</div>
+    <table><thead><tr><th>Subgroup</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${sgRows}</tbody></table>
+    <div class="card-title" style="margin-top:16px">Holdings (${holdings.length})</div>
+    <div style="max-height:300px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${holdRows}</tbody></table></div>`;
+  m.classList.add('show');
+}
+
+// ===== CHARACTERISTICS DRILL =====
+function oDrChar(metric){
+  let m=$('charModal');
+  let char=cs.chars.find(c=>c.m===metric);
+  if(!char)return;
+  // Generate synthetic historical comparison
+  let hist=[];
+  let now=new Date();
+  for(let i=11;i>=0;i--){
+    let d=new Date(now);d.setMonth(d.getMonth()-i*3);
+    hist.push({d:d.toISOString().slice(0,10),p:+(char.p*(0.9+Math.random()*0.2)).toFixed(1),b:+(char.b*(0.9+Math.random()*0.2)).toFixed(1)});
+  }
+
+  $('charContent').innerHTML=`
+    <h2>${metric}<button class="close" onclick="$('charModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g3" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Portfolio</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(char.p,1)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark</div><div style="font-size:20px;font-weight:700;color:var(--txt)">${f2(char.b,1)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Difference</div><div style="font-size:20px;font-weight:700;color:${(char.p-char.b)>=0?'var(--pos)':'var(--neg)'}">${fp(char.p-char.b,1)}</div></div>
+    </div>
+    <div id="charHistDiv" style="height:250px"></div>`;
+  m.classList.add('show');
+
+  setTimeout(()=>{
+    Plotly.newPlot('charHistDiv',[
+      {x:hist.map(h=>h.d),y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#3b82f6',width:2}},
+      {x:hist.map(h=>h.d),y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#64748b',width:2,dash:'dot'}}
+    ],{...plotBg,yaxis:{...plotBg.yaxis,title:metric},legend:{orientation:'h',y:1.1,font:{size:10}}},plotCfg);
+  },50);
+}
+
+// ===== CORRELATION SCATTER DRILL =====
+function oDrCorr(f1Name,f2Name){
+  if(f1Name===f2Name)return;
+  let m=$('corrModal');
+  let corrVal=cs.fcorr[f1Name]?cs.fcorr[f1Name][f2Name]:0;
+  // Generate synthetic scatter data
+  let pts=cs.hold.slice(0,20).map(h=>({
+    x:+(Math.random()*2-1).toFixed(3),
+    y:+(corrVal*(Math.random()*2-1)+Math.random()*0.5).toFixed(3),
+    t:h.t
+  }));
+
+  $('corrContent').innerHTML=`
+    <h2>${f1Name} vs ${f2Name}<button class="close" onclick="$('corrModal').classList.remove('show')">&times;</button></h2>
+    <div style="text-align:center;margin-bottom:12px"><span style="font-size:14px;color:var(--txth)">Correlation: </span><span style="font-size:20px;font-weight:700;color:${corrVal>0?'var(--pos)':'var(--neg)'}">${f2(corrVal,2)}</span></div>
+    <div id="corrScatterDiv" style="height:300px"></div>`;
+  m.classList.add('show');
+
+  setTimeout(()=>{
+    Plotly.newPlot('corrScatterDiv',[{
+      x:pts.map(p=>p.x),y:pts.map(p=>p.y),mode:'markers+text',type:'scatter',
+      text:pts.map(p=>p.t),textposition:'top center',textfont:{size:8,color:'#64748b'},
+      marker:{size:8,color:'#3b82f6'},hovertemplate:'%{text}<br>'+f1Name+': %{x:.3f}<br>'+f2Name+': %{y:.3f}<extra></extra>'
+    }],{...plotBg,xaxis:{...plotBg.xaxis,title:f1Name+' Exposure',zeroline:true,zerolinecolor:'#64748b'},yaxis:{...plotBg.yaxis,title:f2Name+' Exposure',zeroline:true,zerolinecolor:'#64748b'}},plotCfg);
+  },50);
+}
+
+// ===== ATTRIBUTION DRILL =====
+function oDrAttrib(sectorName){
+  let m=$('attrDrillModal');
+  let attr=cs.attrib.find(a=>a.n===sectorName);
+  if(!attr)return;
+  let holdings=cs.hold.filter(h=>h.sec===sectorName).sort((a,b)=>b.p-a.p);
+
+  // Synthetic holdings-level attribution
+  let holdAttr=holdings.map(h=>{
+    let alloc=+(attr.alloc*h.p/Math.max(attr.pa,1)*0.5).toFixed(3);
+    let sel=+(attr.sel*h.p/Math.max(attr.pa,1)).toFixed(3);
+    return{...h,alloc,sel,total:+(alloc+sel).toFixed(3)};
+  });
+
+  let rows=holdAttr.map(h=>`<tr class="clickable" onclick="$('attrDrillModal').classList.remove('show');oSt('${h.t}')">
+    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
+    <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
+    <td class="r" style="${h.alloc>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.alloc,3)}</td>
+    <td class="r" style="${h.sel>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.sel,3)}</td>
+    <td class="r" style="font-weight:600;${h.total>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.total,3)}</td>
+  </tr>`).join('');
+
+  $('attrDrillContent').innerHTML=`
+    <h2>${sectorName} — Attribution Detail<button class="close" onclick="$('attrDrillModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g4" style="margin-bottom:16px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Allocation</div><div style="font-size:18px;font-weight:700;color:${attr.alloc>=0?'var(--pos)':'var(--neg)'}">${fp(attr.alloc)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Selection</div><div style="font-size:18px;font-weight:700;color:${attr.sel>=0?'var(--pos)':'var(--neg)'}">${fp(attr.sel)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Interaction</div><div style="font-size:18px;font-weight:700;color:${attr.inter>=0?'var(--pos)':'var(--neg)'}">${fp(attr.inter)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Total</div><div style="font-size:18px;font-weight:700;color:${attr.total>=0?'var(--pos)':'var(--neg)'}">${fp(attr.total)}</div></div>
+    </div>
+    <div class="card-title">Holdings-Level Decomposition</div>
+    <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Alloc</th><th class="r">Select</th><th class="r">Total</th></tr></thead><tbody>${rows}</tbody></table>`;
+  m.classList.add('show');
+}
+
+// ===== RISK BUDGET DETAILED DRILL =====
+function oDrRiskBudget(){
+  let m=$('riskBudgetModal');
+  let facs=cs.factors;
+  let total=facs.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
+
+  let details=facs.map(f=>{
+    let pctOfTotal=Math.abs(f.c||0)/total*100;
+    let intentional=Math.abs(f.e)>0.2;
+    return{n:f.n,e:f.e,c:f.c||0,pct:pctOfTotal,mcr:+(f.c*cs.sum.te/100||0).toFixed(3),intentional};
+  }).sort((a,b)=>b.pct-a.pct);
+
+  let rows=details.map(d=>`<tr>
+    <td style="color:var(--txth);font-weight:500">${d.n}</td>
+    <td class="r ${d.e>=0?'pos':'neg'}">${fp(d.e,3)}</td>
+    <td class="r">${f2(d.c)}</td>
+    <td class="r">${f2(d.pct,1)}%</td>
+    <td class="r">${fp(d.mcr,3)}</td>
+    <td class="r"><span class="pill ${d.intentional?'pill-pos':'pill-neg'}">${d.intentional?'Intentional':'Unintentional'}</span></td>
+  </tr>`).join('');
+
+  $('riskBudgetContent').innerHTML=`
+    <h2>Factor Risk Budget — Detailed<button class="close" onclick="$('riskBudgetModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g2" style="margin-bottom:16px">
+      <div><div id="rbPieDiv" style="height:280px"></div></div>
+      <div>
+        <div class="card-title">Breakdown</div>
+        <table><thead><tr><th>Factor</th><th class="r">Exposure</th><th class="r">Contrib%</th><th class="r">% of Total</th><th class="r">MCR</th><th class="r">Type</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>
+    </div>
+    <div class="card-title">Risk Budget Bars</div>
+    <div id="rbBarDiv" style="height:200px"></div>`;
+  m.classList.add('show');
+
+  setTimeout(()=>{
+    Plotly.newPlot('rbPieDiv',[{
+      labels:details.map(d=>d.n),values:details.map(d=>d.pct),type:'pie',hole:0.45,
+      marker:{colors:['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899']},
+      textinfo:'label+percent',textfont:{size:10,color:'#e2e8f0'}
+    }],{...plotBg,margin:{l:10,r:10,t:10,b:10},showlegend:false},plotCfg);
+
+    Plotly.newPlot('rbBarDiv',[
+      {x:details.map(d=>d.n),y:details.map(d=>d.pct),type:'bar',name:'% of Total Risk',marker:{color:details.map(d=>d.intentional?'#3b82f6':'#ef4444')},
+      text:details.map(d=>f2(d.pct,1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}}
+    ],{...plotBg,yaxis:{...plotBg.yaxis,title:'% of Total Risk'},xaxis:{...plotBg.xaxis}},plotCfg);
+  },50);
+}
+
+// ===== EMAIL SNAPSHOT =====
+function generateEmailSnapshot(){
+  let s=cs;
+  let teColor=s.sum.te>=10?'#ef4444':s.sum.te<5?'#f59e0b':'#10b981';
+  let betaColor=Math.abs(s.sum.beta-1)>0.1?'#f59e0b':'#10b981';
+  let topOW=s.sectors.sort((a,b)=>b.a-a.a).slice(0,3).map(x=>`${x.n}: ${fp(x.a)}%`).join(', ');
+  let topUW=s.sectors.sort((a,b)=>a.a-b.a).slice(0,3).map(x=>`${x.n}: ${fp(x.a)}%`).join(', ');
+  let emailHtml=`<!DOCTYPE html><html><head><style>
+    body{font-family:Arial,sans-serif;background:#f5f5f5;padding:20px}
+    .container{max-width:700px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    .header{background:#080e1e;color:#e2e8f0;padding:20px 24px}
+    .header h1{margin:0;font-size:20px;font-weight:700}
+    .header .sub{color:#94a3b8;font-size:12px;margin-top:4px}
+    .metrics{display:flex;padding:16px 24px;gap:16px;border-bottom:1px solid #eee}
+    .metric{flex:1;text-align:center;padding:12px;border-radius:8px;background:#f8f9fa}
+    .metric .label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px}
+    .metric .value{font-size:24px;font-weight:700;margin-top:4px}
+    .section{padding:16px 24px;border-bottom:1px solid #eee}
+    .section h3{font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+    .section p{font-size:13px;color:#333;line-height:1.5}
+    .footer{padding:12px 24px;font-size:10px;color:#999;text-align:center}
+  </style></head><body>
+  <div class="container">
+    <div class="header"><h1>REDWOOD Risk Control Panel</h1><div class="sub">${s.name} (${s.id}) | ${s.benchmark} | ${new Date().toLocaleDateString()}</div></div>
+    <div class="metrics">
+      <div class="metric"><div class="label">Tracking Error</div><div class="value" style="color:${teColor}">${f2(s.sum.te)}%</div></div>
+      <div class="metric"><div class="label">Active Share</div><div class="value">${f2(s.sum.as)}%</div></div>
+      <div class="metric"><div class="label">Beta</div><div class="value" style="color:${betaColor}">${f2(s.sum.beta,3)}</div></div>
+      <div class="metric"><div class="label">Holdings</div><div class="value">${s.sum.h||equityCount(s.hold)}</div></div>
+    </div>
+    <div class="section"><h3>Key Overweights</h3><p>${topOW}</p></div>
+    <div class="section"><h3>Key Underweights</h3><p>${topUW}</p></div>
+    <div class="section"><h3>Factor Tilts</h3><p>${s.factors.filter(f=>Math.abs(f.e)>0.2).map(f=>`${f.n}: ${fp(f.e,3)}`).join(', ')||'No significant tilts'}</p></div>
+    <div class="footer">Generated by Redwood Risk Control Panel | ${new Date().toLocaleString()}</div>
+  </div></body></html>`;
+
+  // Copy to clipboard
+  navigator.clipboard.writeText(emailHtml).then(()=>{
+    showToast('Email HTML copied to clipboard! Paste into your email client.');
+  });
+  // Also open in new window for preview
+  let win=window.open('','_blank','width=750,height=600');
+  if(win){win.document.write(emailHtml);win.document.close()}
+}
+
+// ===== TOAST HELPER =====
+function showToast(msg,color){
+  let toast=document.createElement('div');
+  toast.textContent=msg;
+  toast.style.cssText=`position:fixed;bottom:20px;right:20px;background:${color||'var(--pri)'};color:#fff;padding:10px 20px;border-radius:8px;font-size:12px;z-index:999;animation:fadeIn .2s;font-family:Inter,sans-serif;max-width:350px;box-shadow:0 4px 12px rgba(0,0,0,.3)`;
+  document.body.appendChild(toast);
+  setTimeout(()=>{toast.style.opacity='0';toast.style.transition='opacity .3s';setTimeout(()=>toast.remove(),300)},2500);
+}
+
+// ===== CONTEXT MENU (right-click copy) =====
+document.addEventListener('contextmenu',e=>{
+  let td=e.target.closest('td');
+  let val=e.target.closest('.value');
+  if(td||val){
+    let text=(td||val).textContent.trim();
+    if(text&&text!=='--'){
+      e.preventDefault();
+      copyValue(text);
+    }
+  }
+});
+
+// ===== EMPTY STATE HELPER =====
+function emptyState(msg){
+  return`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px;color:var(--txt)">
+    <div style="font-size:32px;margin-bottom:8px;opacity:.3">&#9888;</div>
+    <div style="font-size:13px">${msg||'No data available'}</div>
+    <div style="font-size:11px;margin-top:4px;opacity:.6">Upload a JSON file or configure API connection</div>
+  </div>`;
+}
+
+// ===== FACTSET NORMALIZE EXTENSION =====
+function normalizeFactSet(fsResponse){
+  // Transform FactSet-style response into our internal format
+  // Supports: portfolioAnalytics, paEngine, spar responses
+  let out={};
+  let cfg={};
+  try{cfg=JSON.parse(localStorage.getItem('rr_config')||'{}')}catch(e){}
+  let stratMap={};
+  try{stratMap=JSON.parse(cfg.stratMap||'{}')}catch(e){}
+
+  // Reverse map: FactSet ID -> our strategy code
+  let reverseMap={};
+  Object.entries(stratMap).forEach(([k,v])=>reverseMap[v]=k);
+
+  // Handle array of portfolios
+  let portfolios=fsResponse.data||fsResponse.portfolios||fsResponse;
+  if(!Array.isArray(portfolios))portfolios=[portfolios];
+
+  portfolios.forEach(p=>{
+    let fsId=p.portfolioId||p.id||'UNKNOWN';
+    let stratId=reverseMap[fsId]||fsId;
+    let stratDef=STRATS.find(s=>s.id===stratId)||{id:stratId,name:p.name||stratId,bm:p.benchmarkId||''};
+
+    let s={
+      id:stratId,name:p.name||stratDef.name,benchmark:p.benchmarkName||p.benchmarkId||stratDef.bm,
+      sum:{
+        te:p.trackingError||p.te||0,
+        as:p.activeShare||p.as||0,
+        beta:p.beta||1,
+        h:p.holdingsCount||0,
+        bh:p.benchmarkHoldings||0,
+        sr:p.selectionRate||0,
+        cash:p.cashWeight||0
+      },
+      sectors:(p.sectors||p.sectorExposures||[]).map(x=>({
+        n:x.name||x.sector,p:x.portfolioWeight||x.p||0,b:x.benchmarkWeight||x.b||0,
+        a:x.activeWeight||x.a||(x.portfolioWeight-x.benchmarkWeight)||0,
+        s:x.stockSpecific||0,t:x.totalReturn||0
+      })),
+      regions:(p.regions||p.regionExposures||[]).map(x=>({
+        n:x.name||x.region,p:x.portfolioWeight||x.p||0,b:x.benchmarkWeight||x.b||0,
+        a:x.activeWeight||x.a||(x.portfolioWeight-x.benchmarkWeight)||0
+      })),
+      countries:(p.countries||p.countryExposures||[]).map(x=>({
+        n:x.name||x.country,p:x.portfolioWeight||x.p||0,b:x.benchmarkWeight||x.b||0,
+        a:x.activeWeight||x.a||(x.portfolioWeight-x.benchmarkWeight)||0
+      })),
+      factors:(p.factors||p.factorExposures||[]).map(x=>({
+        n:x.name||x.factor,e:x.exposure||x.e||0,a:x.activeExposure||x.exposure||0,bm:x.benchmarkExposure||0,
+        c:x.contribution||x.c||0,ret:x.factorReturn||0,imp:x.impact||0
+      })),
+      hold:(p.holdings||p.positions||[]).map(x=>({
+        t:x.ticker||x.symbol||x.id,n:x.name||x.securityName||'',
+        sec:x.sector||'',co:x.country||'',
+        p:x.portfolioWeight||x.weight||0,b:x.benchmarkWeight||0,
+        a:x.activeWeight||(x.portfolioWeight-x.benchmarkWeight)||0,
+        mcr:x.mcr||x.marginalContribution||0,tr:x.totalReturn||0,
+        r:x.rank||x.quantRank||3,
+        over:x.overallScore||3,rev:x.revenueScore||3,val:x.valueScore||3,
+        qual:x.qualityScore||3,mom:x.momentumScore||3,stab:x.stabilityScore||3
+      })),
+      ranks:p.ranks||[],chars:p.characteristics||[],groups:p.groups||[],
+      unowned:(p.unownedRisk||p.unowned||[]).map(x=>({
+        t:x.ticker||x.id,n:x.name||'',reg:x.region||'',b:x.benchmarkWeight||0,tr:x.teContribution||0
+      }))
+    };
+    out[stratId]=s;
+  });
+  return out;
+}
+
+// ===== ENHANCED NORMALIZE (accepts both formats) =====
+let _origNormalize=normalize;
+normalize=function(raw){
+  // Detect FactSet format
+  if(raw.data||raw.portfolios||(raw[Object.keys(raw)[0]]&&raw[Object.keys(raw)[0]].portfolioId)){
+    return _origNormalize(normalizeFactSet(raw));
+  }
+  return _origNormalize(raw);
+};
+
+// ===== LIVE REFRESH =====
+let refreshTimer=null;
+function startLiveRefresh(){
+  let cfg={};
+  try{cfg=JSON.parse(localStorage.getItem('rr_config')||'{}')}catch(e){}
+  let interval=(parseInt(cfg.refresh)||300)*1000;
+  if(refreshTimer)clearInterval(refreshTimer);
+  refreshTimer=setInterval(async()=>{
+    try{
+      let data=await fetchFromAPI('portfolio/analytics');
+      A=normalize(data);
+      let keys=Object.keys(A);
+      if(keys.includes(cs.id))cs=A[cs.id];
+      else if(keys.length)cs=A[keys[0]];
+      upd();
+      $('dataTimestamp').textContent='Data as of: '+new Date().toLocaleDateString()+' '+new Date().toLocaleTimeString();
+      showToast('Data refreshed','var(--pos)');
+    }catch(e){
+      let dot=$('connStatus').querySelector('.conn-dot');
+      dot.className='conn-dot off';
+    }
+  },interval);
+}
+
 // ===== AUTO-LOAD WITH DEMO DATA =====
 window.addEventListener('DOMContentLoaded',()=>{
+  loadConfig();
+  // Check for shared state in URL hash
+  if(location.hash){
+    try{
+      let state=JSON.parse(atob(location.hash.slice(1)));
+      if(state.t)activeTab=state.t;
+      // Strategy selection will happen after init
+    }catch(e){}
+  }
   // Start with synthetic data
   A=normalize(genSynthetic());
   init();

@@ -396,6 +396,12 @@ def parse(csv_path):
     for (acct, dt), rows in rows_by_acct_date.items():
         date_counts[dt] += len(rows)
     sorted_dates = sorted(date_counts, key=lambda d: date_counts[d], reverse=True)
+    if not sorted_dates:
+        return {}, ["No data rows found (all accounts unknown or file empty)"], "", {
+            "total_rows": total_rows, "parse_time_s": round(time.time() - t_start, 2),
+            "file_size_mb": round(file_size_mb, 2), "encoding": enc_used,
+            "strat_stats": {}, "repair_warnings": len(repair_warnings),
+        }
     main_date    = sorted_dates[0]      # most rows = sector/country/holdings data
     factor_dates = sorted_dates[1:]     # smaller row counts = factor snapshots
 

@@ -229,6 +229,7 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <div class="strat-sel" id="stratSel"></div>
 <div class="conn-status" id="connStatus" style="display:none"><span class="conn-dot file"></span><span>File</span></div>
 <button class="btn btn-sec btn-sm" id="shareBtn" style="display:none" onclick="generateShareURL()" title="Copy share URL">Share<span class="kbd">S</span></button>
+<button class="btn btn-sec btn-sm" id="copyBtn" style="display:none" onclick="copySummary()" title="Copy formatted summary to clipboard">Copy Summary</button>
 <button class="btn btn-sec btn-sm" id="emailBtn" style="display:none" onclick="generateEmailSnapshot()" title="Email-ready snapshot">Email</button>
 <button class="btn btn-sec btn-sm" id="compareBtn" style="display:none" onclick="openComp()">Compare<span class="kbd">C</span></button>
 <label class="upload-btn-sm" id="reupload" style="display:none">Upload JSON<input type="file" accept=".json" onchange="upload(event)" hidden></label>
@@ -560,6 +561,7 @@ function init(){
   $('reupload').style.display='block';
   $('reportBtn').style.display='block';
   $('shareBtn').style.display='inline-block';
+  $('copyBtn').style.display='inline-block';
   $('emailBtn').style.display='inline-block';
   $('compareBtn').style.display='inline-block';
   $('configBtn').style.display='inline-block';
@@ -1329,7 +1331,7 @@ function renderHoldTab(){
         <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>
         <div style="display:flex;gap:8px;align-items:center">
           <div class="export-bar">
-            <button class="export-btn" onclick="exportCSV('#cardHoldings table','holdings_${cs.id}')">CSV</button>
+            <button class="export-btn" onclick="exportAllHoldings()" title="Export all holdings including all pages">Export All CSV</button>
             <button class="export-btn" onclick="screenshotCard('#cardHoldings')">PNG</button>
           </div>
           <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by sector">
@@ -2750,47 +2752,148 @@ function oDrRiskBudget(){
 }
 
 // ===== EMAIL SNAPSHOT =====
+// ===== COPY SUMMARY =====
+function copySummary(){
+  let s=cs;
+  let pad=(str,n)=>str.toString().padEnd(n);
+  let lpad=(str,n)=>str.toString().padStart(n);
+  let topOW=[...s.sectors].sort((a,b)=>b.a-a.a).slice(0,3);
+  let topUW=[...s.sectors].sort((a,b)=>a.a-b.a).slice(0,3);
+  let sigFac=s.factors.filter(f=>Math.abs(f.a??0)>0.15).sort((a,b)=>Math.abs(b.a??0)-Math.abs(a.a??0)).slice(0,6);
+  let dateStr=$('dataTimestamp').textContent||'';
+  let lines=[
+    `${s.name} (${s.id})  |  Benchmark: ${s.benchmark}`,
+    dateStr,
+    '',
+    'RISK METRICS',
+    `  Tracking Error : ${f2(s.sum.te)}%`,
+    `  Active Share   : ${f2(s.sum.as)}%`,
+    `  Beta           : ${f2(s.sum.beta,3)}`,
+    `  Holdings       : ${s.sum.h} portfolio  /  ${s.sum.bh||'—'} benchmark`,
+    `  Cash           : ${f2(s.sum.cash)}%`,
+    '',
+    'TOP SECTOR TILTS',
+    ...topOW.map(x=>`  ${x.a>=0?'+':''}${fp(x.a)}%  ${x.n}`),
+    ...topUW.map(x=>`  ${fp(x.a)}%  ${x.n}`),
+  ];
+  if(sigFac.length){
+    lines.push('');
+    lines.push('SIGNIFICANT FACTOR TILTS');
+    sigFac.forEach(f=>lines.push(`  ${pad(f.n,24)} ${f.a>=0?'+':''}${fp(f.a,3)}`));
+  }
+  let topHold=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>b.p-a.p).slice(0,5);
+  if(topHold.length){
+    lines.push('');
+    lines.push('TOP 5 HOLDINGS');
+    topHold.forEach(h=>lines.push(`  ${pad(h.t,8)} ${pad(h.n,28)} ${lpad(f2(h.p),5)}%`));
+  }
+  let txt=lines.join('\n');
+  navigator.clipboard.writeText(txt).then(()=>showToast('Summary copied to clipboard!','var(--pos)'));
+}
+
+// ===== EXPORT ALL HOLDINGS CSV =====
+function exportAllHoldings(){
+  let s=cs;
+  let allHold=[...s.hold];
+  let header='"Ticker","Name","Sector","Country","Port%","Bench%","Active%","%S (Specific TE)","%T (TE Contrib)","Rank","OVER_WAvg","REV_WAvg","VAL_WAvg","QUAL_WAvg","MOM_WAvg","STAB_WAvg"';
+  let rows=allHold.map(h=>[
+    h.t,h.n,h.sec||'',h.co||'',h.p,h.b,h.a,h.mcr,h.tr,h.r,
+    h.over,h.rev,h.val,h.qual,h.mom,h.stab
+  ].map(v=>'"'+(v==null?'':String(v).replace(/"/g,'""'))+'"').join(','));
+  let csv=[header,...rows].join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`holdings_${s.id}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`Exported ${allHold.length} holdings`,'var(--pos)');
+}
+
 function generateEmailSnapshot(){
   let s=cs;
   let teColor=s.sum.te>=10?'#ef4444':s.sum.te<5?'#f59e0b':'#10b981';
   let betaColor=Math.abs(s.sum.beta-1)>0.1?'#f59e0b':'#10b981';
-  let topOW=s.sectors.sort((a,b)=>b.a-a.a).slice(0,3).map(x=>`${x.n}: ${fp(x.a)}%`).join(', ');
-  let topUW=s.sectors.sort((a,b)=>a.a-b.a).slice(0,3).map(x=>`${x.n}: ${fp(x.a)}%`).join(', ');
+  let topOW=[...s.sectors].sort((a,b)=>b.a-a.a).slice(0,3);
+  let topUW=[...s.sectors].sort((a,b)=>a.a-b.a).slice(0,3);
+  let sigFac=s.factors.filter(f=>Math.abs(f.a??0)>0.15).sort((a,b)=>Math.abs(b.a??0)-Math.abs(a.a??0)).slice(0,8);
+  let topHold=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>b.p-a.p).slice(0,10);
+  let dateStr=$('dataTimestamp').textContent||new Date().toLocaleDateString();
+
+  let sectorRows=[...topOW,...topUW].map(x=>`<tr>
+    <td style="padding:6px 10px;font-size:12px;color:#333">${x.n}</td>
+    <td style="padding:6px 10px;font-size:12px;text-align:right">${f2(x.p)}%</td>
+    <td style="padding:6px 10px;font-size:12px;text-align:right">${f2(x.b)}%</td>
+    <td style="padding:6px 10px;font-size:12px;text-align:right;color:${x.a>=0?'#059669':'#dc2626'};font-weight:600">${fp(x.a)}%</td>
+  </tr>`).join('');
+
+  let facRows=sigFac.map(f=>`<tr>
+    <td style="padding:6px 10px;font-size:12px;color:#333">${f.n}</td>
+    <td style="padding:6px 10px;font-size:12px;text-align:right;color:${(f.a??0)>=0?'#059669':'#dc2626'};font-weight:600">${fp(f.a,3)}</td>
+    <td style="padding:6px 10px;font-size:12px;text-align:right">${f2(f.c)}</td>
+  </tr>`).join('');
+
+  let holdRows=topHold.map((h,i)=>`<tr style="background:${i%2?'#f9f9f9':'#fff'}">
+    <td style="padding:5px 10px;font-size:11px;font-weight:600;color:#333">${h.t}</td>
+    <td style="padding:5px 10px;font-size:11px;color:#555">${h.n}</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:right">${f2(h.p)}%</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:right;color:${(h.a||0)>=0?'#059669':'#dc2626'}">${fp(h.a)}%</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:center">${h.r!=null?'R'+h.r:'--'}</td>
+  </tr>`).join('');
+
   let emailHtml=`<!DOCTYPE html><html><head><style>
     body{font-family:Arial,sans-serif;background:#f5f5f5;padding:20px}
-    .container{max-width:700px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    .container{max-width:720px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
     .header{background:#080e1e;color:#e2e8f0;padding:20px 24px}
     .header h1{margin:0;font-size:20px;font-weight:700}
     .header .sub{color:#94a3b8;font-size:12px;margin-top:4px}
-    .metrics{display:flex;padding:16px 24px;gap:16px;border-bottom:1px solid #eee}
-    .metric{flex:1;text-align:center;padding:12px;border-radius:8px;background:#f8f9fa}
+    .metrics{display:flex;padding:16px 24px;gap:12px;border-bottom:1px solid #eee;flex-wrap:wrap}
+    .metric{flex:1;min-width:100px;text-align:center;padding:10px;border-radius:8px;background:#f8f9fa}
     .metric .label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px}
-    .metric .value{font-size:24px;font-weight:700;margin-top:4px}
-    .section{padding:16px 24px;border-bottom:1px solid #eee}
-    .section h3{font-size:13px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
-    .section p{font-size:13px;color:#333;line-height:1.5}
-    .footer{padding:12px 24px;font-size:10px;color:#999;text-align:center}
+    .metric .value{font-size:22px;font-weight:700;margin-top:4px}
+    .section{padding:14px 24px;border-bottom:1px solid #eee}
+    .section h3{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px 0}
+    table{width:100%;border-collapse:collapse}
+    th{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;border-bottom:2px solid #eee;text-align:left}
+    th.r{text-align:right}
+    .footer{padding:10px 24px;font-size:10px;color:#999;text-align:center}
   </style></head><body>
   <div class="container">
-    <div class="header"><h1>REDWOOD Risk Control Panel</h1><div class="sub">${s.name} (${s.id}) | ${s.benchmark} | ${new Date().toLocaleDateString()}</div></div>
+    <div class="header">
+      <h1>REDWOOD Risk Control Panel</h1>
+      <div class="sub">${s.name} (${s.id}) &nbsp;|&nbsp; Benchmark: ${s.benchmark} &nbsp;|&nbsp; ${dateStr}</div>
+    </div>
     <div class="metrics">
       <div class="metric"><div class="label">Tracking Error</div><div class="value" style="color:${teColor}">${f2(s.sum.te)}%</div></div>
       <div class="metric"><div class="label">Active Share</div><div class="value">${f2(s.sum.as)}%</div></div>
       <div class="metric"><div class="label">Beta</div><div class="value" style="color:${betaColor}">${f2(s.sum.beta,3)}</div></div>
       <div class="metric"><div class="label">Holdings</div><div class="value">${s.sum.h||equityCount(s.hold)}</div></div>
+      <div class="metric"><div class="label">Cash</div><div class="value">${f2(s.sum.cash)}%</div></div>
     </div>
-    <div class="section"><h3>Key Overweights</h3><p>${topOW}</p></div>
-    <div class="section"><h3>Key Underweights</h3><p>${topUW}</p></div>
-    <div class="section"><h3>Factor Tilts</h3><p>${s.factors.filter(f=>Math.abs(f.a??0)>0.2).map(f=>`${f.n}: ${fp(f.a,3)}`).join(', ')||'No significant tilts'}</p></div>
-    <div class="footer">Generated by Redwood Risk Control Panel | ${new Date().toLocaleString()}</div>
+    <div class="section">
+      <h3>Sector Tilts (Top OW / UW)</h3>
+      <table><thead><tr><th>Sector</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead>
+      <tbody>${sectorRows}</tbody></table>
+    </div>
+    ${sigFac.length?`<div class="section">
+      <h3>Significant Factor Tilts</h3>
+      <table><thead><tr><th>Factor</th><th class="r">Active Exp.</th><th class="r">TE Contrib%</th></tr></thead>
+      <tbody>${facRows}</tbody></table>
+    </div>`:''}
+    ${holdRows?`<div class="section">
+      <h3>Top 10 Holdings</h3>
+      <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead>
+      <tbody>${holdRows}</tbody></table>
+    </div>`:''}
+    <div class="footer">Generated by Redwood Risk Control Panel &nbsp;|&nbsp; ${new Date().toLocaleString()}</div>
   </div></body></html>`;
 
   // Copy to clipboard
   navigator.clipboard.writeText(emailHtml).then(()=>{
-    showToast('Email HTML copied to clipboard! Paste into your email client.');
+    showToast('Email snapshot copied — paste into your email client');
   });
   // Also open in new window for preview
-  let win=window.open('','_blank','width=750,height=600');
+  let win=window.open('','_blank','width=750,height=700');
   if(win){win.document.write(emailHtml);win.document.close()}
 }
 

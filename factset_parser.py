@@ -3,7 +3,7 @@
 FactSet Portfolio Attribution CSV → Redwood Risk Dashboard JSON
 ===============================================================
 Usage:
-    python3 factset_parser.py <input.csv> [output.json]
+    python3 factset_parser.py <input.csv|input.txt> [output.json]
 
 File structure (confirmed from risk_reports_sample.csv):
   The CSV is a concatenation of 14 separate tables, each preceded by an
@@ -42,9 +42,13 @@ import csv
 import json
 import math
 import sys
+import time
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
+
+PARSER_VERSION = "1.0.0"
+FORMAT_VERSION = "2.1"
 
 # ── Strategy / account mapping ──────────────────────────────────────────────
 
@@ -163,6 +167,10 @@ C_MOM_WA  = 10  # Momentum score (weighted avg)
 C_STAB_WA = 11  # Stability score (weighted avg)
 # C_OVER_A, C_VAL_A, C_QUAL_A, C_MOM_A, C_REV_A, C_STAB_A = 12-17 (simple avgs)
 
+# Expected column counts for the two main schemas
+EXPECTED_96  = 96
+EXPECTED_101 = 101
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def pf(s):
@@ -198,6 +206,28 @@ def get_group(row, g):
         # Drop "Overall Rank" at position 5 to keep standard column mapping
         chunk = chunk[:5] + chunk[6:]
     return [pf(chunk[i]) if i < len(chunk) else None for i in range(GROUP_SIZE)]
+
+
+def repair_comma_in_name(row, expected_len):
+    """
+    Attempt to repair a row that has more columns than expected due to an
+    unquoted comma in the SecurityName field (col[5]).
+
+    The repair merges extra columns back into SecurityName by finding how many
+    extra columns there are and concatenating col[5] through col[5+extra].
+
+    Returns (repaired_row, repaired_name) or (None, None) if repair fails.
+    """
+    extra = len(row) - expected_len
+    if extra <= 0:
+        return None, None
+    # SecurityName spans col[5] through col[5 + extra]
+    name_parts = row[5:6 + extra]
+    repaired_name = ",".join(name_parts)
+    repaired_row = row[:5] + [repaired_name] + row[6 + extra:]
+    if len(repaired_row) == expected_len:
+        return repaired_row, repaired_name
+    return None, None
 
 
 def classify_row(lv2, secname):
@@ -252,26 +282,114 @@ def weekly_dates_for(report_date_str):
     return [dt.strftime("%Y-%m-%d") for dt in fridays]
 
 
+def open_with_encoding(csv_path):
+    """
+    Try opening the file with a fallback encoding chain.
+    Returns (file_handle, encoding_used).
+    """
+    encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
+    for enc in encodings:
+        try:
+            fh = open(csv_path, newline="", encoding=enc)
+            # Try reading a small chunk to verify the encoding works
+            fh.read(1024)
+            fh.seek(0)
+            print(f"  Encoding: {enc}")
+            return fh, enc
+        except (UnicodeDecodeError, LookupError):
+            try:
+                fh.close()
+            except Exception:
+                pass
+            continue
+    raise ValueError(f"Could not decode {csv_path} with any of: {encodings}")
+
+
 # ── Main parser ──────────────────────────────────────────────────────────────
 
 def parse(csv_path):
     """
-    Parse the FactSet CSV and return (strategies_dict, validation_issues).
+    Parse the FactSet CSV and return (strategies_dict, validation_issues, main_date, stats).
     strategies_dict keys are dashboard IDs (IDM, IOP, EM, ISC, SCG, ACWI, GSC).
+    stats is a dict with parse metadata (row_count, parse_time_s, etc.)
     """
-    rows_by_acct_date = defaultdict(list)
+    t_start = time.time()
+    csv_path = Path(csv_path)
+    file_size_mb = csv_path.stat().st_size / (1024 * 1024)
+    show_progress = file_size_mb > 10
 
-    with open(csv_path, newline="", encoding="utf-8-sig") as fh:
+    rows_by_acct_date  = defaultdict(list)
+    unknown_accts_seen = set()
+    repair_warnings    = []
+    total_rows         = 0
+
+    fh, enc_used = open_with_encoding(csv_path)
+    try:
         reader = csv.reader(fh)
         headers = next(reader)
         for row in reader:
+            total_rows += 1
+            if show_progress and total_rows % 50_000 == 0:
+                print(f"  Parsing... {total_rows:,} rows processed")
             if len(row) < PREFIX_COLS:
                 continue
             acct, dt = row[0], row[1]
             if acct in ("ACCT", "Level") or dt in ("DATE",):
                 continue
-            if acct in STRATEGY_ACCTS:
-                rows_by_acct_date[(acct, dt)].append(row)
+
+            # Handle unknown account codes gracefully
+            if acct not in STRATEGY_ACCTS and acct not in ("ACCT", "Level", ""):
+                if acct not in unknown_accts_seen:
+                    unknown_accts_seen.add(acct)
+                    print(f"  ⚠ Unknown account [{acct}] — skipping. "
+                          f"Add to ACCT_TO_ID if this is a new strategy.")
+                continue
+
+            if acct not in STRATEGY_ACCTS:
+                continue
+
+            # Comma-in-name repair for holdings rows only
+            # Skip aggregate/special rows: Data, @NA, [Unassigned], [Cash], etc.
+            lv2_raw = row[4] if len(row) > 4 else ""
+            _skip_repair = (not lv2_raw or lv2_raw in
+                            ("Data", "@NA", "[Unassigned]", "[Cash]", "ACCT", "Level"))
+            row_len = len(row)
+            if not _skip_repair and row_len > EXPECTED_101:
+                # Too long even for 101-col: attempt repair
+                repaired, rname = repair_comma_in_name(row, EXPECTED_101)
+                if repaired:
+                    ticker = row[4] if len(row) > 4 else "?"
+                    orig_name = ",".join(row[5:5 + (row_len - EXPECTED_101 + 1)])
+                    repair_warnings.append(
+                        f"  ⚠ Comma-in-name repaired: acct={acct} ticker={ticker} "
+                        f"name={repr(orig_name)} (merged {row_len - EXPECTED_101 + 1} cols)"
+                    )
+                    row = repaired
+                else:
+                    repair_warnings.append(
+                        f"  ⚠ Could not repair row with {row_len} cols "
+                        f"(acct={acct}, ticker={row[4] if len(row)>4 else '?'})"
+                    )
+            elif not _skip_repair and row_len > EXPECTED_96 and row_len < EXPECTED_101:
+                repaired, rname = repair_comma_in_name(row, EXPECTED_96)
+                if repaired:
+                    ticker = row[4] if len(row) > 4 else "?"
+                    orig_name = ",".join(row[5:5 + (row_len - EXPECTED_96 + 1)])
+                    repair_warnings.append(
+                        f"  ⚠ Comma-in-name repaired: acct={acct} ticker={ticker} "
+                        f"name={repr(orig_name)} (merged {row_len - EXPECTED_96 + 1} cols)"
+                    )
+                    row = repaired
+
+            rows_by_acct_date[(acct, dt)].append(row)
+    finally:
+        fh.close()
+
+    # Print any repair warnings
+    if repair_warnings:
+        print(f"\n  Comma-in-name repairs ({len(repair_warnings)}):")
+        for w in repair_warnings:
+            print(w)
 
     # Identify which DATE is the main holdings date vs factor dates
     date_counts = defaultdict(int)
@@ -281,14 +399,26 @@ def parse(csv_path):
     main_date    = sorted_dates[0]      # most rows = sector/country/holdings data
     factor_dates = sorted_dates[1:]     # smaller row counts = factor snapshots
 
+    # Date range for report
+    all_dates    = sorted(sorted_dates)
+    date_range   = (all_dates[0], all_dates[-1]) if all_dates else (main_date, main_date)
+
     week_dates = weekly_dates_for(main_date)   # 5 Friday dates for history
 
     strategies        = {}
     validation_issues = []
 
+    # Track per-strategy stats
+    strat_stats = {}
+
     for acct in sorted(STRATEGY_ACCTS):
         strat_id   = ACCT_TO_ID[acct]
         main_rows  = rows_by_acct_date.get((acct, main_date), [])
+
+        strat_stats[strat_id] = {
+            "data_rows_found": 0,
+            "factor_dates":    [],
+        }
 
         if not main_rows:
             validation_issues.append(f"{strat_id}: no rows found for main date {main_date}")
@@ -312,7 +442,7 @@ def parse(csv_path):
         }
 
         cash_weight = None
-        data_rows   = []       # (row, group1_data) for Level2='Data' rows
+        data_rows   = []       # rows for Level2='Data'
 
         # ── Pass 1: classify and extract main_date rows ──────────────────────
         seen_sectors   = set()
@@ -403,8 +533,8 @@ def parse(csv_path):
                     "p":    r2(w),
                     "b":    r2(bw),
                     "a":    r2(aw),
-                    "mcr":  r2(cur[C_PCT_S]),   # marginal contribution to risk
-                    "tr":   r2(cur[C_PCT_T]),   # tracking error contribution
+                    "mcr":  r2(cur[C_PCT_S]),   # %S stock-specific TE component
+                    "tr":   r2(cur[C_PCT_T]),   # %T tracking error contribution
                     "r":    rank,
                     "over": r2(cur[C_OVER_WA]),
                     "rev":  r2(cur[C_REV_WA]),
@@ -429,15 +559,9 @@ def parse(csv_path):
             elif rtype == "special" and lv2 == "Data":
                 data_rows.append(row)
 
-        # ── Summary stats from Data rows ─────────────────────────────────────
-        # Data rows split into two types:
-        #   Rows 1-4 (G1 has BW but no W): TE attribution breakdown — skip
-        #   Rows 5-8 (G1 has AW, %T=hold count, %T_Check=active share,
-        #             OVER_WAvg=portfolio market cap in $M):
-        #             G2 has %T=benchmark hold count, OVER_WAvg=benchmark mktcap
-        #
-        # Use the LAST stat row (highest market cap = most recent week)
+        strat_stats[strat_id]["data_rows_found"] = len(data_rows)
 
+        # ── Summary stats from Data rows ─────────────────────────────────────
         te = as_ = beta = h = bh = None
         mktcap_p = mktcap_b = None
         pe_p = pb_p = None          # P/E and P/B (portfolio only; no benchmark in export)
@@ -449,15 +573,6 @@ def parse(csv_path):
 
         for row in data_rows:
             g1 = get_group(row, 0)
-            # Identify stat rows from section @119:
-            #   no W in G1, but Market Cap (g1[C_OVER_WA]) > 1000
-            # Column mapping for section @119 (via get_group):
-            #   C_AW(2)=Predicted TE, C_PCT_S(3)=Predicted Beta,
-            #   C_PCT_T(4)=# Securities, C_CHECK(5)=Active Share,
-            #   C_OVER_WA(6)=Market Cap ($M),
-            #   [10]=EPS Growth 3Yr, [11]=EPS Growth Est 3-5Yr,
-            #   [14]=FCF Yield NTM, [15]=Dividend Yield Annual,
-            #   [16]=ROE NTM, [17]=Operating Margin NTM
             if g1[C_W] is None and g1[C_OVER_WA] is not None and g1[C_OVER_WA] > 1000:
                 te       = g1[C_AW]           # Predicted Tracking Error %
                 beta     = g1[C_PCT_S]         # Predicted Beta to Benchmark
@@ -469,36 +584,30 @@ def parse(csv_path):
                 as_ = as_raw
 
                 # Fundamentals (portfolio)
-                eps_growth_p = g1[10]   # EPS Growth - Hist. 3Yr:P
-                fcf_yield_p  = g1[14]   # FCF Yield - NTM:P
-                div_yield_p  = g1[15]   # Dividend Yield - Annual:P
-                roe_p        = g1[16]   # ROE - NTM:P
-                op_margin_p  = g1[17]   # Operating Margin - NTM:P
+                eps_growth_p = g1[10]
+                fcf_yield_p  = g1[14]
+                div_yield_p  = g1[15]
+                roe_p        = g1[16]
+                op_margin_p  = g1[17]
 
                 g2 = get_group(row, 1)
                 if g2[C_PCT_T] is not None:
                     bh       = int(g2[C_PCT_T])
                     mktcap_b = g2[C_OVER_WA]
 
-                # Fundamentals (benchmark) — same positions in g2
+                # Fundamentals (benchmark)
                 eps_growth_b = g2[10]
                 fcf_yield_b  = g2[14]
                 div_yield_b  = g2[15]
                 roe_b        = g2[16]
                 op_margin_b  = g2[17]
 
-                # Keep overwriting; last qualifying row = most recent week
-
             # Section @90: Fundamental characteristics (P/E, P/B)
-            # Identified by: g1[C_W]=None, g1[C_BW]=P/E (col 7 = non-None float),
-            #                g1[C_OVER_WA]=Benchmark Risk (~10-25%, i.e. < 100)
-            # Section @119 rows have col[7] = model label string → g1[C_BW]=None → no overlap
             elif g1[C_W] is None and g1[C_BW] is not None:
                 pe_p = g1[C_BW]    # Price/Earnings (portfolio only)
                 pb_p = g1[C_AW]    # Price/Book (portfolio only)
-                # Benchmark P/E and P/B are not present in this export
 
-        h_actual = len(s["hold"])   # holdings count from current-week (G5) snapshot
+        h_actual = len(s["hold"])
         s["sum"] = {
             "te":   r2(te),
             "as":   r2(as_),
@@ -512,8 +621,8 @@ def parse(csv_path):
         # Portfolio characteristics
         chars_data = [
             ("Market Cap ($M)", mktcap_p,    mktcap_b),
-            ("P/E Ratio",       pe_p,        None),      # benchmark P/E not in export
-            ("P/B Ratio",       pb_p,        None),      # benchmark P/B not in export
+            ("P/E Ratio",       pe_p,        None),
+            ("P/B Ratio",       pb_p,        None),
             ("ROE NTM (%)",     roe_p,        roe_b),
             ("FCF Yield (%)",   fcf_yield_p,  fcf_yield_b),
             ("Div Yield (%)",   div_yield_p,  div_yield_b),
@@ -533,17 +642,18 @@ def parse(csv_path):
             s["ranks"].append({"r": r_val, "l": label, "ct": ct, "p": r2(p), "a": None})
 
         # ── Factors from other dates ─────────────────────────────────────────
-        # Determine which factor date is the "current snapshot" (has BW values)
-        # and which is "attribution" (no BW)
-        factor_map = {}   # display_name → entry dict
+        factor_map = {}
 
         for fdate in sorted(factor_dates):
             factor_rows = rows_by_acct_date.get((acct, fdate), [])
+            if not factor_rows:
+                continue
             has_bw = any(
                 get_group(r, 0)[C_BW] is not None
                 for r in factor_rows if r[4] in FACTOR_NAME_MAP
             )
             fdate_str = f"{fdate[:4]}-{fdate[4:6]}-{fdate[6:]}"
+            strat_stats[strat_id]["factor_dates"].append(fdate_str)
 
             for row in factor_rows:
                 lv2   = row[4] if len(row) > 4 else ""
@@ -564,25 +674,18 @@ def parse(csv_path):
                 entry = factor_map[fname]
 
                 if has_bw:
-                    # Section @340: factor exposure snapshot (9-col rows)
-                    # col[6]=Portfolio Exposure, col[7]=Benchmark Exposure, col[8]=Active Exposure
-                    entry["e"]  = r2(w)     # portfolio factor loading
-                    entry["bm"] = r2(bw)    # benchmark factor loading
+                    entry["e"]  = r2(w)
+                    entry["bm"] = r2(bw)
                     entry["a"]  = r2(aw if aw is not None else
                                      ((w or 0) - (bw or 0)))
                 else:
-                    # Section @15818: factor attribution (5-period × 5-col structure)
-                    # Period layout: AvgActiveExp[0], FactorReturn[1], FactorImpact[2],
-                    #                FactorStdDev[3], CumulativeFactorImpact[4]
-                    # Most recent = period 5 (data positions 20–24, cols 26–30)
                     ATTR_PERIOD = 5
                     last_start  = PREFIX_COLS + (NUM_GROUPS - 1) * ATTR_PERIOD
                     if len(row) > last_start + 4:
-                        entry["c"]   = r2(pf(row[last_start + 2]))  # CompoundedFactorImpact
-                        entry["ret"] = r2(pf(row[last_start + 1]))  # CompoundedFactorReturn
-                        entry["imp"] = r2(pf(row[last_start + 4]))  # CumulativeFactorImpact
+                        entry["c"]   = r2(pf(row[last_start + 2]))
+                        entry["ret"] = r2(pf(row[last_start + 1]))
+                        entry["imp"] = r2(pf(row[last_start + 4]))
 
-                # Factor history
                 if fname not in s["hist"]["fac"]:
                     s["hist"]["fac"][fname] = []
                 s["hist"]["fac"][fname].append({
@@ -594,19 +697,17 @@ def parse(csv_path):
         s["factors"] = list(factor_map.values())
 
         # ── Weekly history summary from Data stat rows ────────────────────────
-        # Collect up to 4 weekly stat snapshots from Data rows (stat type only)
         weekly_stats = []
         for row in data_rows:
             g1 = get_group(row, 0)
             if g1[C_W] is None and g1[C_OVER_WA] is not None and g1[C_OVER_WA] > 1000:
                 weekly_stats.append(g1)
 
-        # Pair with the last N week_dates (stat rows cover most recent weeks)
-        offset = NUM_GROUPS - len(weekly_stats)   # e.g. if 4 stat rows, skip week 1
+        offset = NUM_GROUPS - len(weekly_stats)
         for i, g1 in enumerate(weekly_stats):
             wdate  = week_dates[offset + i] if (offset + i) < len(week_dates) else week_dates[-1]
             te_w   = g1[C_AW]
-            beta_w = g1[C_PCT_S]   # Predicted Beta (same column position as in summary)
+            beta_w = g1[C_PCT_S]
             as_w   = g1[C_CHECK]
             h_w    = int(g1[C_PCT_T]) if g1[C_PCT_T] is not None else h
             s["hist"]["summary"].append({
@@ -618,7 +719,6 @@ def parse(csv_path):
                 "sr":   None,
             })
 
-        # If no stat rows found, add a single current-snapshot entry
         if not s["hist"]["summary"]:
             s["hist"]["summary"].append({
                 "d": week_dates[-1], "te": r2(te), "as": r2(as_),
@@ -642,7 +742,14 @@ def parse(csv_path):
         country_sum = sum(x["p"] or 0 for x in s["countries"])
         equity_exp  = 100 - (cash_weight or 0)
 
-        if s["sectors"] and abs(sector_sum - equity_exp) > 5:
+        # Flag 0 holdings
+        if len(s["hold"]) == 0:
+            validation_issues.append(
+                f"{strat_id}: ⚠ 0 portfolio holdings found — check CSV for this account"
+            )
+
+        # Flag sector sum off by more than 2% from (100 - cash)
+        if s["sectors"] and abs(sector_sum - equity_exp) > 2:
             validation_issues.append(
                 f"{strat_id}: sector weights sum to {sector_sum:.1f}% "
                 f"(expected ~{equity_exp:.1f}%, diff {sector_sum - equity_exp:+.1f}%)"
@@ -652,20 +759,49 @@ def parse(csv_path):
                 f"{strat_id}: country weights sum to {country_sum:.1f}% "
                 f"(expected ~{equity_exp:.1f}%, diff {country_sum - equity_exp:+.1f}%)"
             )
-        # Note: h (from Data rows) may differ from len(s["hold"]) because Data rows
-        # can reflect an earlier week's count while s["hold"] uses the G5 (current) snapshot.
 
-    return strategies, validation_issues, main_date
+    t_elapsed = time.time() - t_start
+
+    parse_stats = {
+        "total_rows":     total_rows,
+        "parse_time_s":   round(t_elapsed, 2),
+        "file_size_mb":   round(file_size_mb, 2),
+        "encoding":       enc_used,
+        "main_date":      main_date,
+        "factor_dates":   factor_dates,
+        "date_range":     date_range,
+        "repair_warnings": len(repair_warnings),
+        "unknown_accts":  list(unknown_accts_seen),
+        "strat_stats":    strat_stats,
+    }
+
+    return strategies, validation_issues, main_date, parse_stats
 
 
 # ── Validation report ────────────────────────────────────────────────────────
 
-def print_validation(strategies, issues):
+def print_validation(strategies, issues, parse_stats):
     print("\n" + "=" * 62)
     print("VALIDATION REPORT")
     print("=" * 62)
+
+    # Parse metadata header
+    dr = parse_stats["date_range"]
+    d0 = f"{dr[0][:4]}-{dr[0][4:6]}-{dr[0][6:]}"
+    d1 = f"{dr[1][:4]}-{dr[1][4:6]}-{dr[1][6:]}"
+    print(f"\n  Report covers:  {d0}  →  {d1}")
+    print(f"  Total rows:     {parse_stats['total_rows']:,}")
+    print(f"  Parse time:     {parse_stats['parse_time_s']}s")
+    print(f"  File size:      {parse_stats['file_size_mb']} MB")
+    print(f"  Encoding:       {parse_stats['encoding']}")
+    if parse_stats["repair_warnings"]:
+        print(f"  Comma repairs:  {parse_stats['repair_warnings']}")
+    if parse_stats["unknown_accts"]:
+        print(f"  Unknown accts:  {parse_stats['unknown_accts']}")
+
     for sid, s in strategies.items():
         sm = s["sum"]
+        ss = parse_stats["strat_stats"].get(sid, {})
         sector_sum  = sum(x["p"] or 0 for x in s["sectors"])
         country_sum = sum(x["p"] or 0 for x in s["countries"])
         region_sum  = sum(x["p"] or 0 for x in s["regions"])
@@ -676,6 +812,8 @@ def print_validation(strategies, issues):
         print(f"  Countries:  {len(s['countries'])} items, weight sum = {country_sum:.1f}%")
         print(f"  Groups:     {len(s['groups'])} custom buckets")
         print(f"  Factors:    {len(s['factors'])} factors")
+        print(f"  Data rows:  {ss.get('data_rows_found', '?')} found  "
+              f"| Factor dates: {ss.get('factor_dates', [])}")
         print(f"  Summary:    TE={sm['te']}  AS={sm['as']}%  "
               f"H={sm['h']}  BH={sm['bh']}  Cash={sm['cash']}%")
         if s["chars"]:
@@ -697,7 +835,7 @@ def print_validation(strategies, issues):
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
-        print("Usage: python3 factset_parser.py <input.csv> [output.json]")
+        print("Usage: python3 factset_parser.py <input.csv|input.txt> [output.json]")
         sys.exit(1)
 
     csv_path = Path(sys.argv[1])
@@ -705,23 +843,28 @@ def main():
         print(f"Error: file not found: {csv_path}")
         sys.exit(1)
 
+    # Accept both .csv and .txt extensions (same format)
+    if csv_path.suffix.lower() not in (".csv", ".txt"):
+        print(f"Warning: unexpected extension {csv_path.suffix!r} — treating as CSV")
+
     out_path = Path(sys.argv[2]) if len(sys.argv) > 2 else csv_path.with_suffix(".json")
 
     print(f"Parsing {csv_path} …")
-    strategies, issues, main_date = parse(csv_path)
+    strategies, issues, main_date, parse_stats = parse(csv_path)
 
     output = {
-        "generated":  datetime.now().isoformat(timespec="seconds"),
-        "version":    "2.0",
-        "freq":       "weekly-in-month",
-        "report_date": f"{main_date[:4]}-{main_date[4:6]}-{main_date[6:]}",
-        "strategies": strategies,
+        "generated":      datetime.now().isoformat(timespec="seconds"),
+        "version":        FORMAT_VERSION,
+        "parser_version": PARSER_VERSION,
+        "freq":           "weekly-in-month",
+        "report_date":    f"{main_date[:4]}-{main_date[4:6]}-{main_date[6:]}",
+        "strategies":     strategies,
     }
 
     out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
     print(f"Output written to {out_path}")
 
-    print_validation(strategies, issues)
+    print_validation(strategies, issues, parse_stats)
 
 
 if __name__ == "__main__":

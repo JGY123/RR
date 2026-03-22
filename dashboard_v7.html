@@ -1773,7 +1773,7 @@ function oSt(ticker){
 function openComp(){
   let m=$('compModal');
   let keys=Object.keys(A);
-  if(keys.length<2){alert('Need 2+ strategies to compare');return}
+  if(keys.length<2){showToast('Need 2+ strategies to compare','var(--warn)');return}
 
   // Summary stats table
   let metrics=['TE','Active Share','Beta','Holdings','Selection Rate','Cash'];
@@ -1791,64 +1791,88 @@ function openComp(){
     return`<tr><td class="metric-name">${name}</td>${cells}</tr>`;
   }).join('');
 
-  // Sector heatmap diff (first two strategies)
   let s1=A[keys[0]],s2=A[keys[1]];
-  let secDiff=SECS.map(sec=>{
-    let a1=s1.sectors.find(x=>x.n===sec);
-    let a2=s2.sectors.find(x=>x.n===sec);
-    let d=(a1?a1.a:0)-(a2?a2.a:0);
-    return{n:sec,d:+d.toFixed(2),a1:a1?a1.a:0,a2:a2?a2.a:0};
-  });
 
-  let secDiffHtml=secDiff.map(s=>{
-    let bg=s.d>2?'rgba(16,185,129,.2)':s.d<-2?'rgba(239,68,68,.2)':'rgba(51,65,85,.2)';
-    return`<div style="display:flex;justify-content:space-between;padding:5px 8px;background:${bg};border-radius:4px;margin-bottom:3px;font-size:11px">
-      <span>${s.n}</span><span style="display:flex;gap:12px"><span style="color:var(--txt)">${keys[0]}: ${fp(s.a1)}</span><span style="color:var(--txt)">${keys[1]}: ${fp(s.a2)}</span><span style="font-weight:600;color:${s.d>=0?'var(--pos)':'var(--neg)'}">Diff: ${fp(s.d)}</span></span>
-    </div>`;
+  // Sector heatmap — all strategies, color-coded active weights
+  function secHeatColor(v){
+    if(v==null)return'rgba(51,65,85,.1)';
+    let abs=Math.min(Math.abs(v)/6,1);
+    return v>0?`rgba(16,185,129,${abs*0.7+0.05})`:`rgba(239,68,68,${abs*0.7+0.05})`;
+  }
+  let secHeatRows=SECS.map(sec=>{
+    let cells=keys.map(k=>{
+      let row=A[k].sectors.find(x=>x.n===sec);
+      let v=row?row.a:null;
+      let bg=secHeatColor(v);
+      return`<td class="heatmap-cell" style="background:${bg};color:${v!=null?(v>=0?'var(--pos)':'var(--neg)'):'var(--txt)'}">${v!=null?fp(v):'—'}</td>`;
+    }).join('');
+    return`<tr><td style="padding:5px 10px;font-size:11px;color:var(--txth)">${sec}</td>${cells}</tr>`;
   }).join('');
+  let secHeatHtml=`<div style="overflow-x:auto"><table style="font-size:11px">
+    <thead><tr><th style="padding:5px 10px;text-align:left">Sector</th>${keys.map(k=>`<th class="r" style="padding:5px 10px">${k}</th>`).join('')}</tr></thead>
+    <tbody>${secHeatRows}</tbody></table></div>`;
 
-  // Holdings overlap
-  let h1Set=new Set(s1.hold.map(h=>h.t));
-  let h2Set=new Set(s2.hold.map(h=>h.t));
-  let shared=[...h1Set].filter(t=>h2Set.has(t));
-  let unique1=[...h1Set].filter(t=>!h2Set.has(t));
-  let unique2=[...h2Set].filter(t=>!h1Set.has(t));
+  // Holdings overlap — full cross-strategy shared holdings with weights
+  let allHoldSets=keys.map(k=>new Set(A[k].hold.filter(h=>!isCash(h)).map(h=>h.t)));
+  // Shared = appears in 2+ strategies
+  let allTickers=new Set(keys.flatMap(k=>A[k].hold.filter(h=>!isCash(h)).map(h=>h.t)));
+  let sharedTickers=[...allTickers].filter(t=>allHoldSets.filter(s=>s.has(t)).length>=2);
+  let unique1=[...allHoldSets[0]].filter(t=>!allHoldSets[1].has(t));
+  let unique2=[...allHoldSets[1]].filter(t=>!allHoldSets[0].has(t));
+  // Sort shared by weight in s1
+  sharedTickers.sort((a,b)=>{let ha=s1.hold.find(h=>h.t===a);let hb=s1.hold.find(h=>h.t===b);return(hb?hb.p:0)-(ha?ha.p:0)});
+
+  let sharedHtml=sharedTickers.slice(0,15).map(t=>{
+    let cells=keys.map(k=>{
+      let h=A[k].hold.find(x=>x.t===t);
+      return`<td class="r" style="font-size:11px;padding:4px 8px">${h?f2(h.p)+'%':'—'}</td>`;
+    }).join('');
+    let h1=s1.hold.find(x=>x.t===t);
+    return`<tr><td style="font-size:11px;font-weight:600;color:var(--txth);padding:4px 8px">${t}</td><td style="font-size:11px;color:var(--txt);padding:4px 8px">${h1?h1.n:''}</td>${cells}</tr>`;
+  }).join('');
+  let sharedTable=sharedTickers.length?`<div style="overflow-x:auto;max-height:240px;overflow-y:auto"><table>
+    <thead><tr><th>Ticker</th><th>Name</th>${keys.map(k=>`<th class="r">${k} Port%</th>`).join('')}</tr></thead>
+    <tbody>${sharedHtml}</tbody></table></div>`:'<div style="color:var(--txt);font-size:12px;padding:8px">No shared holdings between first two strategies</div>';
 
   $('compContent').innerHTML=`
     <h2>Cross-Strategy Comparison<button class="close" onclick="$('compModal').classList.remove('show')">&times;</button></h2>
 
-    <div class="card-title">Summary Statistics</div>
-    <div style="overflow-x:auto;margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:8px">Summary Statistics</div>
+    <div style="overflow-x:auto;margin-bottom:20px">
     <table class="comp-stats-table"><thead><tr><th>Metric</th>${keys.map(k=>`<th class="r">${k}</th>`).join('')}</tr></thead><tbody>${statsRows}</tbody></table>
     </div>
 
-    <div class="grid g2" style="margin-bottom:16px">
+    <div class="grid g2" style="margin-bottom:20px">
       <div>
-        <div class="card-title">Radar Comparison</div>
-        <div id="compRadarDiv" style="height:300px"></div>
+        <div class="card-title" style="margin-bottom:8px">Risk Radar</div>
+        <div id="compRadarDiv" style="height:280px"></div>
       </div>
       <div>
-        <div class="card-title">Factor Exposure Diff (${keys[0]} vs ${keys[1]})</div>
-        <div id="compFacDiv" style="height:300px"></div>
+        <div class="card-title" style="margin-bottom:8px">Factor Exposures (${keys.slice(0,2).join(' vs ')})</div>
+        <div id="compFacDiv" style="height:280px"></div>
       </div>
     </div>
 
-    <div class="card-title">Sector Active Weight Diff (${keys[0]} − ${keys[1]})</div>
-    <div style="margin-bottom:16px">${secDiffHtml}</div>
+    <div class="card-title" style="margin-bottom:8px">Sector Active Weight Heatmap (all strategies)</div>
+    <div style="margin-bottom:20px">${secHeatHtml}</div>
 
-    <div class="grid g3" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Shared Holdings</div><div style="font-size:24px;font-weight:700;color:var(--pos)">${shared.length}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Unique to ${keys[0]}</div><div style="font-size:24px;font-weight:700;color:var(--pri)">${unique1.length}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Unique to ${keys[1]}</div><div style="font-size:24px;font-weight:700;color:var(--acc)">${unique2.length}</div></div>
+    <div class="card-title" style="margin-bottom:8px">Holdings Overlap</div>
+    <div style="display:flex;gap:16px;margin-bottom:12px">
+      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:100px">
+        <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Shared (2+ strats)</div>
+        <div style="font-size:28px;font-weight:700;color:var(--pos)">${sharedTickers.length}</div>
+      </div>
+      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:100px">
+        <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Only ${keys[0]}</div>
+        <div style="font-size:28px;font-weight:700;color:var(--pri)">${unique1.length}</div>
+      </div>
+      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:100px">
+        <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Only ${keys[1]}</div>
+        <div style="font-size:28px;font-weight:700;color:var(--acc)">${unique2.length}</div>
+      </div>
     </div>
-    <div class="grid g2">
-      <div><div class="card-title">Unique to ${keys[0]} (top 10)</div>
-        <div style="max-height:200px;overflow-y:auto;font-size:11px">${unique1.slice(0,10).map(t=>{let h=s1.hold.find(x=>x.t===t);return`<div style="padding:3px 0;border-bottom:1px solid rgba(51,65,85,.3)"><span style="color:var(--txth);font-weight:600">${t}</span> ${h?h.n:''} <span style="float:right">${h?f2(h.p):'--'}%</span></div>`}).join('')}</div>
-      </div>
-      <div><div class="card-title">Unique to ${keys[1]} (top 10)</div>
-        <div style="max-height:200px;overflow-y:auto;font-size:11px">${unique2.slice(0,10).map(t=>{let h=s2.hold.find(x=>x.t===t);return`<div style="padding:3px 0;border-bottom:1px solid rgba(51,65,85,.3)"><span style="color:var(--txth);font-weight:600">${t}</span> ${h?h.n:''} <span style="float:right">${h?f2(h.p):'--'}%</span></div>`}).join('')}</div>
-      </div>
-    </div>`;
+    <div class="card-title" style="margin-bottom:6px;font-size:10px">Shared Holdings (top 15 by ${keys[0]} weight)</div>
+    ${sharedTable}`;
   m.classList.add('show');
 
   setTimeout(()=>{

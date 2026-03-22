@@ -179,6 +179,9 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 
 /* Keyboard shortcut hints */
 .kbd{display:inline-block;padding:1px 5px;background:var(--surf);border:1px solid var(--grid);border-radius:3px;font-size:9px;color:var(--txt);font-family:monospace;vertical-align:middle;margin-left:4px}
+/* Tab count badges */
+.tab-badge{display:inline-block;background:var(--surf);color:var(--txt);border-radius:10px;font-size:9px;font-weight:600;padding:1px 6px;margin-left:5px;border:1px solid var(--grid);vertical-align:middle}
+.tab.active .tab-badge{background:rgba(59,130,246,.2);color:var(--pri);border-color:rgba(59,130,246,.3)}
 
 /* Print styles */
 @media print{
@@ -252,8 +255,8 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <div class="tabs" id="tabBar" style="display:none">
 <button class="tab active" onclick="switchTab('exposures',this)">Exposures</button>
 <button class="tab" onclick="switchTab('risk',this)">Risk</button>
-<button class="tab" onclick="switchTab('holdings',this)">Holdings</button>
-<button class="tab" onclick="switchTab('attribution',this)">Attribution</button>
+<button class="tab" id="tabHoldings" onclick="switchTab('holdings',this)">Holdings</button>
+<button class="tab" id="tabAttribution" onclick="switchTab('attribution',this)">Attribution</button>
 </div>
 <div class="upload-zone" id="uploadZone">
 <label>Upload JSON Data<input type="file" accept=".json" onchange="upload(event)" hidden></label>
@@ -521,13 +524,25 @@ function genSynthetic(){
 
 function upload(e){
   let f=e.target.files[0];if(!f)return;
+  // Show loading state immediately
+  $('uploadZone').style.display='none';
+  $('content').style.display='block';
+  $('tab-exposures').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--txt)"><div class="skeleton" style="width:24px;height:24px;border-radius:50%;background:var(--pri);animation:shimmer 1s infinite"></div><span>Loading ${f.name}...</span></div>`;
   let r=new FileReader();
   r.onload=ev=>{
     try{
       let raw=JSON.parse(ev.target.result);
       A=normalize(raw);
+      // Store report metadata for display
+      if(raw.report_date)window._reportDate=raw.report_date;
+      if(raw.generated)window._reportGenerated=raw.generated;
       init();
-    }catch(err){alert('Invalid JSON: '+err.message)}
+      showToast(`Loaded ${f.name} — ${Object.keys(A).length} strategies`,'var(--pos)');
+    }catch(err){
+      $('uploadZone').style.display='flex';
+      $('content').style.display='none';
+      showToast('Invalid JSON: '+err.message,'var(--neg)');
+    }
   };
   r.readAsText(f);
 }
@@ -553,7 +568,21 @@ function init(){
   $('stratFullName').style.display='inline';
   $('stratFullName').textContent=cs.name;
   $('dataTimestamp').style.display='inline';
-  $('dataTimestamp').textContent='Data as of: '+new Date().toLocaleDateString()+' '+new Date().toLocaleTimeString();
+  // Use report_date from JSON if available (format: YYYYMMDD or ISO string)
+  let rDate=window._reportDate;
+  let rGen=window._reportGenerated;
+  let dateStr='';
+  if(rDate&&rDate.length===8){
+    // YYYYMMDD → human readable
+    let y=rDate.slice(0,4),m=rDate.slice(4,6),d=rDate.slice(6,8);
+    dateStr=new Date(y+'-'+m+'-'+d).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+  }else if(rDate){
+    dateStr=new Date(rDate).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+  }else{
+    dateStr=new Date().toLocaleDateString();
+  }
+  let genStr=rGen?(' · generated '+new Date(rGen).toLocaleDateString('en-US',{month:'short',day:'numeric'})):'';
+  $('dataTimestamp').textContent='Report: '+dateStr+genStr;
   upd();
 }
 
@@ -576,8 +605,20 @@ function switchTab(tab,btn){
   $('tab-'+tab).classList.add('active');
 }
 
+// ===== TAB BADGES =====
+function updateTabBadges(){
+  let s=cs;
+  let holdCount=equityCount(s.hold);
+  let facCount=(s.factors||[]).length;
+  let th=$('tabHoldings');
+  if(th){th.innerHTML='Holdings'+(holdCount?`<span class="tab-badge">${holdCount}</span>`:'')}
+  let ta=$('tabAttribution');
+  if(ta){ta.innerHTML='Attribution'+(facCount?`<span class="tab-badge">${facCount}f</span>`:'')}
+}
+
 // ===== MAIN UPDATE =====
 function upd(){
+  updateTabBadges();
   rExp();
   rRisk();
   rHold();
@@ -777,7 +818,16 @@ function rWt(data,type){
   }).join('');
   let hasSS=data[0]&&data[0].s!=null;
   let hasTR=data[0]&&data[0].t!=null;
-  return`<table><thead><tr><th>Name</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight">Active</th>${hasSS?'<th class="r tip" data-tip="Stock specific risk">SS%</th>':''}${hasTR?'<th class="r tip" data-tip="Total return contribution">TTR%</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+  let table=`<table><thead><tr><th>Name</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight">Active</th>${hasSS?'<th class="r tip" data-tip="Stock specific risk">SS%</th>':''}${hasTR?'<th class="r tip" data-tip="Total return contribution">TTR%</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+  // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
+  if(type==='reg'&&data.length){
+    let totalW=data.reduce((s,d)=>s+(d.p||0),0);
+    if(totalW<50){
+      table+=`<div style="margin-top:8px;padding:6px 10px;background:rgba(245,158,11,.08);border-left:3px solid var(--warn);border-radius:0 4px 4px 0;font-size:10px;color:var(--warn)">
+        &#9888; Region coverage: ${f2(totalW)}% of portfolio weight. This strategy's benchmark may not use the same regional classification scheme — most exposure may appear unclassified.</div>`;
+    }
+  }
+  return table;
 }
 
 function rFac(factors){
@@ -2067,7 +2117,7 @@ function globalSearch(q){
   if(!matches.length){res.innerHTML='<div class="search-result"><span style="color:var(--txt)">No results</span></div>';return}
   res.innerHTML=matches.map(m=>`<div class="search-result" onmousedown="go('${m.sid}');setTimeout(()=>oSt('${m.t}'),100)">
     <span><span class="sr-ticker">${m.t}</span> ${m.n}</span>
-    <span class="sr-meta">${m.sid} | ${m.sec} | ${fp(m.a)}%</span>
+    <span class="sr-meta">${m.sid}${m.sec?' | '+m.sec:''} | ${fp(m.a)}%</span>
   </div>`).join('');
 }
 
@@ -2871,7 +2921,7 @@ function startLiveRefresh(){
       if(keys.includes(cs.id))cs=A[cs.id];
       else if(keys.length)cs=A[keys[0]];
       upd();
-      $('dataTimestamp').textContent='Data as of: '+new Date().toLocaleDateString()+' '+new Date().toLocaleTimeString();
+      $('dataTimestamp').textContent='Live · '+new Date().toLocaleTimeString();
       showToast('Data refreshed','var(--pos)');
     }catch(e){
       let dot=$('connStatus').querySelector('.conn-dot');

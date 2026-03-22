@@ -3,6 +3,12 @@
 These are ready-to-paste prompts for the production CLI. Execute them in order.
 Each prompt should complete in ~10-20 minutes.
 
+## ✅ COMPLETED: Tile-by-Tile Audit (23m 35s)
+- Factor exposure: f.a (active) not f.e (portfolio) — fixed across 7 locations
+- Null-safety: all null values display as -- across holdings, factors, chars
+- Label corrections: MCR→%S, Return%→%T, Exposure→Active Exposure
+- P/E and P/B benchmark show -- instead of misleading +25.0
+
 ---
 
 ## Prompt 1: Dashboard Polish & Error Handling (Priority: Critical)
@@ -14,23 +20,25 @@ TASK: Production-harden the dashboard (dashboard_v7.html) for real-world use.
 
 Current state: Parser works perfectly (7 strategies, 0 validation issues). Dashboard renders all tabs. Need polish for shipping.
 
-Do these specific improvements:
+Do these specific improvements (NOTE: null-safety was already fixed by the audit — skip anything already handled):
 
 1. **Upload error handling** — When a user uploads a malformed JSON file, show a human-readable error toast (not an alert()). List what's wrong: missing strategies key, empty object, wrong version, etc.
 
 2. **Region sum disclaimer** — In the Regions tab, add a subtle note: "Note: US exposure is not classified into these regional groups" when region sum < 80% for the current strategy. This prevents confusion for SCG/ACWI/GSC.
 
-3. **Empty state for null benchmark values** — P/E and P/B currently show "bench=null" in the chars table. Display "—" instead. Same for any null values in factor exposure/attribution cells.
+3. ~~DONE by audit~~ — Null benchmark values already show -- correctly.
 
 4. **Holdings search improvement** — The search box searches by ticker. Also search by company name (the `n` field) and by sector (the `sec` field) if available.
 
-5. **Report date display** — Show the report date (from JSON `report_date` field) in the header next to the strategy selector, formatted as "Jan 30, 2026" style.
+5. **Report date display** — Show the report date (from JSON `report_date` field) in the header next to the strategy selector, formatted as "Jan 30, 2026" style. Store the report_date in a global variable when JSON is loaded.
 
 6. **Data freshness indicator** — Below the strategy buttons, show "Data as of: [date]" with a colored dot (green if < 7 days old, yellow if 7-30 days, red if > 30 days from today).
 
 7. **Tab count badges** — Show count badges on tabs: Holdings (45), Factors (16), Countries (22), etc. from the current strategy data.
 
-Commit after completing all changes: "Production polish: error handling, null display, search, date indicators"
+8. **Loading state** — Show a brief loading spinner/animation when parsing large JSON files on upload.
+
+Commit after completing all changes: "Production polish: error handling, search, date indicators, tab badges"
 ```
 
 ---

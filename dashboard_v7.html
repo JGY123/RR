@@ -615,7 +615,7 @@ function rExp(){
     </div>
     <div class="sum-card" onclick="oDrMetric('sr')" tabindex="0" role="button" aria-label="Selection Rate trend">
       <div class="label tip" data-tip="Ratio of portfolio holdings to benchmark constituents">Selection Rate</div>
-      <div class="value">${f2(s.sum.sr)}%</div>
+      <div class="value">${s.sum.sr!=null?f2(s.sum.sr)+'%':'--'}</div>
       <div class="sub">port/bench</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('cash')" tabindex="0" role="button" aria-label="Cash trend">
@@ -782,10 +782,10 @@ function rWt(data,type){
 
 function rFac(factors){
   let rows=factors.map(f=>{
-    let cls=f.e>0?'pos':'neg';
-    let threshCls=Math.abs(f.e)>0.5?'thresh-warn':'';
+    let cls=(f.a??0)>0?'pos':'neg';
+    let threshCls=Math.abs(f.a??0)>0.5?'thresh-warn':'';
     return`<tr class="clickable ${threshCls}" onclick="oDrF('${f.n}')">
-      <td>${f.n}</td><td class="r ${cls}">${fp(f.e,3)}</td><td class="r">${f2(f.c)}</td><td class="r" style="${f.ret>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.ret)}</td><td class="r" style="${f.imp>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.imp)}</td>
+      <td>${f.n}</td><td class="r ${cls}">${fp(f.a,3)}</td><td class="r">${f2(f.c)}</td><td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret)}</td><td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp)}</td>
     </tr>`;
   }).join('');
   return`<table><thead><tr><th>Factor</th><th class="r tip" data-tip="Active factor exposure vs benchmark">Exposure</th><th class="r tip" data-tip="Contribution to tracking error">Contrib%</th><th class="r tip" data-tip="Factor return for the period">Return%</th><th class="r tip" data-tip="Exposure x Return = portfolio impact">Impact</th></tr></thead><tbody>${rows}</tbody></table>`;
@@ -793,7 +793,7 @@ function rFac(factors){
 
 function rRnk(ranks){
   if(!ranks.length)return'<p style="color:var(--txt);font-size:12px">No rank data</p>';
-  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r">${r.ct}</td><td class="r">${f2(r.p)}%</td><td class="r">${f2(r.a)}%</td></tr>`).join('');
+  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r">${r.ct}</td><td class="r">${f2(r.p)}%</td><td class="r">${r.a!=null?f2(r.a)+'%':'--'}</td></tr>`).join('');
   return`<table><thead><tr><th>Rank</th><th class="r">Count</th><th class="r">Port%</th><th class="r">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function filterByRank(rank){
@@ -810,8 +810,8 @@ function filterByRank(rank){
 function rChr(chars){
   if(!chars.length)return'<p style="color:var(--txt);font-size:12px">No characteristic data</p>';
   let rows=chars.map(c=>{
-    let diff=c.p-c.b;let cls=diff>0?'pos':'neg';
-    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r">${f2(c.p,1)}</td><td class="r">${f2(c.b,1)}</td><td class="r ${cls}">${fp(diff,1)}</td></tr>`;
+    let diff=c.b!=null?c.p-c.b:null;let cls=diff!=null&&diff>0?'pos':diff!=null?'neg':'';
+    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r">${f2(c.p,1)}</td><td class="r">${f2(c.b,1)}</td><td class="r ${cls}">${diff!=null?fp(diff,1):'--'}</td></tr>`;
   }).join('');
   return`<table><thead><tr><th>Metric</th><th class="r">Portfolio</th><th class="r">Benchmark</th><th class="r">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -887,7 +887,7 @@ function rRegChart(s){
 function rFacButt(s){
   let facs=s.factors;
   let names=facs.map(f=>f.n);
-  let vals=facs.map(f=>f.e);
+  let vals=facs.map(f=>f.a??0);
   Plotly.newPlot('facButtDiv',[{
     y:names,x:vals,type:'bar',orientation:'h',
     marker:{color:vals.map(v=>v>=0?'#3b82f6':'#f59e0b')},
@@ -937,7 +937,7 @@ function rScat(s){
 
 function rTree(s){
   let secData={};
-  s.hold.filter(h=>!isCash(h)).forEach(h=>{if(!secData[h.sec])secData[h.sec]=0;secData[h.sec]+=Math.abs(h.a)});
+  s.hold.filter(h=>!isCash(h)&&h.sec).forEach(h=>{if(!secData[h.sec])secData[h.sec]=0;secData[h.sec]+=Math.abs(h.a)});
   let labels=[],parents=[],values=[],colors=[];
   labels.push('Portfolio');parents.push('');values.push(0);colors.push('#0f172a');
   Object.keys(secData).forEach(sec=>{
@@ -1021,7 +1021,7 @@ function rRisk(){
   let facMCR=s.factors.map(f=>{
     let contrib=Math.abs(f.c||0);
     let mcrTE=+(totalTE*contrib/100).toFixed(3);
-    return{n:f.n,e:f.e,c:f.c,mcrTE,ret:f.ret,imp:f.imp};
+    return{n:f.n,e:f.a,c:f.c,mcrTE,ret:f.ret,imp:f.imp};  // e = active exposure
   }).sort((a,b)=>b.mcrTE-a.mcrTE);
 
   let html=`
@@ -1074,14 +1074,14 @@ function rRisk(){
       <th class="r">MCR to TE</th><th class="r">Factor Return %</th><th class="r">Impact</th>
       <th class="r">Type</th>
     </tr></thead><tbody>${facMCR.map(f=>{
-      let cls=f.e>0?'pos':'neg';
+      let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
       return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n}')">
         <td style="color:var(--txth);font-weight:500">${f.n}</td>
         <td class="r ${cls}">${fp(f.e,3)}</td>
         <td class="r">${f2(f.c)}</td>
         <td class="r">${f2(f.mcrTE,3)}</td>
-        <td class="r" style="${f.ret>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.ret)}</td>
-        <td class="r" style="${f.imp>0?'color:var(--pos)':'color:var(--neg)'}">${fp(f.imp)}</td>
+        <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret)}</td>
+        <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp)}</td>
         <td class="r"><span class="pill pill-pos" style="background:rgba(59,130,246,.15);color:var(--pri)">Factor</span></td>
       </tr>`;
     }).join('')}
@@ -1188,7 +1188,7 @@ function rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows){
     let hist=s.hist.fac[fac];
     if(hist&&hist.length){
       traces.push({
-        x:hist.map(h=>h.d),y:hist.map(h=>h.e||h.a||0),name:fac,
+        x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:fac,
         line:{color:colors[i%colors.length],width:2},
         hovertemplate:fac+'<br>%{x}<br>Exposure: %{y:.3f}<extra></extra>'
       });
@@ -1227,10 +1227,10 @@ function oDrFRisk(name){
   $('drillContent').innerHTML=`
     <h2>${name} Factor — Risk Drill<button class="close" onclick="closeDrill()">&times;</button></h2>
     <div class="grid g4" style="margin-bottom:16px">
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Exposure</div><div style="font-size:20px;font-weight:700;color:${factor.e>=0?'var(--pos)':'var(--neg)'}">${fp(factor.e,3)}</div></div>
+      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Active Exposure</div><div style="font-size:20px;font-weight:700;color:${(factor.a??0)>=0?'var(--pos)':'var(--neg)'}">${fp(factor.a,3)}</div></div>
       <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Risk Contrib</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(factor.c)}%</div></div>
       <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">MCR to TE</div><div style="font-size:20px;font-weight:700;color:var(--pri)">${f2(mcrTE,3)}%</div></div>
-      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp>=0?'var(--pos)':'var(--neg)'}">${fp(factor.imp)}</div></div>
+      <div class="card"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp!=null?(factor.imp>=0?'var(--pos)':'var(--neg)'):'var(--txt)'}">${fp(factor.imp)}</div></div>
     </div>
     <div class="card-title">Exposure Time Series</div>
     ${histHtml}
@@ -1249,7 +1249,7 @@ function oDrFRisk(name){
   if(hist&&hist.length){
     setTimeout(()=>{
       Plotly.newPlot('riskFacHistDiv',[
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.e||h.a),name:'Exposure',
+        {x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',
          line:{color:'#3b82f6',width:2.5},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'},
       ],{...plotBg,
         yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
@@ -1303,8 +1303,8 @@ function renderHoldTab(){
             <th class="r" style="cursor:pointer" onclick="sortHold('p')">Port%</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('b')">Bench%</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('a')">Active</th>
-            <th class="r" style="cursor:pointer" onclick="sortHold('mcr')">MCR</th>
-            <th class="r" style="cursor:pointer" onclick="sortHold('tr')">Return%</th>
+            <th class="r" style="cursor:pointer" onclick="sortHold('mcr')" title="Stock-specific component of tracking error">%S</th>
+            <th class="r" style="cursor:pointer" onclick="sortHold('tr')" title="% of total tracking error from this holding">%T</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('r')">Rank</th>
           </tr></thead>
           <tbody>${renderHoldRows()}</tbody>
@@ -1342,12 +1342,12 @@ function renderHoldRows(){
     let cls=activeStyle(h.a);
     return`<tr style="cursor:pointer" onclick="oSt('${h.t}')">
       <td style="color:var(--txth);font-weight:600">${h.t}</td>
-      <td>${h.n}</td><td><span class="chip">${h.sec}</span></td><td>${h.co}</td>
+      <td>${h.n}</td><td><span class="chip">${h.sec||'--'}</span></td><td>${h.co||'--'}</td>
       <td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td>
       <td class="r ${cls}">${fp(h.a)}</td>
       <td class="r">${f2(h.mcr)}</td>
       <td class="r" style="${h.tr>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.tr,1)}</td>
-      <td class="r"><span style="color:${rc(h.r)};font-weight:600">R${h.r}</span></td>
+      <td class="r">${h.r!=null?`<span style="color:${rc(h.r)};font-weight:600">R${h.r}</span>`:'--'}</td>
     </tr>`;
   }).join('');
 }
@@ -1594,10 +1594,10 @@ function oDrF(name){
   $('drillContent').innerHTML=`
     <h2>${name} Factor Drill<button class="close" onclick="closeDrill()">&times;</button></h2>
     <div class="grid g4" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Exposure</div><div style="font-size:20px;font-weight:700;color:${factor.e>=0?'var(--pos)':'var(--neg)'}">${fp(factor.e,3)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Exposure</div><div style="font-size:20px;font-weight:700;color:${(factor.a??0)>=0?'var(--pos)':'var(--neg)'}">${fp(factor.a,3)}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Contribution</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(factor.c)}%</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">% of Total Risk</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(pctOfRisk,1)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp>=0?'var(--pos)':'var(--neg)'}">${fp(factor.imp)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Impact</div><div style="font-size:20px;font-weight:700;color:${factor.imp!=null?(factor.imp>=0?'var(--pos)':'var(--neg)'):'var(--txt)'}">${fp(factor.imp)}</div></div>
     </div>
     <div class="card-title">Exposure Time Series</div>
     ${histHtml}
@@ -1617,7 +1617,7 @@ function oDrF(name){
   if(hist&&hist.length){
     setTimeout(()=>{
       Plotly.newPlot('facDrillHistDiv',[
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.e||h.a),name:'Exposure',line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.1)'}
+        {x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.1)'}
       ],{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure'},shapes:[{type:'line',y0:0,y1:0,x0:hist[0].d,x1:hist[hist.length-1].d,line:{color:'#64748b',dash:'dot'}}]},plotCfg);
     },50);
   }
@@ -1679,12 +1679,12 @@ function oSt(ticker){
     <div class="grid g2">
       <div>
         <table>
-          <tr><td>Sector</td><td class="r"><span class="chip" style="cursor:pointer" onclick="$('stockModal').classList.remove('show');oDr('sec','${h.sec}')">${h.sec}</span></td></tr>
-          <tr><td>Country</td><td class="r" style="cursor:pointer;color:var(--pri)" onclick="$('stockModal').classList.remove('show');oDrCountry('${h.co}')">${h.co}</td></tr>
+          <tr><td>Sector</td><td class="r"><span class="chip" style="cursor:pointer" onclick="${h.sec?`$('stockModal').classList.remove('show');oDr('sec','${h.sec}')`:'void 0'}">${h.sec||'--'}</span></td></tr>
+          <tr><td>Country</td><td class="r" style="cursor:pointer;color:var(--pri)" onclick="${h.co?`$('stockModal').classList.remove('show');oDrCountry('${h.co}')`:'void 0'}">${h.co||'--'}</td></tr>
           <tr><td>Region</td><td class="r">${h.reg||CMAP[h.co]||'--'}</td></tr>
           <tr><td>Bench Weight</td><td class="r">${f2(h.b)}%</td></tr>
-          <tr><td>MCR</td><td class="r">${f2(h.mcr)}</td></tr>
-          <tr><td>Total Return</td><td class="r" style="${h.tr>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.tr,1)}%</td></tr>
+          <tr><td>%S (Specific TE)</td><td class="r">${f2(h.mcr)}</td></tr>
+          <tr><td>TE Contrib (%T)</td><td class="r">${f2(h.tr,1)}%</td></tr>
         </table>
       </div>
       <div>
@@ -1696,7 +1696,7 @@ function oSt(ticker){
       <div><div class="card-title">Score Radar</div><div id="stockRadarDiv" style="height:220px"></div></div>
       <div><div class="card-title">Weight History</div><div id="stockHistDiv" style="height:220px"></div></div>
     </div>
-    ${peers.length?`<div style="margin-top:12px"><div class="card-title">Peer Comparison (${h.sec})</div>
+    ${peers.length&&h.sec?`<div style="margin-top:12px"><div class="card-title">Peer Comparison (${h.sec})</div>
     <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead><tbody>${peerRows}</tbody></table></div>`:''}`;
   m.classList.add('show');
 
@@ -1805,7 +1805,7 @@ function openComp(){
     let traces=keys.map((k,i)=>{
       let s=A[k];
       return{type:'scatterpolar',name:k,
-        r:[s.sum.te,s.sum.as/10,s.sum.beta*5,(s.sum.h||equityCount(s.hold))/10,s.sum.sr/10,s.sum.te],
+        r:[s.sum.te,s.sum.as/10,s.sum.beta*5,(s.sum.h||equityCount(s.hold))/10,(s.sum.sr||0)/10,s.sum.te],
         theta:['TE','AS/10','Beta*5','H/10','SR/10','TE'],
         fill:'toself',fillcolor:colors[i%colors.length]+'20',line:{color:colors[i%colors.length],width:2}
       };
@@ -1816,7 +1816,7 @@ function openComp(){
     let facDiff=FACS.map(f=>{
       let f1=s1.factors.find(x=>x.n===f);
       let f2f=s2.factors.find(x=>x.n===f);
-      return{n:f,v1:f1?f1.e:0,v2:f2f?f2f.e:0};
+      return{n:f,v1:f1?f1.a??0:0,v2:f2f?f2f.a??0:0};
     });
     Plotly.newPlot('compFacDiv',[
       {y:facDiff.map(f=>f.n),x:facDiff.map(f=>f.v1),name:keys[0],type:'bar',orientation:'h',marker:{color:'#3b82f6'}},
@@ -1976,7 +1976,7 @@ async function buildPPTX(selected,narratives){
       let rows=s.sectors.sort((a,b)=>Math.abs(b.a)-Math.abs(a.a)).map(x=>[x.n,f2(x.p),f2(x.b),fp(x.a)]);
       sl.addTable([['Sector','Port%','Bench%','Active'],...rows],{x:0.5,y:dataY,w:12,h:4,fontSize:10,color:txtColor,fontFace:'Arial',border:{type:'solid',color:'334155',pt:0.5},colW:[4,2.5,2.5,2.5]});
     }else if(sec==='factors'){
-      let rows=s.factors.map(f=>[f.n,f.e.toFixed(3),f2(f.c),fp(f.ret),fp(f.imp)]);
+      let rows=s.factors.map(f=>[f.n,(f.a??0).toFixed(3),f2(f.c),fp(f.ret),fp(f.imp)]);
       sl.addTable([['Factor','Exposure','Contrib%','Return%','Impact'],...rows],{x:0.5,y:dataY,w:12,h:3,fontSize:10,color:txtColor,fontFace:'Arial',border:{type:'solid',color:'334155',pt:0.5}});
     }else{
       sl.addText(`Data available for ${sec}`,{x:0.5,y:dataY,w:12,h:0.5,fontSize:12,color:txtColor,fontFace:'Arial'});
@@ -2201,9 +2201,10 @@ function oDrMetric(metric,skipMonths){
   let vals=hist.map(h=>h[metric]);
   let dates=hist.map(h=>h.d);
   let current=vals[vals.length-1];
-  let min=Math.min(...vals);
-  let max=Math.max(...vals);
-  let avg=(vals.reduce((a,v)=>a+v,0)/vals.length);
+  let numVals=vals.filter(v=>v!=null);
+  let min=numVals.length?Math.min(...numVals):null;
+  let max=numVals.length?Math.max(...numVals):null;
+  let avg=numVals.length?(numVals.reduce((a,v)=>a+v,0)/numVals.length):null;
   let totalMonths=fullHist.length;
   let inception=fullHist[0].d;
   let dec=metric==='beta'?3:2;
@@ -2280,7 +2281,7 @@ function oDrMetric(metric,skipMonths){
           <tr><td>Equity Holdings</td><td class="r">${equityCount(cs.hold)}</td></tr>
           <tr><td>Total Positions (incl. cash)</td><td class="r" style="font-size:10px;color:var(--txt)">${cs.hold.length}</td></tr>
           <tr><td>Benchmark Holdings</td><td class="r">${cs.sum.bh||'--'}</td></tr>
-          <tr><td>Selection Rate</td><td class="r">${f2(cs.sum.sr)}%</td></tr>
+          <tr><td>Selection Rate</td><td class="r">${cs.sum.sr!=null?f2(cs.sum.sr)+'%':'--'}</td></tr>
         </table>
       </div>
       <div>
@@ -2301,7 +2302,7 @@ function oDrMetric(metric,skipMonths){
     let cashHold=cs.hold.filter(h=>isCash(h));
     // Sector distribution of equity holdings
     let secCounts={};
-    eqHold.forEach(h=>{secCounts[h.sec]=(secCounts[h.sec]||0)+1});
+    eqHold.forEach(h=>{if(h.sec){secCounts[h.sec]=(secCounts[h.sec]||0)+1}});
     let secRows=Object.entries(secCounts).sort((a,b)=>b[1]-a[1]).map(([sec,ct])=>`<tr><td style="color:var(--txth)">${sec}</td><td class="r" style="font-weight:600">${ct}</td><td class="r" style="color:var(--txt)">${f2(ct/eqHold.length*100,1)}%</td></tr>`).join('');
     let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}%</td></tr>`).join('');
     extraHtml=`<div class="grid g2" style="margin-top:16px">
@@ -2328,7 +2329,7 @@ function oDrMetric(metric,skipMonths){
         <tr><td>Equity Holdings</td><td class="r" style="font-weight:600;color:var(--txth)">${eqH}</td></tr>
         <tr><td>Benchmark Constituents</td><td class="r" style="font-weight:600;color:var(--txth)">${bh||'--'}</td></tr>
         <tr><td>Computed Rate</td><td class="r" style="font-weight:600;color:var(--pri)">${bh?f2(computed)+'%':'--'}</td></tr>
-        <tr><td>Reported Rate</td><td class="r">${f2(cs.sum.sr)}%</td></tr>
+        <tr><td>Reported Rate (Hit Rate)</td><td class="r">${cs.sum.sr!=null?f2(cs.sum.sr)+'%':'-- (not in export)'}</td></tr>
       </table>
       <p style="font-size:9px;color:var(--txt);margin-top:6px">Selection rate = portfolio equity holdings ÷ benchmark constituents. A lower rate means a more concentrated portfolio.</p>
     </div>`;
@@ -2539,7 +2540,7 @@ function oDrGroup(groupName){
 
   let sgRows=subgroups.map(sg=>`<tr><td>${sg.sg}</td><td class="r">${f2(sg.p)}</td><td class="r">${f2(sg.b)}</td><td class="r ${activeStyle(sg.a)}">${fp(sg.a)}</td></tr>`).join('');
   let holdRows=holdings.slice(0,15).map(h=>`<tr class="clickable" onclick="$('groupModal').classList.remove('show');oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td><span class="chip">${h.sec}</span></td>
+    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td><span class="chip">${h.sec||'--'}</span></td>
     <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
   </tr>`).join('');
 
@@ -2658,13 +2659,13 @@ function oDrRiskBudget(){
 
   let details=facs.map(f=>{
     let pctOfTotal=Math.abs(f.c||0)/total*100;
-    let intentional=Math.abs(f.e)>0.2;
-    return{n:f.n,e:f.e,c:f.c||0,pct:pctOfTotal,mcr:+(f.c*cs.sum.te/100||0).toFixed(3),intentional};
+    let intentional=Math.abs(f.a??0)>0.2;
+    return{n:f.n,e:f.a,c:f.c||0,pct:pctOfTotal,mcr:+(f.c*cs.sum.te/100||0).toFixed(3),intentional};
   }).sort((a,b)=>b.pct-a.pct);
 
   let rows=details.map(d=>`<tr>
     <td style="color:var(--txth);font-weight:500">${d.n}</td>
-    <td class="r ${d.e>=0?'pos':'neg'}">${fp(d.e,3)}</td>
+    <td class="r ${d.e!=null?(d.e>=0?'pos':'neg'):''}">${fp(d.e,3)}</td>
     <td class="r">${f2(d.c)}</td>
     <td class="r">${f2(d.pct,1)}%</td>
     <td class="r">${fp(d.mcr,3)}</td>
@@ -2730,7 +2731,7 @@ function generateEmailSnapshot(){
     </div>
     <div class="section"><h3>Key Overweights</h3><p>${topOW}</p></div>
     <div class="section"><h3>Key Underweights</h3><p>${topUW}</p></div>
-    <div class="section"><h3>Factor Tilts</h3><p>${s.factors.filter(f=>Math.abs(f.e)>0.2).map(f=>`${f.n}: ${fp(f.e,3)}`).join(', ')||'No significant tilts'}</p></div>
+    <div class="section"><h3>Factor Tilts</h3><p>${s.factors.filter(f=>Math.abs(f.a??0)>0.2).map(f=>`${f.n}: ${fp(f.a,3)}`).join(', ')||'No significant tilts'}</p></div>
     <div class="footer">Generated by Redwood Risk Control Panel | ${new Date().toLocaleString()}</div>
   </div></body></html>`;
 

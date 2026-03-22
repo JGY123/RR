@@ -1106,7 +1106,21 @@ function rRisk(){
     </div>
   </div>
 
-  <!-- Row 1: Risk Decomposition Donut + Factor vs Idio Bar -->
+  <!-- Row 1: Historical Trends Mini-Charts -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:8px">
+      <div class="card-title" style="margin:0">Historical Trends</div>
+      <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} data points · click chart for full drill-down</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div onclick="oDrMetric('te')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Tracking Error</div><div id="miniTE" style="height:80px"></div></div>
+      <div onclick="oDrMetric('as')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Active Share</div><div id="miniAS" style="height:80px"></div></div>
+      <div onclick="oDrMetric('beta')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Beta</div><div id="miniBeta" style="height:80px"></div></div>
+      <div onclick="oDrMetric('h')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Holdings Count</div><div id="miniH" style="height:80px"></div></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Risk Decomposition Donut + Factor vs Idio Bar -->
   <div class="grid g2">
     <div class="card">
       <div class="card-title">Risk Decomposition</div>
@@ -1124,9 +1138,11 @@ function rRisk(){
     <table><thead><tr>
       <th>Factor</th><th class="r">Exposure</th><th class="r">Risk Contrib %</th>
       <th class="r">MCR to TE</th><th class="r">Factor Return %</th><th class="r">Impact</th>
-      <th class="r">Type</th>
+      <th class="r" title="Exposure trend over available history">Trend</th>
     </tr></thead><tbody>${facMCR.map(f=>{
       let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
+      let facHist=s.hist.fac[f.n];
+      let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
       return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n}')">
         <td style="color:var(--txth);font-weight:500">${f.n}</td>
         <td class="r ${cls}">${fp(f.e,3)}</td>
@@ -1134,14 +1150,14 @@ function rRisk(){
         <td class="r">${f2(f.mcrTE,3)}</td>
         <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret)}</td>
         <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp)}</td>
-        <td class="r"><span class="pill pill-pos" style="background:rgba(59,130,246,.15);color:var(--pri)">Factor</span></td>
+        <td class="r">${mkSparkline(sparkVals,60,22,null)}</td>
       </tr>`;
     }).join('')}
     <tr style="border-top:2px solid var(--grid);font-weight:600">
       <td>Idiosyncratic (Stock-Specific)</td>
       <td class="r">--</td><td class="r">${f2(100-totalFacContrib)}</td>
       <td class="r">${f2(idioRisk,3)}</td><td class="r">--</td><td class="r">--</td>
-      <td class="r"><span class="pill" style="background:rgba(139,92,246,.15);color:var(--acc)">Idio</span></td>
+      <td class="r">--</td>
     </tr></tbody></table>
   </div>
 
@@ -1253,6 +1269,53 @@ function rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows){
       hovermode:'x unified'
     },plotCfg);
   }
+
+  // Mini trend charts for key metrics
+  let miniLayout={
+    ...plotBg,margin:{l:28,r:8,t:4,b:18},
+    xaxis:{...plotBg.xaxis,showticklabels:false,showgrid:false},
+    yaxis:{...plotBg.yaxis,showgrid:false,showticklabels:true,tickfont:{size:8}},
+    height:80,showlegend:false
+  };
+  let hist12=s.hist.sum.slice(-12);
+  let miniDefs=[
+    {id:'miniTE',key:'te',color:'#10b981',ref:5},
+    {id:'miniAS',key:'as',color:'#3b82f6',ref:null},
+    {id:'miniBeta',key:'beta',color:'#f59e0b',ref:1},
+    {id:'miniH',key:'h',color:'#8b5cf6',ref:null}
+  ];
+  miniDefs.forEach(m=>{
+    let el=document.getElementById(m.id);
+    if(!el)return;
+    let vals=hist12.map(h=>h[m.key]).filter(v=>v!=null);
+    let dates=hist12.map(h=>h.d);
+    if(!vals.length)return;
+    let shapes=m.ref!=null?[{type:'line',y0:m.ref,y1:m.ref,xref:'paper',x0:0,x1:1,line:{color:'rgba(100,116,139,.5)',dash:'dot',width:1}}]:[];
+    Plotly.newPlot(m.id,[{x:dates,y:hist12.map(h=>h[m.key]),type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:m.color+'15',line:{color:m.color,width:1.5},
+      hovertemplate:'%{x|%b %Y}<br>%{y:.2f}<extra></extra>'
+    }],{...miniLayout,shapes},plotCfg);
+  });
+}
+
+// ===== INLINE SVG SPARKLINE =====
+function mkSparkline(vals,w,h,color){
+  if(!vals||vals.length<2)return`<span style="color:var(--txt);font-size:9px">—</span>`;
+  let filtered=vals.filter(v=>v!=null);
+  if(filtered.length<2)return`<span style="color:var(--txt);font-size:9px">—</span>`;
+  let mn=Math.min(...filtered),mx=Math.max(...filtered);
+  let range=mx-mn||0.001;
+  let pts=filtered.map((v,i)=>{
+    let x=(i/(filtered.length-1))*w;
+    let y=h-((v-mn)/range)*(h-2)-1;
+    return`${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  let lastV=filtered[filtered.length-1];
+  let trend=filtered.length>=2?(lastV>filtered[0]?'var(--pos)':lastV<filtered[0]?'var(--neg)':'var(--txt)'):'var(--txt)';
+  return`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="vertical-align:middle">
+    <polyline points="${pts}" fill="none" stroke="${color||trend}" stroke-width="1.5" stroke-linejoin="round"/>
+    <circle cx="${(filtered.length-1)/(filtered.length-1)*w}" cy="${(h-((lastV-mn)/range)*(h-2)-1).toFixed(1)}" r="2" fill="${color||trend}"/>
+  </svg>`;
 }
 
 // Factor drill from Risk tab - shows time series chart

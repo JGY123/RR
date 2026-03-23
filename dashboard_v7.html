@@ -183,6 +183,38 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 .tab-badge{display:inline-block;background:var(--surf);color:var(--txt);border-radius:10px;font-size:9px;font-weight:600;padding:1px 6px;margin-left:5px;border:1px solid var(--grid);vertical-align:middle}
 .tab.active .tab-badge{background:rgba(59,130,246,.2);color:var(--pri);border-color:rgba(59,130,246,.3)}
 
+/* History dropdown */
+.hist-wrap{position:relative}
+.hist-panel{display:none;position:absolute;top:calc(100% + 6px);right:0;width:320px;background:var(--card);border:1px solid var(--grid);border-radius:10px;z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.4);overflow:hidden}
+.hist-panel.open{display:block}
+.hist-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(51,65,85,.3);font-size:11px;display:flex;justify-content:space-between;align-items:center;transition:background .15s}
+.hist-item:hover{background:var(--surf)}
+.hist-item.active-hist{background:rgba(59,130,246,.08);border-left:2px solid var(--pri)}
+.hist-item .hist-name{color:var(--txth);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+.hist-item .hist-meta{color:var(--txt);font-size:10px;white-space:nowrap}
+.hist-footer{padding:8px 14px;font-size:10px;color:var(--txt);text-align:right;cursor:pointer}
+.hist-footer:hover{color:var(--neg)}
+
+/* Validation panel */
+.valid-panel{background:var(--card);border:1px solid var(--grid);border-radius:10px;margin-bottom:12px;overflow:hidden}
+.valid-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
+.valid-header:hover{background:rgba(255,255,255,.02)}
+.valid-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.valid-dot.ok{background:var(--pos)}
+.valid-dot.warn{background:var(--warn)}
+.valid-summary{font-size:12px;color:var(--txth);flex:1}
+.valid-toggle{font-size:10px;color:var(--txt);transition:transform .2s}
+.valid-toggle.open{transform:rotate(180deg)}
+.valid-body{display:none;padding:0 16px 14px;border-top:1px solid rgba(51,65,85,.3)}
+.valid-body.open{display:block}
+.valid-strat{margin-top:10px;padding:8px;background:var(--surf);border-radius:6px;font-size:11px}
+.valid-strat .vs-name{color:var(--txth);font-weight:600;margin-bottom:4px}
+.valid-strat .vs-row{display:flex;justify-content:space-between;color:var(--txt);font-size:10px;margin-top:2px}
+.valid-issue{color:var(--warn);font-size:11px;margin-top:4px;padding-left:12px}
+
+/* CSV parse overlay shimmer text */
+.parse-shimmer{display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--txt);flex-direction:column}
+
 /* Print styles */
 @media print{
   body{background:#fff!important;color:#333!important;font-size:10px}
@@ -232,7 +264,11 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <button class="btn btn-sec btn-sm" id="copyBtn" style="display:none" onclick="copySummary()" title="Copy formatted summary to clipboard">Copy Summary</button>
 <button class="btn btn-sec btn-sm" id="emailBtn" style="display:none" onclick="generateEmailSnapshot()" title="Email-ready snapshot">Email</button>
 <button class="btn btn-sec btn-sm" id="compareBtn" style="display:none" onclick="openComp()">Compare<span class="kbd">C</span></button>
-<label class="upload-btn-sm" id="reupload" style="display:none">Upload JSON<input type="file" accept=".json" onchange="upload(event)" hidden></label>
+<div class="hist-wrap" id="histWrap" style="display:none">
+  <button class="btn btn-sec btn-sm" onclick="toggleHistPanel()" id="histBtn">History ▾</button>
+  <div class="hist-panel" id="histPanel"></div>
+</div>
+<label class="upload-btn-sm" id="reupload" style="display:none">Upload<input type="file" accept=".csv,.txt,.json" onchange="upload(event)" hidden></label>
 <button class="btn btn-pri btn-sm" id="reportBtn" style="display:none" onclick="openReport()">Generate Report</button>
 <button class="btn btn-sec btn-sm" id="configBtn" style="display:none" onclick="toggleConfig()" title="Settings">&#9881;</button>
 </div>
@@ -260,10 +296,12 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <button class="tab" id="tabAttribution" onclick="switchTab('attribution',this)">Attribution</button>
 </div>
 <div class="upload-zone" id="uploadZone">
-<label>Upload JSON Data<input type="file" accept=".json" onchange="upload(event)" hidden></label>
-<p>Drop your FPE risk JSON file to begin</p>
+<label>Upload CSV or JSON<input type="file" accept=".csv,.txt,.json" onchange="upload(event)" hidden></label>
+<p id="uploadZoneText">Drop CSV or JSON file here</p>
+<p style="font-size:11px;opacity:.5">.csv &nbsp;·&nbsp; .txt &nbsp;·&nbsp; .json</p>
 </div>
 <div id="content">
+<div id="validPanel" style="display:none;padding:16px 24px 0"></div>
 <div class="tab-content active" id="tab-exposures"></div>
 <div class="tab-content" id="tab-risk"></div>
 <div class="tab-content" id="tab-holdings"></div>
@@ -528,22 +566,42 @@ function upload(e){
   // Show loading state immediately
   $('uploadZone').style.display='none';
   $('content').style.display='block';
-  $('tab-exposures').innerHTML=`<div style="display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--txt)"><div class="skeleton" style="width:24px;height:24px;border-radius:50%;background:var(--pri);animation:shimmer 1s infinite"></div><span>Loading ${f.name}...</span></div>`;
+  const isCSV=f.name.toLowerCase().endsWith('.csv')||f.name.toLowerCase().endsWith('.txt');
+  $('tab-exposures').innerHTML=`<div class="parse-shimmer"><div class="skeleton" style="width:24px;height:24px;border-radius:50%;background:var(--pri)"></div><span>${isCSV?'Parsing CSV… (this takes a few seconds for large files)':'Loading '+f.name+'…'}</span></div>`;
   let r=new FileReader();
   r.onload=ev=>{
-    try{
-      let raw=JSON.parse(ev.target.result);
-      A=normalize(raw);
-      // Store report metadata for display
-      if(raw.report_date)window._reportDate=raw.report_date;
-      if(raw.generated)window._reportGenerated=raw.generated;
-      init();
-      showToast(`Loaded ${f.name} — ${Object.keys(A).length} strategies`,'var(--pos)');
-    }catch(err){
-      $('uploadZone').style.display='flex';
-      $('content').style.display='none';
-      showToast('Invalid JSON: '+err.message,'var(--neg)');
-    }
+    setTimeout(()=>{
+      try{
+        let raw,parseStats=null,validIssues=[];
+        if(isCSV){
+          let result=parseFactSetCSV(ev.target.result);
+          raw=result;
+          parseStats=result.parse_stats;
+          validIssues=result.validation_issues||[];
+        }else{
+          raw=JSON.parse(ev.target.result);
+        }
+        A=normalize(raw);
+        if(raw.report_date)window._reportDate=raw.report_date;
+        if(raw.generated)window._reportGenerated=raw.generated;
+        saveToHistory(f.name,raw.report_date||'',Object.keys(A).length,raw);
+        init();
+        if(isCSV&&parseStats){
+          const sc=Object.keys(A).length;
+          const reps=parseStats.repair_warnings||0;
+          showToast(`✓ Parsed ${sc} strategies from CSV (${(parseStats.total_rows||0).toLocaleString()} rows${reps?' · '+reps+' repairs':''})`, 'var(--pos)');
+          showValidPanel(A,parseStats,validIssues,f.name);
+        }else{
+          showToast(`Loaded ${f.name} — ${Object.keys(A).length} strategies`,'var(--pos)');
+          $('validPanel').style.display='none';
+        }
+      }catch(err){
+        $('uploadZone').style.display='flex';
+        $('content').style.display='none';
+        showToast('Parse error: '+err.message,'var(--neg)');
+        console.error('Upload error:',err);
+      }
+    },10);
   };
   r.readAsText(f);
 }
@@ -566,6 +624,7 @@ function init(){
   $('compareBtn').style.display='inline-block';
   $('configBtn').style.display='inline-block';
   $('connStatus').style.display='flex';
+  updateHistUI();
   $('globalSearchWrap').style.display='block';
   $('stratFullName').style.display='inline';
   $('stratFullName').textContent=cs.name;
@@ -2168,16 +2227,14 @@ document.addEventListener('keydown',e=>{
 });
 
 // ===== DRAG & DROP =====
-document.body.addEventListener('dragover',e=>{e.preventDefault()});
+document.body.addEventListener('dragover',e=>{e.preventDefault();e.dataTransfer.dropEffect='copy'});
 document.body.addEventListener('drop',e=>{
   e.preventDefault();
   let f=e.dataTransfer.files[0];
-  if(f&&f.name.endsWith('.json')){
-    let r=new FileReader();
-    r.onload=ev=>{
-      try{A=normalize(JSON.parse(ev.target.result));init()}catch(err){alert('Invalid JSON: '+err.message)}
-    };
-    r.readAsText(f);
+  if(!f)return;
+  const name=f.name.toLowerCase();
+  if(name.endsWith('.json')||name.endsWith('.csv')||name.endsWith('.txt')){
+    upload({target:{files:[f]}});
   }
 });
 
@@ -3015,6 +3072,513 @@ function emptyState(msg){
   </div>`;
 }
 
+// ===== FACTSET CSV PARSER (port of factset_parser.py) =====
+function parseFactSetCSV(csvText){
+  const t0=Date.now();
+
+  // ── Static maps ──────────────────────────────────────────────────────────
+  const ACCT_TO_ID={IDM:'IDM',ACWIXUS:'IOP',EM:'EM',ISC:'ISC',SCG:'SCG',ACWI:'ACWI',GSC:'GSC'};
+  const ACCT_TO_NAME={IDM:'International Developed Markets',ACWIXUS:'International Opportunities',EM:'Emerging Markets',ISC:'International Small Cap',SCG:'Small Cap Growth',ACWI:'All Country World',GSC:'Global Small Cap'};
+  const ACCT_TO_BM={IDM:'MSCI EAFE',ACWIXUS:'MSCI ACWI ex USA',EM:'MSCI Emerging Markets',ISC:'MSCI World ex USA Small Cap',SCG:'Russell 2000 Growth',ACWI:'MSCI ACWI',GSC:'MSCI ACWI Small Cap'};
+  const STRATEGY_ACCTS=new Set(Object.keys(ACCT_TO_ID));
+
+  const GICS_L1=new Set(['Communication Services','Consumer Discretionary','Consumer Staples','Energy','Financials','Health Care','Industrials','Information Technology','Materials','Real Estate','Utilities']);
+  const REGIONS=new Set(['English','Far East','Northern Europe','Western Europe','Southern Europe','Australia - New Zealand','Emerging Market']);
+  const COUNTRIES=new Set(['Australia','Austria','Belgium','Brazil','Canada','Chile','China','Colombia','Czech Republic','Denmark','Egypt','Finland','France','Germany','Greece','Hong Kong','Hungary','India','Indonesia','Ireland','Israel','Italy','Japan','Korea','Kuwait','Malaysia','Mexico','Netherlands','New Zealand','Norway','Peru','Philippines','Poland','Portugal','Qatar','Saudi Arabia','Singapore','South Africa','Spain','Sweden','Switzerland','Taiwan','Thailand','Turkey','United Arab Emirates','United Kingdom','United States','Usa']);
+  const QUINTILE_SET=new Set(['1.000000','2.000000','3.000000','4.000000','5.000000']);
+  const CUSTOM_GROUP_MAP={'HARD CYCLICAL':['CYCLICALS','HARD CYCLICAL'],'GROWTH CYCLICAL':['CYCLICALS','GROWTH CYCLICAL'],'SOFT CYCLICAL':['CYCLICALS','SOFT CYCLICAL'],'DEFENSIVE':['DEFENSIVE','DEFENSIVE'],'GROWTH':['GROWTH','GROWTH'],'COMMODITY':['COMMODITY','COMMODITY'],'BANKS':['RATE SENSITIVE','BANKS'],'BOND PROXIES':['RATE SENSITIVE','BOND PROXIES']};
+  const FACTOR_NAME_MAP={'Growth':'Growth','Medium-Term Momentum':'Momentum','Volatility':'Volatility','Market Sensitivity':'Market Sensitivity','Liquidity':'Liquidity','Exchange Rate Sensitivity':'FX Sensitivity','Profitability':'Profitability','Currency':'Currency','Size':'Size','Market':'Market','Industry':'Industry','Country':'Country','Leverage':'Leverage','Earnings Yield':'Earnings Yield','Value':'Value','Dividend Yield':'Dividend Yield'};
+
+  const PREFIX_COLS=6,GROUP_SIZE=18,NUM_GROUPS=5,CURRENT_GRP=4;
+  const EXPECTED_96=96,EXPECTED_101=101;
+  const C_W=0,C_BW=1,C_AW=2,C_PCT_S=3,C_PCT_T=4,C_CHECK=5,C_OVER_WA=6,C_REV_WA=7,C_VAL_WA=8,C_QUAL_WA=9,C_MOM_WA=10,C_STAB_WA=11;
+
+  // ── CSV line parser (handles quoted fields) ───────────────────────────────
+  function parseCSVLine(line){
+    const result=[];let field='';let inQ=false;
+    for(let i=0;i<line.length;i++){
+      const c=line[i];
+      if(c==='"'){if(inQ&&line[i+1]==='"'){field+='"';i++;}else{inQ=!inQ;}}
+      else if(c===','&&!inQ){result.push(field);field='';}
+      else{field+=c;}
+    }
+    result.push(field);return result;
+  }
+
+  // ── Numeric helpers ───────────────────────────────────────────────────────
+  function pf(s){if(s==null||s==='')return null;const v=parseFloat(String(s).trim());return isNaN(v)?null:v;}
+  function r2(v){return v!=null?Math.round(v*100)/100:null;}
+
+  // ── Extract 18-value group from row (handles 96-col and 101-col) ──────────
+  function getGroup(row,g){
+    const dataLen=row.length-PREFIX_COLS;
+    const actualSz=dataLen>=NUM_GROUPS*19?19:GROUP_SIZE;
+    const start=PREFIX_COLS+g*actualSz;
+    let chunk=row.slice(start,start+actualSz);
+    if(actualSz===19)chunk=chunk.slice(0,5).concat(chunk.slice(6)); // drop Overall Rank at pos 5
+    const res=[];for(let i=0;i<GROUP_SIZE;i++)res.push(i<chunk.length?pf(chunk[i]):null);
+    return res;
+  }
+
+  // ── Comma-in-name repair ─────────────────────────────────────────────────
+  function repairCommaInName(row,expectedLen){
+    const extra=row.length-expectedLen;if(extra<=0)return null;
+    const repaired=row.slice(0,5).concat([row.slice(5,6+extra).join(',')]).concat(row.slice(6+extra));
+    return repaired.length===expectedLen?repaired:null;
+  }
+
+  // ── Row classifier ────────────────────────────────────────────────────────
+  function classifyRow(lv2,secname){
+    if(!lv2||lv2==='Data'||lv2==='@NA'||lv2==='[Unassigned]'||lv2==='')return'special';
+    if(lv2==='[Cash]')return'cash';
+    if(lv2.startsWith('CASH_'))return'other';
+    if(GICS_L1.has(lv2))return'sector';
+    if(REGIONS.has(lv2))return'region';
+    if(QUINTILE_SET.has(lv2))return'quintile';
+    if(CUSTOM_GROUP_MAP[lv2])return'custom_group';
+    if(COUNTRIES.has(lv2))return'country';
+    if(FACTOR_NAME_MAP[lv2])return'factor';
+    if(secname)return'holding';
+    if(lv2.startsWith('*'))return'holding';
+    if(!lv2.includes(' ')&&!lv2.includes('.')&&lv2.length>=4&&(lv2===lv2.toUpperCase()||/^\d+$/.test(lv2)))return'holding';
+    return'other';
+  }
+
+  // ── Weekly Friday dates walking back from report date ────────────────────
+  function weeklyDatesFor(reportDateStr){
+    const y=parseInt(reportDateStr.slice(0,4));
+    const m=parseInt(reportDateStr.slice(4,6))-1;
+    const d=parseInt(reportDateStr.slice(6,8));
+    let cur=new Date(y,m,d);
+    const fridays=[];
+    while(fridays.length<NUM_GROUPS){
+      if(cur.getDay()===5)fridays.push(new Date(cur));
+      cur.setDate(cur.getDate()-1);
+    }
+    fridays.reverse();
+    return fridays.map(dt=>dt.toISOString().slice(0,10));
+  }
+
+  // ── Parse CSV text ────────────────────────────────────────────────────────
+  const lines=csvText.split(/\r?\n/);
+  const rowsByAcctDate=new Map();
+  const unknownAccts=new Set();
+  const repairWarnings=[];
+  let totalRows=0;
+  let isFirstRow=true;
+
+  for(const line of lines){
+    if(!line.trim())continue;
+    const row=parseCSVLine(line);
+    if(row.length<PREFIX_COLS)continue;
+
+    // Skip the very first row (column headers)
+    if(isFirstRow){isFirstRow=false;continue;}
+
+    const acct=row[0],dt=row[1];
+    // Skip re-embedded tile headers
+    if(acct==='ACCT'||acct==='Level'||dt==='DATE')continue;
+
+    if(!STRATEGY_ACCTS.has(acct)){
+      if(acct&&acct.trim()!=='')unknownAccts.add(acct);
+      continue;
+    }
+
+    totalRows++;
+
+    // Comma-in-name repair (skip for aggregate/special rows)
+    const lv2Raw=row.length>4?row[4]:'';
+    const skipRepair=!lv2Raw||['Data','@NA','[Unassigned]','[Cash]','ACCT','Level'].includes(lv2Raw);
+    let finalRow=row;
+    if(!skipRepair){
+      const rlen=row.length;
+      if(rlen>EXPECTED_101){
+        const repaired=repairCommaInName(row,EXPECTED_101);
+        if(repaired){repairWarnings.push({acct,ticker:row[4],cols:rlen});finalRow=repaired;}
+        else repairWarnings.push({acct,ticker:row[4],cols:rlen,failed:true});
+      }else if(rlen>EXPECTED_96&&rlen<EXPECTED_101){
+        const repaired=repairCommaInName(row,EXPECTED_96);
+        if(repaired){repairWarnings.push({acct,ticker:row[4],cols:rlen});finalRow=repaired;}
+      }
+    }
+
+    const key=acct+'|'+dt;
+    if(!rowsByAcctDate.has(key))rowsByAcctDate.set(key,[]);
+    rowsByAcctDate.get(key).push(finalRow);
+  }
+
+  // ── Find main date (most rows) ─────────────────────────────────────────
+  const dateCounts=new Map();
+  for(const[key,rows]of rowsByAcctDate){
+    const dt=key.split('|')[1];
+    dateCounts.set(dt,(dateCounts.get(dt)||0)+rows.length);
+  }
+  const sortedDates=[...dateCounts.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
+  if(!sortedDates.length){
+    return{strategies:{},validation_issues:['No data rows found (all accounts unknown or file empty)'],report_date:'',parse_stats:{total_rows:totalRows,parse_time_ms:Date.now()-t0,repair_warnings:repairWarnings.length,unknown_accts:[...unknownAccts]}};
+  }
+  const mainDate=sortedDates[0];
+  const factorDates=sortedDates.slice(1);
+  const weekDates=weeklyDatesFor(mainDate);
+
+  const strategies={};
+  const validationIssues=[];
+  const stratStats={};
+
+  for(const acct of [...STRATEGY_ACCTS].sort()){
+    const stratId=ACCT_TO_ID[acct];
+    const mainRows=rowsByAcctDate.get(acct+'|'+mainDate)||[];
+    stratStats[stratId]={dataRowsFound:0,factorDates:[]};
+
+    if(!mainRows.length){
+      validationIssues.push(`${stratId}: no rows found for main date ${mainDate}`);
+      continue;
+    }
+
+    const s={
+      id:stratId,name:ACCT_TO_NAME[acct],benchmark:ACCT_TO_BM[acct]||'',
+      sum:{},sectors:[],regions:[],countries:[],
+      factors:[],hold:[],ranks:[],chars:[],
+      groups:[],unowned:[],hist:{sum:[],fac:{}}
+    };
+
+    let cashWeight=null;
+    const dataRows=[];
+    const seenSectors=new Set(),seenRegions=new Set(),seenCountries=new Set();
+    const seenGroups=new Set(),seenHoldings=new Set();
+
+    // ── Pass 1: classify and extract main_date rows ───────────────────────
+    for(const row of mainRows){
+      let lv2=row.length>4?row[4]:'';
+      const secname=row.length>5?row[5].trim():'';
+      if(lv2==='Usa')lv2='United States';
+      const rtype=classifyRow(lv2,secname);
+      const cur=getGroup(row,CURRENT_GRP);
+
+      if(rtype==='cash'){
+        const w=cur[C_W];if(w!=null)cashWeight=w;
+      }else if(rtype==='sector'&&!seenSectors.has(lv2)){
+        seenSectors.add(lv2);
+        s.sectors.push({n:lv2,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW]),s:r2(cur[C_PCT_S]),t:r2(cur[C_PCT_T])});
+      }else if(rtype==='region'&&!seenRegions.has(lv2)){
+        seenRegions.add(lv2);
+        s.regions.push({n:lv2,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
+      }else if(rtype==='country'&&!seenCountries.has(lv2)){
+        seenCountries.add(lv2);
+        s.countries.push({n:lv2,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
+      }else if(rtype==='custom_group'){
+        const sgKey=CUSTOM_GROUP_MAP[lv2][1];
+        if(!seenGroups.has(sgKey)){
+          seenGroups.add(sgKey);
+          const[pg,sg]=CUSTOM_GROUP_MAP[lv2];
+          s.groups.push({g:pg,sg:sg,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
+        }
+      }else if(rtype==='holding'){
+        if(seenHoldings.has(lv2))continue;
+        seenHoldings.add(lv2);
+        let w=cur[C_W],bw=cur[C_BW],aw=cur[C_AW];
+        if(aw==null&&(w!=null||bw!=null))aw=r2((w||0)-(bw||0));
+        const overScore=cur[C_OVER_WA];
+        const rank=overScore!=null?Math.max(1,Math.min(5,Math.round(overScore))):null;
+        const holding={t:lv2,n:secname,sec:null,co:null,p:r2(w),b:r2(bw),a:r2(aw),mcr:r2(cur[C_PCT_S]),tr:r2(cur[C_PCT_T]),r:rank,over:r2(overScore),rev:r2(cur[C_REV_WA]),val:r2(cur[C_VAL_WA]),qual:r2(cur[C_QUAL_WA]),mom:r2(cur[C_MOM_WA]),stab:r2(cur[C_STAB_WA])};
+        if(w&&w>0)s.hold.push(holding);
+        else if(bw&&bw>0)s.unowned.push({t:lv2,n:secname,reg:null,b:r2(bw),tr:r2(cur[C_PCT_T])});
+      }else if(rtype==='special'&&lv2==='Data'){
+        dataRows.push(row);
+      }
+    }
+    stratStats[stratId].dataRowsFound=dataRows.length;
+
+    // ── Summary stats from Data rows ────────────────────────────────────
+    let te=null,as_=null,beta=null,h=null,bh=null,mktcap_p=null,mktcap_b=null;
+    let pe_p=null,pb_p=null,eps_growth_p=null,eps_growth_b=null;
+    let fcf_yield_p=null,fcf_yield_b=null,div_yield_p=null,div_yield_b=null;
+    let roe_p=null,roe_b=null,op_margin_p=null,op_margin_b=null;
+
+    for(const row of dataRows){
+      const g1=getGroup(row,0);
+      if(g1[C_W]==null&&g1[C_OVER_WA]!=null&&g1[C_OVER_WA]>1000){
+        te=g1[C_AW];beta=g1[C_PCT_S];
+        const hRaw=g1[C_PCT_T];as_=g1[C_CHECK];mktcap_p=g1[C_OVER_WA];
+        h=hRaw!=null?Math.floor(hRaw):null;
+        eps_growth_p=g1[10];fcf_yield_p=g1[14];div_yield_p=g1[15];roe_p=g1[16];op_margin_p=g1[17];
+        const g2=getGroup(row,1);
+        if(g2[C_PCT_T]!=null){bh=Math.floor(g2[C_PCT_T]);mktcap_b=g2[C_OVER_WA];}
+        eps_growth_b=g2[10];fcf_yield_b=g2[14];div_yield_b=g2[15];roe_b=g2[16];op_margin_b=g2[17];
+      }else if(g1[C_W]==null&&g1[C_BW]!=null){
+        pe_p=g1[C_BW];pb_p=g1[C_AW]; // Section @90: P/E and P/B
+      }
+    }
+
+    s.sum={te:r2(te),as:r2(as_),beta:r2(beta),h:s.hold.length,bh,sr:null,cash:r2(cashWeight)};
+
+    // Portfolio characteristics
+    const charsData=[
+      ['Market Cap ($M)',mktcap_p,mktcap_b],['P/E Ratio',pe_p,null],['P/B Ratio',pb_p,null],
+      ['ROE NTM (%)',roe_p,roe_b],['FCF Yield (%)',fcf_yield_p,fcf_yield_b],
+      ['Div Yield (%)',div_yield_p,div_yield_b],['EPS Growth 3Y (%)',eps_growth_p,eps_growth_b],
+      ['Op Margin (%)',op_margin_p,op_margin_b],
+    ];
+    for(const[label,pVal,bVal]of charsData){
+      if(pVal!=null)s.chars.push({m:label,p:r2(pVal),b:r2(bVal)});
+    }
+
+    // Ranks from holdings
+    for(let rVal=1;rVal<=5;rVal++){
+      const grpH=s.hold.filter(hh=>hh.r===rVal);
+      const ct=grpH.length;
+      const p=grpH.reduce((acc,hh)=>acc+(hh.p||0),0);
+      const label=rVal===1?'R1 (Best)':rVal===5?'R5 (Worst)':'R'+rVal;
+      s.ranks.push({r:rVal,l:label,ct,p:r2(p),a:null});
+    }
+
+    // ── Factors from non-main dates ────────────────────────────────────
+    const factorMap={};
+    for(const fdate of factorDates.slice().sort()){
+      const factorRows=rowsByAcctDate.get(acct+'|'+fdate)||[];
+      if(!factorRows.length)continue;
+      const hasBw=factorRows.some(r=>{
+        const lv2=r.length>4?r[4]:'';
+        return FACTOR_NAME_MAP[lv2]&&getGroup(r,0)[C_BW]!=null;
+      });
+      const fdateStr=`${fdate.slice(0,4)}-${fdate.slice(4,6)}-${fdate.slice(6)}`;
+      stratStats[stratId].factorDates.push(fdateStr);
+      for(const row of factorRows){
+        const lv2=row.length>4?row[4]:'';
+        const fname=FACTOR_NAME_MAP[lv2];if(!fname)continue;
+        const g1=getGroup(row,0);
+        const w=g1[C_W],bw=g1[C_BW],aw=g1[C_AW];
+        if(!factorMap[fname])factorMap[fname]={n:fname,a:null,bm:null,e:null,c:null,ret:null,imp:null};
+        const entry=factorMap[fname];
+        if(hasBw){
+          entry.e=r2(w);entry.bm=r2(bw);entry.a=r2(aw!=null?aw:(w||0)-(bw||0));
+        }else{
+          // Attribution section: period 5 is last 5 cols (6 prefix + 4*5 = 26 offset)
+          const lastStart=PREFIX_COLS+(NUM_GROUPS-1)*5; // 26
+          if(row.length>lastStart+4){
+            entry.c=r2(pf(row[lastStart+2]));
+            entry.ret=r2(pf(row[lastStart+1]));
+            entry.imp=r2(pf(row[lastStart+4]));
+          }
+        }
+        if(!s.hist.fac[fname])s.hist.fac[fname]=[];
+        s.hist.fac[fname].push({d:fdateStr,e:r2(w),bm:r2(bw)});
+      }
+    }
+    s.factors=Object.values(factorMap);
+
+    // ── Weekly history from Data rows ────────────────────────────────────
+    const weeklyStats=[];
+    for(const row of dataRows){
+      const g1=getGroup(row,0);
+      if(g1[C_W]==null&&g1[C_OVER_WA]!=null&&g1[C_OVER_WA]>1000)weeklyStats.push(g1);
+    }
+    const offset=NUM_GROUPS-weeklyStats.length;
+    for(let i=0;i<weeklyStats.length;i++){
+      const g1=weeklyStats[i];
+      const wIdx=offset+i;
+      const wdate=wIdx<weekDates.length?weekDates[wIdx]:weekDates[weekDates.length-1];
+      const teW=g1[C_AW],betaW=g1[C_PCT_S],asW=g1[C_CHECK];
+      const hW=g1[C_PCT_T]!=null?Math.floor(g1[C_PCT_T]):h;
+      s.hist.sum.push({
+        d:wdate,
+        te:(teW!=null&&teW>0&&teW<20)?r2(teW):null,
+        as:(asW!=null&&asW>50&&asW<100)?r2(asW):null,
+        beta:(betaW!=null&&betaW>0&&betaW<3)?r2(betaW):null,
+        h:hW,sr:null
+      });
+    }
+    if(!s.hist.sum.length){
+      s.hist.sum.push({d:weekDates[weekDates.length-1],te:r2(te),as:r2(as_),beta:r2(beta),h,sr:null});
+    }
+
+    // ── Consistent ordering ───────────────────────────────────────────────
+    const regOrder=['Far East','English','Northern Europe','Western Europe','Southern Europe','Emerging Market','Australia - New Zealand'];
+    s.regions.sort((a,b)=>{const ia=regOrder.indexOf(a.n),ib=regOrder.indexOf(b.n);return(ia<0?99:ia)-(ib<0?99:ib);});
+    s.sectors.sort((a,b)=>(b.p||0)-(a.p||0));
+    s.countries.sort((a,b)=>(b.p||0)-(a.p||0));
+    s.hold.sort((a,b)=>(b.p||0)-(a.p||0));
+    s.unowned.sort((a,b)=>(b.b||0)-(a.b||0));
+
+    strategies[stratId]=s;
+
+    // ── Per-strategy validation ───────────────────────────────────────────
+    const sectorSum=s.sectors.reduce((acc,x)=>acc+(x.p||0),0);
+    const countrySum=s.countries.reduce((acc,x)=>acc+(x.p||0),0);
+    const equityExp=100-(cashWeight||0);
+    if(s.hold.length===0)validationIssues.push(`${stratId}: 0 portfolio holdings found`);
+    if(s.sectors.length&&Math.abs(sectorSum-equityExp)>2)
+      validationIssues.push(`${stratId}: sector weights sum to ${sectorSum.toFixed(1)}% (expected ~${equityExp.toFixed(1)}%)`);
+    if(s.countries.length&&Math.abs(countrySum-equityExp)>5)
+      validationIssues.push(`${stratId}: country weights sum to ${countrySum.toFixed(1)}% (expected ~${equityExp.toFixed(1)}%)`);
+  }
+
+  return{
+    strategies,
+    validation_issues:validationIssues,
+    report_date:mainDate,
+    version:'2.1',
+    parser_version:'1.0.0-js',
+    parse_stats:{
+      total_rows:totalRows,
+      parse_time_ms:Date.now()-t0,
+      main_date:mainDate,
+      factor_dates:factorDates,
+      repair_warnings:repairWarnings.length,
+      unknown_accts:[...unknownAccts],
+      strat_stats:stratStats,
+    }
+  };
+}
+
+// ===== UPLOAD HISTORY (localStorage) =====
+const HIST_KEY='rr_history';
+const HIST_MAX=6;
+let _activeHistIdx=-1;
+
+function getHistory(){
+  try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}catch(e){return[];}
+}
+
+function saveToHistory(filename,reportDate,strategiesCount,jsonData){
+  let hist=getHistory();
+  hist=hist.filter(h=>h.filename!==filename); // deduplicate
+  hist.unshift({timestamp:new Date().toISOString(),filename,reportDate,strategiesCount,json:jsonData});
+  hist=hist.slice(0,HIST_MAX);
+  // Try to save; if storage full, reduce
+  for(let maxEntries=hist.length;maxEntries>0;maxEntries--){
+    try{localStorage.setItem(HIST_KEY,JSON.stringify(hist.slice(0,maxEntries)));break;}
+    catch(e){if(e.name!=='QuotaExceededError'&&e.name!=='NS_ERROR_DOM_QUOTA_REACHED')break;}
+  }
+  _activeHistIdx=0;
+  updateHistUI();
+}
+
+function loadFromHistory(idx){
+  const hist=getHistory();
+  if(idx>=hist.length)return;
+  const entry=hist[idx];
+  try{
+    const raw=entry.json;
+    if(raw.report_date)window._reportDate=raw.report_date;
+    if(raw.generated)window._reportGenerated=raw.generated;
+    A=normalize(raw);
+    $('validPanel').style.display='none';
+    init();
+    _activeHistIdx=idx;
+    updateHistUI();
+    updateHistButton(idx);
+    showToast(`Loaded ${entry.filename}`,'var(--pos)');
+  }catch(e){showToast('Failed to load: '+e.message,'var(--neg)');}
+  closeHistPanel();
+}
+
+function clearHistory(){
+  localStorage.removeItem(HIST_KEY);
+  _activeHistIdx=-1;
+  updateHistUI();
+  showToast('History cleared','var(--txt)');
+}
+
+function toggleHistPanel(){
+  $('histPanel').classList.toggle('open');
+}
+
+function closeHistPanel(){
+  $('histPanel').classList.remove('open');
+}
+
+function updateHistButton(activeIdx){
+  const hist=getHistory();
+  if(!hist.length)return;
+  const entry=hist[activeIdx];
+  if(!entry)return;
+  const rd=entry.reportDate;
+  let dateLabel='';
+  if(rd&&rd.length===8)dateLabel=new Date(rd.slice(0,4)+'-'+rd.slice(4,6)+'-'+rd.slice(6)).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const btn=$('histBtn');
+  if(btn)btn.textContent=`${entry.filename.replace(/\.[^.]+$/,'')}${dateLabel?' ('+dateLabel+')':''} ▾`;
+}
+
+function updateHistUI(){
+  const hist=getHistory();
+  const wrap=$('histWrap');
+  if(!wrap)return;
+  if(hist.length){
+    wrap.style.display='block';
+  }else{
+    wrap.style.display='none';
+    return;
+  }
+  const panel=$('histPanel');
+  const rd=d=>{if(!d||d.length!==8)return'';return new Date(d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6)).toLocaleDateString('en-US',{month:'short',day:'numeric'});};
+  panel.innerHTML=hist.map((e,i)=>`
+    <div class="hist-item${i===_activeHistIdx?' active-hist':''}" onclick="loadFromHistory(${i})">
+      <span class="hist-name">${e.filename}</span>
+      <span class="hist-meta">${rd(e.reportDate)}&nbsp;·&nbsp;${e.strategiesCount} strats</span>
+    </div>`).join('')+
+    `<div class="hist-footer" onclick="clearHistory()">Clear history</div>`;
+}
+
+// Close history panel on outside click
+document.addEventListener('click',e=>{
+  const wrap=$('histWrap');
+  if(wrap&&!wrap.contains(e.target))closeHistPanel();
+});
+
+// ===== VALIDATION PANEL =====
+function showValidPanel(normalizedData,parseStats,issues,filename){
+  const panel=$('validPanel');
+  if(!panel)return;
+  const hasIssues=issues&&issues.length>0;
+  const dotCls=hasIssues?'warn':'ok';
+  const sc=Object.keys(normalizedData).length;
+  const reps=parseStats.repair_warnings||0;
+  const ms=parseStats.parse_time_ms||0;
+  const summary=`${sc} strategies · ${(parseStats.total_rows||0).toLocaleString()} rows · ${(ms/1000).toFixed(1)}s${reps?' · '+reps+' comma repair'+(reps!==1?'s':''):''}${hasIssues?' · '+issues.length+' warning'+(issues.length!==1?'s':''):''}`;
+
+  let perStrat='';
+  for(const[sid,s]of Object.entries(normalizedData)){
+    const ss=(parseStats.strat_stats||{})[sid]||{};
+    const secSum=s.sectors.reduce((a,x)=>a+(x.p||0),0);
+    const ctrySum=s.countries.reduce((a,x)=>a+(x.p||0),0);
+    const te=s.sum.te!=null?s.sum.te+'%':'--';
+    const as=s.sum.as!=null?s.sum.as+'%':'--';
+    const beta=s.sum.beta!=null?s.sum.beta:'--';
+    perStrat+=`<div class="valid-strat">
+      <div class="vs-name">${sid} — ${s.name}</div>
+      <div class="vs-row"><span>${s.hold.length} holdings · ${s.sectors.length} sectors · ${s.countries.length} countries · ${s.factors.length} factors</span><span style="color:var(--pos)">TE ${te} · AS ${as} · β ${beta}</span></div>
+      <div class="vs-row"><span>Sector sum ${secSum.toFixed(1)}% · Country sum ${ctrySum.toFixed(1)}%</span><span>${(ss.factorDates||[]).length} factor dates</span></div>
+    </div>`;
+  }
+
+  let issueHtml='';
+  if(hasIssues){
+    issueHtml=issues.map(i=>`<div class="valid-issue">⚠ ${i}</div>`).join('');
+  }
+
+  panel.innerHTML=`<div class="valid-panel">
+    <div class="valid-header" onclick="toggleValidPanel()">
+      <div class="valid-dot ${dotCls}"></div>
+      <div class="valid-summary">${filename} — ${summary}</div>
+      <div class="valid-toggle" id="validToggle">▼</div>
+    </div>
+    <div class="valid-body" id="validBody">
+      ${issueHtml}
+      ${perStrat}
+    </div>
+  </div>`;
+  panel.style.display='block';
+}
+
+function toggleValidPanel(){
+  const body=$('validBody');
+  const toggle=$('validToggle');
+  if(!body)return;
+  body.classList.toggle('open');
+  if(toggle)toggle.classList.toggle('open');
+}
+
 // ===== FACTSET NORMALIZE EXTENSION =====
 function normalizeFactSet(fsResponse){
   // Transform FactSet-style response into our internal format
@@ -3128,12 +3692,29 @@ window.addEventListener('DOMContentLoaded',()=>{
     try{
       let state=JSON.parse(atob(location.hash.slice(1)));
       if(state.t)activeTab=state.t;
-      // Strategy selection will happen after init
     }catch(e){}
+  }
+  // Auto-load most recent history entry, else start with synthetic data
+  let hist=getHistory();
+  if(hist.length){
+    try{
+      let entry=hist[0];
+      let raw=entry.json;
+      if(raw.report_date)window._reportDate=raw.report_date;
+      if(raw.generated)window._reportGenerated=raw.generated;
+      A=normalize(raw);
+      $('uploadZoneText').textContent='Drop new file to update';
+      init();
+      updateHistUI();
+      updateHistButton(0);
+      showToast(`Auto-loaded ${entry.filename}`,'var(--txt)');
+      return;
+    }catch(e){console.warn('History load failed:',e)}
   }
   // Start with synthetic data
   A=normalize(genSynthetic());
   init();
+  updateHistUI();
 });
 </script>
 </body>

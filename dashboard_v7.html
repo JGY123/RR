@@ -293,7 +293,6 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <button class="tab active" onclick="switchTab('exposures',this)">Exposures</button>
 <button class="tab" onclick="switchTab('risk',this)">Risk</button>
 <button class="tab" id="tabHoldings" onclick="switchTab('holdings',this)">Holdings</button>
-<button class="tab" id="tabAttribution" onclick="switchTab('attribution',this)">Attribution</button>
 </div>
 <div class="upload-zone" id="uploadZone">
 <label>Upload CSV or JSON<input type="file" accept=".csv,.txt,.json" onchange="upload(event)" hidden></label>
@@ -305,7 +304,7 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <div class="tab-content active" id="tab-exposures"></div>
 <div class="tab-content" id="tab-risk"></div>
 <div class="tab-content" id="tab-holdings"></div>
-<div class="tab-content" id="tab-attribution"></div>
+<div class="tab-content" id="tab-attribution" style="display:none"></div>
 </div>
 <div class="modal-overlay" id="drillModal"><div class="modal modal-lg" id="drillContent"></div></div>
 <div class="modal-overlay" id="stockModal"><div class="modal" id="stockContent"></div></div>
@@ -609,10 +608,11 @@ function upload(e){
 function init(){
   let keys=Object.keys(A);
   if(!keys.length){A=normalize(genSynthetic());keys=Object.keys(A)}
-  cs=A[keys[0]];
+  cs=A['EM']||A[keys[0]];
   // Build strategy buttons
   let sel=$('stratSel');
-  sel.innerHTML=keys.map((k,i)=>`<button class="strat-btn${i===0?' active':''}" onclick="go('${k}',this)">${k}<span class="kbd">${i+1}</span></button>`).join('');
+  let defaultKey=keys.includes('EM')?'EM':keys[0];
+  sel.innerHTML=keys.map((k,i)=>`<button class="strat-btn${k===defaultKey?' active':''}" onclick="go('${k}',this)">${k}<span class="kbd">${i+1}</span></button>`).join('');
   $('uploadZone').style.display='none';
   $('content').style.display='block';
   $('tabBar').style.display='flex';
@@ -673,8 +673,6 @@ function updateTabBadges(){
   let facCount=(s.factors||[]).length;
   let th=$('tabHoldings');
   if(th){th.innerHTML='Holdings'+(holdCount?`<span class="tab-badge">${holdCount}</span>`:'')}
-  let ta=$('tabAttribution');
-  if(ta){ta.innerHTML='Attribution'+(facCount?`<span class="tab-badge">${facCount}f</span>`:'')}
 }
 
 // ===== MAIN UPDATE =====
@@ -683,7 +681,7 @@ function upd(){
   rExp();
   rRisk();
   rHold();
-  rAttr();
+  rAttr();  // factor attribution renders into Factors card on Exposures tab
 }
 
 // ===== EXPOSURES TAB =====
@@ -767,6 +765,9 @@ function rExp(){
       ${rFac(s.factors)}
     </div>
   </div>
+
+  <!-- Factor Attribution (moved from removed Attribution tab) -->
+  <div id="facAttribArea"></div>
 
   <!-- Row 4: Country Active Weights -->
   <div class="grid g2">
@@ -1629,7 +1630,19 @@ function rAttr(){
     ${rStressTable(s.stress)}
   </div>`;
 
-  $('tab-attribution').innerHTML=html;
+  // Render into factor attribution area on Exposures tab (Attribution tab removed)
+  let target=$('facAttribArea');
+  if(target){target.innerHTML=html;}
+  else{
+    // Fallback: append to factor detail card area
+    let fc=$('cardFacDetail');
+    if(fc){
+      let area=document.createElement('div');
+      area.id='facAttribArea';
+      area.innerHTML=html;
+      fc.parentElement.after(area);
+    }
+  }
   setTimeout(()=>{rAttribWat(attrib);rAttribComp(attrib)},50);
 }
 
@@ -2216,7 +2229,7 @@ document.addEventListener('keydown',e=>{
   }
   // Tab key for tab switching (with shift for reverse)
   if(e.key==='Tab'&&!e.ctrlKey&&!e.metaKey){
-    let tabNames=['exposures','holdings','attribution'];
+    let tabNames=['exposures','holdings','risk'];
     let tabBtns=document.querySelectorAll('.tab');
     let idx=tabNames.indexOf(activeTab);
     if(e.shiftKey)idx=(idx-1+tabNames.length)%tabNames.length;

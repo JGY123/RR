@@ -47,8 +47,8 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-PARSER_VERSION = "1.0.0"
-FORMAT_VERSION = "2.1"
+PARSER_VERSION = "1.1.0"
+FORMAT_VERSION = "3.0"
 
 # ── Strategy / account mapping ──────────────────────────────────────────────
 
@@ -391,7 +391,7 @@ def parse(csv_path):
         for w in repair_warnings:
             print(w)
 
-    # Identify which DATE is the main holdings date vs factor dates
+    # Identify which DATEs are main (holdings/sectors/countries) vs factor-only
     date_counts = defaultdict(int)
     for (acct, dt), rows in rows_by_acct_date.items():
         date_counts[dt] += len(rows)
@@ -402,14 +402,28 @@ def parse(csv_path):
             "file_size_mb": round(file_size_mb, 2), "encoding": enc_used,
             "strat_stats": {}, "repair_warnings": len(repair_warnings),
         }
-    main_date    = sorted_dates[0]      # most rows = sector/country/holdings data
-    factor_dates = sorted_dates[1:]     # smaller row counts = factor snapshots
+
+    # Multi-month detection: dates with >= 30% of max row count are "main" dates
+    # (holdings + sectors + countries have many rows; factor sections have few)
+    max_date_count = date_counts[sorted_dates[0]]
+    main_dates_set = {d for d, c in date_counts.items() if c >= max_date_count * 0.30}
+    main_dates     = sorted(main_dates_set)             # chronological, all monthly main dates
+    factor_dates   = sorted(d for d in sorted_dates if d not in main_dates_set)
+    current_date   = main_dates[-1]                     # most recent month for full detail
+    is_multi_month = len(main_dates) > 1
+
+    # Backward-compat alias used in validation report
+    main_date  = current_date
 
     # Date range for report
-    all_dates    = sorted(sorted_dates)
-    date_range   = (all_dates[0], all_dates[-1]) if all_dates else (main_date, main_date)
+    all_dates  = sorted(date_counts.keys())
+    date_range = (all_dates[0], all_dates[-1]) if all_dates else (current_date, current_date)
 
-    week_dates = weekly_dates_for(main_date)   # 5 Friday dates for history
+    week_dates = weekly_dates_for(current_date)   # 5 Friday dates for current month
+
+    if is_multi_month:
+        print(f"  Multi-month file detected: {len(main_dates)} monthly snapshots, "
+              f"{len(factor_dates)} factor dates")
 
     strategies        = {}
     validation_issues = []
@@ -419,7 +433,7 @@ def parse(csv_path):
 
     for acct in sorted(STRATEGY_ACCTS):
         strat_id   = ACCT_TO_ID[acct]
-        main_rows  = rows_by_acct_date.get((acct, main_date), [])
+        main_rows  = rows_by_acct_date.get((acct, current_date), [])
 
         strat_stats[strat_id] = {
             "data_rows_found": 0,
@@ -427,7 +441,7 @@ def parse(csv_path):
         }
 
         if not main_rows:
-            validation_issues.append(f"{strat_id}: no rows found for main date {main_date}")
+            validation_issues.append(f"{strat_id}: no rows found for current date {current_date}")
             continue
 
         s = {
@@ -702,34 +716,89 @@ def parse(csv_path):
 
         s["factors"] = list(factor_map.values())
 
-        # ── Weekly history summary from Data stat rows ────────────────────────
-        weekly_stats = []
-        for row in data_rows:
-            g1 = get_group(row, 0)
-            if g1[C_W] is None and g1[C_OVER_WA] is not None and g1[C_OVER_WA] > 1000:
-                weekly_stats.append(g1)
+        # ── Multi-month history: summary + sector weights ─────────────────────
+        # Loop through ALL main_dates (one per monthly snapshot) to build full
+        # historical time series.  Single-month files have len(main_dates)==1
+        # and this naturally replicates the old 5-weekly-entry behaviour.
+        all_hist_entries = []
+        hist_sec_data    = {}   # sectorName → [{d, p, b, a}]
 
-        offset = NUM_GROUPS - len(weekly_stats)
-        for i, g1 in enumerate(weekly_stats):
-            wdate  = week_dates[offset + i] if (offset + i) < len(week_dates) else week_dates[-1]
-            te_w   = g1[C_AW]
-            beta_w = g1[C_PCT_S]
-            as_w   = g1[C_CHECK]
-            h_w    = int(g1[C_PCT_T]) if g1[C_PCT_T] is not None else h
-            s["hist"]["summary"].append({
-                "d":    wdate,
-                "te":   r2(te_w)   if te_w   and 0  < te_w   < 20  else None,
-                "as":   r2(as_w)   if as_w   and 50 < as_w   < 100 else None,
-                "beta": r2(beta_w) if beta_w and 0  < beta_w < 3   else None,
-                "h":    h_w,
-                "sr":   None,
-            })
+        for mdate in main_dates:
+            mdate_rows       = rows_by_acct_date.get((acct, mdate), [])
+            month_week_dates = weekly_dates_for(mdate)
+            last_friday      = month_week_dates[-1]
 
+            # --- Weekly summary stats (from Data rows in 42-col stats section) ---
+            month_stat_g1s = []
+            for row in mdate_rows:
+                lv2 = row[4] if len(row) > 4 else ""
+                if lv2 != "Data":
+                    continue
+                g1 = get_group(row, 0)
+                if g1[C_W] is None and g1[C_OVER_WA] is not None and g1[C_OVER_WA] > 1000:
+                    month_stat_g1s.append(g1)
+
+            offset = NUM_GROUPS - len(month_stat_g1s)
+            for i, g1 in enumerate(month_stat_g1s):
+                wdate_idx = offset + i
+                wdate     = (month_week_dates[wdate_idx]
+                             if wdate_idx < len(month_week_dates)
+                             else month_week_dates[-1])
+                te_w   = g1[C_AW]
+                beta_w = g1[C_PCT_S]
+                as_w   = g1[C_CHECK]
+                h_w    = int(g1[C_PCT_T]) if g1[C_PCT_T] is not None else None
+                all_hist_entries.append({
+                    "d":    wdate,
+                    "te":   r2(te_w)   if te_w   and 0  < te_w   < 20  else None,
+                    "as":   r2(as_w)   if as_w   and 50 < as_w   < 100 else None,
+                    "beta": r2(beta_w) if beta_w and 0  < beta_w < 3   else None,
+                    "h":    h_w,
+                    "sr":   None,
+                })
+
+            # --- Sector weight snapshot (most recent week for this month) ---
+            seen_sec_this_month = set()
+            for row in mdate_rows:
+                lv2 = row[4] if len(row) > 4 else ""
+                if lv2 == "Usa":
+                    lv2 = "United States"
+                if lv2 not in GICS_L1 or lv2 in seen_sec_this_month:
+                    continue
+                seen_sec_this_month.add(lv2)
+                cur = get_group(row, CURRENT_GRP)
+                if lv2 not in hist_sec_data:
+                    hist_sec_data[lv2] = []
+                hist_sec_data[lv2].append({
+                    "d": last_friday,
+                    "p": r2(cur[C_W]),
+                    "b": r2(cur[C_BW]),
+                    "a": r2(cur[C_AW]),
+                })
+
+        # Sort, deduplicate by date, store
+        seen_hist_dates = set()
+        for entry in sorted(all_hist_entries, key=lambda x: x["d"]):
+            if entry["d"] not in seen_hist_dates:
+                seen_hist_dates.add(entry["d"])
+                s["hist"]["summary"].append(entry)
+
+        # Fallback: if we got no entries (shouldn't happen) use current stats
         if not s["hist"]["summary"]:
             s["hist"]["summary"].append({
                 "d": week_dates[-1], "te": r2(te), "as": r2(as_),
                 "beta": r2(beta), "h": h, "sr": None,
             })
+
+        # Store sector history (sorted by date)
+        for sec_name, entries in hist_sec_data.items():
+            hist_sec_data[sec_name] = sorted(entries, key=lambda x: x["d"])
+        if hist_sec_data:
+            s["hist"]["sec"] = hist_sec_data
+
+        # Available dates (for dashboard week selector)
+        s["available_dates"] = [e["d"] for e in s["hist"]["summary"]]
+        s["current_date"]    = s["available_dates"][-1] if s["available_dates"] else None
 
         # ── Consistent ordering ───────────────────────────────────────────────
         reg_order = ["Far East", "English", "Northern Europe", "Western Europe",
@@ -769,16 +838,19 @@ def parse(csv_path):
     t_elapsed = time.time() - t_start
 
     parse_stats = {
-        "total_rows":     total_rows,
-        "parse_time_s":   round(t_elapsed, 2),
-        "file_size_mb":   round(file_size_mb, 2),
-        "encoding":       enc_used,
-        "main_date":      main_date,
-        "factor_dates":   factor_dates,
-        "date_range":     date_range,
+        "total_rows":      total_rows,
+        "parse_time_s":    round(t_elapsed, 2),
+        "file_size_mb":    round(file_size_mb, 2),
+        "encoding":        enc_used,
+        "main_date":       current_date,
+        "main_dates":      main_dates,
+        "factor_dates":    factor_dates,
+        "date_range":      date_range,
+        "is_multi_month":  is_multi_month,
+        "monthly_count":   len(main_dates),
         "repair_warnings": len(repair_warnings),
-        "unknown_accts":  list(unknown_accts_seen),
-        "strat_stats":    strat_stats,
+        "unknown_accts":   list(unknown_accts_seen),
+        "strat_stats":     strat_stats,
     }
 
     return strategies, validation_issues, main_date, parse_stats
@@ -795,7 +867,11 @@ def print_validation(strategies, issues, parse_stats):
     dr = parse_stats["date_range"]
     d0 = f"{dr[0][:4]}-{dr[0][4:6]}-{dr[0][6:]}"
     d1 = f"{dr[1][:4]}-{dr[1][4:6]}-{dr[1][6:]}"
+    is_multi = parse_stats.get("is_multi_month", False)
+    n_months = parse_stats.get("monthly_count", 1)
     print(f"\n  Report covers:  {d0}  →  {d1}")
+    if is_multi:
+        print(f"  Monthly snapshots: {n_months} months ({len(parse_stats.get('factor_dates', []))} factor dates)")
     print(f"  Total rows:     {parse_stats['total_rows']:,}")
     print(f"  Parse time:     {parse_stats['parse_time_s']}s")
     print(f"  File size:      {parse_stats['file_size_mb']} MB")
@@ -818,8 +894,12 @@ def print_validation(strategies, issues, parse_stats):
         print(f"  Countries:  {len(s['countries'])} items, weight sum = {country_sum:.1f}%")
         print(f"  Groups:     {len(s['groups'])} custom buckets")
         print(f"  Factors:    {len(s['factors'])} factors")
+        hist_pts = len(s.get("hist", {}).get("summary", []))
+        avail_dates = s.get("available_dates", [])
+        date_span = f"{avail_dates[0]} → {avail_dates[-1]}" if len(avail_dates) >= 2 else (avail_dates[0] if avail_dates else "?")
+        print(f"  History:    {hist_pts} weekly pts  ({date_span})")
         print(f"  Data rows:  {ss.get('data_rows_found', '?')} found  "
-              f"| Factor dates: {ss.get('factor_dates', [])}")
+              f"| Factor dates: {len(ss.get('factor_dates', []))}")
         print(f"  Summary:    TE={sm['te']}  AS={sm['as']}%  "
               f"H={sm['h']}  BH={sm['bh']}  Cash={sm['cash']}%")
         if s["chars"]:
@@ -864,6 +944,8 @@ def main():
         "parser_version": PARSER_VERSION,
         "freq":           "weekly-in-month",
         "report_date":    f"{main_date[:4]}-{main_date[4:6]}-{main_date[6:]}",
+        "monthly_count":  parse_stats["monthly_count"],
+        "is_multi_month": parse_stats["is_multi_month"],
         "strategies":     strategies,
     }
 

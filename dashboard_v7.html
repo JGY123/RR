@@ -215,6 +215,15 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 /* CSV parse overlay shimmer text */
 .parse-shimmer{display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--txt);flex-direction:column}
 
+/* Week selector */
+#weekSelWrap select option{background:var(--card);color:var(--txth)}
+.week-hist-banner{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:6px 14px;font-size:11px;color:var(--warn);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+/* Range buttons for time series charts */
+.range-btns{display:flex;gap:4px;margin-bottom:8px}
+.range-btn{padding:3px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s}
+.range-btn.active{background:var(--pri);color:#fff;border-color:var(--pri)}
+.range-btn:hover:not(.active){border-color:var(--pri);color:var(--txth)}
+
 /* Print styles */
 @media print{
   body{background:#fff!important;color:#333!important;font-size:10px}
@@ -259,6 +268,12 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 <div class="search-results" id="globalSearchResults"></div>
 </div>
 <div class="strat-sel" id="stratSel"></div>
+<div id="weekSelWrap" style="display:none;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+  <button onclick="stepWeek(-1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Previous week">&#8249;</button>
+  <select id="weekSel" onchange="changeWeek(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px;max-width:120px"></select>
+  <button onclick="stepWeek(1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Next week">&#8250;</button>
+  <button onclick="jumpToLatest()" id="latestBtn" style="display:none;background:var(--pri);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:600;padding:2px 7px;cursor:pointer;font-family:inherit;margin-left:2px">Latest</button>
+</div>
 <div class="conn-status" id="connStatus" style="display:none"><span class="conn-dot file"></span><span>File</span></div>
 <button class="btn btn-sec btn-sm" id="shareBtn" style="display:none" onclick="generateShareURL()" title="Copy share URL">Share<span class="kbd">S</span></button>
 <button class="btn btn-sec btn-sm" id="copyBtn" style="display:none" onclick="copySummary()" title="Copy formatted summary to clipboard">Copy Summary</button>
@@ -355,6 +370,7 @@ const STRESS=[
 
 // ===== STATE =====
 let A={},cs=null,ah=[],fh=[],hp=1,PPG=20,activeTab='exposures',sortCol=null,sortDir=1;
+let _selectedWeek=null;   // null = latest; else a date string from available_dates
 
 // ===== HELPERS =====
 const $=id=>document.getElementById(id);
@@ -588,7 +604,9 @@ function upload(e){
         if(isCSV&&parseStats){
           const sc=Object.keys(A).length;
           const reps=parseStats.repair_warnings||0;
-          showToast(`✓ Parsed ${sc} strategies from CSV (${(parseStats.total_rows||0).toLocaleString()} rows${reps?' · '+reps+' repairs':''})`, 'var(--pos)');
+          const mo=parseStats.monthly_count||1;
+          const moStr=mo>1?` · ${mo} months`:'';
+          showToast(`✓ Parsed ${sc} strategies from CSV (${(parseStats.total_rows||0).toLocaleString()} rows${moStr}${reps?' · '+reps+' repairs':''})`, 'var(--pos)');
           showValidPanel(A,parseStats,validIssues,f.name);
         }else{
           showToast(`Loaded ${f.name} — ${Object.keys(A).length} strategies`,'var(--pos)');
@@ -625,6 +643,8 @@ function init(){
   $('configBtn').style.display='inline-block';
   $('connStatus').style.display='flex';
   updateHistUI();
+  _selectedWeek=null;
+  initWeekSelector();
   $('globalSearchWrap').style.display='block';
   $('stratFullName').style.display='inline';
   $('stratFullName').textContent=cs.name;
@@ -651,7 +671,9 @@ function go(id,btn){
   cs=A[id];
   document.querySelectorAll('.strat-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  hp=1;sortCol=null;
+  hp=1;sortCol=null;sortDir=1;
+  _selectedWeek=null;
+  initWeekSelector();
   $('stratFullName').textContent=cs.name;
   // Brief loading shimmer
   showLoading('tab-'+activeTab);
@@ -664,6 +686,63 @@ function switchTab(tab,btn){
   btn.classList.add('active');
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   $('tab-'+tab).classList.add('active');
+}
+
+// ===== WEEK SELECTOR =====
+function initWeekSelector(){
+  const wrap=$('weekSelWrap');
+  const sel=$('weekSel');
+  if(!wrap||!sel)return;
+  const dates=cs.available_dates||[];
+  if(dates.length<=1){wrap.style.display='none';return;}
+  wrap.style.display='flex';
+  sel.innerHTML=dates.slice().reverse().map(d=>{
+    const dt=new Date(d);
+    const label=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return`<option value="${d}"${d===(_selectedWeek||dates[dates.length-1])?' selected':''}>${label}</option>`;
+  }).join('');
+  $('latestBtn').style.display=(_selectedWeek&&_selectedWeek!==dates[dates.length-1])?'inline':'none';
+}
+
+function changeWeek(date){
+  const dates=cs.available_dates||[];
+  const isLatest=!date||date===dates[dates.length-1];
+  _selectedWeek=isLatest?null:date;
+  $('latestBtn').style.display=isLatest?'none':'inline';
+  upd();
+}
+
+function stepWeek(dir){
+  const dates=cs.available_dates||[];
+  if(!dates.length)return;
+  const cur=_selectedWeek||dates[dates.length-1];
+  const idx=dates.indexOf(cur);
+  const next=dates[idx+dir];
+  if(next)changeWeek(next);
+}
+
+function jumpToLatest(){
+  _selectedWeek=null;
+  const sel=$('weekSel');
+  const dates=cs.available_dates||[];
+  if(sel&&dates.length)sel.value=dates[dates.length-1];
+  $('latestBtn').style.display='none';
+  upd();
+}
+
+// Returns the currently selected week's hist.sum entry (or current stats object)
+function getSelectedWeekSum(){
+  if(!_selectedWeek)return cs.sum;
+  const entry=(cs.hist&&cs.hist.sum||[]).find(e=>e.d===_selectedWeek);
+  return entry||cs.sum;
+}
+
+// Banner HTML shown when viewing a historical week
+function weekBannerHtml(){
+  if(!_selectedWeek)return'';
+  const dt=new Date(_selectedWeek);
+  const label=dt.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  return`<div class="week-hist-banner">&#9432;&nbsp; Viewing week of <strong>${label}</strong> — summary metrics only. <a href="#" style="color:var(--warn);margin-left:4px" onclick="event.preventDefault();jumpToLatest()">Jump to latest</a> for full detail.</div>`;
 }
 
 // ===== TAB BADGES =====
@@ -687,40 +766,41 @@ function upd(){
 // ===== EXPOSURES TAB =====
 function rExp(){
   let s=cs;
-  let teClass=s.sum.te>=10?'alert':s.sum.te<5?'warn':'';
-  let asClass=s.sum.as>98?'':'';
+  let ws=getSelectedWeekSum();  // current or historical week stats
+  let isHistWeek=!!_selectedWeek;
+  let teClass=ws.te>=10?'alert':ws.te<5?'warn':'';
 
-  let html=`
+  let html=`${weekBannerHtml()}
   <!-- Row 1: Summary Cards -->
   <div class="sum-cards">
     <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
       <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark">Tracking Error</div>
-      <div class="value" style="${s.sum.te>=10?'color:var(--neg)':s.sum.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(s.sum.te)}%</div>
-      <div class="sub">${gt(s.hist.sum,'te')} 36m trend</div>
+      <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(ws.te)}%</div>
+      <div class="sub">${gt(s.hist.sum,'te')} ${s.hist.sum.length} wk trend</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('as')" tabindex="0" role="button" aria-label="Active Share trend">
       <div class="label tip" data-tip="Percentage of portfolio that differs from benchmark">Active Share</div>
-      <div class="value">${f2(s.sum.as)}%</div>
-      <div class="sub">${gt(s.hist.sum,'as')} 36m trend</div>
+      <div class="value">${f2(ws.as)}%</div>
+      <div class="sub">${gt(s.hist.sum,'as')} ${s.hist.sum.length} wk trend</div>
     </div>
-    <div class="sum-card ${Math.abs(s.sum.beta-1)>0.1?'warn':''}" onclick="oDrMetric('beta')" tabindex="0" role="button" aria-label="Beta trend">
+    <div class="sum-card ${Math.abs((ws.beta||1)-1)>0.1?'warn':''}" onclick="oDrMetric('beta')" tabindex="0" role="button" aria-label="Beta trend">
       <div class="label tip" data-tip="Portfolio sensitivity to benchmark movements">Beta</div>
-      <div class="value">${f2(s.sum.beta,3)}</div>
+      <div class="value">${f2(ws.beta,3)}</div>
       <div class="sub">${gt(s.hist.sum,'beta')} vs 1.0</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('h')" tabindex="0" role="button" aria-label="Holdings count trend">
       <div class="label tip" data-tip="Equity securities only (excl. cash/currency baskets)">Holdings</div>
-      <div class="value">${s.sum.h||equityCount(s.hold)}</div>
+      <div class="value">${ws.h||equityCount(s.hold)}</div>
       <div class="sub">of ${s.sum.bh||'--'} benchmark</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('sr')" tabindex="0" role="button" aria-label="Selection Rate trend">
       <div class="label tip" data-tip="Ratio of portfolio holdings to benchmark constituents">Selection Rate</div>
-      <div class="value">${s.sum.sr!=null?f2(s.sum.sr)+'%':'--'}</div>
+      <div class="value">${ws.sr!=null?f2(ws.sr)+'%':'--'}</div>
       <div class="sub">port/bench</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('cash')" tabindex="0" role="button" aria-label="Cash trend">
       <div class="label tip" data-tip="Undeployed cash as percentage of portfolio">Cash</div>
-      <div class="value">${f2(s.sum.cash)}%</div>
+      <div class="value">${isHistWeek?'--':f2(s.sum.cash)+'%'}</div>
       <div class="sub">residual</div>
     </div>
     <div class="sum-card" onclick="oDrS()" tabindex="0" role="button" aria-label="All summary trends">
@@ -1379,19 +1459,26 @@ function mkSparkline(vals,w,h,color){
 }
 
 // Factor drill from Risk tab - shows time series chart
-function oDrFRisk(name){
+function oDrFRisk(name,range){
   let m=$('drillModal');
-  let hist=cs.hist.fac[name];
+  let hist=cs.hist.fac[name]||[];
   let factor=cs.factors.find(f=>f.n===name);
   if(!factor)return;
+  if(range!=null)_facDrillRange=range;
+  let rangeWks={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
+  let wks=rangeWks[_facDrillRange]||Infinity;
+  let histSlice=wks===Infinity?hist:(hist.slice(-wks)||hist);
+  if(!histSlice.length)histSlice=hist;
 
   // Compute this factor's risk contribution
   let totalTE=cs.sum.te;
   let mcrTE=+(totalTE*Math.abs(factor.c||0)/100).toFixed(3);
 
   let histHtml='';
-  if(hist&&hist.length){
-    histHtml=`<div id="riskFacHistDiv" style="height:280px;margin-bottom:16px"></div>`;
+  if(histSlice.length){
+    let nm=name.replace(/'/g,"\\'");
+    let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_facDrillRange===r?' active':''}" onclick="oDrFRisk('${nm}','${r}')">${r}</button>`).join('');
+    histHtml=`<div class="range-btns">${rangeBtns}</div><div id="riskFacHistDiv" style="height:260px;margin-bottom:16px"></div>`;
   }
 
   // Top/bottom holdings by factor exposure
@@ -1421,17 +1508,18 @@ function oDrFRisk(name){
     </div>`;
   m.classList.add('show');
 
-  if(hist&&hist.length){
+  if(histSlice.length){
     setTimeout(()=>{
+      let last=histSlice[histSlice.length-1];
       Plotly.newPlot('riskFacHistDiv',[
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',
+        {x:histSlice.map(h=>h.d),y:histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',
          line:{color:'#3b82f6',width:2.5},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'},
       ],{...plotBg,
         yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
         xaxis:{...plotBg.xaxis,title:'Date'},
-        shapes:[{type:'line',y0:0,y1:0,x0:hist[0].d,x1:hist[hist.length-1].d,line:{color:'#64748b',dash:'dot'}}],
-        annotations:[{x:hist[hist.length-1].d,y:hist[hist.length-1].e||hist[hist.length-1].a,
-          text:'Current: '+(hist[hist.length-1].e||hist[hist.length-1].a).toFixed(3),
+        shapes:[{type:'line',y0:0,y1:0,x0:histSlice[0].d,x1:last.d,line:{color:'#64748b',dash:'dot'}}],
+        annotations:[{x:last.d,y:last.e||last.a,
+          text:'Current: '+(last.e||last.a).toFixed(3),
           showarrow:true,arrowcolor:'#3b82f6',font:{size:10,color:'#e2e8f0'},
           bgcolor:'#1e293b',bordercolor:'#3b82f6',borderwidth:1,borderpad:4}]
       },plotCfg);
@@ -1756,17 +1844,24 @@ function oDr(type,name){
 
 function closeDrill(){$('drillModal').classList.remove('show')}
 
-function oDrF(name){
+function oDrF(name,range){
   let m=$('drillModal');
-  let hist=cs.hist.fac[name];
+  let hist=cs.hist.fac[name]||[];
   let factor=cs.factors.find(f=>f.n===name);
+  if(range!=null)_facDrillRange=range;
+  let rangeWks={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
+  let wks=rangeWks[_facDrillRange]||Infinity;
+  let histSlice=wks===Infinity?hist:(hist.slice(-wks)||hist);
+  if(!histSlice.length)histSlice=hist;
   let topHold=[...cs.hold].sort((a,b)=>(b[name.toLowerCase().slice(0,3)]||b.over||0)-(a[name.toLowerCase().slice(0,3)]||a.over||0));
   let top5=topHold.slice(0,5);
   let bot5=topHold.slice(-5);
 
   let histHtml='';
-  if(hist&&hist.length){
-    histHtml=`<div id="facDrillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
+  if(histSlice.length){
+    let nm=name.replace(/'/g,"\\'");
+    let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_facDrillRange===r?' active':''}" onclick="oDrF('${nm}','${r}')">${r}</button>`).join('');
+    histHtml=`<div class="range-btns">${rangeBtns}</div><div id="facDrillHistDiv" style="height:230px;margin-bottom:16px"></div>`;
   }
 
   // Factor correlations
@@ -1801,23 +1896,31 @@ function oDrF(name){
     </div>`;
   m.classList.add('show');
 
-  if(hist&&hist.length){
+  if(histSlice.length){
     setTimeout(()=>{
       Plotly.newPlot('facDrillHistDiv',[
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.1)'}
-      ],{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure'},shapes:[{type:'line',y0:0,y1:0,x0:hist[0].d,x1:hist[hist.length-1].d,line:{color:'#64748b',dash:'dot'}}]},plotCfg);
+        {x:histSlice.map(h=>h.d),y:histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.1)'}
+      ],{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure'},shapes:[{type:'line',y0:0,y1:0,x0:histSlice[0].d,x1:histSlice[histSlice.length-1].d,line:{color:'#64748b',dash:'dot'}}]},plotCfg);
     },50);
   }
 }
 
-function oDrS(){
+let _sumDrillRange='All';
+function oDrS(range){
   let m=$('drillModal');
-  let hist=cs.hist.sum;
-  if(!hist||!hist.length){closeDrill();return}
+  let fullHist=cs.hist.sum;
+  if(!fullHist||!fullHist.length){closeDrill();return}
+  if(range!=null)_sumDrillRange=range;
+  let rangeWks={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
+  let wks=rangeWks[_sumDrillRange]||Infinity;
+  let hist=wks===Infinity?fullHist:fullHist.slice(-wks);
+  if(!hist.length)hist=fullHist;
+  let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_sumDrillRange===r?' active':''}" onclick="oDrS('${r}')">${r}</button>`).join('');
 
   $('drillContent').innerHTML=`
     <h2>Summary Trends — ${cs.id}<button class="close" onclick="closeDrill()">&times;</button></h2>
-    <div id="sumDrillDiv" style="height:400px"></div>`;
+    <div class="range-btns">${rangeBtns}</div>
+    <div id="sumDrillDiv" style="height:380px"></div>`;
   m.classList.add('show');
 
   setTimeout(()=>{
@@ -2387,15 +2490,18 @@ function showLoading(containerId){
 }
 
 // ===== METRIC DRILL (Summary Card Click) =====
-let _metricSkipMonths=0;
+let _metricRange='All';
+let _facDrillRange='All';
 
-function oDrMetric(metric,skipMonths){
+function oDrMetric(metric,range){
   let m=$('metricModal');
   let fullHist=cs.hist.sum;
   if(!fullHist||!fullHist.length)return;
-  let skip=skipMonths!=null?skipMonths:_metricSkipMonths;
-  _metricSkipMonths=skip;
-  let hist=fullHist.slice(skip);
+  if(range!=null)_metricRange=range;
+  // Slice to range: 3M≈13wk, 6M≈26wk, 1Y≈52wk, 3Y≈156wk, All=all
+  let rangeWks={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
+  let wks=rangeWks[_metricRange]||Infinity;
+  let hist=wks===Infinity?fullHist:fullHist.slice(-wks);
   if(!hist.length)hist=fullHist;
 
   let labels={te:'Tracking Error',as:'Active Share',beta:'Beta',h:'Holdings Count',sr:'Selection Rate',cash:'Cash %'};
@@ -2580,21 +2686,17 @@ function oDrMetric(metric,skipMonths){
       </tr>`).join('')}</tbody></table></div></div>`;
   }
 
+  let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_metricRange===r?' active':''}" onclick="oDrMetric('${metric}','${r}')">${r}</button>`).join('');
   $('metricContent').innerHTML=`
-    <h2>${labels[metric]||metric} — Since Inception<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+    <h2>${labels[metric]||metric}<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
     <div class="grid g4" style="margin-bottom:12px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current</div><div style="font-size:18px;font-weight:700;color:${valColor}">${f2(current,dec)}${units[metric]}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Avg</div><div style="font-size:18px;font-weight:700;color:var(--txt)">${f2(avg,dec)}${units[metric]}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Min</div><div style="font-size:18px;font-weight:700;color:var(--pos)">${f2(min,dec)}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Max</div><div style="font-size:18px;font-weight:700;color:var(--neg)">${f2(max,dec)}</div></div>
     </div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;padding:6px 12px;background:var(--surf);border-radius:8px">
-      <span style="font-size:11px;color:var(--txt);white-space:nowrap">Drop first</span>
-      <input type="range" id="metricSkipSlider" min="0" max="${Math.max(0,totalMonths-12)}" value="${skip}" style="flex:1;accent-color:var(--pri)" oninput="document.getElementById('metricSkipLabel').textContent=this.value+' mo';_metricSkipMonths=parseInt(this.value)">
-      <span id="metricSkipLabel" style="font-size:11px;color:var(--txth);min-width:36px">${skip} mo</span>
-      <button class="btn btn-sm btn-pri" onclick="oDrMetric('${metric}',parseInt(document.getElementById('metricSkipSlider').value))">Apply</button>
-    </div>
-    <div style="font-size:10px;color:var(--txt);margin-bottom:6px">Inception: ${inception} | ${totalMonths} mo total | Showing: ${hist.length} mo${skip>0?' (dropped '+skip+')':''}</div>
+    <div class="range-btns">${rangeBtns}</div>
+    <div style="font-size:10px;color:var(--txt);margin-bottom:6px">Since ${inception} | ${fullHist.length} wks total | Showing: ${hist.length} wks</div>
     <div id="metricChartDiv" style="height:300px"></div>
     ${breachHtml}
     ${extraHtml}`;
@@ -3220,7 +3322,7 @@ function parseFactSetCSV(csvText){
     rowsByAcctDate.get(key).push(finalRow);
   }
 
-  // ── Find main date (most rows) ─────────────────────────────────────────
+  // ── Find main dates (high row count) vs factor dates (low row count) ──────
   const dateCounts=new Map();
   for(const[key,rows]of rowsByAcctDate){
     const dt=key.split('|')[1];
@@ -3230,9 +3332,14 @@ function parseFactSetCSV(csvText){
   if(!sortedDates.length){
     return{strategies:{},validation_issues:['No data rows found (all accounts unknown or file empty)'],report_date:'',parse_stats:{total_rows:totalRows,parse_time_ms:Date.now()-t0,repair_warnings:repairWarnings.length,unknown_accts:[...unknownAccts]}};
   }
-  const mainDate=sortedDates[0];
-  const factorDates=sortedDates.slice(1);
-  const weekDates=weeklyDatesFor(mainDate);
+  // Multi-month detection: dates with >= 30% of max row count are main dates
+  const maxDateCount=dateCounts.get(sortedDates[0]);
+  const mainDatesSet=new Set([...dateCounts.entries()].filter(([,c])=>c>=maxDateCount*0.30).map(([d])=>d));
+  const mainDates=[...mainDatesSet].sort();          // chronological
+  const factorDates=sortedDates.filter(d=>!mainDatesSet.has(d)).sort();
+  const currentDate=mainDates[mainDates.length-1];   // most recent for full detail
+  const isMultiMonth=mainDates.length>1;
+  const weekDates=weeklyDatesFor(currentDate);
 
   const strategies={};
   const validationIssues=[];
@@ -3240,7 +3347,7 @@ function parseFactSetCSV(csvText){
 
   for(const acct of [...STRATEGY_ACCTS].sort()){
     const stratId=ACCT_TO_ID[acct];
-    const mainRows=rowsByAcctDate.get(acct+'|'+mainDate)||[];
+    const mainRows=rowsByAcctDate.get(acct+'|'+currentDate)||[];
     stratStats[stratId]={dataRowsFound:0,factorDates:[]};
 
     if(!mainRows.length){
@@ -3380,30 +3487,71 @@ function parseFactSetCSV(csvText){
     }
     s.factors=Object.values(factorMap);
 
-    // ── Weekly history from Data rows ────────────────────────────────────
-    const weeklyStats=[];
-    for(const row of dataRows){
-      const g1=getGroup(row,0);
-      if(g1[C_W]==null&&g1[C_OVER_WA]!=null&&g1[C_OVER_WA]>1000)weeklyStats.push(g1);
+    // ── Multi-month history: summary stats + sector weights ───────────────
+    const allHistEntries=[];
+    const histSecData={};   // sectorName → [{d,p,b,a}]
+
+    for(const mdate of mainDates){
+      const mdateRows=rowsByAcctDate.get(acct+'|'+mdate)||[];
+      const monthWeekDates=weeklyDatesFor(mdate);
+      const lastFriday=monthWeekDates[monthWeekDates.length-1];
+
+      // Weekly summary stats from 42-col Data rows
+      const monthStatG1s=[];
+      for(const row of mdateRows){
+        const lv2=row.length>4?row[4]:'';
+        if(lv2!=='Data')continue;
+        const g1=getGroup(row,0);
+        if(g1[C_W]==null&&g1[C_OVER_WA]!=null&&g1[C_OVER_WA]>1000)monthStatG1s.push(g1);
+      }
+      const offset2=NUM_GROUPS-monthStatG1s.length;
+      for(let i=0;i<monthStatG1s.length;i++){
+        const g1=monthStatG1s[i];
+        const wIdx=offset2+i;
+        const wdate=wIdx<monthWeekDates.length?monthWeekDates[wIdx]:monthWeekDates[monthWeekDates.length-1];
+        const teW=g1[C_AW],betaW=g1[C_PCT_S],asW=g1[C_CHECK];
+        const hW=g1[C_PCT_T]!=null?Math.floor(g1[C_PCT_T]):null;
+        allHistEntries.push({
+          d:wdate,
+          te:(teW!=null&&teW>0&&teW<20)?r2(teW):null,
+          as:(asW!=null&&asW>50&&asW<100)?r2(asW):null,
+          beta:(betaW!=null&&betaW>0&&betaW<3)?r2(betaW):null,
+          h:hW,sr:null
+        });
+      }
+
+      // Sector weight snapshot (most recent week of this month)
+      const seenSecThisMonth=new Set();
+      for(const row of mdateRows){
+        let lv2=row.length>4?row[4]:'';
+        if(lv2==='Usa')lv2='United States';
+        if(!GICS_L1.has(lv2)||seenSecThisMonth.has(lv2))continue;
+        seenSecThisMonth.add(lv2);
+        const cur=getGroup(row,CURRENT_GRP);
+        if(!histSecData[lv2])histSecData[lv2]=[];
+        histSecData[lv2].push({d:lastFriday,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
+      }
     }
-    const offset=NUM_GROUPS-weeklyStats.length;
-    for(let i=0;i<weeklyStats.length;i++){
-      const g1=weeklyStats[i];
-      const wIdx=offset+i;
-      const wdate=wIdx<weekDates.length?weekDates[wIdx]:weekDates[weekDates.length-1];
-      const teW=g1[C_AW],betaW=g1[C_PCT_S],asW=g1[C_CHECK];
-      const hW=g1[C_PCT_T]!=null?Math.floor(g1[C_PCT_T]):h;
-      s.hist.sum.push({
-        d:wdate,
-        te:(teW!=null&&teW>0&&teW<20)?r2(teW):null,
-        as:(asW!=null&&asW>50&&asW<100)?r2(asW):null,
-        beta:(betaW!=null&&betaW>0&&betaW<3)?r2(betaW):null,
-        h:hW,sr:null
-      });
+
+    // Sort + deduplicate by date
+    allHistEntries.sort((a,b)=>a.d<b.d?-1:1);
+    const seenHistDates=new Set();
+    for(const entry of allHistEntries){
+      if(!seenHistDates.has(entry.d)){seenHistDates.add(entry.d);s.hist.sum.push(entry);}
     }
     if(!s.hist.sum.length){
       s.hist.sum.push({d:weekDates[weekDates.length-1],te:r2(te),as:r2(as_),beta:r2(beta),h,sr:null});
     }
+
+    // Store sector history
+    for(const[sn,entries]of Object.entries(histSecData)){
+      histSecData[sn]=entries.sort((a,b)=>a.d<b.d?-1:1);
+    }
+    if(Object.keys(histSecData).length)s.hist.sec=histSecData;
+
+    // Available dates for week selector
+    s.available_dates=s.hist.sum.map(e=>e.d);
+    s.current_date=s.available_dates[s.available_dates.length-1]||null;
 
     // ── Consistent ordering ───────────────────────────────────────────────
     const regOrder=['Far East','English','Northern Europe','Western Europe','Southern Europe','Emerging Market','Australia - New Zealand'];
@@ -3429,14 +3577,19 @@ function parseFactSetCSV(csvText){
   return{
     strategies,
     validation_issues:validationIssues,
-    report_date:mainDate,
-    version:'2.1',
-    parser_version:'1.0.0-js',
+    report_date:currentDate,
+    is_multi_month:isMultiMonth,
+    monthly_count:mainDates.length,
+    version:'3.0',
+    parser_version:'1.1.0-js',
     parse_stats:{
       total_rows:totalRows,
       parse_time_ms:Date.now()-t0,
-      main_date:mainDate,
+      main_date:currentDate,
+      main_dates:mainDates,
       factor_dates:factorDates,
+      is_multi_month:isMultiMonth,
+      monthly_count:mainDates.length,
       repair_warnings:repairWarnings.length,
       unknown_accts:[...unknownAccts],
       strat_stats:stratStats,

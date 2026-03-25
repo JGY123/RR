@@ -14,7 +14,7 @@ Single-file portfolio risk analysis and visualization dashboard. Monitors invest
 ## Key Files
 ```
 RR/
-├── dashboard_v7.html        ← Complete dashboard (~3,320 lines, all-in-one)
+├── dashboard_v7.html        ← Complete dashboard (~3,900 lines, all-in-one)
 ├── factset_parser.py        ← CSV → JSON transformer (PARSER_VERSION="1.1.0", FORMAT_VERSION="3.0")
 ├── test_parser.py           ← pytest suite (89 tests: unit + integration + edge case, all passing)
 ├── load_data.sh             ← Parse CSV and open dashboard (Usage: ./load_data.sh [file.csv])
@@ -79,6 +79,13 @@ FactSet CSVs may contain multiple report dates. Dates with row count ≥ 30% of 
 - Sector heatmap comparison across all 7 strategies
 - Historical Trends mini-charts in Risk tab (TE, Active Share, Beta, Holdings)
 - Factor exposure sparklines (inline SVG)
+- **PM Customization (Phase 1-6, 2026-03-24):**
+  - Summary cards: Idiosyncratic Risk (sum of %S) + Top 2 Factor Risk cards; delta annotations (↑/↓ vs prior week, up=red for risk metrics); Cash moved to info strip
+  - Time-series modals: avg line (dashed) + ±1σ shaded bands on all charts; scrollZoom + Plotly rangeslider (modalPlotCfg); factor drill = dual chart (Exposure top, Return+Impact bottom)
+  - Factor tab: primary factors always visible sorted by TE contrib; secondary factors collapsible; Profitability = green tint + reversed alert (up=good); attribution waterfall below
+  - Sectors: TE Contribution % column; sorted by TE contrib descending; visual bar
+  - Holdings: default sort %T descending; %T visual bar in-cell; Industry column toggle (_showIndustry); Q1-Q5 colored badge
+  - Layout: Regions moved to page bottom; active tab preserved on strategy switch; Attribution tab removed; comparison modal has strategy filter checkboxes (_compSel)
 
 ## FactSet CSV Field Definitions (CONFIRMED)
 - `%T` = Percentage of tracking error — each holding's % contribution to total portfolio TE (sums to ~100%)

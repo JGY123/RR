@@ -486,9 +486,17 @@ function normalize(raw){
   let strats=raw.strategies||raw;
   for(let[id,s]of Object.entries(strats)){
     let st={...s,id:id,name:s.name||id,benchmark:s.benchmark||''};
+    // v2 JSON omits name/benchmark — look up from STRATS
+    {let def=STRATS.find(x=>x.id===id)||{};if(!st.name||st.name===id)st.name=def.name||id;if(!st.benchmark)st.benchmark=def.bm||'';}
     // Normalize summary
     if(!st.sum&&s.summary)st.sum=s.summary;
     if(!st.sum)st.sum={te:0,as:0,beta:1,h:0,bh:0,sr:0,cash:0};
+    // v2 sum field aliases (pe→pe_p, bpe→pe_b, pb→pb_p, bpb→pb_b, mcap→mc)
+    if(st.sum.pe_p==null&&st.sum.pe!=null)st.sum.pe_p=st.sum.pe;
+    if(st.sum.pe_b==null&&st.sum.bpe!=null)st.sum.pe_b=st.sum.bpe;
+    if(st.sum.pb_p==null&&st.sum.pb!=null)st.sum.pb_p=st.sum.pb;
+    if(st.sum.pb_b==null&&st.sum.bpb!=null)st.sum.pb_b=st.sum.bpb;
+    if(st.sum.mc==null&&st.sum.mcap!=null)st.sum.mc=st.sum.mcap;
     // Preserve beta variants if present in source data
     if(s.sum&&s.sum.betas)st.sum.betas=s.sum.betas;
     else if(s.betas)st.sum.betas=s.betas;
@@ -501,7 +509,16 @@ function normalize(raw){
     if(!st.regions)st.regions=[];
     if(!st.countries)st.countries=[];
     if(!st.factors)st.factors=[];
+    // Compute f.c proxy when missing (v2 omits it — estimate from |active|×dev, normalized to pct_factor)
+    if(st.factors.length&&!st.factors.some(f=>f.c!=null)){
+      let raws=st.factors.map(f=>Math.abs(f.a||0)*Math.abs(f.dev||1));
+      let tot=raws.reduce((a,v)=>a+v,0)||1;
+      let target=st.sum.pct_factor||(100-(st.sum.pct_specific||0));
+      st.factors=st.factors.map((f,i)=>({...f,c:+(raws[i]/tot*target).toFixed(2)}));
+    }
     if(!st.hold)st.hold=[];
+    // v2→v1 holdings field aliases (w→p, bw→b, aw→a, pct_s→mcr, pct_t→tr, over→r)
+    st.hold=st.hold.map(h=>({...h,p:h.p??h.w,b:h.b??h.bw,a:h.a??h.aw,mcr:h.mcr??h.pct_s,tr:h.tr??h.pct_t,r:h.r??(h.over!=null?Math.round(h.over):null)}));
     if(!st.ranks)st.ranks=[];
     if(!st.chars)st.chars=[];
     if(!st.groups)st.groups=[];

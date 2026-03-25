@@ -756,6 +756,7 @@ function updateTabBadges(){
 
 // ===== MAIN UPDATE =====
 function upd(){
+  _riskFacToggle=null; // reset so rRisk() re-initializes toggle for new strategy
   updateTabBadges();
   rExp();
   rRisk();
@@ -829,13 +830,13 @@ function rExp(){
       <div class="value" style="color:var(--acc)">${f2(idioSum,1)}%</div>
       <div class="sub">of total TE</div>
     </div>
-    ${tf1?`<div class="sum-card" onclick="oDrFRisk('${tf1.n.replace(/'/g,"\\'")}')" tabindex="0" role="button" aria-label="Top factor risk">
-      <div class="label tip" data-tip="Factor contributing most to tracking error — click for time series">Top Factor Risk</div>
+    ${tf1?`<div class="sum-card" onclick="oDrAllFactorRisk()" tabindex="0" role="button" aria-label="Top factor risk — click for full factor ranking">
+      <div class="label tip" data-tip="Factor contributing most to tracking error — click for all factors ranked">Top Factor Risk</div>
       <div class="value" style="font-size:15px;color:var(--pri)">${tf1.n}</div>
       <div class="sub">${f2(tf1.c,1)}% of TE</div>
     </div>`:`<div class="sum-card"><div class="label">Top Factor Risk</div><div class="value" style="font-size:14px">--</div><div class="sub">no data</div></div>`}
-    ${tf2?`<div class="sum-card" onclick="oDrFRisk('${tf2.n.replace(/'/g,"\\'")}')" tabindex="0" role="button" aria-label="2nd factor risk">
-      <div class="label tip" data-tip="Second-highest factor contributor to tracking error — click for time series">2nd Factor Risk</div>
+    ${tf2?`<div class="sum-card" onclick="oDrAllFactorRisk()" tabindex="0" role="button" aria-label="2nd factor risk — click for full factor ranking">
+      <div class="label tip" data-tip="Second-highest factor contributor to tracking error — click for all factors ranked">2nd Factor Risk</div>
       <div class="value" style="font-size:15px;color:var(--pri)">${tf2.n}</div>
       <div class="sub">${f2(tf2.c,1)}% of TE</div>
     </div>`:`<div class="sum-card"><div class="label">2nd Factor Risk</div><div class="value" style="font-size:14px">--</div><div class="sub">no data</div></div>`}
@@ -1286,260 +1287,461 @@ function toggleGrpView(v,btn){
   if(v==='chart')rGroupChart(cs);
 }
 
+// ===== RISK TAB STATE =====
+let _riskFacToggle=null; // null=uninitialized; Set of checked factor names
+let _corrTimeframe='3Y';
+let _corrFreq='Monthly';
+let _corrShowAll=false;
+
+// Phase 1: All-factor risk ranking popup
+function oDrAllFactorRisk(){
+  let s=cs;
+  let totalTE=s.sum.te||0;
+  let pctSpecific=s.sum.pct_specific;
+  let pctFactor=s.sum.pct_factor;
+  let idioSum=pctSpecific!=null?+pctSpecific.toFixed(1):+(s.hold.filter(h=>!isCash(h)&&(h.p||h.w||0)>0).reduce((a,h)=>a+(h.mcr||h.pct_s||0),0).toFixed(1));
+  let idioFrac=totalTE>0?Math.min(idioSum/100,0.99):0;
+  // Factor risk contribution using same proxy as rRisk
+  let facs=s.factors||[];
+  let facRiskRaw=facs.map(f=>{let raw=f.c!=null?Math.abs(f.c):(Math.abs(f.a||0)*Math.abs(f.dev||1));return{...f,raw};});
+  let totalRaw=facRiskRaw.reduce((a,f)=>a+f.raw,0)||1;
+  let facTotalPct=pctFactor!=null?pctFactor:(100-idioSum);
+  let facsByC=[...facRiskRaw].sort((a,b)=>b.raw-a.raw).map(f=>({...f,c:+(f.raw/totalRaw*facTotalPct).toFixed(2)}));
+  let totalFacPct=facTotalPct;
+
+  let rows=facsByC.map((f,i)=>{
+    let pct=Math.abs(f.c||0);
+    let barW=totalFacPct>0?(pct/totalFacPct*100).toFixed(1):0;
+    let barColor=(f.a??0)>=0?'#3b82f6':'#f59e0b';
+    let facHist=s.hist.fac[f.n]||[];
+    let sparkVals=facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0));
+    let spark=mkSparkline(sparkVals,180,28,barColor);
+    return`<tr style="cursor:pointer;border-bottom:1px solid var(--grid)" onclick="closeDrill();setTimeout(()=>oDrFRisk('${f.n.replace(/'/g,"\\'")}'),50)">
+      <td style="width:20px;color:var(--txt);font-size:11px;padding:6px 4px">${i+1}</td>
+      <td style="color:var(--txth);font-weight:500;font-size:12px;min-width:160px;padding:6px 4px">${f.n}</td>
+      <td style="text-align:right;font-size:12px;color:${barColor};font-weight:600;padding:6px 4px;min-width:60px">${f2(pct,1)}%</td>
+      <td style="padding:6px 8px;min-width:210px">
+        <div style="position:relative;height:8px;background:var(--surf);border-radius:4px;margin-bottom:2px">
+          <div style="position:absolute;left:0;top:0;height:8px;width:${barW}%;background:${barColor};border-radius:4px;opacity:0.7"></div>
+        </div>
+        <div style="font-size:9px;color:var(--txt)">of factor risk</div>
+      </td>
+      <td style="padding:6px 4px">${spark}</td>
+    </tr>`;
+  }).join('');
+
+  let totalFacRisk=+(totalTE*(totalFacPct/100)).toFixed(2);
+  let totalIdioRisk=+(totalTE*idioFrac).toFixed(2);
+  let facAbsPct=f2(totalFacPct,1);
+  let idioPct=f2(idioSum,1);
+
+  $('drillContent').innerHTML=`
+    <h2>Factor Risk Breakdown<button class="close" onclick="closeDrill()">&times;</button></h2>
+    <p style="font-size:11px;color:var(--txt);margin-bottom:12px">All factors ranked by tracking error contribution. Click any row for exposure time series.</p>
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:2px solid var(--grid)">
+        <th style="width:20px;font-size:10px;color:var(--txt)">#</th>
+        <th style="text-align:left;font-size:10px;color:var(--txt)">Factor</th>
+        <th style="text-align:right;font-size:10px;color:var(--txt)">% of TE</th>
+        <th style="text-align:left;font-size:10px;color:var(--txt);padding-left:8px">Contribution</th>
+        <th style="text-align:left;font-size:10px;color:var(--txt)">Trend</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="margin-top:16px;padding:12px;background:var(--surf);border-radius:8px;display:flex;gap:24px">
+      <div><span style="font-size:10px;color:var(--txt)">Factor Risk</span><br>
+        <span style="font-size:18px;font-weight:700;color:#3b82f6">${f2(totalFacRisk,2)}%</span>
+        <span style="font-size:11px;color:var(--txt)"> · ${facAbsPct}% of TE</span></div>
+      <div style="width:1px;background:var(--grid)"></div>
+      <div><span style="font-size:10px;color:var(--txt)">Stock-Specific Risk</span><br>
+        <span style="font-size:18px;font-weight:700;color:#8b5cf6">${f2(totalIdioRisk,2)}%</span>
+        <span style="font-size:11px;color:var(--txt)"> · ${idioPct}% of TE</span></div>
+    </div>`;
+  $('drillModal').classList.add('show');
+}
+
+// Phase 6: Pearson correlation helper
+function pearsonCorr(x,y){
+  let n=x.length;
+  if(n<3)return null;
+  let mx=x.reduce((a,v)=>a+v,0)/n,my=y.reduce((a,v)=>a+v,0)/n;
+  let num=0,dx2=0,dy2=0;
+  for(let i=0;i<n;i++){let dx=x[i]-mx,dy=y[i]-my;num+=dx*dy;dx2+=dx*dx;dy2+=dy*dy;}
+  let denom=Math.sqrt(dx2*dy2);
+  return denom>0?+(num/denom).toFixed(2):0;
+}
+
+function calcCorrMatrix(s){
+  let allFacKeys=Object.keys(s.hist.fac||{});
+  let facs=_corrShowAll?allFacKeys:[...FAC_PRIMARY].filter(f=>s.hist.fac[f]);
+  if(!facs.length)facs=allFacKeys.slice(0,6);
+  let rangeWks={All:Infinity,'5Y':260,'3Y':156,'1Y':52,'6M':26,'3M':13};
+  let wks=rangeWks[_corrTimeframe]||Infinity;
+
+  // Build series per factor
+  let series={};
+  facs.forEach(f=>{
+    let hist=(s.hist.fac[f]||[]);
+    let slice=wks===Infinity?hist:hist.slice(-wks);
+    if(_corrFreq==='Monthly'){
+      // keep last entry per calendar month
+      let mo='',monthly=[];
+      slice.forEach(h=>{let m=h.d.slice(0,7);if(m!==mo){monthly.push(h);mo=m;}});
+      // actually keep LAST entry per month (iterate and overwrite)
+      let byMo={};
+      slice.forEach(h=>{let m=h.d.slice(0,7);byMo[m]=h;});
+      slice=Object.values(byMo).sort((a,b)=>a.d<b.d?-1:1);
+    }
+    series[f]=slice.map(h=>h.bm!=null?+(h.e-h.bm):+(h.e||0));
+  });
+
+  // Pairwise Pearson
+  let corr={};
+  facs.forEach(f1=>{
+    corr[f1]={};
+    facs.forEach(f2=>{
+      if(f1===f2){corr[f1][f2]=1;return;}
+      if(corr[f2]&&corr[f2][f1]!=null){corr[f1][f2]=corr[f2][f1];return;}
+      let x=series[f1]||[],y=series[f2]||[];
+      let n=Math.min(x.length,y.length);
+      if(n<3){corr[f1][f2]=null;return;}
+      corr[f1][f2]=pearsonCorr(x.slice(-n),y.slice(-n));
+    });
+  });
+  return{corr,facs};
+}
+
+function rRiskCorrDraw(){
+  let s=cs;
+  if(!document.getElementById('corrMatrixDiv'))return;
+  _corrTimeframe=$('corrTF')?$('corrTF').value:_corrTimeframe;
+  _corrFreq=$('corrFQ')?$('corrFQ').value:_corrFreq;
+  _corrShowAll=$('corrAll')?$('corrAll').checked:_corrShowAll;
+  let{corr,facs}=calcCorrMatrix(s);
+  if(!facs.length)return;
+
+  // Build z matrix
+  let z=facs.map(f1=>facs.map(f2=>corr[f1][f2]));
+  let annotations=[];
+  facs.forEach((f1,r)=>facs.forEach((f2,c)=>{
+    let v=z[r][c];
+    annotations.push({x:c,y:r,text:v!=null?v.toFixed(2):'--',showarrow:false,font:{size:9,color:Math.abs(v||0)>0.5?'#fff':'#94a3b8'}});
+  }));
+
+  Plotly.newPlot('corrMatrixDiv',[{
+    z,x:facs,y:facs,type:'heatmap',
+    colorscale:[[0,'#ef4444'],[0.5,'#1e293b'],[1,'#3b82f6']],
+    zmin:-1,zmax:1,showscale:true,
+    colorbar:{thickness:10,len:0.8,tickfont:{size:9,color:'#94a3b8'},tickvals:[-1,-0.5,0,0.5,1],ticktext:['-1.0','-0.5','0','0.5','1.0']},
+    hovertemplate:'%{y} × %{x}<br>r = %{z:.2f}<extra>${_corrTimeframe} ${_corrFreq}</extra>',
+    text:z.map(row=>row.map(v=>v!=null?v.toFixed(2):'--')),texttemplate:'%{text}',textfont:{size:9}
+  }],{...plotBg,margin:{l:120,r:60,t:20,b:120},
+    xaxis:{...plotBg.xaxis,tickangle:-45,tickfont:{size:10},side:'bottom'},
+    yaxis:{...plotBg.yaxis,tickfont:{size:10},autorange:'reversed'},
+    annotations
+  },plotCfg);
+
+  // Insight row
+  let insights=[];
+  let seen=new Set();
+  facs.forEach((f1,i)=>facs.forEach((f2,j)=>{
+    if(i>=j)return;
+    let v=corr[f1][f2];
+    if(v==null)return;
+    let key=f1+'|'+f2;
+    if(seen.has(key))return;seen.add(key);
+    if(v>0.7)insights.push(`<span style="color:var(--warn)">⚠ <strong>${f1}</strong> and <strong>${f2}</strong> are ${v.toFixed(2)} correlated — these bets may not be diversifying</span>`);
+    else if(v<-0.5)insights.push(`<span style="color:var(--pos)">✓ <strong>${f1}</strong> and <strong>${f2}</strong> are ${v.toFixed(2)} — these bets provide diversification</span>`);
+  }));
+  let insEl=$('corrInsights');
+  if(insEl)insEl.innerHTML=insights.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;font-size:11px">${insights.join('')}</div>`:'';
+}
+
+// Phase 5: Factor exposure toggle chart
+let _riskFacColors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#a855f7','#e11d48','#0ea5e9','#22c55e','#eab308','#64748b'];
+function rRiskFacSelectAll(checked){
+  let s=cs;
+  let allFacs=Object.keys(s.hist.fac||{});
+  _riskFacToggle=checked?new Set(allFacs):new Set();
+  document.querySelectorAll('.fac-toggle-cb').forEach(cb=>{cb.checked=checked;});
+  rRiskFacToggleChart(s);
+}
+function onFacToggleChange(facName,checked){
+  if(!_riskFacToggle)_riskFacToggle=new Set([...FAC_PRIMARY]);
+  if(checked)_riskFacToggle.add(facName);
+  else _riskFacToggle.delete(facName);
+  rRiskFacToggleChart(cs);
+}
+function rRiskFacToggleChart(s){
+  let allFacKeys=Object.keys(s.hist.fac||{});
+  let checked=_riskFacToggle||(new Set([...FAC_PRIMARY].filter(f=>s.hist.fac[f])));
+  let traces=[];
+  let colorIdx=0;
+  allFacKeys.forEach(fac=>{
+    let color=_riskFacColors[colorIdx%_riskFacColors.length];colorIdx++;
+    if(!checked.has(fac))return;
+    let hist=s.hist.fac[fac]||[];
+    if(!hist.length)return;
+    traces.push({
+      x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),
+      name:fac,line:{color,width:2},
+      hovertemplate:fac+'<br>%{x}<br>Active Exposure: %{y:.3f}<extra></extra>'
+    });
+  });
+  let el=document.getElementById('riskExpHistDiv');
+  if(!el)return;
+  if(traces.length){
+    Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
+      yaxis:{...plotBg.yaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
+      legend:{orientation:'h',y:1.12,font:{size:9}},
+      hovermode:'x unified',
+      xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.06}}
+    },{...plotCfg,scrollZoom:true});
+  } else {
+    el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:16px">No factors selected</p>';
+  }
+}
+
 // ===== RISK TAB =====
 function rRisk(){
   let s=cs;
-  // Compute factor vs idiosyncratic risk decomposition
-  let totalTE=s.sum.te;
-  let facContribs=s.factors.map(f=>Math.abs(f.c||0));
-  let totalFacContrib=facContribs.reduce((a,v)=>a+v,0);
-  // Factor risk as proportion of total TE
-  let factorRisk=+(totalTE*Math.min(totalFacContrib/100*1.2,0.85)).toFixed(2);
-  let idioRisk=+(totalTE-factorRisk).toFixed(2);
-  let factorPct=+(factorRisk/totalTE*100).toFixed(1);
-  let idioPct=+(idioRisk/totalTE*100).toFixed(1);
+  let totalTE=s.sum.te||0;
 
-  // Conditional risk: compute risk under different regimes
-  let regimes=[
-    {name:'Normal',mult:1.0,desc:'Average volatility regime'},
-    {name:'Elevated Vol',mult:1.4,desc:'VIX 20-30 range'},
-    {name:'Crisis',mult:2.2,desc:'VIX >30, correlation spike'},
-    {name:'Low Vol',mult:0.6,desc:'VIX <15, calm markets'}
-  ];
-  let condRows=regimes.map(r=>{
-    let cTE=+(totalTE*r.mult).toFixed(2);
-    let cFac=+(factorRisk*r.mult*(r.mult>1.5?1.15:1)).toFixed(2);
-    let cIdio=+(cTE-cFac).toFixed(2);
-    return{...r,te:cTE,fac:cFac,idio:cIdio};
+  // Idiosyncratic / Factor split: use pct_specific/pct_factor from parser if available
+  // Fall back to summing holdings %S (h.mcr) for v1 parser compat
+  let pctSpecific=s.sum.pct_specific;
+  let pctFactor=s.sum.pct_factor;
+  let idioFrac, idioSum;
+  if(pctSpecific!=null){
+    idioFrac=Math.min(pctSpecific/100,0.99);
+    idioSum=+pctSpecific.toFixed(1);
+  } else {
+    let eqHold=s.hold.filter(h=>!isCash(h)&&(h.p||h.w||0)>0);
+    idioSum=+eqHold.reduce((a,h)=>a+(h.mcr||h.pct_s||0),0).toFixed(1);
+    idioFrac=totalTE>0?Math.min(idioSum/100,0.99):0;
+  }
+
+  // Factor contributions — use |a|*dev as risk proxy if f.c is absent
+  let facs=s.factors||[];
+  let facRiskRaw=facs.map(f=>{
+    // f.c = direct TE% if available (v1); else estimate from |active exposure| × factor stddev
+    let raw=f.c!=null?Math.abs(f.c):(Math.abs(f.a||0)*Math.abs(f.dev||1));
+    return{n:f.n,e:f.a,c:f.c,dev:f.dev,raw};
+  });
+  let totalRaw=facRiskRaw.reduce((a,f)=>a+f.raw,0)||1;
+  // Normalize so factor contributions sum to pctFactor (or 100-idioSum if not available)
+  let facTotalPct=pctFactor!=null?pctFactor:(100-idioSum);
+  let facsByC=[...facRiskRaw].sort((a,b)=>b.raw-a.raw);
+  let facMCR=facsByC.map(f=>{
+    let contrib=+(f.raw/totalRaw*facTotalPct).toFixed(2);
+    return{n:f.n,e:f.e,c:contrib,mcrTE:+(totalTE*contrib/100).toFixed(3)};
   });
 
-  // Factor marginal contribution to risk
-  let facMCR=s.factors.map(f=>{
-    let contrib=Math.abs(f.c||0);
-    let mcrTE=+(totalTE*contrib/100).toFixed(3);
-    return{n:f.n,e:f.a,c:f.c,mcrTE,ret:f.ret,imp:f.imp};  // e = active exposure
-  }).sort((a,b)=>b.mcrTE-a.mcrTE);
+  // Factor toggle — init on first render
+  let allFacKeys=Object.keys(s.hist.fac||{});
+  if(!_riskFacToggle){
+    _riskFacToggle=new Set([...FAC_PRIMARY].filter(f=>s.hist.fac[f]));
+    if(!_riskFacToggle.size)allFacKeys.slice(0,6).forEach(f=>_riskFacToggle.add(f));
+  }
+
+  // Toggle checkboxes HTML
+  let colorIdx=0;
+  let toggleHtml=allFacKeys.map(fac=>{
+    let color=_riskFacColors[colorIdx++%_riskFacColors.length];
+    let isPri=FAC_PRIMARY.has(fac);
+    let chk=_riskFacToggle.has(fac)?'checked':'';
+    let facEsc=fac.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:var(--txth);background:var(--surf);padding:3px 8px;border-radius:4px;border:1px solid ${isPri?color:'var(--grid)'};white-space:nowrap">
+      <input type="checkbox" class="fac-toggle-cb" ${chk} onchange="onFacToggleChange('${facEsc}',this.checked)" style="accent-color:${color};cursor:pointer">
+      ${fac}
+    </label>`;
+  }).join('');
 
   let html=`
-  <!-- Risk Decomposition Summary -->
-  <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
-    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}">
-      <div class="label">Total Risk (TE)</div>
-      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE)}%</div>
-      <div class="sub">annualized</div>
+  <!-- Phase 2: TE Stacked Area (HERO) -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:4px">
+      <div class="card-title" style="margin:0">Tracking Error — Stock-Specific (Gold) vs Factor Risk (Blue)</div>
+      <span style="font-size:10px;color:var(--txt)">split ratio from current week · ${s.hist.sum.length} data points · <a style="color:var(--pri);cursor:pointer" onclick="oDrMetric('te')">full drill ↗</a></span>
     </div>
-    <div class="sum-card">
-      <div class="label">Factor Risk</div>
-      <div class="value" style="color:var(--pri)">${f2(factorRisk)}%</div>
-      <div class="sub">${factorPct}% of total</div>
+    <div id="teStackedDiv" style="height:250px"></div>
+  </div>
+
+  <!-- Phase 3 + Holdings mini -->
+  <div class="grid g32" style="margin-bottom:16px">
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:4px">
+        <div class="card-title" style="margin:0">Beta — Predicted · Historical · MPT</div>
+        <a style="font-size:10px;color:var(--pri);cursor:pointer" onclick="oDrMetric('beta')">full drill ↗</a>
+      </div>
+      <div id="multiBetaDiv" style="height:200px"></div>
     </div>
-    <div class="sum-card">
-      <div class="label">Idiosyncratic Risk</div>
-      <div class="value" style="color:var(--acc)">${f2(idioRisk)}%</div>
-      <div class="sub">${idioPct}% of total</div>
-    </div>
-    <div class="sum-card">
-      <div class="label">Beta</div>
-      <div class="value">${f2(s.sum.beta,3)}</div>
-      <div class="sub">vs benchmark</div>
-    </div>
-    <div class="sum-card">
-      <div class="label">Active Share</div>
-      <div class="value">${f2(s.sum.as)}%</div>
-      <div class="sub">${gt(s.hist.sum,'as')} trend</div>
+    <div class="card" onclick="oDrMetric('h')" style="cursor:pointer">
+      <div class="flex-between" style="margin-bottom:4px">
+        <div class="card-title" style="margin:0">Holdings Count</div>
+        <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} wks</span>
+      </div>
+      <div id="miniH" style="height:200px"></div>
     </div>
   </div>
 
-  <!-- Row 1: Historical Trends Mini-Charts -->
+  <!-- Phase 4: Factor Contribution Bars (factors only, no idiosyncratic) -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:4px">
+      <div class="card-title" style="margin:0">Factor Risk Contribution (% of TE) — click bar for drill-down</div>
+      <span style="font-size:10px;color:var(--txt)">idiosyncratic: ${f2(idioSum,1)}% of TE (see Overview)</span>
+    </div>
+    <div id="riskFacBarDiv" style="height:${Math.max(240,facMCR.length*24+40)}px"></div>
+  </div>
+
+  <!-- Phase 5: Factor Exposure Time Series with Toggles -->
   <div class="card" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Historical Trends</div>
-      <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} data points · click chart for full drill-down</span>
+      <div class="card-title" style="margin:0">Factor Exposure History (Active = Portfolio − Benchmark)</div>
+      <div style="display:flex;gap:6px">
+        <button class="export-btn" onclick="rRiskFacSelectAll(true)">Select All</button>
+        <button class="export-btn" onclick="rRiskFacSelectAll(false)">Clear All</button>
+      </div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-      <div onclick="oDrMetric('te')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Tracking Error</div><div id="miniTE" style="height:80px"></div></div>
-      <div onclick="oDrMetric('as')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Active Share</div><div id="miniAS" style="height:80px"></div></div>
-      <div onclick="oDrMetric('beta')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Beta</div><div id="miniBeta" style="height:80px"></div></div>
-      <div onclick="oDrMetric('h')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Holdings Count</div><div id="miniH" style="height:80px"></div></div>
-    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${toggleHtml}</div>
+    <div id="riskExpHistDiv" style="height:280px"></div>
   </div>
 
-  <!-- Row 2: Risk Decomposition Donut + Factor vs Idio Bar -->
-  <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Risk Decomposition</div>
-      <div id="riskDecompDiv" style="height:300px"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Factor Contribution to Risk</div>
-      <div id="riskFacBarDiv" style="height:300px"></div>
-    </div>
-  </div>
-
-  <!-- Row 2: Factor Exposure Table (clickable for time series) -->
+  <!-- Phase 6: Interactive Factor Correlation Matrix -->
   <div class="card">
-    <div class="card-title">Factor Exposures — click any factor for time series</div>
-    <table><thead><tr>
-      <th>Factor</th><th class="r">Exposure</th><th class="r">Risk Contrib %</th>
-      <th class="r">MCR to TE</th><th class="r">Factor Return %</th><th class="r">Impact</th>
-      <th class="r" title="Exposure trend over available history">Trend</th>
-    </tr></thead><tbody>${facMCR.map(f=>{
-      let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
-      let facHist=s.hist.fac[f.n];
-      let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
-      return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n}')">
-        <td style="color:var(--txth);font-weight:500">${f.n}</td>
-        <td class="r ${cls}">${fp(f.e,3)}</td>
-        <td class="r">${f2(f.c)}</td>
-        <td class="r">${f2(f.mcrTE,3)}</td>
-        <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret)}</td>
-        <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp)}</td>
-        <td class="r">${mkSparkline(sparkVals,60,22,null)}</td>
-      </tr>`;
-    }).join('')}
-    <tr style="border-top:2px solid var(--grid);font-weight:600">
-      <td>Idiosyncratic (Stock-Specific)</td>
-      <td class="r">--</td><td class="r">${f2(100-totalFacContrib)}</td>
-      <td class="r">${f2(idioRisk,3)}</td><td class="r">--</td><td class="r">--</td>
-      <td class="r">--</td>
-    </tr></tbody></table>
-  </div>
-
-  <!-- Row 3: Conditional Risk by Regime -->
-  <div class="card">
-    <div class="card-title">Conditional Risk by Market Regime</div>
-    <table><thead><tr>
-      <th>Regime</th><th>Description</th><th class="r">Total TE</th>
-      <th class="r">Factor Risk</th><th class="r">Idio Risk</th><th class="r">Factor/Total</th>
-    </tr></thead><tbody>${condRows.map(r=>{
-      let teStyle=r.te>7?'color:var(--neg);font-weight:600':r.te>5?'color:var(--warn);font-weight:500':'';
-      return`<tr>
-        <td style="color:var(--txth);font-weight:500">${r.name}</td>
-        <td style="font-size:11px">${r.desc}</td>
-        <td class="r" style="${teStyle}">${f2(r.te)}%</td>
-        <td class="r" style="color:var(--pri)">${f2(r.fac)}%</td>
-        <td class="r" style="color:var(--acc)">${f2(r.idio)}%</td>
-        <td class="r">${f2(r.fac/r.te*100,0)}%</td>
-      </tr>`;
-    }).join('')}</tbody></table>
-  </div>
-
-  <!-- Row 4: Conditional Risk Chart + Exposure Time Series Overview -->
-  <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Risk by Regime</div>
-      <div id="riskRegimeDiv" style="height:280px"></div>
+    <div class="flex-between" style="margin-bottom:8px">
+      <div class="card-title" style="margin:0">Factor Correlation Matrix</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="corrTF" style="background:var(--surf);color:var(--txth);border:1px solid var(--grid);border-radius:4px;font-size:11px;padding:3px 6px" onchange="rRiskCorrDraw()">
+          <option value="3M" ${_corrTimeframe==='3M'?'selected':''}>3 Months</option>
+          <option value="6M" ${_corrTimeframe==='6M'?'selected':''}>6 Months</option>
+          <option value="1Y" ${_corrTimeframe==='1Y'?'selected':''}>1 Year</option>
+          <option value="3Y" ${_corrTimeframe==='3Y'?'selected':''}>3 Years</option>
+          <option value="5Y" ${_corrTimeframe==='5Y'?'selected':''}>5 Years</option>
+          <option value="All" ${_corrTimeframe==='All'?'selected':''}>All History</option>
+        </select>
+        <select id="corrFQ" style="background:var(--surf);color:var(--txth);border:1px solid var(--grid);border-radius:4px;font-size:11px;padding:3px 6px" onchange="rRiskCorrDraw()">
+          <option value="Weekly" ${_corrFreq==='Weekly'?'selected':''}>Weekly</option>
+          <option value="Monthly" ${_corrFreq==='Monthly'?'selected':''}>Monthly</option>
+        </select>
+        <label style="font-size:11px;color:var(--txth);display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" id="corrAll" ${_corrShowAll?'checked':''} onchange="rRiskCorrDraw()"> All Factors
+        </label>
+      </div>
     </div>
-    <div class="card">
-      <div class="card-title">Factor Exposure History (All Factors)</div>
-      <div id="riskExpHistDiv" style="height:280px"></div>
-    </div>
-  </div>
-
-  <!-- Row 5: Stress Scenarios (from existing) -->
-  <div class="card">
-    <div class="card-title">Stress Scenarios</div>
-    ${rStressTable(s.stress)}
-  </div>
-
-  <!-- Row 6: Factor Correlation -->
-  <div class="card">
-    <div class="card-title">Factor Correlation Matrix</div>
-    ${rFCorr(s.fcorr)}
+    <div id="corrMatrixDiv" style="height:400px"></div>
+    <div id="corrInsights"></div>
   </div>`;
 
   $('tab-risk').innerHTML=html;
-  setTimeout(()=>{rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows)},50);
+  setTimeout(()=>{rRiskCharts(s,facMCR,idioFrac)},50);
 }
 
-function rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows){
-  // Risk decomposition donut
-  Plotly.newPlot('riskDecompDiv',[{
-    labels:['Factor Risk','Idiosyncratic Risk'],
-    values:[factorRisk,idioRisk],type:'pie',hole:0.55,
-    marker:{colors:['#3b82f6','#8b5cf6']},
-    textinfo:'label+percent',textfont:{size:11,color:'#e2e8f0'},
-    hovertemplate:'%{label}<br>%{value:.2f}% TE<br>%{percent}<extra></extra>'
-  }],{...plotBg,margin:{l:20,r:20,t:10,b:10},showlegend:true,
-    legend:{orientation:'h',y:-0.05,font:{size:11,color:'#94a3b8'}},
-    annotations:[{text:`${f2(s.sum.te)}%<br><span style="font-size:10px">Total TE</span>`,
-      showarrow:false,font:{size:18,color:'#e2e8f0'},x:0.5,y:0.5}]
-  },plotCfg);
+function rRiskCharts(s,facMCR,idioFrac){
+  let totalTE=s.sum.te||0;
 
-  // Factor contribution bar
-  Plotly.newPlot('riskFacBarDiv',[{
-    y:facMCR.map(f=>f.n),x:facMCR.map(f=>f.mcrTE),type:'bar',orientation:'h',
-    marker:{color:facMCR.map(f=>f.e>=0?'#3b82f6':'#f59e0b')},
-    text:facMCR.map(f=>f.mcrTE.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
-    hovertemplate:'%{y}<br>MCR to TE: %{x:.3f}%<extra></extra>'
-  },{
-    y:['Idiosyncratic'],x:[idioRisk],type:'bar',orientation:'h',
-    marker:{color:'#8b5cf6'},text:[idioRisk.toFixed(3)],textposition:'outside',
-    textfont:{size:10,color:'#94a3b8'},showlegend:false,
-    hovertemplate:'Idiosyncratic<br>Risk: %{x:.3f}%<extra></extra>'
-  }],{...plotBg,barmode:'stack',showlegend:false,
-    yaxis:{...plotBg.yaxis,autorange:'reversed'},
-    xaxis:{...plotBg.xaxis,title:'Contribution to TE %'}
-  },plotCfg);
-
-  // Conditional risk regime chart
-  Plotly.newPlot('riskRegimeDiv',[
-    {x:condRows.map(r=>r.name),y:condRows.map(r=>r.fac),name:'Factor Risk',type:'bar',marker:{color:'#3b82f6'}},
-    {x:condRows.map(r=>r.name),y:condRows.map(r=>r.idio),name:'Idiosyncratic Risk',type:'bar',marker:{color:'#8b5cf6'}}
-  ],{...plotBg,barmode:'stack',
-    yaxis:{...plotBg.yaxis,title:'TE %'},
-    legend:{orientation:'h',y:1.12,font:{size:10}},
-    shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#f59e0b',dash:'dash',width:1}},
-            {type:'line',y0:7,y1:7,xref:'paper',x0:0,x1:1,line:{color:'#ef4444',dash:'dash',width:1}}]
-  },plotCfg);
-
-  // Factor exposure history - all factors on one chart
-  let traces=[];
-  let colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
-  FACS.forEach((fac,i)=>{
-    let hist=s.hist.fac[fac];
-    if(hist&&hist.length){
-      traces.push({
-        x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:fac,
-        line:{color:colors[i%colors.length],width:2},
-        hovertemplate:fac+'<br>%{x}<br>Exposure: %{y:.3f}<extra></extra>'
-      });
-    }
-  });
-  if(traces.length){
-    Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
-      yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
-      legend:{orientation:'h',y:1.15,font:{size:9}},
+  // ── Phase 2: TE Stacked Area ──
+  let histAll=s.hist.sum;
+  if(histAll.length){
+    let dates=histAll.map(h=>h.d);
+    let teVals=histAll.map(h=>h.te||0);
+    let idioVals=teVals.map(te=>+(te*idioFrac).toFixed(3));
+    // stacked area: gold fills 0→idio, blue fills idio→total TE
+    let teStackTraces=[
+      {x:dates,y:idioVals,name:'Stock-Specific',type:'scatter',mode:'lines',
+       fill:'tozeroy',fillcolor:'rgba(245,158,11,0.25)',line:{color:'#f59e0b',width:1},
+       hoverinfo:'skip'},
+      {x:dates,y:teVals,name:'Factor Risk',type:'scatter',mode:'lines',
+       fill:'tonexty',fillcolor:'rgba(59,130,246,0.25)',line:{color:'#3b82f6',width:1},
+       hoverinfo:'skip'},
+      {x:dates,y:teVals,name:'Total TE',type:'scatter',mode:'lines',
+       line:{color:'#ffffff',width:2},
+       customdata:teVals.map((te,i)=>[idioVals[i],+(te-idioVals[i]).toFixed(3)]),
+       hovertemplate:'%{x|%b %d, %Y}<br>Total TE: <b>%{y:.2f}%</b><br>Stock-Specific: %{customdata[0]:.2f}% · Factor: %{customdata[1]:.2f}%<extra></extra>'}
+    ];
+    let xTeAxis={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.07}};
+    Plotly.newPlot('teStackedDiv',teStackTraces,{...plotBg,
+      margin:{...plotBg.margin,b:50},
+      yaxis:{...plotBg.yaxis,title:'TE %',rangemode:'tozero'},
+      xaxis:xTeAxis,showlegend:true,
+      legend:{orientation:'h',y:1.08,font:{size:10}},
       hovermode:'x unified'
+    },{...plotCfg,scrollZoom:true});
+  }
+
+  // ── Phase 3: Multi-Beta Chart ──
+  let betaHist=s.hist.sum.filter(h=>h.beta!=null);
+  if(betaHist.length){
+    let betaDates=betaHist.map(h=>h.d);
+    let predVals=betaHist.map(h=>h.beta);
+    let betas=s.sum.betas||{};
+    let betaTraces=[
+      {x:betaDates,y:predVals,name:'Predicted Beta (main)',type:'scatter',mode:'lines',
+       line:{color:'#3b82f6',width:2.5},
+       hovertemplate:'%{x|%b %d, %Y}<br>Predicted: <b>%{y:.3f}</b><extra></extra>'}
+    ];
+    // Historical and MPT: constant lines from current value (no per-week history)
+    if(betas.historical!=null){
+      betaTraces.push({x:betaDates,y:betaDates.map(()=>betas.historical),name:'Historical Beta',
+        type:'scatter',mode:'lines',line:{color:'#64748b',width:1.5,dash:'dash'},
+        hovertemplate:'Historical: %{y:.3f}<extra></extra>'});
+    }
+    if(betas.mpt!=null){
+      betaTraces.push({x:betaDates,y:betaDates.map(()=>betas.mpt),name:'MPT Beta',
+        type:'scatter',mode:'lines',line:{color:'#8b5cf6',width:1.5,dash:'dot'},
+        hovertemplate:'MPT: %{y:.3f}<extra></extra>'});
+    }
+    let betaNote=(!betas.historical&&!betas.mpt)?'Historical/MPT beta not in data — showing Predicted only':'';
+    Plotly.newPlot('multiBetaDiv',betaTraces,{...plotBg,
+      margin:{...plotBg.margin,b:30},
+      yaxis:{...plotBg.yaxis,title:'Beta'},
+      xaxis:{...plotBg.xaxis,showticklabels:true},
+      showlegend:true,legend:{orientation:'h',y:1.12,font:{size:10}},
+      hovermode:'x unified',
+      shapes:[{type:'line',y0:1,y1:1,xref:'paper',x0:0,x1:1,line:{color:'rgba(148,163,184,.5)',dash:'dot',width:1}}],
+      annotations:betaNote?[{x:0.5,y:1.05,xref:'paper',yref:'paper',text:betaNote,showarrow:false,font:{size:9,color:'#64748b'}}]:[]
     },plotCfg);
   }
 
-  // Mini trend charts for key metrics
-  let miniLayout={
-    ...plotBg,margin:{l:28,r:8,t:4,b:18},
-    xaxis:{...plotBg.xaxis,showticklabels:false,showgrid:false},
+  // ── Holdings Count mini ──
+  let miniLayout={...plotBg,margin:{l:32,r:8,t:4,b:20},
+    xaxis:{...plotBg.xaxis,showticklabels:true,showgrid:false,tickfont:{size:8}},
     yaxis:{...plotBg.yaxis,showgrid:false,showticklabels:true,tickfont:{size:8}},
-    height:80,showlegend:false
-  };
-  let hist12=s.hist.sum.slice(-12);
-  let miniDefs=[
-    {id:'miniTE',key:'te',color:'#10b981',ref:5},
-    {id:'miniAS',key:'as',color:'#3b82f6',ref:null},
-    {id:'miniBeta',key:'beta',color:'#f59e0b',ref:1},
-    {id:'miniH',key:'h',color:'#8b5cf6',ref:null}
-  ];
-  miniDefs.forEach(m=>{
-    let el=document.getElementById(m.id);
-    if(!el)return;
-    let vals=hist12.map(h=>h[m.key]).filter(v=>v!=null);
-    let dates=hist12.map(h=>h.d);
-    if(!vals.length)return;
-    let shapes=m.ref!=null?[{type:'line',y0:m.ref,y1:m.ref,xref:'paper',x0:0,x1:1,line:{color:'rgba(100,116,139,.5)',dash:'dot',width:1}}]:[];
-    Plotly.newPlot(m.id,[{x:dates,y:hist12.map(h=>h[m.key]),type:'scatter',mode:'lines',
-      fill:'tozeroy',fillcolor:m.color+'15',line:{color:m.color,width:1.5},
-      hovertemplate:'%{x|%b %Y}<br>%{y:.2f}<extra></extra>'
-    }],{...miniLayout,shapes},plotCfg);
-  });
+    showlegend:false};
+  let hHist=s.hist.sum.slice(-52);
+  if(hHist.length&&document.getElementById('miniH')){
+    Plotly.newPlot('miniH',[{x:hHist.map(h=>h.d),y:hHist.map(h=>h.h),type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:'#8b5cf615',line:{color:'#8b5cf6',width:1.5},
+      hovertemplate:'%{x|%b %d, %Y}<br>Holdings: %{y}<extra></extra>'
+    }],miniLayout,plotCfg);
+  }
+
+  // ── Phase 4: Factor Contribution Bar (factors only) ──
+  if(facMCR.length&&document.getElementById('riskFacBarDiv')){
+    Plotly.newPlot('riskFacBarDiv',[{
+      y:facMCR.map(f=>f.n),x:facMCR.map(f=>f.mcrTE),type:'bar',orientation:'h',
+      marker:{color:facMCR.map(f=>(f.e??0)>=0?'#3b82f6':'#f59e0b')},
+      text:facMCR.map(f=>f.mcrTE.toFixed(3)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+      hovertemplate:'%{y}<br>TE Contribution: %{x:.3f}%<extra></extra>',
+      customdata:facMCR.map(f=>f.n),
+    }],{...plotBg,showlegend:false,
+      yaxis:{...plotBg.yaxis,autorange:'reversed'},
+      xaxis:{...plotBg.xaxis,title:'Contribution to TE %'},
+      margin:{...plotBg.margin,l:160}
+    },{...plotCfg,
+      modeBarButtonsToRemove:['lasso2d','select2d']
+    });
+    // Click on bar → drill into that factor
+    document.getElementById('riskFacBarDiv').on('plotly_click',d=>{
+      if(d.points[0])oDrFRisk(d.points[0].y);
+    });
+  }
+
+  // ── Phase 5: Factor Exposure Time Series with Toggles ──
+  rRiskFacToggleChart(s);
+
+  // ── Phase 6: Correlation Matrix ──
+  rRiskCorrDraw();
 }
 
 // ===== INLINE SVG SPARKLINE =====

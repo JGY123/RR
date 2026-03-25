@@ -770,66 +770,97 @@ function rExp(){
   let isHistWeek=!!_selectedWeek;
   let teClass=ws.te>=10?'alert':ws.te<5?'warn':'';
 
+  // Delta vs previous week (for annotations)
+  let hist=s.hist.sum||[];
+  let prevWs=hist.length>=2?hist[hist.length-2]:null;
+  // riskDelta: up=red (more risk), down=green (less risk)
+  function riskDelta(cur,prev,dec){
+    if(cur==null||prev==null)return'';
+    let d=+(cur-prev).toFixed(dec??1);
+    if(Math.abs(d)<Math.pow(10,-(dec??1))*0.5)return'';
+    let up=d>0;
+    let col=up?'var(--neg)':'var(--pos)';
+    return`<span style="font-size:9px;color:${col};margin-left:3px;font-weight:500">${up?'↑':'↓'}${up?'+':''}${d}</span>`;
+  }
+  // neutralDelta: no color judgment
+  function neutDelta(cur,prev,dec){
+    if(cur==null||prev==null)return'';
+    let d=+(cur-prev).toFixed(dec??1);
+    if(Math.abs(d)<Math.pow(10,-(dec??1))*0.5)return'';
+    let up=d>0;
+    return`<span style="font-size:9px;color:var(--txt);margin-left:3px">${up?'↑':'↓'}${up?'+':''}${d}</span>`;
+  }
+
+  // Idiosyncratic risk: sum of %S (%mcr) across equity portfolio holdings
+  let eqHold=s.hold.filter(h=>!isCash(h)&&h.p>0);
+  let idioSum=+eqHold.reduce((a,h)=>a+(h.mcr||0),0).toFixed(1);
+
+  // Top 2 factors by absolute TE contribution
+  let facsByC=[...(s.factors||[])].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+  let tf1=facsByC[0]||null;
+  let tf2=facsByC[1]||null;
+  let hCount=ws.h||equityCount(s.hold);
+
   let html=`${weekBannerHtml()}
   <!-- Row 1: Summary Cards -->
   <div class="sum-cards">
     <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
       <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark">Tracking Error</div>
-      <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(ws.te)}%</div>
+      <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(ws.te,1)}%${riskDelta(ws.te,prevWs&&prevWs.te,1)}</div>
       <div class="sub">${gt(s.hist.sum,'te')} ${s.hist.sum.length} wk trend</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('as')" tabindex="0" role="button" aria-label="Active Share trend">
       <div class="label tip" data-tip="Percentage of portfolio that differs from benchmark">Active Share</div>
-      <div class="value">${f2(ws.as)}%</div>
+      <div class="value">${f2(ws.as,1)}%${neutDelta(ws.as,prevWs&&prevWs.as,1)}</div>
       <div class="sub">${gt(s.hist.sum,'as')} ${s.hist.sum.length} wk trend</div>
     </div>
     <div class="sum-card ${Math.abs((ws.beta||1)-1)>0.1?'warn':''}" onclick="oDrMetric('beta')" tabindex="0" role="button" aria-label="Beta trend">
       <div class="label tip" data-tip="Portfolio sensitivity to benchmark movements">Beta</div>
-      <div class="value">${f2(ws.beta,3)}</div>
+      <div class="value">${f2(ws.beta,2)}${neutDelta(ws.beta,prevWs&&prevWs.beta,2)}</div>
       <div class="sub">${gt(s.hist.sum,'beta')} vs 1.0</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('h')" tabindex="0" role="button" aria-label="Holdings count trend">
       <div class="label tip" data-tip="Equity securities only (excl. cash/currency baskets)">Holdings</div>
-      <div class="value">${ws.h||equityCount(s.hold)}</div>
+      <div class="value">${hCount}${neutDelta(hCount,prevWs&&prevWs.h,0)}</div>
       <div class="sub">of ${s.sum.bh||'--'} benchmark</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('sr')" tabindex="0" role="button" aria-label="Selection Rate trend">
-      <div class="label tip" data-tip="Ratio of portfolio holdings to benchmark constituents">Selection Rate</div>
-      <div class="value">${ws.sr!=null?f2(ws.sr)+'%':'--'}</div>
-      <div class="sub">port/bench</div>
+    <div class="sum-card" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Stock-Specific Risk breakdown">
+      <div class="label tip" data-tip="Sum of stock-specific TE contributions across all holdings — idiosyncratic portion of tracking error">Stock-Specific Risk</div>
+      <div class="value" style="color:var(--acc)">${f2(idioSum,1)}%</div>
+      <div class="sub">of total TE</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('cash')" tabindex="0" role="button" aria-label="Cash trend">
-      <div class="label tip" data-tip="Undeployed cash as percentage of portfolio">Cash</div>
-      <div class="value">${isHistWeek?'--':f2(s.sum.cash)+'%'}</div>
-      <div class="sub">residual</div>
-    </div>
-    <div class="sum-card" onclick="oDrS()" tabindex="0" role="button" aria-label="All summary trends">
-      <div class="label">Benchmark</div>
-      <div class="value" style="font-size:12px;line-height:1.8">${s.benchmark||s.name}</div>
-      <div class="sub">${s.id}</div>
-    </div>
+    ${tf1?`<div class="sum-card" onclick="oDrFRisk('${tf1.n.replace(/'/g,"\\'")}')" tabindex="0" role="button" aria-label="Top factor risk">
+      <div class="label tip" data-tip="Factor contributing most to tracking error — click for time series">Top Factor Risk</div>
+      <div class="value" style="font-size:15px;color:var(--pri)">${tf1.n}</div>
+      <div class="sub">${f2(tf1.c,1)}% of TE</div>
+    </div>`:`<div class="sum-card"><div class="label">Top Factor Risk</div><div class="value" style="font-size:14px">--</div><div class="sub">no data</div></div>`}
+    ${tf2?`<div class="sum-card" onclick="oDrFRisk('${tf2.n.replace(/'/g,"\\'")}')" tabindex="0" role="button" aria-label="2nd factor risk">
+      <div class="label tip" data-tip="Second-highest factor contributor to tracking error — click for time series">2nd Factor Risk</div>
+      <div class="value" style="font-size:15px;color:var(--pri)">${tf2.n}</div>
+      <div class="sub">${f2(tf2.c,1)}% of TE</div>
+    </div>`:`<div class="sum-card"><div class="label">2nd Factor Risk</div><div class="value" style="font-size:14px">--</div><div class="sub">no data</div></div>`}
+  </div>
+  <!-- Cash + Benchmark indicator strip -->
+  <div style="display:flex;align-items:center;gap:20px;padding:5px 10px;background:var(--surf);border-radius:6px;font-size:11px;margin-bottom:14px">
+    <span style="color:var(--txt)">Cash:</span>
+    <span style="color:var(--txth);font-weight:600">${isHistWeek?'--':f2(s.sum.cash,1)+'%'}</span>
+    <span style="color:var(--grid)">|</span>
+    <span style="color:var(--txt)">Benchmark:</span>
+    <span style="color:var(--txth);font-weight:600">${s.benchmark||s.name}</span>
+    <span style="font-size:10px;color:var(--txt)">(${s.id})</span>
+    <span style="flex:1"></span>
+    <span style="font-size:10px;color:var(--txt)" onclick="oDrMetric('cash')" style="cursor:pointer">Cash detail ›</span>
   </div>
 
-  <!-- Row 2: Sector Weights + Region Weights -->
-  <div class="grid g2">
-    <div class="card" id="cardSectors">
-      <div class="flex-between"><div class="card-title">Sector Active Weights</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#secTable table','sectors')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardSectors')">PNG</button></div>
-        <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
-      </div></div>
-      <div id="secTable">${rWt(s.sectors,'sec')}</div>
-      <div id="secChart" style="display:none"><div id="secChartDiv" style="height:320px"></div></div>
-    </div>
-    <div class="card" id="cardRegions">
-      <div class="flex-between"><div class="card-title">Region Active Weights</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#regTable table','regions')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardRegions')">PNG</button></div>
-        <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
-      </div></div>
-      <div id="regTable">${rWt(s.regions,'reg')}</div>
-      <div id="regChart" style="display:none"><div id="regChartDiv" style="height:320px"></div></div>
-    </div>
+  <!-- Row 2: Sector Weights (Region moved to bottom) -->
+  <div class="card" id="cardSectors" style="margin-bottom:16px">
+    <div class="flex-between"><div class="card-title">Sector Active Weights</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#secTable table','sectors')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardSectors')">PNG</button></div>
+      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
+    </div></div>
+    <div id="secTable">${rWt(s.sectors,'sec',s.hold)}</div>
+    <div id="secChart" style="display:none"><div id="secChartDiv" style="height:320px"></div></div>
   </div>
 
   <!-- Row 3: Factor Exposures -->
@@ -842,7 +873,7 @@ function rExp(){
     <div class="card" id="cardFacDetail">
       <div class="flex-between"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail.">Factor Detail</div>
       <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardFacDetail table','factors')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardFacDetail')">PNG</button></div></div>
-      ${rFac(s.factors)}
+      ${rFac(s.factors,s.hold)}
     </div>
   </div>
 
@@ -935,6 +966,18 @@ function rExp(){
     <div class="flex-between"><div class="card-title tip" data-tip="Click any cell to see scatter plot of two factors">Factor Correlation Matrix</div>
     <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCorr table','factor_correlation')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
     ${rFCorr(s.fcorr)}
+  </div>
+
+  <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
+  <div class="card" id="cardRegions" style="margin-top:16px">
+    <div class="flex-between"><div class="card-title">Region Active Weights</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div style="font-size:10px;color:var(--txt);margin-right:4px">Region coverage may be low for US-focused strategies</div>
+      <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#regTable table','regions')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardRegions')">PNG</button></div>
+      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
+    </div></div>
+    <div id="regTable">${rWt(s.regions,'reg')}</div>
+    <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
   </div>`;
 
   $('tab-exposures').innerHTML=html;
@@ -946,21 +989,35 @@ function rExp(){
 }
 
 // ===== TABLE RENDERERS =====
-function rWt(data,type){
-  let rows=data.map(d=>{
+// hold param: optional array of holdings (used for sector TE contribution computation)
+function rWt(data,type,hold){
+  // For sectors: compute TE contribution per sector from holdings %T values
+  let secTEMap={};
+  if(type==='sec'&&hold){
+    hold.forEach(h=>{if(h.sec)secTEMap[h.sec]=(secTEMap[h.sec]||0)+(h.tr||0)});
+  }
+  // Sort sectors by TE contribution descending (largest risk first); regions stay as-is
+  let sorted = type==='sec' ? [...data].sort((a,b)=>(secTEMap[b.n]||0)-(secTEMap[a.n]||0)) : data;
+  let rows=sorted.map(d=>{
     let cls=activeStyle(d.a);
     let drillFn=type==='sec'?`oDr('sec','${d.n}')`:`oDr('reg','${d.n}')`;
     let threshCls=Math.abs(d.a)>5?'thresh-alert':Math.abs(d.a)>3?'thresh-warn':'';
+    let teC=type==='sec'?secTEMap[d.n]||0:null;
+    // TE contribution bar for sectors
+    let teBar=type==='sec'?`<td class="r"><div class="bar-cell" style="justify-content:flex-end">
+      <span style="min-width:28px;text-align:right;font-size:11px">${f2(teC,1)}%</span>
+      <div style="width:${Math.min(teC*4,60).toFixed(0)}px;height:6px;background:var(--pri);border-radius:3px;opacity:0.7;margin-left:4px"></div>
+    </div></td>`:'';
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
-      <td>${d.n}</td><td class="r">${f2(d.p)}</td><td class="r">${f2(d.b)}</td>
-      <td class="r ${cls}">${fp(d.a)}</td>
-      ${d.s!=null?`<td class="r">${f2(d.s)}</td>`:''}
-      ${d.t!=null?`<td class="r" style="${d.t>0?'color:var(--pos)':'color:var(--neg)'}">${fp(d.t)}</td>`:''}
+      <td>${d.n}</td><td class="r">${f2(d.p,1)}</td><td class="r">${f2(d.b,1)}</td>
+      <td class="r ${cls}">${fp(d.a,1)}</td>
+      ${teBar}
+      ${d.s!=null&&type!=='sec'?`<td class="r">${f2(d.s,1)}</td>`:''}
     </tr>`;
   }).join('');
-  let hasSS=data[0]&&data[0].s!=null;
-  let hasTR=data[0]&&data[0].t!=null;
-  let table=`<table><thead><tr><th>Name</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight">Active</th>${hasSS?'<th class="r tip" data-tip="Stock specific risk">SS%</th>':''}${hasTR?'<th class="r tip" data-tip="Total return contribution">TTR%</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+  let table=type==='sec'
+    ?`<table><thead><tr><th>Sector</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Active weight (port minus bench)">Active</th><th class="r tip" data-tip="Sector contribution to total tracking error (from holdings %T)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`
+    :`<table><thead><tr><th>Name</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
     let totalW=data.reduce((s,d)=>s+(d.p||0),0);
@@ -972,15 +1029,61 @@ function rWt(data,type){
   return table;
 }
 
-function rFac(factors){
-  let rows=factors.map(f=>{
+// Primary factors shown by default, sorted by TE contribution
+const FAC_PRIMARY=new Set(['Momentum (Medium-Term)','Momentum','Volatility','Growth','Value','Dividend Yield','Profitability']);
+
+function rFac(factors,hold){
+  if(!factors||!factors.length)return'<p style="color:var(--txt);font-size:12px">No factor data</p>';
+  let facsSorted=[...factors].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+  let primary=facsSorted.filter(f=>FAC_PRIMARY.has(f.n));
+  let secondary=facsSorted.filter(f=>!FAC_PRIMARY.has(f.n));
+
+  function facRow(f,isPrimary){
+    let isProfitability=f.n==='Profitability';
     let cls=(f.a??0)>0?'pos':'neg';
-    let threshCls=Math.abs(f.a??0)>0.5?'thresh-warn':'';
-    return`<tr class="clickable ${threshCls}" onclick="oDrF('${f.n}')">
-      <td>${f.n}</td><td class="r ${cls}">${fp(f.a,3)}</td><td class="r">${f2(f.c)}</td><td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret)}</td><td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp)}</td>
+    // Profitability: UP exposure is GOOD (green), DOWN is bad (red) - reversed from other factors
+    let expStyle=isProfitability
+      ?((f.a??0)>0.1?'color:var(--pos);font-weight:600':(f.a??0)<-0.1?'color:var(--neg);font-weight:600':'')
+      :'';
+    let rowStyle=isProfitability?'background:rgba(16,185,129,0.06);':'';
+    let profTip=isProfitability?' class="tip" data-tip="Intentional exposure — higher profitability is desired. Green=increasing (good), Red=decreasing (risk)."':'';
+    // Sparkline from factor history
+    let facHist=(cs.hist&&cs.hist.fac)?cs.hist.fac[f.n]:null;
+    let sparkVals=facHist?facHist.slice(-12).map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
+    let spark=sparkVals.length>=2?mkSparkline(sparkVals,48,18,isProfitability?'#10b981':null):'';
+    let nm=f.n.replace(/'/g,"\\'");
+    return`<tr class="clickable" style="${rowStyle}cursor:pointer" onclick="oDrF('${nm}')">
+      <td${profTip}>${isProfitability?'<span style="color:var(--pos);font-weight:600">'+f.n+' ✦</span>':f.n}</td>
+      <td class="r" style="${expStyle||((f.a??0)>0?'color:var(--pos)':'color:var(--neg)')}">${fp(f.a,2)}</td>
+      <td class="r">${f2(f.c,1)}%</td>
+      <td class="r">${spark}</td>
+      <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
+      <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
     </tr>`;
-  }).join('');
-  return`<table><thead><tr><th>Factor</th><th class="r tip" data-tip="Active factor exposure vs benchmark">Exposure</th><th class="r tip" data-tip="Contribution to tracking error">Contrib%</th><th class="r tip" data-tip="Factor return for the period">Return%</th><th class="r tip" data-tip="Exposure x Return = portfolio impact">Impact</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  let thead=`<thead><tr><th>Factor</th><th class="r tip" data-tip="Active exposure vs benchmark">Exposure</th><th class="r tip" data-tip="Contribution to tracking error">TE%</th><th class="r">12wk</th><th class="r tip" data-tip="Factor return for the period">Return</th><th class="r tip" data-tip="Exposure × Return impact">Impact</th></tr></thead>`;
+  let primaryHtml=primary.length?primary.map(f=>facRow(f,true)).join(''):'';
+  let secondaryHtml=secondary.length?secondary.map(f=>facRow(f,false)).join(''):'';
+
+  let secBlock=secondary.length?`
+    <tr id="facSecToggleRow" onclick="toggleFacSecondary()" style="cursor:pointer;background:var(--surf)">
+      <td colspan="6" style="text-align:center;font-size:10px;color:var(--txt);padding:6px">
+        <span id="facSecLabel">▶ Secondary Factors (${secondary.length}) — click to expand</span>
+      </td>
+    </tr>
+    <tbody id="facSecBody" style="display:none">${secondaryHtml}</tbody>`:'';
+
+  return`<table>${thead}<tbody>${primaryHtml}</tbody>${secBlock}</table>`;
+}
+
+function toggleFacSecondary(){
+  let body=document.getElementById('facSecBody');
+  let label=document.getElementById('facSecLabel');
+  if(!body||!label)return;
+  let open=body.style.display!=='none';
+  body.style.display=open?'none':'table-row-group';
+  label.textContent=open?`▶ Secondary Factors — click to expand`:`▼ Secondary Factors — click to collapse`;
 }
 
 function rRnk(ranks){
@@ -1059,6 +1162,7 @@ function rFCorr(fcorr){
 // ===== CHART RENDERERS =====
 const plotBg={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:'#94a3b8',size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:'#334155',zerolinecolor:'#334155'},yaxis:{gridcolor:'#334155',zerolinecolor:'#334155'}};
 const plotCfg={displayModeBar:false,responsive:true};
+const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
   let d=s.sectors.sort((a,b)=>b.a-a.a);
@@ -1478,7 +1582,9 @@ function oDrFRisk(name,range){
   if(histSlice.length){
     let nm=name.replace(/'/g,"\\'");
     let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_facDrillRange===r?' active':''}" onclick="oDrFRisk('${nm}','${r}')">${r}</button>`).join('');
-    histHtml=`<div class="range-btns">${rangeBtns}</div><div id="riskFacHistDiv" style="height:260px;margin-bottom:16px"></div>`;
+    let hasRetData=histSlice.some(h=>h.ret!=null||h.imp!=null);
+    let retChart=hasRetData?`<div class="card-title" style="margin-top:8px">Factor Return &amp; Impact</div><div id="riskFacRetDiv" style="height:160px;margin-bottom:16px"></div>`:'';
+    histHtml=`<div class="range-btns">${rangeBtns}</div><div class="card-title">Active Exposure</div><div id="riskFacHistDiv" style="height:200px;margin-bottom:4px"></div>${retChart}`;
   }
 
   // Top/bottom holdings by factor exposure
@@ -1511,27 +1617,44 @@ function oDrFRisk(name,range){
   if(histSlice.length){
     setTimeout(()=>{
       let last=histSlice[histSlice.length-1];
-      Plotly.newPlot('riskFacHistDiv',[
-        {x:histSlice.map(h=>h.d),y:histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',
-         line:{color:'#3b82f6',width:2.5},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'},
-      ],{...plotBg,
-        yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
-        xaxis:{...plotBg.xaxis,title:'Date'},
-        shapes:[{type:'line',y0:0,y1:0,x0:histSlice[0].d,x1:last.d,line:{color:'#64748b',dash:'dot'}}],
-        annotations:[{x:last.d,y:last.e||last.a,
-          text:'Current: '+(last.e||last.a).toFixed(3),
-          showarrow:true,arrowcolor:'#3b82f6',font:{size:10,color:'#e2e8f0'},
-          bgcolor:'#1e293b',bordercolor:'#3b82f6',borderwidth:1,borderpad:4}]
-      },plotCfg);
+      let expVals=histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e);
+      let expDates=histSlice.map(h=>h.d);
+      let numExp=expVals.filter(v=>v!=null);
+      let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
+      let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
+      let rfShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:last.d,line:{color:'#64748b',dash:'dot'}}];
+      let rfAnno=[{x:last.d,y:last.e||last.a,text:'Current: '+(last.e||last.a).toFixed(3),showarrow:true,arrowcolor:'#3b82f6',font:{size:10,color:'#e2e8f0'},bgcolor:'#1e293b',bordercolor:'#3b82f6',borderwidth:1,borderpad:4}];
+      let rfTraces=[];
+      if(expAvg!=null&&expSd>0){
+        rfTraces.push(
+          {x:expDates,y:expDates.map(()=>expAvg+expSd),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
+          {x:expDates,y:expDates.map(()=>expAvg-expSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip'}
+        );
+        rfShapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
+        rfAnno.push({x:1,xref:'paper',y:expAvg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
+      }
+      rfTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#3b82f6',width:2.5},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'});
+      let xRf={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
+      Plotly.newPlot('riskFacHistDiv',rfTraces,{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},xaxis:xRf,shapes:rfShapes,annotations:rfAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
+
+      if(document.getElementById('riskFacRetDiv')){
+        Plotly.newPlot('riskFacRetDiv',[
+          {x:expDates,y:histSlice.map(h=>h.ret??null),name:'Factor Return',line:{color:'#f59e0b',width:2},mode:'lines'},
+          {x:expDates,y:histSlice.map(h=>h.imp??null),name:'Factor Impact',line:{color:'#10b981',width:2,dash:'dot'},mode:'lines'}
+        ],{...plotBg,xaxis:{...plotBg.xaxis},yaxis:{...plotBg.yaxis,title:''},legend:{orientation:'h',y:1.15,font:{size:10}},margin:{...plotBg.margin,r:20}},modalPlotCfg);
+      }
     },50);
   }
 }
 
 // ===== HOLDINGS TAB =====
+let _showIndustry=false;
 function rHold(){
   ah=[...cs.hold];
+  // Default sort: %T descending (biggest risk contributors first)
+  ah.sort((a,b)=>(b.tr||0)-(a.tr||0));
   fh=[...ah];
-  hp=1;
+  hp=1;sortCol='tr';sortDir=-1;
   renderHoldTab();
 }
 
@@ -1545,6 +1668,7 @@ function renderHoldTab(){
             <button class="export-btn" onclick="exportAllHoldings()" title="Export all holdings including all pages">Export All CSV</button>
             <button class="export-btn" onclick="screenshotCard('#cardHoldings')">PNG</button>
           </div>
+          <button class="export-btn" onclick="_showIndustry=!_showIndustry;renderHoldTab()" title="Toggle Industry column" style="${_showIndustry?'border-color:var(--pri);color:var(--pri)':''}">Industry ${_showIndustry?'▲':'▼'}</button>
           <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by sector">
             <option value="">All Sectors</option>
             ${SECS.map(s=>`<option value="${s}">${s}</option>`).join('')}
@@ -1562,12 +1686,13 @@ function renderHoldTab(){
             <th style="cursor:pointer" onclick="sortHold('t')">Ticker</th>
             <th style="cursor:pointer" onclick="sortHold('n')">Name</th>
             <th style="cursor:pointer" onclick="sortHold('sec')">Sector</th>
+            ${_showIndustry?`<th style="cursor:pointer" onclick="sortHold('ind')">Industry</th>`:''}
             <th style="cursor:pointer" onclick="sortHold('co')">Country</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('p')">Port%</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('b')">Bench%</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('a')">Active</th>
-            <th class="r" style="cursor:pointer" onclick="sortHold('mcr')" title="Stock-specific component of tracking error">%S</th>
-            <th class="r" style="cursor:pointer" onclick="sortHold('tr')" title="% of total tracking error from this holding">%T</th>
+            <th class="r" style="cursor:pointer" onclick="sortHold('mcr')" title="Stock-specific TE component">%S</th>
+            <th class="r" style="cursor:pointer;color:${sortCol==='tr'?'var(--pri)':'inherit'}" onclick="sortHold('tr')" title="% of total tracking error — sorted by default">%T ▼</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('r')">Rank</th>
           </tr></thead>
           <tbody>${renderHoldRows()}</tbody>
@@ -1601,16 +1726,29 @@ function renderHoldTab(){
 function renderHoldRows(){
   let start=(hp-1)*PPG;
   let page=fh.slice(start,start+PPG);
+  // Max %T for bar scaling
+  let maxTR=Math.max(...fh.map(h=>Math.abs(h.tr||0)),0.01);
   return page.map(h=>{
     let cls=activeStyle(h.a);
+    let trVal=h.tr!=null?h.tr:0;
+    let trBarW=Math.min(Math.abs(trVal)/maxTR*50,50).toFixed(0);
+    let trCell=`<td class="r" style="white-space:nowrap">
+      <div style="display:inline-flex;align-items:center;gap:3px;justify-content:flex-end">
+        <span style="font-size:11px;${trVal>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(trVal,1)}</span>
+        <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
+      </div></td>`;
+    let rankBadge=h.r!=null?`<span style="display:inline-block;padding:1px 6px;border-radius:10px;background:${rc(h.r)}22;color:${rc(h.r)};font-weight:700;font-size:10px">Q${h.r}</span>`:'--';
     return`<tr style="cursor:pointer" onclick="oSt('${h.t}')">
       <td style="color:var(--txth);font-weight:600">${h.t}</td>
-      <td>${h.n}</td><td><span class="chip">${h.sec||'--'}</span></td><td>${h.co||'--'}</td>
-      <td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td>
-      <td class="r ${cls}">${fp(h.a)}</td>
-      <td class="r">${f2(h.mcr)}</td>
-      <td class="r" style="${h.tr>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.tr,1)}</td>
-      <td class="r">${h.r!=null?`<span style="color:${rc(h.r)};font-weight:600">R${h.r}</span>`:'--'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
+      <td><span class="chip">${h.sec||'--'}</span></td>
+      ${_showIndustry?`<td style="font-size:11px;color:var(--txt)">${h.ind||h.industry||'--'}</td>`:''}
+      <td>${h.co||'--'}</td>
+      <td class="r">${f2(h.p,1)}</td><td class="r">${f2(h.b,1)}</td>
+      <td class="r ${cls}">${fp(h.a,1)}</td>
+      <td class="r">${f2(h.mcr,2)}</td>
+      ${trCell}
+      <td class="r">${rankBadge}</td>
     </tr>`;
   }).join('');
 }
@@ -1861,7 +1999,9 @@ function oDrF(name,range){
   if(histSlice.length){
     let nm=name.replace(/'/g,"\\'");
     let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_facDrillRange===r?' active':''}" onclick="oDrF('${nm}','${r}')">${r}</button>`).join('');
-    histHtml=`<div class="range-btns">${rangeBtns}</div><div id="facDrillHistDiv" style="height:230px;margin-bottom:16px"></div>`;
+    let hasRetData=histSlice.some(h=>h.ret!=null||h.imp!=null);
+    let retChartHtml=hasRetData?`<div class="card-title" style="margin-top:8px">Factor Return &amp; Impact</div><div id="facDrillRetDiv" style="height:160px;margin-bottom:16px"></div>`:'';
+    histHtml=`<div class="range-btns">${rangeBtns}</div><div class="card-title">Active Exposure</div><div id="facDrillHistDiv" style="height:200px;margin-bottom:4px"></div>${retChartHtml}`;
   }
 
   // Factor correlations
@@ -1898,9 +2038,35 @@ function oDrF(name,range){
 
   if(histSlice.length){
     setTimeout(()=>{
-      Plotly.newPlot('facDrillHistDiv',[
-        {x:histSlice.map(h=>h.d),y:histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e),name:'Active Exposure',line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.1)'}
-      ],{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure'},shapes:[{type:'line',y0:0,y1:0,x0:histSlice[0].d,x1:histSlice[histSlice.length-1].d,line:{color:'#64748b',dash:'dot'}}]},plotCfg);
+      let expVals=histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e);
+      let expDates=histSlice.map(h=>h.d);
+      let numExp=expVals.filter(v=>v!=null);
+      let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
+      let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
+      let expShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:expDates[expDates.length-1],line:{color:'#64748b',dash:'dot'}}];
+      let expAnno=[];
+      let expTraces=[];
+      if(expAvg!=null&&expSd>0){
+        expTraces.push(
+          {x:expDates,y:expDates.map(()=>expAvg+expSd),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
+          {x:expDates,y:expDates.map(()=>expAvg-expSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip'}
+        );
+        expShapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
+        expAnno.push({x:1,xref:'paper',y:expAvg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
+      }
+      expTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.1)'});
+      let xFac={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
+      Plotly.newPlot('facDrillHistDiv',expTraces,{...plotBg,xaxis:xFac,yaxis:{...plotBg.yaxis,title:'Exposure'},shapes:expShapes,annotations:expAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
+
+      // Second chart: Factor Return & Impact (if data present)
+      if(document.getElementById('facDrillRetDiv')){
+        let retVals=histSlice.map(h=>h.ret??null);
+        let impVals=histSlice.map(h=>h.imp??null);
+        Plotly.newPlot('facDrillRetDiv',[
+          {x:expDates,y:retVals,name:'Factor Return',line:{color:'#f59e0b',width:2},mode:'lines'},
+          {x:expDates,y:impVals,name:'Factor Impact',line:{color:'#10b981',width:2,dash:'dot'},mode:'lines'}
+        ],{...plotBg,xaxis:{...plotBg.xaxis},yaxis:{...plotBg.yaxis,title:''},legend:{orientation:'h',y:1.15,font:{size:10}},margin:{...plotBg.margin,r:20}},modalPlotCfg);
+      }
     },50);
   }
 }
@@ -2008,10 +2174,15 @@ function oSt(ticker){
 // Close modals on overlay click (handled by ALL_MODALS in modal management section below)
 
 // ===== COMPARISON MODAL (Full v2 style) =====
-function openComp(){
+let _compSel=null; // Set of selected strategy keys (null = all)
+function openComp(selOverride){
   let m=$('compModal');
-  let keys=Object.keys(A);
-  if(keys.length<2){showToast('Need 2+ strategies to compare','var(--warn)');return}
+  let allKeys=Object.keys(A);
+  if(allKeys.length<2){showToast('Need 2+ strategies to compare','var(--warn)');return}
+  if(selOverride)_compSel=selOverride;
+  if(!_compSel||_compSel.size<2)_compSel=new Set(allKeys);
+  let keys=allKeys.filter(k=>_compSel.has(k));
+  if(keys.length<2)keys=allKeys;
 
   // Summary stats table
   let metrics=['TE','Active Share','Beta','Holdings','Selection Rate','Cash'];
@@ -2072,8 +2243,17 @@ function openComp(){
     <thead><tr><th>Ticker</th><th>Name</th>${keys.map(k=>`<th class="r">${k} Port%</th>`).join('')}</tr></thead>
     <tbody>${sharedHtml}</tbody></table></div>`:'<div style="color:var(--txt);font-size:12px;padding:8px">No shared holdings between first two strategies</div>';
 
+  let checkboxes=allKeys.map(k=>{
+    let sel=_compSel.has(k);
+    return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border-radius:6px;background:${sel?'rgba(59,130,246,.18)':'rgba(51,65,85,.3)'};font-size:11px;font-weight:600;color:${sel?'var(--txth)':'var(--txt)'}">
+      <input type="checkbox" style="accent-color:var(--pri)" ${sel?'checked':''} onchange="(function(k,el){let s=new Set(_compSel);if(el.checked)s.add(k);else if(s.size>2)s.delete(k);else{el.checked=true;return};openComp(s)})('${k}',this)">${k}</label>`;
+  }).join('');
+
   $('compContent').innerHTML=`
     <h2>Cross-Strategy Comparison<button class="close" onclick="$('compModal').classList.remove('show')">&times;</button></h2>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center">
+      <span style="font-size:11px;color:var(--txt);margin-right:2px">Show:</span>${checkboxes}
+    </div>
 
     <div class="card-title" style="margin-bottom:8px">Summary Statistics</div>
     <div style="overflow-x:auto;margin-bottom:20px">
@@ -2495,6 +2675,34 @@ let _facDrillRange='All';
 
 function oDrMetric(metric,range){
   let m=$('metricModal');
+
+  // Idiosyncratic risk — no time series; show holdings breakdown by %S
+  if(metric==='idio'){
+    let eqHold=cs.hold.filter(h=>!isCash(h)&&h.p>0).sort((a,b)=>(b.mcr||0)-(a.mcr||0));
+    let totalIdio=eqHold.reduce((a,h)=>a+(h.mcr||0),0);
+    $('metricContent').innerHTML=`
+      <h2>Stock-Specific (Idiosyncratic) Risk<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+      <div class="grid g4" style="margin-bottom:12px">
+        <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Total %S</div><div style="font-size:18px;font-weight:700;color:var(--neg)">${f2(totalIdio,1)}%</div></div>
+        <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Holdings</div><div style="font-size:18px;font-weight:700;color:var(--txth)">${eqHold.length}</div></div>
+        <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Top Name</div><div style="font-size:14px;font-weight:700;color:var(--txth)">${eqHold[0]?.t||'--'}</div></div>
+        <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Top %S</div><div style="font-size:18px;font-weight:700;color:var(--neg)">${f2(eqHold[0]?.mcr||0,2)}%</div></div>
+      </div>
+      <div class="card-title">Holdings by Stock-Specific TE (%S) — sorted descending</div>
+      <div style="max-height:380px;overflow-y:auto">
+      <table style="font-size:11px"><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active%</th><th class="r">%S</th></tr></thead>
+      <tbody>${eqHold.map(h=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
+        <td style="color:var(--txth);font-weight:600">${h.t}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
+        <td><span class="chip">${h.sec||'--'}</span></td>
+        <td class="r">${f2(h.p,1)}</td>
+        <td class="r ${activeStyle(h.a)}">${fp(h.a,1)}</td>
+        <td class="r" style="font-weight:700;color:var(--neg)">${f2(h.mcr,2)}</td>
+      </tr>`).join('')}</tbody></table></div>`;
+    m.classList.add('show');
+    return;
+  }
+
   let fullHist=cs.hist.sum;
   if(!fullHist||!fullHist.length)return;
   if(range!=null)_metricRange=range;
@@ -2520,6 +2728,7 @@ function oDrMetric(metric,range){
   let min=numVals.length?Math.min(...numVals):null;
   let max=numVals.length?Math.max(...numVals):null;
   let avg=numVals.length?(numVals.reduce((a,v)=>a+v,0)/numVals.length):null;
+  let stddev=numVals.length>1&&avg!=null?Math.sqrt(numVals.reduce((a,v)=>a+(v-avg)**2,0)/numVals.length):0;
   let totalMonths=fullHist.length;
   let inception=fullHist[0].d;
   let dec=metric==='beta'?3:2;
@@ -2719,23 +2928,30 @@ function oDrMetric(metric,range){
     let xaxis={...plotBg.xaxis,tickangle:0,nticks:maxTicks,tickformat:'%b %Y',tickfont:{size:10,color:'#64748b'}};
     let fillColor=metric==='beta'?'rgba(59,130,246,.04)':'rgba(59,130,246,.08)';
     let fill=metric==='beta'?'none':'tozeroy';
-    let traces=[{
-      x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],
-      line:{color:'#3b82f6',width:2},fill,fillcolor:fillColor
-    }];
-    // Beta overlays: draw horizontal lines for each selected beta variant
+    // Build traces: [upper_band, lower_band(fill), main_line]
+    let allTraces=[];
+    if(avg!=null&&stddev>0){
+      allTraces.push(
+        {x:dates,y:dates.map(()=>avg+stddev),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
+        {x:dates,y:dates.map(()=>avg-stddev),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip',name:'±1σ'}
+      );
+      shapes.push({type:'line',y0:avg,y1:avg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
+      annotations.push({x:1,xref:'paper',y:avg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
+    }
+    allTraces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],line:{color:'#3b82f6',width:2},fill,fillcolor:fillColor});
+    // Beta overlays
     if(metric==='beta'&&window._betaVariants&&window._betaSelected){
       let betaColors=['#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#f97316','#22c55e'];
       let entries=Object.entries(window._betaVariants);
       entries.forEach(([k,v],i)=>{
         if(window._betaSelected.has(k)&&v!=null){
           shapes.push({type:'line',y0:v,y1:v,xref:'paper',x0:0,x1:1,line:{color:betaColors[i%betaColors.length],width:2,dash:'dot'}});
-          // Add label annotation on the right side
           annotations.push({x:1,xref:'paper',y:v,text:k.replace(/Beta\s*/i,'').replace(/[()]/g,''),showarrow:false,font:{size:9,color:betaColors[i%betaColors.length]},xanchor:'left',xshift:4});
         }
       });
     }
-    Plotly.newPlot('metricChartDiv',traces,{...plotBg,xaxis,yaxis,shapes,annotations,margin:{...plotBg.margin,r:metric==='beta'?80:20}},plotCfg);
+    let xaxisFinal={...xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
+    Plotly.newPlot('metricChartDiv',allTraces,{...plotBg,xaxis:xaxisFinal,yaxis,shapes,annotations,margin:{...plotBg.margin,r:metric==='beta'?80:20}},modalPlotCfg);
   },50);
 }
 

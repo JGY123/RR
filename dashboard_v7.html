@@ -276,6 +276,7 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 </div>
 <div class="conn-status" id="connStatus" style="display:none"><span class="conn-dot file"></span><span>File</span></div>
 <button class="btn btn-sec btn-sm" id="shareBtn" style="display:none" onclick="generateShareURL()" title="Copy share URL">Share<span class="kbd">S</span></button>
+<button class="btn btn-sm" id="clearBtn" style="display:none;background:var(--neg);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer" onclick="clearDashboard()" title="Clear all data and start fresh">✕ Clear</button>
 <button class="btn btn-sec btn-sm" id="copyBtn" style="display:none" onclick="copySummary()" title="Copy formatted summary to clipboard">Copy Summary</button>
 <button class="btn btn-sec btn-sm" id="emailBtn" style="display:none" onclick="generateEmailSnapshot()" title="Email-ready snapshot">Email</button>
 <button class="btn btn-sec btn-sm" id="compareBtn" style="display:none" onclick="openComp()">Compare<span class="kbd">C</span></button>
@@ -486,17 +487,9 @@ function normalize(raw){
   let strats=raw.strategies||raw;
   for(let[id,s]of Object.entries(strats)){
     let st={...s,id:id,name:s.name||id,benchmark:s.benchmark||''};
-    // v2 JSON omits name/benchmark — look up from STRATS
-    {let def=STRATS.find(x=>x.id===id)||{};if(!st.name||st.name===id)st.name=def.name||id;if(!st.benchmark)st.benchmark=def.bm||'';}
     // Normalize summary
     if(!st.sum&&s.summary)st.sum=s.summary;
     if(!st.sum)st.sum={te:0,as:0,beta:1,h:0,bh:0,sr:0,cash:0};
-    // v2 sum field aliases (pe→pe_p, bpe→pe_b, pb→pb_p, bpb→pb_b, mcap→mc)
-    if(st.sum.pe_p==null&&st.sum.pe!=null)st.sum.pe_p=st.sum.pe;
-    if(st.sum.pe_b==null&&st.sum.bpe!=null)st.sum.pe_b=st.sum.bpe;
-    if(st.sum.pb_p==null&&st.sum.pb!=null)st.sum.pb_p=st.sum.pb;
-    if(st.sum.pb_b==null&&st.sum.bpb!=null)st.sum.pb_b=st.sum.bpb;
-    if(st.sum.mc==null&&st.sum.mcap!=null)st.sum.mc=st.sum.mcap;
     // Preserve beta variants if present in source data
     if(s.sum&&s.sum.betas)st.sum.betas=s.sum.betas;
     else if(s.betas)st.sum.betas=s.betas;
@@ -509,16 +502,7 @@ function normalize(raw){
     if(!st.regions)st.regions=[];
     if(!st.countries)st.countries=[];
     if(!st.factors)st.factors=[];
-    // Compute f.c proxy when missing (v2 omits it — estimate from |active|×dev, normalized to pct_factor)
-    if(st.factors.length&&!st.factors.some(f=>f.c!=null)){
-      let raws=st.factors.map(f=>Math.abs(f.a||0)*Math.abs(f.dev||1));
-      let tot=raws.reduce((a,v)=>a+v,0)||1;
-      let target=st.sum.pct_factor||(100-(st.sum.pct_specific||0));
-      st.factors=st.factors.map((f,i)=>({...f,c:+(raws[i]/tot*target).toFixed(2)}));
-    }
     if(!st.hold)st.hold=[];
-    // v2→v1 holdings field aliases (w→p, bw→b, aw→a, pct_s→mcr, pct_t→tr, over→r)
-    st.hold=st.hold.map(h=>({...h,p:h.p??h.w,b:h.b??h.bw,a:h.a??h.aw,mcr:h.mcr??h.pct_s,tr:h.tr??h.pct_t,r:h.r??(h.over!=null?Math.round(h.over):null)}));
     if(!st.ranks)st.ranks=[];
     if(!st.chars)st.chars=[];
     if(!st.groups)st.groups=[];
@@ -632,12 +616,22 @@ function upload(e){
       }catch(err){
         $('uploadZone').style.display='flex';
         $('content').style.display='none';
-        showToast('Parse error: '+err.message,'var(--neg)');
+        showToast('Parse error: '+err.message+' (line: '+(err.stack||'').split('\n')[1]+')','var(--neg)');
         console.error('Upload error:',err);
+        alert('PARSE ERROR:\n'+err.message+'\n\nStack:\n'+err.stack);
       }
     },10);
   };
   r.readAsText(f);
+}
+
+function clearDashboard(){
+  try{localStorage.clear();}catch(e){}
+  A={};cs=null;
+  $('content').style.display='none';
+  $('uploadZone').style.display='flex';
+  $('clearBtn').style.display='none';
+  $('uploadZoneText').textContent='Drop CSV or JSON file here';
 }
 
 function init(){
@@ -650,6 +644,7 @@ function init(){
   sel.innerHTML=keys.map((k,i)=>`<button class="strat-btn${k===defaultKey?' active':''}" onclick="go('${k}',this)">${k}<span class="kbd">${i+1}</span></button>`).join('');
   $('uploadZone').style.display='none';
   $('content').style.display='block';
+  $('clearBtn').style.display='inline-block';
   $('tabBar').style.display='flex';
   $('reupload').style.display='block';
   $('reportBtn').style.display='block';
@@ -773,7 +768,6 @@ function updateTabBadges(){
 
 // ===== MAIN UPDATE =====
 function upd(){
-  _riskFacToggle=null; // reset so rRisk() re-initializes toggle for new strategy
   updateTabBadges();
   rExp();
   rRisk();
@@ -847,13 +841,13 @@ function rExp(){
       <div class="value" style="color:var(--acc)">${f2(idioSum,1)}%</div>
       <div class="sub">of total TE</div>
     </div>
-    ${tf1?`<div class="sum-card" onclick="oDrAllFactorRisk()" tabindex="0" role="button" aria-label="Top factor risk — click for full factor ranking">
-      <div class="label tip" data-tip="Factor contributing most to tracking error — click for all factors ranked">Top Factor Risk</div>
+    ${tf1?`<div class="sum-card" onclick="oDrFRisk('${tf1.n.replace(/'/g,"\\'")}')" tabindex="0" role="button" aria-label="Top factor risk">
+      <div class="label tip" data-tip="Factor contributing most to tracking error — click for time series">Top Factor Risk</div>
       <div class="value" style="font-size:15px;color:var(--pri)">${tf1.n}</div>
       <div class="sub">${f2(tf1.c,1)}% of TE</div>
     </div>`:`<div class="sum-card"><div class="label">Top Factor Risk</div><div class="value" style="font-size:14px">--</div><div class="sub">no data</div></div>`}
-    ${tf2?`<div class="sum-card" onclick="oDrAllFactorRisk()" tabindex="0" role="button" aria-label="2nd factor risk — click for full factor ranking">
-      <div class="label tip" data-tip="Second-highest factor contributor to tracking error — click for all factors ranked">2nd Factor Risk</div>
+    ${tf2?`<div class="sum-card" onclick="oDrFRisk('${tf2.n.replace(/'/g,"\\'")}')" tabindex="0" role="button" aria-label="2nd factor risk">
+      <div class="label tip" data-tip="Second-highest factor contributor to tracking error — click for time series">2nd Factor Risk</div>
       <div class="value" style="font-size:15px;color:var(--pri)">${tf2.n}</div>
       <div class="sub">${f2(tf2.c,1)}% of TE</div>
     </div>`:`<div class="sum-card"><div class="label">2nd Factor Risk</div><div class="value" style="font-size:14px">--</div><div class="sub">no data</div></div>`}
@@ -1304,461 +1298,260 @@ function toggleGrpView(v,btn){
   if(v==='chart')rGroupChart(cs);
 }
 
-// ===== RISK TAB STATE =====
-let _riskFacToggle=null; // null=uninitialized; Set of checked factor names
-let _corrTimeframe='3Y';
-let _corrFreq='Monthly';
-let _corrShowAll=false;
-
-// Phase 1: All-factor risk ranking popup
-function oDrAllFactorRisk(){
-  let s=cs;
-  let totalTE=s.sum.te||0;
-  let pctSpecific=s.sum.pct_specific;
-  let pctFactor=s.sum.pct_factor;
-  let idioSum=pctSpecific!=null?+pctSpecific.toFixed(1):+(s.hold.filter(h=>!isCash(h)&&(h.p||h.w||0)>0).reduce((a,h)=>a+(h.mcr||h.pct_s||0),0).toFixed(1));
-  let idioFrac=totalTE>0?Math.min(idioSum/100,0.99):0;
-  // Factor risk contribution using same proxy as rRisk
-  let facs=s.factors||[];
-  let facRiskRaw=facs.map(f=>{let raw=f.c!=null?Math.abs(f.c):(Math.abs(f.a||0)*Math.abs(f.dev||1));return{...f,raw};});
-  let totalRaw=facRiskRaw.reduce((a,f)=>a+f.raw,0)||1;
-  let facTotalPct=pctFactor!=null?pctFactor:(100-idioSum);
-  let facsByC=[...facRiskRaw].sort((a,b)=>b.raw-a.raw).map(f=>({...f,c:+(f.raw/totalRaw*facTotalPct).toFixed(2)}));
-  let totalFacPct=facTotalPct;
-
-  let rows=facsByC.map((f,i)=>{
-    let pct=Math.abs(f.c||0);
-    let barW=totalFacPct>0?(pct/totalFacPct*100).toFixed(1):0;
-    let barColor=(f.a??0)>=0?'#3b82f6':'#f59e0b';
-    let facHist=s.hist.fac[f.n]||[];
-    let sparkVals=facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0));
-    let spark=mkSparkline(sparkVals,180,28,barColor);
-    return`<tr style="cursor:pointer;border-bottom:1px solid var(--grid)" onclick="closeDrill();setTimeout(()=>oDrFRisk('${f.n.replace(/'/g,"\\'")}'),50)">
-      <td style="width:20px;color:var(--txt);font-size:11px;padding:6px 4px">${i+1}</td>
-      <td style="color:var(--txth);font-weight:500;font-size:12px;min-width:160px;padding:6px 4px">${f.n}</td>
-      <td style="text-align:right;font-size:12px;color:${barColor};font-weight:600;padding:6px 4px;min-width:60px">${f2(pct,1)}%</td>
-      <td style="padding:6px 8px;min-width:210px">
-        <div style="position:relative;height:8px;background:var(--surf);border-radius:4px;margin-bottom:2px">
-          <div style="position:absolute;left:0;top:0;height:8px;width:${barW}%;background:${barColor};border-radius:4px;opacity:0.7"></div>
-        </div>
-        <div style="font-size:9px;color:var(--txt)">of factor risk</div>
-      </td>
-      <td style="padding:6px 4px">${spark}</td>
-    </tr>`;
-  }).join('');
-
-  let totalFacRisk=+(totalTE*(totalFacPct/100)).toFixed(2);
-  let totalIdioRisk=+(totalTE*idioFrac).toFixed(2);
-  let facAbsPct=f2(totalFacPct,1);
-  let idioPct=f2(idioSum,1);
-
-  $('drillContent').innerHTML=`
-    <h2>Factor Risk Breakdown<button class="close" onclick="closeDrill()">&times;</button></h2>
-    <p style="font-size:11px;color:var(--txt);margin-bottom:12px">All factors ranked by tracking error contribution. Click any row for exposure time series.</p>
-    <table style="width:100%;border-collapse:collapse">
-      <thead><tr style="border-bottom:2px solid var(--grid)">
-        <th style="width:20px;font-size:10px;color:var(--txt)">#</th>
-        <th style="text-align:left;font-size:10px;color:var(--txt)">Factor</th>
-        <th style="text-align:right;font-size:10px;color:var(--txt)">% of TE</th>
-        <th style="text-align:left;font-size:10px;color:var(--txt);padding-left:8px">Contribution</th>
-        <th style="text-align:left;font-size:10px;color:var(--txt)">Trend</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="margin-top:16px;padding:12px;background:var(--surf);border-radius:8px;display:flex;gap:24px">
-      <div><span style="font-size:10px;color:var(--txt)">Factor Risk</span><br>
-        <span style="font-size:18px;font-weight:700;color:#3b82f6">${f2(totalFacRisk,2)}%</span>
-        <span style="font-size:11px;color:var(--txt)"> · ${facAbsPct}% of TE</span></div>
-      <div style="width:1px;background:var(--grid)"></div>
-      <div><span style="font-size:10px;color:var(--txt)">Stock-Specific Risk</span><br>
-        <span style="font-size:18px;font-weight:700;color:#8b5cf6">${f2(totalIdioRisk,2)}%</span>
-        <span style="font-size:11px;color:var(--txt)"> · ${idioPct}% of TE</span></div>
-    </div>`;
-  $('drillModal').classList.add('show');
-}
-
-// Phase 6: Pearson correlation helper
-function pearsonCorr(x,y){
-  let n=x.length;
-  if(n<3)return null;
-  let mx=x.reduce((a,v)=>a+v,0)/n,my=y.reduce((a,v)=>a+v,0)/n;
-  let num=0,dx2=0,dy2=0;
-  for(let i=0;i<n;i++){let dx=x[i]-mx,dy=y[i]-my;num+=dx*dy;dx2+=dx*dx;dy2+=dy*dy;}
-  let denom=Math.sqrt(dx2*dy2);
-  return denom>0?+(num/denom).toFixed(2):0;
-}
-
-function calcCorrMatrix(s){
-  let allFacKeys=Object.keys(s.hist.fac||{});
-  let facs=_corrShowAll?allFacKeys:[...FAC_PRIMARY].filter(f=>s.hist.fac[f]);
-  if(!facs.length)facs=allFacKeys.slice(0,6);
-  let rangeWks={All:Infinity,'5Y':260,'3Y':156,'1Y':52,'6M':26,'3M':13};
-  let wks=rangeWks[_corrTimeframe]||Infinity;
-
-  // Build series per factor
-  let series={};
-  facs.forEach(f=>{
-    let hist=(s.hist.fac[f]||[]);
-    let slice=wks===Infinity?hist:hist.slice(-wks);
-    if(_corrFreq==='Monthly'){
-      // keep last entry per calendar month
-      let mo='',monthly=[];
-      slice.forEach(h=>{let m=h.d.slice(0,7);if(m!==mo){monthly.push(h);mo=m;}});
-      // actually keep LAST entry per month (iterate and overwrite)
-      let byMo={};
-      slice.forEach(h=>{let m=h.d.slice(0,7);byMo[m]=h;});
-      slice=Object.values(byMo).sort((a,b)=>a.d<b.d?-1:1);
-    }
-    series[f]=slice.map(h=>h.bm!=null?+(h.e-h.bm):+(h.e||0));
-  });
-
-  // Pairwise Pearson
-  let corr={};
-  facs.forEach(f1=>{
-    corr[f1]={};
-    facs.forEach(f2=>{
-      if(f1===f2){corr[f1][f2]=1;return;}
-      if(corr[f2]&&corr[f2][f1]!=null){corr[f1][f2]=corr[f2][f1];return;}
-      let x=series[f1]||[],y=series[f2]||[];
-      let n=Math.min(x.length,y.length);
-      if(n<3){corr[f1][f2]=null;return;}
-      corr[f1][f2]=pearsonCorr(x.slice(-n),y.slice(-n));
-    });
-  });
-  return{corr,facs};
-}
-
-function rRiskCorrDraw(){
-  let s=cs;
-  if(!document.getElementById('corrMatrixDiv'))return;
-  _corrTimeframe=$('corrTF')?$('corrTF').value:_corrTimeframe;
-  _corrFreq=$('corrFQ')?$('corrFQ').value:_corrFreq;
-  _corrShowAll=$('corrAll')?$('corrAll').checked:_corrShowAll;
-  let{corr,facs}=calcCorrMatrix(s);
-  if(!facs.length)return;
-
-  // Build z matrix
-  let z=facs.map(f1=>facs.map(f2=>corr[f1][f2]));
-  let annotations=[];
-  facs.forEach((f1,r)=>facs.forEach((f2,c)=>{
-    let v=z[r][c];
-    annotations.push({x:c,y:r,text:v!=null?v.toFixed(2):'--',showarrow:false,font:{size:9,color:Math.abs(v||0)>0.5?'#fff':'#94a3b8'}});
-  }));
-
-  Plotly.newPlot('corrMatrixDiv',[{
-    z,x:facs,y:facs,type:'heatmap',
-    colorscale:[[0,'#ef4444'],[0.5,'#1e293b'],[1,'#3b82f6']],
-    zmin:-1,zmax:1,showscale:true,
-    colorbar:{thickness:10,len:0.8,tickfont:{size:9,color:'#94a3b8'},tickvals:[-1,-0.5,0,0.5,1],ticktext:['-1.0','-0.5','0','0.5','1.0']},
-    hovertemplate:'%{y} × %{x}<br>r = %{z:.2f}<extra>${_corrTimeframe} ${_corrFreq}</extra>',
-    text:z.map(row=>row.map(v=>v!=null?v.toFixed(2):'--')),texttemplate:'%{text}',textfont:{size:9}
-  }],{...plotBg,margin:{l:120,r:60,t:20,b:120},
-    xaxis:{...plotBg.xaxis,tickangle:-45,tickfont:{size:10},side:'bottom'},
-    yaxis:{...plotBg.yaxis,tickfont:{size:10},autorange:'reversed'},
-    annotations
-  },plotCfg);
-
-  // Insight row
-  let insights=[];
-  let seen=new Set();
-  facs.forEach((f1,i)=>facs.forEach((f2,j)=>{
-    if(i>=j)return;
-    let v=corr[f1][f2];
-    if(v==null)return;
-    let key=f1+'|'+f2;
-    if(seen.has(key))return;seen.add(key);
-    if(v>0.7)insights.push(`<span style="color:var(--warn)">⚠ <strong>${f1}</strong> and <strong>${f2}</strong> are ${v.toFixed(2)} correlated — these bets may not be diversifying</span>`);
-    else if(v<-0.5)insights.push(`<span style="color:var(--pos)">✓ <strong>${f1}</strong> and <strong>${f2}</strong> are ${v.toFixed(2)} — these bets provide diversification</span>`);
-  }));
-  let insEl=$('corrInsights');
-  if(insEl)insEl.innerHTML=insights.length?`<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;font-size:11px">${insights.join('')}</div>`:'';
-}
-
-// Phase 5: Factor exposure toggle chart
-let _riskFacColors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#84cc16','#f97316','#14b8a6','#a855f7','#e11d48','#0ea5e9','#22c55e','#eab308','#64748b'];
-function rRiskFacSelectAll(checked){
-  let s=cs;
-  let allFacs=Object.keys(s.hist.fac||{});
-  _riskFacToggle=checked?new Set(allFacs):new Set();
-  document.querySelectorAll('.fac-toggle-cb').forEach(cb=>{cb.checked=checked;});
-  rRiskFacToggleChart(s);
-}
-function onFacToggleChange(facName,checked){
-  if(!_riskFacToggle)_riskFacToggle=new Set([...FAC_PRIMARY]);
-  if(checked)_riskFacToggle.add(facName);
-  else _riskFacToggle.delete(facName);
-  rRiskFacToggleChart(cs);
-}
-function rRiskFacToggleChart(s){
-  let allFacKeys=Object.keys(s.hist.fac||{});
-  let checked=_riskFacToggle||(new Set([...FAC_PRIMARY].filter(f=>s.hist.fac[f])));
-  let traces=[];
-  let colorIdx=0;
-  allFacKeys.forEach(fac=>{
-    let color=_riskFacColors[colorIdx%_riskFacColors.length];colorIdx++;
-    if(!checked.has(fac))return;
-    let hist=s.hist.fac[fac]||[];
-    if(!hist.length)return;
-    traces.push({
-      x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),
-      name:fac,line:{color,width:2},
-      hovertemplate:fac+'<br>%{x}<br>Active Exposure: %{y:.3f}<extra></extra>'
-    });
-  });
-  let el=document.getElementById('riskExpHistDiv');
-  if(!el)return;
-  if(traces.length){
-    Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
-      yaxis:{...plotBg.yaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
-      legend:{orientation:'h',y:1.12,font:{size:9}},
-      hovermode:'x unified',
-      xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.06}}
-    },{...plotCfg,scrollZoom:true});
-  } else {
-    el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:16px">No factors selected</p>';
-  }
-}
-
 // ===== RISK TAB =====
 function rRisk(){
   let s=cs;
-  let totalTE=s.sum.te||0;
+  // Compute factor vs idiosyncratic risk decomposition
+  let totalTE=s.sum.te;
+  let facContribs=s.factors.map(f=>Math.abs(f.c||0));
+  let totalFacContrib=facContribs.reduce((a,v)=>a+v,0);
+  // Factor risk as proportion of total TE
+  let factorRisk=+(totalTE*Math.min(totalFacContrib/100*1.2,0.85)).toFixed(2);
+  let idioRisk=+(totalTE-factorRisk).toFixed(2);
+  let factorPct=+(factorRisk/totalTE*100).toFixed(1);
+  let idioPct=+(idioRisk/totalTE*100).toFixed(1);
 
-  // Idiosyncratic / Factor split: use pct_specific/pct_factor from parser if available
-  // Fall back to summing holdings %S (h.mcr) for v1 parser compat
-  let pctSpecific=s.sum.pct_specific;
-  let pctFactor=s.sum.pct_factor;
-  let idioFrac, idioSum;
-  if(pctSpecific!=null){
-    idioFrac=Math.min(pctSpecific/100,0.99);
-    idioSum=+pctSpecific.toFixed(1);
-  } else {
-    let eqHold=s.hold.filter(h=>!isCash(h)&&(h.p||h.w||0)>0);
-    idioSum=+eqHold.reduce((a,h)=>a+(h.mcr||h.pct_s||0),0).toFixed(1);
-    idioFrac=totalTE>0?Math.min(idioSum/100,0.99):0;
-  }
-
-  // Factor contributions — use |a|*dev as risk proxy if f.c is absent
-  let facs=s.factors||[];
-  let facRiskRaw=facs.map(f=>{
-    // f.c = direct TE% if available (v1); else estimate from |active exposure| × factor stddev
-    let raw=f.c!=null?Math.abs(f.c):(Math.abs(f.a||0)*Math.abs(f.dev||1));
-    return{n:f.n,e:f.a,c:f.c,dev:f.dev,raw};
-  });
-  let totalRaw=facRiskRaw.reduce((a,f)=>a+f.raw,0)||1;
-  // Normalize so factor contributions sum to pctFactor (or 100-idioSum if not available)
-  let facTotalPct=pctFactor!=null?pctFactor:(100-idioSum);
-  let facsByC=[...facRiskRaw].sort((a,b)=>b.raw-a.raw);
-  let facMCR=facsByC.map(f=>{
-    let contrib=+(f.raw/totalRaw*facTotalPct).toFixed(2);
-    return{n:f.n,e:f.e,c:contrib,mcrTE:+(totalTE*contrib/100).toFixed(3)};
+  // Conditional risk: compute risk under different regimes
+  let regimes=[
+    {name:'Normal',mult:1.0,desc:'Average volatility regime'},
+    {name:'Elevated Vol',mult:1.4,desc:'VIX 20-30 range'},
+    {name:'Crisis',mult:2.2,desc:'VIX >30, correlation spike'},
+    {name:'Low Vol',mult:0.6,desc:'VIX <15, calm markets'}
+  ];
+  let condRows=regimes.map(r=>{
+    let cTE=+(totalTE*r.mult).toFixed(2);
+    let cFac=+(factorRisk*r.mult*(r.mult>1.5?1.15:1)).toFixed(2);
+    let cIdio=+(cTE-cFac).toFixed(2);
+    return{...r,te:cTE,fac:cFac,idio:cIdio};
   });
 
-  // Factor toggle — init on first render
-  let allFacKeys=Object.keys(s.hist.fac||{});
-  if(!_riskFacToggle){
-    _riskFacToggle=new Set([...FAC_PRIMARY].filter(f=>s.hist.fac[f]));
-    if(!_riskFacToggle.size)allFacKeys.slice(0,6).forEach(f=>_riskFacToggle.add(f));
-  }
-
-  // Toggle checkboxes HTML
-  let colorIdx=0;
-  let toggleHtml=allFacKeys.map(fac=>{
-    let color=_riskFacColors[colorIdx++%_riskFacColors.length];
-    let isPri=FAC_PRIMARY.has(fac);
-    let chk=_riskFacToggle.has(fac)?'checked':'';
-    let facEsc=fac.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:10px;color:var(--txth);background:var(--surf);padding:3px 8px;border-radius:4px;border:1px solid ${isPri?color:'var(--grid)'};white-space:nowrap">
-      <input type="checkbox" class="fac-toggle-cb" ${chk} onchange="onFacToggleChange('${facEsc}',this.checked)" style="accent-color:${color};cursor:pointer">
-      ${fac}
-    </label>`;
-  }).join('');
+  // Factor marginal contribution to risk
+  let facMCR=s.factors.map(f=>{
+    let contrib=Math.abs(f.c||0);
+    let mcrTE=+(totalTE*contrib/100).toFixed(3);
+    return{n:f.n,e:f.a,c:f.c,mcrTE,ret:f.ret,imp:f.imp};  // e = active exposure
+  }).sort((a,b)=>b.mcrTE-a.mcrTE);
 
   let html=`
-  <!-- Phase 2: TE Stacked Area (HERO) -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:4px">
-      <div class="card-title" style="margin:0">Tracking Error — Stock-Specific (Gold) vs Factor Risk (Blue)</div>
-      <span style="font-size:10px;color:var(--txt)">split ratio from current week · ${s.hist.sum.length} data points · <a style="color:var(--pri);cursor:pointer" onclick="oDrMetric('te')">full drill ↗</a></span>
+  <!-- Risk Decomposition Summary -->
+  <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
+    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}">
+      <div class="label">Total Risk (TE)</div>
+      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE)}%</div>
+      <div class="sub">annualized</div>
     </div>
-    <div id="teStackedDiv" style="height:250px"></div>
+    <div class="sum-card">
+      <div class="label">Factor Risk</div>
+      <div class="value" style="color:var(--pri)">${f2(factorRisk)}%</div>
+      <div class="sub">${factorPct}% of total</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Idiosyncratic Risk</div>
+      <div class="value" style="color:var(--acc)">${f2(idioRisk)}%</div>
+      <div class="sub">${idioPct}% of total</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Beta</div>
+      <div class="value">${f2(s.sum.beta,3)}</div>
+      <div class="sub">vs benchmark</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Active Share</div>
+      <div class="value">${f2(s.sum.as)}%</div>
+      <div class="sub">${gt(s.hist.sum,'as')} trend</div>
+    </div>
   </div>
 
-  <!-- Phase 3 + Holdings mini -->
-  <div class="grid g32" style="margin-bottom:16px">
+  <!-- Row 1: Historical Trends Mini-Charts -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:8px">
+      <div class="card-title" style="margin:0">Historical Trends</div>
+      <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} data points · click chart for full drill-down</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+      <div onclick="oDrMetric('te')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Tracking Error</div><div id="miniTE" style="height:80px"></div></div>
+      <div onclick="oDrMetric('as')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Active Share</div><div id="miniAS" style="height:80px"></div></div>
+      <div onclick="oDrMetric('beta')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Beta</div><div id="miniBeta" style="height:80px"></div></div>
+      <div onclick="oDrMetric('h')" style="cursor:pointer"><div style="font-size:10px;color:var(--txt);margin-bottom:2px">Holdings Count</div><div id="miniH" style="height:80px"></div></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Risk Decomposition Donut + Factor vs Idio Bar -->
+  <div class="grid g2">
     <div class="card">
-      <div class="flex-between" style="margin-bottom:4px">
-        <div class="card-title" style="margin:0">Beta — Predicted · Historical · MPT</div>
-        <a style="font-size:10px;color:var(--pri);cursor:pointer" onclick="oDrMetric('beta')">full drill ↗</a>
-      </div>
-      <div id="multiBetaDiv" style="height:200px"></div>
+      <div class="card-title">Risk Decomposition</div>
+      <div id="riskDecompDiv" style="height:300px"></div>
     </div>
-    <div class="card" onclick="oDrMetric('h')" style="cursor:pointer">
-      <div class="flex-between" style="margin-bottom:4px">
-        <div class="card-title" style="margin:0">Holdings Count</div>
-        <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} wks</span>
-      </div>
-      <div id="miniH" style="height:200px"></div>
+    <div class="card">
+      <div class="card-title">Factor Contribution to Risk</div>
+      <div id="riskFacBarDiv" style="height:300px"></div>
     </div>
   </div>
 
-  <!-- Phase 4: Factor Contribution Bars (factors only, no idiosyncratic) -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:4px">
-      <div class="card-title" style="margin:0">Factor Risk Contribution (% of TE) — click bar for drill-down</div>
-      <span style="font-size:10px;color:var(--txt)">idiosyncratic: ${f2(idioSum,1)}% of TE (see Overview)</span>
-    </div>
-    <div id="riskFacBarDiv" style="height:${Math.max(240,facMCR.length*24+40)}px"></div>
-  </div>
-
-  <!-- Phase 5: Factor Exposure Time Series with Toggles -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Factor Exposure History (Active = Portfolio − Benchmark)</div>
-      <div style="display:flex;gap:6px">
-        <button class="export-btn" onclick="rRiskFacSelectAll(true)">Select All</button>
-        <button class="export-btn" onclick="rRiskFacSelectAll(false)">Clear All</button>
-      </div>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${toggleHtml}</div>
-    <div id="riskExpHistDiv" style="height:280px"></div>
-  </div>
-
-  <!-- Phase 6: Interactive Factor Correlation Matrix -->
+  <!-- Row 2: Factor Exposure Table (clickable for time series) -->
   <div class="card">
-    <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Factor Correlation Matrix</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select id="corrTF" style="background:var(--surf);color:var(--txth);border:1px solid var(--grid);border-radius:4px;font-size:11px;padding:3px 6px" onchange="rRiskCorrDraw()">
-          <option value="3M" ${_corrTimeframe==='3M'?'selected':''}>3 Months</option>
-          <option value="6M" ${_corrTimeframe==='6M'?'selected':''}>6 Months</option>
-          <option value="1Y" ${_corrTimeframe==='1Y'?'selected':''}>1 Year</option>
-          <option value="3Y" ${_corrTimeframe==='3Y'?'selected':''}>3 Years</option>
-          <option value="5Y" ${_corrTimeframe==='5Y'?'selected':''}>5 Years</option>
-          <option value="All" ${_corrTimeframe==='All'?'selected':''}>All History</option>
-        </select>
-        <select id="corrFQ" style="background:var(--surf);color:var(--txth);border:1px solid var(--grid);border-radius:4px;font-size:11px;padding:3px 6px" onchange="rRiskCorrDraw()">
-          <option value="Weekly" ${_corrFreq==='Weekly'?'selected':''}>Weekly</option>
-          <option value="Monthly" ${_corrFreq==='Monthly'?'selected':''}>Monthly</option>
-        </select>
-        <label style="font-size:11px;color:var(--txth);display:flex;align-items:center;gap:4px;cursor:pointer">
-          <input type="checkbox" id="corrAll" ${_corrShowAll?'checked':''} onchange="rRiskCorrDraw()"> All Factors
-        </label>
-      </div>
+    <div class="card-title">Factor Exposures — click any factor for time series</div>
+    <table><thead><tr>
+      <th>Factor</th><th class="r">Exposure</th><th class="r">Risk Contrib %</th>
+      <th class="r">MCR to TE</th><th class="r">Factor Return %</th><th class="r">Impact</th>
+      <th class="r" title="Exposure trend over available history">Trend</th>
+    </tr></thead><tbody>${facMCR.map(f=>{
+      let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
+      let facHist=s.hist.fac[f.n];
+      let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
+      return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n}')">
+        <td style="color:var(--txth);font-weight:500">${f.n}</td>
+        <td class="r ${cls}">${fp(f.e,3)}</td>
+        <td class="r">${f2(f.c)}</td>
+        <td class="r">${f2(f.mcrTE,3)}</td>
+        <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret)}</td>
+        <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp)}</td>
+        <td class="r">${mkSparkline(sparkVals,60,22,null)}</td>
+      </tr>`;
+    }).join('')}
+    <tr style="border-top:2px solid var(--grid);font-weight:600">
+      <td>Idiosyncratic (Stock-Specific)</td>
+      <td class="r">--</td><td class="r">${f2(100-totalFacContrib)}</td>
+      <td class="r">${f2(idioRisk,3)}</td><td class="r">--</td><td class="r">--</td>
+      <td class="r">--</td>
+    </tr></tbody></table>
+  </div>
+
+  <!-- Row 3: Conditional Risk by Regime -->
+  <div class="card">
+    <div class="card-title">Conditional Risk by Market Regime</div>
+    <table><thead><tr>
+      <th>Regime</th><th>Description</th><th class="r">Total TE</th>
+      <th class="r">Factor Risk</th><th class="r">Idio Risk</th><th class="r">Factor/Total</th>
+    </tr></thead><tbody>${condRows.map(r=>{
+      let teStyle=r.te>7?'color:var(--neg);font-weight:600':r.te>5?'color:var(--warn);font-weight:500':'';
+      return`<tr>
+        <td style="color:var(--txth);font-weight:500">${r.name}</td>
+        <td style="font-size:11px">${r.desc}</td>
+        <td class="r" style="${teStyle}">${f2(r.te)}%</td>
+        <td class="r" style="color:var(--pri)">${f2(r.fac)}%</td>
+        <td class="r" style="color:var(--acc)">${f2(r.idio)}%</td>
+        <td class="r">${f2(r.fac/r.te*100,0)}%</td>
+      </tr>`;
+    }).join('')}</tbody></table>
+  </div>
+
+  <!-- Row 4: Conditional Risk Chart + Exposure Time Series Overview -->
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-title">Risk by Regime</div>
+      <div id="riskRegimeDiv" style="height:280px"></div>
     </div>
-    <div id="corrMatrixDiv" style="height:400px"></div>
-    <div id="corrInsights"></div>
+    <div class="card">
+      <div class="card-title">Factor Exposure History (All Factors)</div>
+      <div id="riskExpHistDiv" style="height:280px"></div>
+    </div>
+  </div>
+
+  <!-- Row 5: Stress Scenarios (from existing) -->
+  <div class="card">
+    <div class="card-title">Stress Scenarios</div>
+    ${rStressTable(s.stress)}
+  </div>
+
+  <!-- Row 6: Factor Correlation -->
+  <div class="card">
+    <div class="card-title">Factor Correlation Matrix</div>
+    ${rFCorr(s.fcorr)}
   </div>`;
 
   $('tab-risk').innerHTML=html;
-  setTimeout(()=>{rRiskCharts(s,facMCR,idioFrac)},50);
+  setTimeout(()=>{rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows)},50);
 }
 
-function rRiskCharts(s,facMCR,idioFrac){
-  let totalTE=s.sum.te||0;
+function rRiskCharts(s,factorRisk,idioRisk,facMCR,condRows){
+  // Risk decomposition donut
+  Plotly.newPlot('riskDecompDiv',[{
+    labels:['Factor Risk','Idiosyncratic Risk'],
+    values:[factorRisk,idioRisk],type:'pie',hole:0.55,
+    marker:{colors:['#3b82f6','#8b5cf6']},
+    textinfo:'label+percent',textfont:{size:11,color:'#e2e8f0'},
+    hovertemplate:'%{label}<br>%{value:.2f}% TE<br>%{percent}<extra></extra>'
+  }],{...plotBg,margin:{l:20,r:20,t:10,b:10},showlegend:true,
+    legend:{orientation:'h',y:-0.05,font:{size:11,color:'#94a3b8'}},
+    annotations:[{text:`${f2(s.sum.te)}%<br><span style="font-size:10px">Total TE</span>`,
+      showarrow:false,font:{size:18,color:'#e2e8f0'},x:0.5,y:0.5}]
+  },plotCfg);
 
-  // ── Phase 2: TE Stacked Area ──
-  let histAll=s.hist.sum;
-  if(histAll.length){
-    let dates=histAll.map(h=>h.d);
-    let teVals=histAll.map(h=>h.te||0);
-    let idioVals=teVals.map(te=>+(te*idioFrac).toFixed(3));
-    // stacked area: gold fills 0→idio, blue fills idio→total TE
-    let teStackTraces=[
-      {x:dates,y:idioVals,name:'Stock-Specific',type:'scatter',mode:'lines',
-       fill:'tozeroy',fillcolor:'rgba(245,158,11,0.25)',line:{color:'#f59e0b',width:1},
-       hoverinfo:'skip'},
-      {x:dates,y:teVals,name:'Factor Risk',type:'scatter',mode:'lines',
-       fill:'tonexty',fillcolor:'rgba(59,130,246,0.25)',line:{color:'#3b82f6',width:1},
-       hoverinfo:'skip'},
-      {x:dates,y:teVals,name:'Total TE',type:'scatter',mode:'lines',
-       line:{color:'#ffffff',width:2},
-       customdata:teVals.map((te,i)=>[idioVals[i],+(te-idioVals[i]).toFixed(3)]),
-       hovertemplate:'%{x|%b %d, %Y}<br>Total TE: <b>%{y:.2f}%</b><br>Stock-Specific: %{customdata[0]:.2f}% · Factor: %{customdata[1]:.2f}%<extra></extra>'}
-    ];
-    let xTeAxis={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.07}};
-    Plotly.newPlot('teStackedDiv',teStackTraces,{...plotBg,
-      margin:{...plotBg.margin,b:50},
-      yaxis:{...plotBg.yaxis,title:'TE %',rangemode:'tozero'},
-      xaxis:xTeAxis,showlegend:true,
-      legend:{orientation:'h',y:1.08,font:{size:10}},
+  // Factor contribution bar
+  Plotly.newPlot('riskFacBarDiv',[{
+    y:facMCR.map(f=>f.n),x:facMCR.map(f=>f.mcrTE),type:'bar',orientation:'h',
+    marker:{color:facMCR.map(f=>f.e>=0?'#3b82f6':'#f59e0b')},
+    text:facMCR.map(f=>f.mcrTE.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+    hovertemplate:'%{y}<br>MCR to TE: %{x:.3f}%<extra></extra>'
+  },{
+    y:['Idiosyncratic'],x:[idioRisk],type:'bar',orientation:'h',
+    marker:{color:'#8b5cf6'},text:[idioRisk.toFixed(3)],textposition:'outside',
+    textfont:{size:10,color:'#94a3b8'},showlegend:false,
+    hovertemplate:'Idiosyncratic<br>Risk: %{x:.3f}%<extra></extra>'
+  }],{...plotBg,barmode:'stack',showlegend:false,
+    yaxis:{...plotBg.yaxis,autorange:'reversed'},
+    xaxis:{...plotBg.xaxis,title:'Contribution to TE %'}
+  },plotCfg);
+
+  // Conditional risk regime chart
+  Plotly.newPlot('riskRegimeDiv',[
+    {x:condRows.map(r=>r.name),y:condRows.map(r=>r.fac),name:'Factor Risk',type:'bar',marker:{color:'#3b82f6'}},
+    {x:condRows.map(r=>r.name),y:condRows.map(r=>r.idio),name:'Idiosyncratic Risk',type:'bar',marker:{color:'#8b5cf6'}}
+  ],{...plotBg,barmode:'stack',
+    yaxis:{...plotBg.yaxis,title:'TE %'},
+    legend:{orientation:'h',y:1.12,font:{size:10}},
+    shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#f59e0b',dash:'dash',width:1}},
+            {type:'line',y0:7,y1:7,xref:'paper',x0:0,x1:1,line:{color:'#ef4444',dash:'dash',width:1}}]
+  },plotCfg);
+
+  // Factor exposure history - all factors on one chart
+  let traces=[];
+  let colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
+  FACS.forEach((fac,i)=>{
+    let hist=s.hist.fac[fac];
+    if(hist&&hist.length){
+      traces.push({
+        x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:fac,
+        line:{color:colors[i%colors.length],width:2},
+        hovertemplate:fac+'<br>%{x}<br>Exposure: %{y:.3f}<extra></extra>'
+      });
+    }
+  });
+  if(traces.length){
+    Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
+      yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
+      legend:{orientation:'h',y:1.15,font:{size:9}},
       hovermode:'x unified'
-    },{...plotCfg,scrollZoom:true});
-  }
-
-  // ── Phase 3: Multi-Beta Chart ──
-  let betaHist=s.hist.sum.filter(h=>h.beta!=null);
-  if(betaHist.length){
-    let betaDates=betaHist.map(h=>h.d);
-    let predVals=betaHist.map(h=>h.beta);
-    let betas=s.sum.betas||{};
-    let betaTraces=[
-      {x:betaDates,y:predVals,name:'Predicted Beta (main)',type:'scatter',mode:'lines',
-       line:{color:'#3b82f6',width:2.5},
-       hovertemplate:'%{x|%b %d, %Y}<br>Predicted: <b>%{y:.3f}</b><extra></extra>'}
-    ];
-    // Historical and MPT: constant lines from current value (no per-week history)
-    if(betas.historical!=null){
-      betaTraces.push({x:betaDates,y:betaDates.map(()=>betas.historical),name:'Historical Beta',
-        type:'scatter',mode:'lines',line:{color:'#64748b',width:1.5,dash:'dash'},
-        hovertemplate:'Historical: %{y:.3f}<extra></extra>'});
-    }
-    if(betas.mpt!=null){
-      betaTraces.push({x:betaDates,y:betaDates.map(()=>betas.mpt),name:'MPT Beta',
-        type:'scatter',mode:'lines',line:{color:'#8b5cf6',width:1.5,dash:'dot'},
-        hovertemplate:'MPT: %{y:.3f}<extra></extra>'});
-    }
-    let betaNote=(!betas.historical&&!betas.mpt)?'Historical/MPT beta not in data — showing Predicted only':'';
-    Plotly.newPlot('multiBetaDiv',betaTraces,{...plotBg,
-      margin:{...plotBg.margin,b:30},
-      yaxis:{...plotBg.yaxis,title:'Beta'},
-      xaxis:{...plotBg.xaxis,showticklabels:true},
-      showlegend:true,legend:{orientation:'h',y:1.12,font:{size:10}},
-      hovermode:'x unified',
-      shapes:[{type:'line',y0:1,y1:1,xref:'paper',x0:0,x1:1,line:{color:'rgba(148,163,184,.5)',dash:'dot',width:1}}],
-      annotations:betaNote?[{x:0.5,y:1.05,xref:'paper',yref:'paper',text:betaNote,showarrow:false,font:{size:9,color:'#64748b'}}]:[]
     },plotCfg);
   }
 
-  // ── Holdings Count mini ──
-  let miniLayout={...plotBg,margin:{l:32,r:8,t:4,b:20},
-    xaxis:{...plotBg.xaxis,showticklabels:true,showgrid:false,tickfont:{size:8}},
+  // Mini trend charts for key metrics
+  let miniLayout={
+    ...plotBg,margin:{l:28,r:8,t:4,b:18},
+    xaxis:{...plotBg.xaxis,showticklabels:false,showgrid:false},
     yaxis:{...plotBg.yaxis,showgrid:false,showticklabels:true,tickfont:{size:8}},
-    showlegend:false};
-  let hHist=s.hist.sum.slice(-52);
-  if(hHist.length&&document.getElementById('miniH')){
-    Plotly.newPlot('miniH',[{x:hHist.map(h=>h.d),y:hHist.map(h=>h.h),type:'scatter',mode:'lines',
-      fill:'tozeroy',fillcolor:'#8b5cf615',line:{color:'#8b5cf6',width:1.5},
-      hovertemplate:'%{x|%b %d, %Y}<br>Holdings: %{y}<extra></extra>'
-    }],miniLayout,plotCfg);
-  }
-
-  // ── Phase 4: Factor Contribution Bar (factors only) ──
-  if(facMCR.length&&document.getElementById('riskFacBarDiv')){
-    Plotly.newPlot('riskFacBarDiv',[{
-      y:facMCR.map(f=>f.n),x:facMCR.map(f=>f.mcrTE),type:'bar',orientation:'h',
-      marker:{color:facMCR.map(f=>(f.e??0)>=0?'#3b82f6':'#f59e0b')},
-      text:facMCR.map(f=>f.mcrTE.toFixed(3)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
-      hovertemplate:'%{y}<br>TE Contribution: %{x:.3f}%<extra></extra>',
-      customdata:facMCR.map(f=>f.n),
-    }],{...plotBg,showlegend:false,
-      yaxis:{...plotBg.yaxis,autorange:'reversed'},
-      xaxis:{...plotBg.xaxis,title:'Contribution to TE %'},
-      margin:{...plotBg.margin,l:160}
-    },{...plotCfg,
-      modeBarButtonsToRemove:['lasso2d','select2d']
-    });
-    // Click on bar → drill into that factor
-    document.getElementById('riskFacBarDiv').on('plotly_click',d=>{
-      if(d.points[0])oDrFRisk(d.points[0].y);
-    });
-  }
-
-  // ── Phase 5: Factor Exposure Time Series with Toggles ──
-  rRiskFacToggleChart(s);
-
-  // ── Phase 6: Correlation Matrix ──
-  rRiskCorrDraw();
+    height:80,showlegend:false
+  };
+  let hist12=s.hist.sum.slice(-12);
+  let miniDefs=[
+    {id:'miniTE',key:'te',color:'#10b981',ref:5},
+    {id:'miniAS',key:'as',color:'#3b82f6',ref:null},
+    {id:'miniBeta',key:'beta',color:'#f59e0b',ref:1},
+    {id:'miniH',key:'h',color:'#8b5cf6',ref:null}
+  ];
+  miniDefs.forEach(m=>{
+    let el=document.getElementById(m.id);
+    if(!el)return;
+    let vals=hist12.map(h=>h[m.key]).filter(v=>v!=null);
+    let dates=hist12.map(h=>h.d);
+    if(!vals.length)return;
+    let shapes=m.ref!=null?[{type:'line',y0:m.ref,y1:m.ref,xref:'paper',x0:0,x1:1,line:{color:'rgba(100,116,139,.5)',dash:'dot',width:1}}]:[];
+    Plotly.newPlot(m.id,[{x:dates,y:hist12.map(h=>h[m.key]),type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:m.color+'15',line:{color:m.color,width:1.5},
+      hovertemplate:'%{x|%b %Y}<br>%{y:.2f}<extra></extra>'
+    }],{...miniLayout,shapes},plotCfg);
+  });
 }
 
 // ===== INLINE SVG SPARKLINE =====
@@ -3622,414 +3415,140 @@ function emptyState(msg){
   </div>`;
 }
 
-// ===== FACTSET CSV PARSER (port of factset_parser.py) =====
+// ===== FACTSET CSV PARSER v3 (section-driven, matches factset_parser_v3.py) =====
+function pf(s){if(!s||!String(s).trim())return null;let v=parseFloat(s);return isNaN(v)?null:v;}
+function r2(v){return v!=null?Math.round(v*100)/100:null;}
+function parseCSVLine(line){
+  let result=[],cell='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    let c=line[i];
+    if(inQ){if(c==='"'&&line[i+1]==='"'){cell+='"';i++;}else if(c==='"'){inQ=false;}else{cell+=c;}}
+    else{if(c==='"'){inQ=true;}else if(c===','){result.push(cell);cell='';}else{cell+=c;}}
+  }
+  result.push(cell);
+  return result;
+}
+const ACCT_MAP={'IDM':'IDM','ACWIXUS':'IOP','EM':'EM','ISC':'ISC','SCG':'SCG','ACWI':'ACWI','GSC':'GSC'};
+const ACCT_NAME={'IDM':'International Developed Markets','ACWIXUS':'International Opportunities','EM':'Emerging Markets','ISC':'International Small Cap','SCG':'Small Cap Growth','ACWI':'All Country World','GSC':'Global Small Cap'};
+const ACCT_BM={'IDM':'MSCI EAFE','ACWIXUS':'MSCI ACWI ex USA','EM':'MSCI Emerging Markets','ISC':'MSCI World ex USA Small Cap','SCG':'Russell 2000 Growth','ACWI':'MSCI ACWI','GSC':'MSCI ACWI Small Cap'};
+const FACTOR_MAP={'Dividend Yield':'Dividend Yield','Earnings Yield':'Earnings Yield','Exchange Rate Sensitivity':'FX Sensitivity','Growth':'Growth','Leverage':'Leverage','Liquidity':'Liquidity','Market Sensitivity':'Market Sensitivity','Medium-Term Momentum':'Momentum','Profitability':'Profitability','Size':'Size','Value':'Value','Volatility':'Volatility','Market':'Market','Industry':'Industry','Country':'Country','Currency':'Currency'};
+const STYLE_FACTORS=new Set(Object.values(FACTOR_MAP));
+function isDate(s){return s&&/\d+\/\d+\/\d+/.test(s.trim());}
+function getGroups(row,startCol,gSize){
+  let groups=[];let col=startCol;
+  while(col<row.length){
+    let d=(row[col]||'').trim();
+    if(!isDate(d)){col++;continue;}
+    let m=gSize===24?col+6:col+1;
+    if(m+11>=row.length)break;
+    groups.push({
+      date:d,
+      sec:gSize===24?(row[col+1]||'').trim()||null:null,
+      reg:gSize===24?(row[col+2]||'').trim()||null:null,
+      co:gSize===24?(row[col+3]||'').trim()||null:null,
+      ind:gSize===24?(row[col+4]||'').trim()||null:null,
+      grp:gSize===24?(row[col+5]||'').trim()||null:null,
+      w:pf(row[m]),bw:pf(row[m+1]),aw:pf(row[m+2]),
+      pct_s:pf(row[m+3]),pct_t:pf(row[m+4]),check:pf(row[m+5]),
+      over:pf(row[m+6]),rev:pf(row[m+7]),val:pf(row[m+8]),
+      qual:pf(row[m+9]),mom:pf(row[m+10]),stab:pf(row[m+11])
+    });
+    col+=gSize;
+  }
+  return groups;
+}
+
 function parseFactSetCSV(csvText){
   const t0=Date.now();
-
-  // ── Static maps ──────────────────────────────────────────────────────────
-  const ACCT_TO_ID={IDM:'IDM',ACWIXUS:'IOP',EM:'EM',ISC:'ISC',SCG:'SCG',ACWI:'ACWI',GSC:'GSC'};
-  const ACCT_TO_NAME={IDM:'International Developed Markets',ACWIXUS:'International Opportunities',EM:'Emerging Markets',ISC:'International Small Cap',SCG:'Small Cap Growth',ACWI:'All Country World',GSC:'Global Small Cap'};
-  const ACCT_TO_BM={IDM:'MSCI EAFE',ACWIXUS:'MSCI ACWI ex USA',EM:'MSCI Emerging Markets',ISC:'MSCI World ex USA Small Cap',SCG:'Russell 2000 Growth',ACWI:'MSCI ACWI',GSC:'MSCI ACWI Small Cap'};
-  const STRATEGY_ACCTS=new Set(Object.keys(ACCT_TO_ID));
-
-  const GICS_L1=new Set(['Communication Services','Consumer Discretionary','Consumer Staples','Energy','Financials','Health Care','Industrials','Information Technology','Materials','Real Estate','Utilities']);
-  const REGIONS=new Set(['English','Far East','Northern Europe','Western Europe','Southern Europe','Australia - New Zealand','Emerging Market']);
-  const COUNTRIES=new Set(['Australia','Austria','Belgium','Brazil','Canada','Chile','China','Colombia','Czech Republic','Denmark','Egypt','Finland','France','Germany','Greece','Hong Kong','Hungary','India','Indonesia','Ireland','Israel','Italy','Japan','Korea','Kuwait','Malaysia','Mexico','Netherlands','New Zealand','Norway','Peru','Philippines','Poland','Portugal','Qatar','Saudi Arabia','Singapore','South Africa','Spain','Sweden','Switzerland','Taiwan','Thailand','Turkey','United Arab Emirates','United Kingdom','United States','Usa']);
-  const QUINTILE_SET=new Set(['1.000000','2.000000','3.000000','4.000000','5.000000']);
-  const CUSTOM_GROUP_MAP={'HARD CYCLICAL':['CYCLICALS','HARD CYCLICAL'],'GROWTH CYCLICAL':['CYCLICALS','GROWTH CYCLICAL'],'SOFT CYCLICAL':['CYCLICALS','SOFT CYCLICAL'],'DEFENSIVE':['DEFENSIVE','DEFENSIVE'],'GROWTH':['GROWTH','GROWTH'],'COMMODITY':['COMMODITY','COMMODITY'],'BANKS':['RATE SENSITIVE','BANKS'],'BOND PROXIES':['RATE SENSITIVE','BOND PROXIES']};
-  const FACTOR_NAME_MAP={'Growth':'Growth','Medium-Term Momentum':'Momentum','Volatility':'Volatility','Market Sensitivity':'Market Sensitivity','Liquidity':'Liquidity','Exchange Rate Sensitivity':'FX Sensitivity','Profitability':'Profitability','Currency':'Currency','Size':'Size','Market':'Market','Industry':'Industry','Country':'Country','Leverage':'Leverage','Earnings Yield':'Earnings Yield','Value':'Value','Dividend Yield':'Dividend Yield'};
-
-  const PREFIX_COLS=6,GROUP_SIZE=18,NUM_GROUPS=5,CURRENT_GRP=4;
-  const EXPECTED_96=96,EXPECTED_101=101;
-  const C_W=0,C_BW=1,C_AW=2,C_PCT_S=3,C_PCT_T=4,C_CHECK=5,C_OVER_WA=6,C_REV_WA=7,C_VAL_WA=8,C_QUAL_WA=9,C_MOM_WA=10,C_STAB_WA=11;
-
-  // ── CSV line parser (handles quoted fields) ───────────────────────────────
-  function parseCSVLine(line){
-    const result=[];let field='';let inQ=false;
-    for(let i=0;i<line.length;i++){
-      const c=line[i];
-      if(c==='"'){if(inQ&&line[i+1]==='"'){field+='"';i++;}else{inQ=!inQ;}}
-      else if(c===','&&!inQ){result.push(field);field='';}
-      else{field+=c;}
-    }
-    result.push(field);return result;
-  }
-
-  // ── Numeric helpers ───────────────────────────────────────────────────────
-  function pf(s){if(s==null||s==='')return null;const v=parseFloat(String(s).trim());return isNaN(v)?null:v;}
-  function r2(v){return v!=null?Math.round(v*100)/100:null;}
-
-  // ── Extract 18-value group from row (handles 96-col and 101-col) ──────────
-  function getGroup(row,g){
-    const dataLen=row.length-PREFIX_COLS;
-    const actualSz=dataLen>=NUM_GROUPS*19?19:GROUP_SIZE;
-    const start=PREFIX_COLS+g*actualSz;
-    let chunk=row.slice(start,start+actualSz);
-    if(actualSz===19)chunk=chunk.slice(0,5).concat(chunk.slice(6)); // drop Overall Rank at pos 5
-    const res=[];for(let i=0;i<GROUP_SIZE;i++)res.push(i<chunk.length?pf(chunk[i]):null);
-    return res;
-  }
-
-  // ── Comma-in-name repair ─────────────────────────────────────────────────
-  function repairCommaInName(row,expectedLen){
-    const extra=row.length-expectedLen;if(extra<=0)return null;
-    const repaired=row.slice(0,5).concat([row.slice(5,6+extra).join(',')]).concat(row.slice(6+extra));
-    return repaired.length===expectedLen?repaired:null;
-  }
-
-  // ── Row classifier ────────────────────────────────────────────────────────
-  function classifyRow(lv2,secname){
-    if(!lv2||lv2==='Data'||lv2==='@NA'||lv2==='[Unassigned]'||lv2==='')return'special';
-    if(lv2==='[Cash]')return'cash';
-    if(lv2.startsWith('CASH_'))return'other';
-    if(GICS_L1.has(lv2))return'sector';
-    if(REGIONS.has(lv2))return'region';
-    if(QUINTILE_SET.has(lv2))return'quintile';
-    if(CUSTOM_GROUP_MAP[lv2])return'custom_group';
-    if(COUNTRIES.has(lv2))return'country';
-    if(FACTOR_NAME_MAP[lv2])return'factor';
-    if(secname)return'holding';
-    if(lv2.startsWith('*'))return'holding';
-    if(!lv2.includes(' ')&&!lv2.includes('.')&&lv2.length>=4&&(lv2===lv2.toUpperCase()||/^\d+$/.test(lv2)))return'holding';
-    return'other';
-  }
-
-  // ── Weekly Friday dates walking back from report date ────────────────────
-  function weeklyDatesFor(reportDateStr){
-    const y=parseInt(reportDateStr.slice(0,4));
-    const m=parseInt(reportDateStr.slice(4,6))-1;
-    const d=parseInt(reportDateStr.slice(6,8));
-    let cur=new Date(y,m,d);
-    const fridays=[];
-    while(fridays.length<NUM_GROUPS){
-      if(cur.getDay()===5)fridays.push(new Date(cur));
-      cur.setDate(cur.getDate()-1);
-    }
-    fridays.reverse();
-    return fridays.map(dt=>dt.toISOString().slice(0,10));
-  }
-
-  // ── Parse CSV text ────────────────────────────────────────────────────────
-  const lines=csvText.split(/\r?\n/);
-  const rowsByAcctDate=new Map();
-  const unknownAccts=new Set();
-  const repairWarnings=[];
-  let totalRows=0;
-  let isFirstRow=true;
-
-  for(const line of lines){
-    if(!line.trim())continue;
-    const row=parseCSVLine(line);
-    if(row.length<PREFIX_COLS)continue;
-
-    // Skip the very first row (column headers)
-    if(isFirstRow){isFirstRow=false;continue;}
-
-    const acct=row[0],dt=row[1];
-    // Skip re-embedded tile headers
-    if(acct==='ACCT'||acct==='Level'||dt==='DATE')continue;
-
-    if(!STRATEGY_ACCTS.has(acct)){
-      if(acct&&acct.trim()!=='')unknownAccts.add(acct);
+  let lines=csvText.split(/\r?\n/).filter(l=>l.trim());
+  let strategies={};let riskMH=null;
+  
+  for(let i=1;i<lines.length;i++){
+    let row=parseCSVLine(lines[i]);
+    if(row[0]==='Section'){
+      let j=row.slice(7,50).join('|');
+      if(j.includes('Total Risk')&&j.includes('% Asset Specific'))riskMH=row;
       continue;
     }
-
-    totalRows++;
-
-    // Comma-in-name repair (skip for aggregate/special rows)
-    const lv2Raw=row.length>4?row[4]:'';
-    const skipRepair=!lv2Raw||['Data','@NA','[Unassigned]','[Cash]','ACCT','Level'].includes(lv2Raw);
-    let finalRow=row;
-    if(!skipRepair){
-      const rlen=row.length;
-      if(rlen>EXPECTED_101){
-        const repaired=repairCommaInName(row,EXPECTED_101);
-        if(repaired){repairWarnings.push({acct,ticker:row[4],cols:rlen});finalRow=repaired;}
-        else repairWarnings.push({acct,ticker:row[4],cols:rlen,failed:true});
-      }else if(rlen>EXPECTED_96&&rlen<EXPECTED_101){
-        const repaired=repairCommaInName(row,EXPECTED_96);
-        if(repaired){repairWarnings.push({acct,ticker:row[4],cols:rlen});finalRow=repaired;}
+    let sec=row[0],acct=row[1];
+    if(!ACCT_MAP[acct])continue;
+    let sid=ACCT_MAP[acct];
+    if(!strategies[sid])strategies[sid]={id:sid,name:ACCT_NAME[acct]||acct,benchmark:ACCT_BM[acct]||'',sum:{te:0,as:0,beta:1,h:0,bh:0,sr:null,cash:0},hold:[],sectors:[],regions:[],countries:[],industries:[],groups:[],factors:[],chars:[],ranks:[],unowned:[],hist:{sum:[],fac:{},sec:{}}};
+    let s=strategies[sid],l2=(row[5]||'').trim();
+    
+    if(sec==='Sector Weights'||sec==='Country'||sec==='Region'||sec==='Industry'||sec==='Group'||sec==='Overall'||sec==='REV'||sec==='VAL'||sec==='QUAL'){
+      if(!l2||l2==='Data')continue;
+      let tgt=sec==='Sector Weights'?'sectors':sec==='Country'?'countries':sec==='Region'?'regions':sec==='Industry'?'industries':sec==='Group'?'groups':'ranks';
+      let gs=getGroups(row,7,19);if(!gs.length)continue;
+      let g=gs[gs.length-1];
+      if(!s[tgt].find(x=>x.n===l2))s[tgt].push({n:l2,p:r2(g.w),b:r2(g.bw),a:r2(g.aw),mcr:r2(g.pct_s),tr:r2(g.pct_t),over:r2(g.over),rev:r2(g.rev),val:r2(g.val),qual:r2(g.qual),mom:r2(g.mom),stab:r2(g.stab)});
+    }
+    else if(sec==='Security'){
+      if(!l2||l2==='Data')continue;
+      let gs=getGroups(row,7,24);if(!gs.length)continue;
+      let g=gs[gs.length-1];
+      let rank=g.over,rInt=(rank!=null&&rank>=1&&rank<=5)?Math.round(rank):null;
+      if(l2.startsWith('CASH_')){s.sum.cash=(s.sum.cash||0)+(g.w||0);continue;}
+      s.hold.push({t:l2,n:(row[6]||'').trim()||l2,sec:g.sec||(row[8]||'').trim()||null,co:g.co||(row[10]||'').trim()||null,reg:g.reg||(row[9]||'').trim()||null,ind:g.ind||(row[11]||'').trim()||null,grp:g.grp||(row[12]||'').trim()||null,p:r2(g.w),b:r2(g.bw),a:r2(g.aw),mcr:r2(g.pct_s),tr:r2(g.pct_t),r:rInt,over:r2(g.over),rev:r2(g.rev),val:r2(g.val),qual:r2(g.qual),mom:r2(g.mom),stab:r2(g.stab)});
+    }
+    else if(sec==='RiskM'){
+      if(l2!=='Data')continue;
+      let date=(row[7]||'').trim();
+      let pe_p=pf(row[9]),pb_p=pf(row[10]),pe_b=pf(row[11]),pb_b=pf(row[12]);
+      let tR=pf(row[15]),bR=pf(row[16]),beta=pf(row[17]);
+      let pS=pf(row[20]),pF=pf(row[21]);
+      let fR={},fE={};
+      if(riskMH){for(let c=23;c<Math.min(40,row.length);c++){let fn=(riskMH[c]||'').trim();if(fn&&FACTOR_MAP[fn]&&pf(row[c])!=null)fR[FACTOR_MAP[fn]]=pf(row[c]);}
+      for(let c=43;c<Math.min(50,row.length);c++){let fn=(riskMH[c]||'').trim();if(fn&&FACTOR_MAP[fn]&&pf(row[c])!=null)fE[FACTOR_MAP[fn]]=pf(row[c]);}}
+      if(!s.sum._rd||date>s.sum._rd){
+        s.sum.te=r2(tR)||s.sum.te;s.sum.beta=r2(beta)||s.sum.beta;
+        s.sum.pe_p=r2(pe_p);s.sum.pe_b=r2(pe_b);s.sum.pb_p=r2(pb_p);s.sum.pb_b=r2(pb_b);
+        s.sum.pct_specific=r2(pS);s.sum.pct_factor=r2(pF);s.sum.total_risk=r2(tR);s.sum.bm_risk=r2(bR);
+        s.sum._rd=date;s.sum._fr=fR;s.sum._fe=fE;
       }
+      s.hist.sum.push({d:date,te:r2(tR),beta:r2(beta),pct_specific:r2(pS),pct_factor:r2(pF)});
     }
-
-    const key=acct+'|'+dt;
-    if(!rowsByAcctDate.has(key))rowsByAcctDate.set(key,[]);
-    rowsByAcctDate.get(key).push(finalRow);
-  }
-
-  // ── Find main dates (high row count) vs factor dates (low row count) ──────
-  const dateCounts=new Map();
-  for(const[key,rows]of rowsByAcctDate){
-    const dt=key.split('|')[1];
-    dateCounts.set(dt,(dateCounts.get(dt)||0)+rows.length);
-  }
-  const sortedDates=[...dateCounts.entries()].sort((a,b)=>b[1]-a[1]).map(e=>e[0]);
-  if(!sortedDates.length){
-    return{strategies:{},validation_issues:['No data rows found (all accounts unknown or file empty)'],report_date:'',parse_stats:{total_rows:totalRows,parse_time_ms:Date.now()-t0,repair_warnings:repairWarnings.length,unknown_accts:[...unknownAccts]}};
-  }
-  // Multi-month detection: dates with >= 30% of max row count are main dates
-  const maxDateCount=dateCounts.get(sortedDates[0]);
-  const mainDatesSet=new Set([...dateCounts.entries()].filter(([,c])=>c>=maxDateCount*0.30).map(([d])=>d));
-  const mainDates=[...mainDatesSet].sort();          // chronological
-  const factorDates=sortedDates.filter(d=>!mainDatesSet.has(d)).sort();
-  const currentDate=mainDates[mainDates.length-1];   // most recent for full detail
-  const isMultiMonth=mainDates.length>1;
-  const weekDates=weeklyDatesFor(currentDate);
-
-  const strategies={};
-  const validationIssues=[];
-  const stratStats={};
-
-  for(const acct of [...STRATEGY_ACCTS].sort()){
-    const stratId=ACCT_TO_ID[acct];
-    const mainRows=rowsByAcctDate.get(acct+'|'+currentDate)||[];
-    stratStats[stratId]={dataRowsFound:0,factorDates:[]};
-
-    if(!mainRows.length){
-      validationIssues.push(`${stratId}: no rows found for main date ${mainDate}`);
-      continue;
+    else if(sec==='Portfolio Characteristics'){
+      if(l2!=='Data')continue;
+      let date=(row[7]||'').trim();
+      let te=pf(row[10]),bP=pf(row[11]),h=pf(row[12]),as=pf(row[13]),mc=pf(row[14]);
+      let hB=pf(row[16]),mB=pf(row[17]),ep=pf(row[18]),fc=pf(row[22]),dy=pf(row[23]),ro=pf(row[24]),om=pf(row[25]);
+      let bMc=pf(row[33]),bFc=pf(row[38]),bDy=pf(row[39]),bRo=pf(row[40]),bOm=pf(row[41]),bEp=pf(row[42]);
+      if(!s.sum._cd||date>s.sum._cd){
+        if(te!=null)s.sum.te=r2(te);if(as!=null)s.sum.as=r2(as);if(bP!=null)s.sum.beta=r2(bP);if(h!=null)s.sum.h=Math.round(h);
+        s.sum.mc=r2(mc);s.sum.roe=r2(ro);s.sum.fcfy=r2(fc);s.sum.divy=r2(dy);s.sum.epsg=r2(ep);s.sum.opmgn=r2(om);
+        s.sum.betas={predicted:r2(bP),historical:r2(hB),mpt:r2(mB)};s.sum._cd=date;
+        s.chars=[{m:'Market Cap ($M)',p:r2(mc),b:r2(bMc)},{m:'P/E Ratio',p:s.sum.pe_p,b:s.sum.pe_b},{m:'P/B Ratio',p:s.sum.pb_p,b:s.sum.pb_b},{m:'ROE NTM (%)',p:r2(ro),b:r2(bRo)},{m:'FCF Yield (%)',p:r2(fc),b:r2(bFc)},{m:'Div Yield (%)',p:r2(dy),b:r2(bDy)},{m:'EPS Growth 3Y (%)',p:r2(ep),b:r2(bEp)},{m:'Op Margin (%)',p:r2(om),b:r2(bOm)}];
+      }
+      s.hist.sum.push({d:date,te:r2(te),as:r2(as),beta:r2(bP),h:h?Math.round(h):null,cash:s.sum.cash});
     }
-
-    const s={
-      id:stratId,name:ACCT_TO_NAME[acct],benchmark:ACCT_TO_BM[acct]||'',
-      sum:{},sectors:[],regions:[],countries:[],
-      factors:[],hold:[],ranks:[],chars:[],
-      groups:[],unowned:[],hist:{sum:[],fac:{}}
-    };
-
-    let cashWeight=null;
-    const dataRows=[];
-    const seenSectors=new Set(),seenRegions=new Set(),seenCountries=new Set();
-    const seenGroups=new Set(),seenHoldings=new Set();
-
-    // ── Pass 1: classify and extract main_date rows ───────────────────────
-    for(const row of mainRows){
-      let lv2=row.length>4?row[4]:'';
-      const secname=row.length>5?row[5].trim():'';
-      if(lv2==='Usa')lv2='United States';
-      const rtype=classifyRow(lv2,secname);
-      const cur=getGroup(row,CURRENT_GRP);
-
-      if(rtype==='cash'){
-        const w=cur[C_W];if(w!=null)cashWeight=w;
-      }else if(rtype==='sector'&&!seenSectors.has(lv2)){
-        seenSectors.add(lv2);
-        s.sectors.push({n:lv2,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW]),s:r2(cur[C_PCT_S]),t:r2(cur[C_PCT_T])});
-      }else if(rtype==='region'&&!seenRegions.has(lv2)){
-        seenRegions.add(lv2);
-        s.regions.push({n:lv2,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
-      }else if(rtype==='country'&&!seenCountries.has(lv2)){
-        seenCountries.add(lv2);
-        s.countries.push({n:lv2,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
-      }else if(rtype==='custom_group'){
-        const sgKey=CUSTOM_GROUP_MAP[lv2][1];
-        if(!seenGroups.has(sgKey)){
-          seenGroups.add(sgKey);
-          const[pg,sg]=CUSTOM_GROUP_MAP[lv2];
-          s.groups.push({g:pg,sg:sg,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
+    else if(sec==='18 Style Snapshot'){
+      if(!l2||l2==='Data')continue;
+      let fname=FACTOR_MAP[l2]||l2;
+      if(!STYLE_FACTORS.has(fname))continue; // skip non-style factors
+      let lastE=null,lastR=null,lastI=null,col=7;
+      while(col+6<row.length){
+        if(isDate((row[col]||'').trim())){
+          let e=pf(row[col+2]),r=pf(row[col+3]),im=pf(row[col+4]);
+          if(e!=null||r!=null){lastE=e;lastR=r;lastI=im;}
         }
-      }else if(rtype==='holding'){
-        if(seenHoldings.has(lv2))continue;
-        seenHoldings.add(lv2);
-        let w=cur[C_W],bw=cur[C_BW],aw=cur[C_AW];
-        if(aw==null&&(w!=null||bw!=null))aw=r2((w||0)-(bw||0));
-        const overScore=cur[C_OVER_WA];
-        const rank=overScore!=null?Math.max(1,Math.min(5,Math.round(overScore))):null;
-        const holding={t:lv2,n:secname,sec:null,co:null,p:r2(w),b:r2(bw),a:r2(aw),mcr:r2(cur[C_PCT_S]),tr:r2(cur[C_PCT_T]),r:rank,over:r2(overScore),rev:r2(cur[C_REV_WA]),val:r2(cur[C_VAL_WA]),qual:r2(cur[C_QUAL_WA]),mom:r2(cur[C_MOM_WA]),stab:r2(cur[C_STAB_WA])};
-        if(w&&w>0)s.hold.push(holding);
-        else if(bw&&bw>0)s.unowned.push({t:lv2,n:secname,reg:null,b:r2(bw),tr:r2(cur[C_PCT_T])});
-      }else if(rtype==='special'&&lv2==='Data'){
-        dataRows.push(row);
+        col+=7;
       }
+      let ex=s.factors.find(f=>f.n===fname);
+      if(ex){if(lastE!=null)ex.a=r2(lastE);if(lastR!=null)ex.ret=r2(lastR);if(lastI!=null)ex.imp=r2(lastI);}
+      else s.factors.push({n:fname,e:0,bm:0,a:r2(lastE),c:0,ret:r2(lastR),imp:r2(lastI)});
     }
-    stratStats[stratId].dataRowsFound=dataRows.length;
-
-    // ── Summary stats from Data rows ────────────────────────────────────
-    let te=null,as_=null,beta=null,h=null,bh=null,mktcap_p=null,mktcap_b=null;
-    let pe_p=null,pb_p=null,eps_growth_p=null,eps_growth_b=null;
-    let fcf_yield_p=null,fcf_yield_b=null,div_yield_p=null,div_yield_b=null;
-    let roe_p=null,roe_b=null,op_margin_p=null,op_margin_b=null;
-
-    for(const row of dataRows){
-      const g1=getGroup(row,0);
-      if(g1[C_W]==null&&g1[C_OVER_WA]!=null&&g1[C_OVER_WA]>1000){
-        te=g1[C_AW];beta=g1[C_PCT_S];
-        const hRaw=g1[C_PCT_T];as_=g1[C_CHECK];mktcap_p=g1[C_OVER_WA];
-        h=hRaw!=null?Math.floor(hRaw):null;
-        eps_growth_p=g1[10];fcf_yield_p=g1[14];div_yield_p=g1[15];roe_p=g1[16];op_margin_p=g1[17];
-        const g2=getGroup(row,1);
-        if(g2[C_PCT_T]!=null){bh=Math.floor(g2[C_PCT_T]);mktcap_b=g2[C_OVER_WA];}
-        eps_growth_b=g2[10];fcf_yield_b=g2[14];div_yield_b=g2[15];roe_b=g2[16];op_margin_b=g2[17];
-      }else if(g1[C_W]==null&&g1[C_BW]!=null){
-        pe_p=g1[C_BW];pb_p=g1[C_AW]; // Section @90: P/E and P/B
-      }
-    }
-
-    s.sum={te:r2(te),as:r2(as_),beta:r2(beta),h:s.hold.length,bh,sr:null,cash:r2(cashWeight)};
-
-    // Portfolio characteristics
-    const charsData=[
-      ['Market Cap ($M)',mktcap_p,mktcap_b],['P/E Ratio',pe_p,null],['P/B Ratio',pb_p,null],
-      ['ROE NTM (%)',roe_p,roe_b],['FCF Yield (%)',fcf_yield_p,fcf_yield_b],
-      ['Div Yield (%)',div_yield_p,div_yield_b],['EPS Growth 3Y (%)',eps_growth_p,eps_growth_b],
-      ['Op Margin (%)',op_margin_p,op_margin_b],
-    ];
-    for(const[label,pVal,bVal]of charsData){
-      if(pVal!=null)s.chars.push({m:label,p:r2(pVal),b:r2(bVal)});
-    }
-
-    // Ranks from holdings
-    for(let rVal=1;rVal<=5;rVal++){
-      const grpH=s.hold.filter(hh=>hh.r===rVal);
-      const ct=grpH.length;
-      const p=grpH.reduce((acc,hh)=>acc+(hh.p||0),0);
-      const label=rVal===1?'R1 (Best)':rVal===5?'R5 (Worst)':'R'+rVal;
-      s.ranks.push({r:rVal,l:label,ct,p:r2(p),a:null});
-    }
-
-    // ── Factors from non-main dates ────────────────────────────────────
-    const factorMap={};
-    for(const fdate of factorDates.slice().sort()){
-      const factorRows=rowsByAcctDate.get(acct+'|'+fdate)||[];
-      if(!factorRows.length)continue;
-      const hasBw=factorRows.some(r=>{
-        const lv2=r.length>4?r[4]:'';
-        return FACTOR_NAME_MAP[lv2]&&getGroup(r,0)[C_BW]!=null;
-      });
-      const fdateStr=`${fdate.slice(0,4)}-${fdate.slice(4,6)}-${fdate.slice(6)}`;
-      stratStats[stratId].factorDates.push(fdateStr);
-      for(const row of factorRows){
-        const lv2=row.length>4?row[4]:'';
-        const fname=FACTOR_NAME_MAP[lv2];if(!fname)continue;
-        const g1=getGroup(row,0);
-        const w=g1[C_W],bw=g1[C_BW],aw=g1[C_AW];
-        if(!factorMap[fname])factorMap[fname]={n:fname,a:null,bm:null,e:null,c:null,ret:null,imp:null};
-        const entry=factorMap[fname];
-        if(hasBw){
-          entry.e=r2(w);entry.bm=r2(bw);entry.a=r2(aw!=null?aw:(w||0)-(bw||0));
-        }else{
-          // Attribution section: period 5 is last 5 cols (6 prefix + 4*5 = 26 offset)
-          const lastStart=PREFIX_COLS+(NUM_GROUPS-1)*5; // 26
-          if(row.length>lastStart+4){
-            entry.c=r2(pf(row[lastStart+2]));
-            entry.ret=r2(pf(row[lastStart+1]));
-            entry.imp=r2(pf(row[lastStart+4]));
-          }
-        }
-        if(!s.hist.fac[fname])s.hist.fac[fname]=[];
-        s.hist.fac[fname].push({d:fdateStr,e:r2(w),bm:r2(bw)});
-      }
-    }
-    s.factors=Object.values(factorMap);
-
-    // ── Multi-month history: summary stats + sector weights ───────────────
-    const allHistEntries=[];
-    const histSecData={};   // sectorName → [{d,p,b,a}]
-
-    for(const mdate of mainDates){
-      const mdateRows=rowsByAcctDate.get(acct+'|'+mdate)||[];
-      const monthWeekDates=weeklyDatesFor(mdate);
-      const lastFriday=monthWeekDates[monthWeekDates.length-1];
-
-      // Weekly summary stats from 42-col Data rows
-      const monthStatG1s=[];
-      for(const row of mdateRows){
-        const lv2=row.length>4?row[4]:'';
-        if(lv2!=='Data')continue;
-        const g1=getGroup(row,0);
-        if(g1[C_W]==null&&g1[C_OVER_WA]!=null&&g1[C_OVER_WA]>1000)monthStatG1s.push(g1);
-      }
-      const offset2=NUM_GROUPS-monthStatG1s.length;
-      for(let i=0;i<monthStatG1s.length;i++){
-        const g1=monthStatG1s[i];
-        const wIdx=offset2+i;
-        const wdate=wIdx<monthWeekDates.length?monthWeekDates[wIdx]:monthWeekDates[monthWeekDates.length-1];
-        const teW=g1[C_AW],betaW=g1[C_PCT_S],asW=g1[C_CHECK];
-        const hW=g1[C_PCT_T]!=null?Math.floor(g1[C_PCT_T]):null;
-        allHistEntries.push({
-          d:wdate,
-          te:(teW!=null&&teW>0&&teW<20)?r2(teW):null,
-          as:(asW!=null&&asW>50&&asW<100)?r2(asW):null,
-          beta:(betaW!=null&&betaW>0&&betaW<3)?r2(betaW):null,
-          h:hW,sr:null
-        });
-      }
-
-      // Sector weight snapshot (most recent week of this month)
-      const seenSecThisMonth=new Set();
-      for(const row of mdateRows){
-        let lv2=row.length>4?row[4]:'';
-        if(lv2==='Usa')lv2='United States';
-        if(!GICS_L1.has(lv2)||seenSecThisMonth.has(lv2))continue;
-        seenSecThisMonth.add(lv2);
-        const cur=getGroup(row,CURRENT_GRP);
-        if(!histSecData[lv2])histSecData[lv2]=[];
-        histSecData[lv2].push({d:lastFriday,p:r2(cur[C_W]),b:r2(cur[C_BW]),a:r2(cur[C_AW])});
-      }
-    }
-
-    // Sort + deduplicate by date
-    allHistEntries.sort((a,b)=>a.d<b.d?-1:1);
-    const seenHistDates=new Set();
-    for(const entry of allHistEntries){
-      if(!seenHistDates.has(entry.d)){seenHistDates.add(entry.d);s.hist.sum.push(entry);}
-    }
-    if(!s.hist.sum.length){
-      s.hist.sum.push({d:weekDates[weekDates.length-1],te:r2(te),as:r2(as_),beta:r2(beta),h,sr:null});
-    }
-
-    // Store sector history
-    for(const[sn,entries]of Object.entries(histSecData)){
-      histSecData[sn]=entries.sort((a,b)=>a.d<b.d?-1:1);
-    }
-    if(Object.keys(histSecData).length)s.hist.sec=histSecData;
-
-    // Available dates for week selector
-    s.available_dates=s.hist.sum.map(e=>e.d);
-    s.current_date=s.available_dates[s.available_dates.length-1]||null;
-
-    // ── Consistent ordering ───────────────────────────────────────────────
-    const regOrder=['Far East','English','Northern Europe','Western Europe','Southern Europe','Emerging Market','Australia - New Zealand'];
-    s.regions.sort((a,b)=>{const ia=regOrder.indexOf(a.n),ib=regOrder.indexOf(b.n);return(ia<0?99:ia)-(ib<0?99:ib);});
-    s.sectors.sort((a,b)=>(b.p||0)-(a.p||0));
-    s.countries.sort((a,b)=>(b.p||0)-(a.p||0));
-    s.hold.sort((a,b)=>(b.p||0)-(a.p||0));
-    s.unowned.sort((a,b)=>(b.b||0)-(a.b||0));
-
-    strategies[stratId]=s;
-
-    // ── Per-strategy validation ───────────────────────────────────────────
-    const sectorSum=s.sectors.reduce((acc,x)=>acc+(x.p||0),0);
-    const countrySum=s.countries.reduce((acc,x)=>acc+(x.p||0),0);
-    const equityExp=100-(cashWeight||0);
-    if(s.hold.length===0)validationIssues.push(`${stratId}: 0 portfolio holdings found`);
-    if(s.sectors.length&&Math.abs(sectorSum-equityExp)>2)
-      validationIssues.push(`${stratId}: sector weights sum to ${sectorSum.toFixed(1)}% (expected ~${equityExp.toFixed(1)}%)`);
-    if(s.countries.length&&Math.abs(countrySum-equityExp)>5)
-      validationIssues.push(`${stratId}: country weights sum to ${countrySum.toFixed(1)}% (expected ~${equityExp.toFixed(1)}%)`);
   }
-
-  return{
-    strategies,
-    validation_issues:validationIssues,
-    report_date:currentDate,
-    is_multi_month:isMultiMonth,
-    monthly_count:mainDates.length,
-    version:'3.0',
-    parser_version:'1.1.0-js',
-    parse_stats:{
-      total_rows:totalRows,
-      parse_time_ms:Date.now()-t0,
-      main_date:currentDate,
-      main_dates:mainDates,
-      factor_dates:factorDates,
-      is_multi_month:isMultiMonth,
-      monthly_count:mainDates.length,
-      repair_warnings:repairWarnings.length,
-      unknown_accts:[...unknownAccts],
-      strat_stats:stratStats,
-    }
-  };
+  
+  for(let[sid,s]of Object.entries(strategies)){
+    let fR=s.sum._fr||{},fE=s.sum._fe||{};delete s.sum._fr;delete s.sum._fe;delete s.sum._rd;delete s.sum._cd;
+    for(let[fn,r]of Object.entries(fR)){let ex=s.factors.find(f=>f.n===fn);if(ex)ex.c=r2(r);else s.factors.push({n:fn,e:0,bm:0,a:r2(fE[fn]),c:r2(r),ret:null,imp:null});}
+    for(let[fn,e]of Object.entries(fE)){let ex=s.factors.find(f=>f.n===fn);if(ex&&ex.a==null)ex.a=r2(e);}
+    s.sum.h=s.sum.h||s.hold.filter(h=>!h.t.startsWith('CASH')).length;
+    s.hist.sum.sort((a,b)=>(a.d||'').localeCompare(b.d||''));
+    let seen=new Set();s.hist.sum=s.hist.sum.filter(h=>{if(seen.has(h.d))return false;seen.add(h.d);return true;});
+  }
+  return{strategies,validation_issues:[],report_date:'',parse_stats:{total_rows:lines.length-1,parse_time_ms:Date.now()-t0}};
 }
 
 // ===== UPLOAD HISTORY (localStorage) =====
@@ -4042,17 +3561,8 @@ function getHistory(){
 }
 
 function saveToHistory(filename,reportDate,strategiesCount,jsonData){
-  let hist=getHistory();
-  hist=hist.filter(h=>h.filename!==filename); // deduplicate
-  hist.unshift({timestamp:new Date().toISOString(),filename,reportDate,strategiesCount,json:jsonData});
-  hist=hist.slice(0,HIST_MAX);
-  // Try to save; if storage full, reduce
-  for(let maxEntries=hist.length;maxEntries>0;maxEntries--){
-    try{localStorage.setItem(HIST_KEY,JSON.stringify(hist.slice(0,maxEntries)));break;}
-    catch(e){if(e.name!=='QuotaExceededError'&&e.name!=='NS_ERROR_DOM_QUOTA_REACHED')break;}
-  }
-  _activeHistIdx=0;
-  updateHistUI();
+  // DISABLED: no caching, every upload is fresh
+  return;
 }
 
 function loadFromHistory(idx){
@@ -4295,27 +3805,11 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(state.t)activeTab=state.t;
     }catch(e){}
   }
-  // Auto-load most recent history entry, else start with synthetic data
-  let hist=getHistory();
-  if(hist.length){
-    try{
-      let entry=hist[0];
-      let raw=entry.json;
-      if(raw.report_date)window._reportDate=raw.report_date;
-      if(raw.generated)window._reportGenerated=raw.generated;
-      A=normalize(raw);
-      $('uploadZoneText').textContent='Drop new file to update';
-      init();
-      updateHistUI();
-      updateHistButton(0);
-      showToast(`Auto-loaded ${entry.filename}`,'var(--txt)');
-      return;
-    }catch(e){console.warn('History load failed:',e)}
-  }
-  // Start with synthetic data
-  A=normalize(genSynthetic());
-  init();
-  updateHistUI();
+  // Nuclear clear — wipe ALL localStorage every time
+  try{localStorage.clear();}catch(e){}
+  // Show blank upload zone — no auto-load, no synthetic data, no cache
+  document.getElementById('content').style.display='none';
+  document.getElementById('uploadZone').style.display='flex';
 });
 </script>
 </body>

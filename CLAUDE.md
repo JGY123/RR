@@ -1,5 +1,12 @@
 # RR — Redwood Risk Control Panel
 
+## ⚠️ MANDATORY: READ THE SPECIALIST AGENT FIRST
+**Before making ANY changes to this project, read the Risk Reports Specialist agent file:**
+```
+cat ~/projects/apps/ai-talent-agency/agents/risk-reports-specialist.md
+```
+**This file contains every field definition, column position, strategy mapping, PM preference, and known edge case. Working without it leads to field mapping errors and broken data. This is not optional.**
+
 ## Project Scope
 Single-file portfolio risk analysis and visualization dashboard. Monitors investment strategies, tracks risk metrics, analyzes sector/regional/country exposures, and manages factor tilts.
 

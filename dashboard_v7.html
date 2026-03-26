@@ -2038,13 +2038,29 @@ function oDrFRisk(name,range){
 
 // ===== HOLDINGS TAB =====
 let _showIndustry=false;
+let _holdSortMode='risk';
+
+function applyHoldSort(){
+  if(_holdSortMode==='risk')    fh.sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
+  else if(_holdSortMode==='weight') fh.sort((a,b)=>Math.abs(b.p||0)-Math.abs(a.p||0));
+  else if(_holdSortMode==='rank')   fh.sort((a,b)=>(a.r!=null?a.r:99)-(b.r!=null?b.r:99));
+  else if(_holdSortMode==='name')   fh.sort((a,b)=>(a.n||'').localeCompare(b.n||''));
+}
+
+function setHoldSort(mode){
+  _holdSortMode=mode;
+  fh=[...ah];
+  applyHoldFilters();
+  applyHoldSort();
+  hp=1;renderHoldTab();
+}
+
 function rHold(){
   // Include active holdings + material BM-only (b>0.5 or |%T|>1)
   ah=[...cs.hold].filter(h=>h.p>0||h.b>0.5||Math.abs(h.tr||0)>1);
-  // Default sort: %T descending (biggest risk contributors first)
-  ah.sort((a,b)=>(b.tr||0)-(a.tr||0));
   fh=[...ah];
   hp=1;sortCol='tr';sortDir=-1;
+  applyHoldSort();
   renderHoldTab();
 }
 
@@ -2070,6 +2086,9 @@ function renderHoldTab(){
         </div>
       </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
+      <div style="display:inline-flex;gap:4px;margin-bottom:8px">
+        ${[['risk','By Risk'],['weight','By Weight'],['rank','By Rank'],['name','By Name']].map(([m,lbl])=>`<button onclick="setHoldSort('${m}')" style="padding:4px 12px;border-radius:16px;background:${_holdSortMode===m?'#3b82f6':'#1e293b'};color:${_holdSortMode===m?'white':'#94a3b8'};font-size:11px;border:none;cursor:pointer;font-family:inherit">${lbl}</button>`).join('')}
+      </div>
       <div style="overflow-x:auto">
         <table>
           <thead><tr>
@@ -2127,9 +2146,13 @@ function renderHoldRows(){
         <span style="font-size:11px;${trVal>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(trVal,1)}</span>
         <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
       </div></td>`;
-    let rankBadge=h.r!=null?`<span style="display:inline-block;padding:1px 6px;border-radius:10px;background:${rc(h.r)}22;color:${rc(h.r)};font-weight:700;font-size:10px">Q${h.r}</span>`:'--';
-    return`<tr style="cursor:pointer" onclick="oSt('${h.t}')">
-      <td style="color:var(--txth);font-weight:600">${h.t}</td>
+    let isBmOnly=(!h.p||h.p===0)&&(h.b>0);
+    let rvq=(h.rev!=null&&h.val!=null&&h.qual!=null)?`<div style="font-size:9px;color:#64748b;margin-top:1px">R${Math.round(h.rev)} V${Math.round(h.val)} Q${Math.round(h.qual)}</div>`:'';
+    let rankBadge=h.r!=null?`<div style="display:inline-block;text-align:center"><span style="display:inline-block;padding:1px 6px;border-radius:10px;background:${rc(h.r)}22;color:${rc(h.r)};font-weight:700;font-size:10px">Q${h.r}</span>${rvq}</div>`:'--';
+    let bmBadge=isBmOnly?`<span style="background:#334155;color:#94a3b8;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
+    let newBadge=h.isNew?`<span style="background:#f59e0b;color:#0f172a;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
+    return`<tr style="cursor:pointer${isBmOnly?';background:rgba(100,116,139,0.1)':''}" onclick="oSt('${h.t}')">
+      <td style="color:var(--txth);font-weight:600">${h.t}${bmBadge}${newBadge}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
       <td><span class="chip">${h.sec||'--'}</span></td>
       ${_showIndustry?`<td style="font-size:11px;color:var(--txt)">${h.ind||h.industry||'--'}</td>`:''}
@@ -2147,12 +2170,14 @@ function searchHold(q){
   q=q.toLowerCase();
   fh=ah.filter(h=>h.t.toLowerCase().includes(q)||h.n.toLowerCase().includes(q));
   applyHoldFilters();
+  applyHoldSort();
   hp=1;renderHoldTab();
 }
 
 function filterHold(){
   fh=[...ah];
   applyHoldFilters();
+  applyHoldSort();
   hp=1;renderHoldTab();
 }
 

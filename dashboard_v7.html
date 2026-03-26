@@ -525,6 +525,10 @@ function normalize(raw){
     if(!st.factors)st.factors=[];
     if(!st.hold)st.hold=[];
     if(!st.ranks)st.ranks=[];
+    if(st.ranks&&!Array.isArray(st.ranks)&&typeof st.ranks==='object'){
+      var overall=st.ranks.overall||st.ranks.Over||[];
+      st.ranks=overall.map(function(q){return{r:q.q,l:'Quintile '+q.q,ct:0,p:q.w,a:q.aw};});
+    }
     if(!st.chars)st.chars=[];
     if(!st.groups)st.groups=[];
     if(!st.unowned)st.unowned=[];
@@ -763,7 +767,7 @@ function initWeekSelector(){
   if(dates.length<=1){wrap.style.display='none';return;}
   wrap.style.display='flex';
   sel.innerHTML=dates.slice().reverse().map(d=>{
-    const dt=new Date(d);
+    const dt=parseDate(d);
     const label=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
     return`<option value="${d}"${d===(_selectedWeek||dates[dates.length-1])?' selected':''}>${label}</option>`;
   }).join('');
@@ -806,7 +810,7 @@ function getSelectedWeekSum(){
 // Banner HTML shown when viewing a historical week
 function weekBannerHtml(){
   if(!_selectedWeek)return'';
-  const dt=new Date(_selectedWeek);
+  const dt=parseDate(_selectedWeek);
   const label=dt.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
   return`<div class="week-hist-banner">&#9432;&nbsp; Viewing week of <strong>${label}</strong> — summary metrics only. <a href="#" style="color:var(--warn);margin-left:4px" onclick="event.preventDefault();jumpToLatest()">Jump to latest</a> for full detail.</div>`;
 }
@@ -1660,7 +1664,7 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   let te=s.sum.te||1;
   let idioFrac=te>0?idioRisk/te:0.5;
   let facFrac=1-idioFrac;
-  let dates=hist.map(h=>h.d);
+  let dates=hist.map(h=>isoDate(h.d));
   let teVals=hist.map(h=>h.te);
   // Normalize per data point so factor+idio sum exactly to te
   let idioVals=hist.map(h=>{
@@ -1691,7 +1695,7 @@ function rTEStackedArea(s,factorRisk,idioRisk){
 function rMultiBeta(s){
   let hist=s.hist.sum;
   if(!hist.length)return;
-  let dates=hist.map(h=>h.d);
+  let dates=hist.map(h=>isoDate(h.d));
   let betaVals=hist.map(h=>h.beta);
   // Main line: realized beta time series (solid, thick)
   let traces=[
@@ -1865,7 +1869,7 @@ function updateFacExpChart(){
     if(!hist||!hist.length)return;
     let col=facColors[colorIdx++%facColors.length];
     traces.push({
-      x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n,
+      x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n,
       line:{color:col,width:2},
       hovertemplate:f.n+'<br>%{x|%b %Y}<br>Exposure: %{y:.3f}<extra></extra>'
     });
@@ -1881,14 +1885,14 @@ function updateFacExpChart(){
     if(isIndustry){
       let secHist=(s.hist.sec||{})[item];
       if(secHist&&secHist.length){
-        traces.push({x:secHist.map(h=>h.d),y:secHist.map(h=>+(h.a||0).toFixed(3)),name:item,
+        traces.push({x:secHist.map(h=>isoDate(h.d)),y:secHist.map(h=>+(h.a||0).toFixed(3)),name:item,
           line:{color:col,width:2,dash:'dot'},
           hovertemplate:item+'<br>%{x|%b %Y}<br>Active Wt: %{y:.2f}%<extra></extra>'});
       } else {
         // Synthetic from current weight
         let secCur=(s.sectors||[]).find(sec=>sec.n===item);
         let baseW=secCur?secCur.a||0:0;
-        let dates=s.hist.sum.map(h=>h.d);
+        let dates=s.hist.sum.map(h=>isoDate(h.d));
         traces.push({x:dates,y:dates.map(()=>baseW),name:item+' (current)',
           line:{color:col,width:1.5,dash:'dot'},
           hovertemplate:item+'<br>Active Wt: %{y:.2f}% (no history)<extra></extra>'});
@@ -1896,7 +1900,7 @@ function updateFacExpChart(){
     } else if(isCountry){
       let cData=(s.countries||[]).find(c=>c.n===item);
       let baseW=cData?cData.a||0:0;
-      let dates=s.hist.sum.map(h=>h.d);
+      let dates=s.hist.sum.map(h=>isoDate(h.d));
       traces.push({x:dates,y:dates.map(()=>baseW),name:item,
         line:{color:col,width:1.5,dash:'dashdot'},
         hovertemplate:item+'<br>Active Wt: %{y:.2f}% (current only)<extra></extra>'});
@@ -2007,12 +2011,12 @@ function oDrFRisk(name,range){
     setTimeout(()=>{
       let last=histSlice[histSlice.length-1];
       let expVals=histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e);
-      let expDates=histSlice.map(h=>h.d);
+      let expDates=histSlice.map(h=>isoDate(h.d));
       let numExp=expVals.filter(v=>v!=null);
       let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
       let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
-      let rfShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:last.d,line:{color:'#64748b',dash:'dot'}}];
-      let rfAnno=[{x:last.d,y:last.e||last.a,text:'Current: '+(last.e||last.a).toFixed(3),showarrow:true,arrowcolor:'#3b82f6',font:{size:10,color:'#e2e8f0'},bgcolor:'#1e293b',bordercolor:'#3b82f6',borderwidth:1,borderpad:4}];
+      let rfShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:isoDate(last.d),line:{color:'#64748b',dash:'dot'}}];
+      let rfAnno=[{x:isoDate(last.d),y:last.e||last.a,text:'Current: '+(last.e||last.a).toFixed(3),showarrow:true,arrowcolor:'#3b82f6',font:{size:10,color:'#e2e8f0'},bgcolor:'#1e293b',bordercolor:'#3b82f6',borderwidth:1,borderpad:4}];
       let rfTraces=[];
       if(expAvg!=null&&expSd>0){
         rfTraces.push(
@@ -2313,7 +2317,7 @@ function oDr(type,name){
   let attr=type==='sec'?cs.attrib.find(a=>a.n===name):null;
 
   // TE contribution estimate
-  let teContrib=holdings.reduce((a,h)=>a+(h.mcr||0),0);
+  let teContrib=holdings.reduce((a,h)=>a+(h.tr||0),0);
 
   let histHtml=`<div id="drillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
 
@@ -2338,7 +2342,7 @@ function oDr(type,name){
   let facScoreHtml='';
   if(type==='sec'&&holdings.length){
     let avg=n=>{let vs=holdings.filter(h=>h[n]!=null);return vs.length?+(vs.reduce((a,h)=>a+h[n],0)/vs.length).toFixed(2):null};
-    let sc=[{k:'over',l:'Overall'},{k:'rev',l:'Rev'},{k:'val',l:'Value'},{k:'qual',l:'Quality'},{k:'mom',l:'Momentum'},{k:'stab',l:'Stability'}];
+    let sc=[{k:'over',l:'Overall'},{k:'rev',l:'Rev'},{k:'val',l:'Value'},{k:'qual',l:'Quality'}];
     let scoreCards=sc.map(({k,l})=>{
       let v=avg(k);if(v==null)return'';
       let col=v<=2?'var(--pos)':v>=4?'var(--neg)':'var(--warn)';
@@ -2350,7 +2354,7 @@ function oDr(type,name){
     }).join('');
     if(scoreCards.trim()){
       facScoreHtml=`<div style="margin-bottom:12px"><div class="card-title" style="margin-bottom:6px">Avg Quant Scores — ${holdings.length} Holdings</div>
-        <div class="grid" style="grid-template-columns:repeat(6,1fr);gap:8px">${scoreCards}</div></div>`;
+        <div class="grid" style="grid-template-columns:repeat(4,1fr);gap:8px">${scoreCards}</div></div>`;
     }
   }
 
@@ -2405,9 +2409,9 @@ function oDr(type,name){
   setTimeout(()=>{
     if(hist&&hist.length){
       Plotly.newPlot('drillHistDiv',[
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#3b82f6',width:2}},
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#64748b',width:2,dash:'dot'}},
-        {x:hist.map(h=>h.d),y:hist.map(h=>h.a),name:'Active',line:{color:'#10b981',width:2},yaxis:'y2'}
+        {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#3b82f6',width:2}},
+        {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#64748b',width:2,dash:'dot'}},
+        {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.a),name:'Active',line:{color:'#10b981',width:2},yaxis:'y2'}
       ],{...plotBg,yaxis:{...plotBg.yaxis,title:'Weight %'},yaxis2:{overlaying:'y',side:'right',title:'Active %',gridcolor:'transparent',titlefont:{color:'#10b981'},tickfont:{color:'#10b981'}},legend:{orientation:'h',y:1.12,font:{size:10}}},plotCfg);
     } else {
       // Generate placeholder chart even without history
@@ -2475,7 +2479,7 @@ function oDrF(name,range){
   if(histSlice.length){
     setTimeout(()=>{
       let expVals=histSlice.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):h.e);
-      let expDates=histSlice.map(h=>h.d);
+      let expDates=histSlice.map(h=>isoDate(h.d));
       let numExp=expVals.filter(v=>v!=null);
       let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
       let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
@@ -2527,9 +2531,9 @@ function oDrS(range){
 
   setTimeout(()=>{
     Plotly.newPlot('sumDrillDiv',[
-      {x:hist.map(h=>h.d),y:hist.map(h=>h.te),name:'TE %',line:{color:'#ef4444',width:2}},
-      {x:hist.map(h=>h.d),y:hist.map(h=>h.as),name:'Active Share %',line:{color:'#3b82f6',width:2},yaxis:'y2'},
-      {x:hist.map(h=>h.d),y:hist.map(h=>h.beta),name:'Beta',line:{color:'#10b981',width:2,dash:'dot'},yaxis:'y3'}
+      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.te),name:'TE %',line:{color:'#ef4444',width:2}},
+      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.as),name:'Active Share %',line:{color:'#3b82f6',width:2},yaxis:'y2'},
+      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.beta),name:'Beta',line:{color:'#10b981',width:2,dash:'dot'},yaxis:'y3'}
     ],{...plotBg,
       yaxis:{...plotBg.yaxis,title:'TE %',titlefont:{color:'#ef4444'},tickfont:{color:'#ef4444'}},
       yaxis2:{overlaying:'y',side:'right',title:'Active Share %',titlefont:{color:'#3b82f6'},tickfont:{color:'#3b82f6'},gridcolor:'transparent'},
@@ -2546,7 +2550,7 @@ function oSt(ticker){
   let m=$('stockModal');
 
   // Quant scores
-  let scores=[{n:'Overall',v:h.over},{n:'Revenue',v:h.rev},{n:'Value',v:h.val},{n:'Quality',v:h.qual},{n:'Momentum',v:h.mom},{n:'Stability',v:h.stab}];
+  let scores=[{n:'Overall',v:h.over},{n:'Revision',v:h.rev},{n:'Value',v:h.val},{n:'Quality',v:h.qual},{n:'Momentum',v:h.mom},{n:'Stability',v:h.stab}];
   let scoreHtml=scores.map(s=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(51,65,85,.3)">
     <span>${s.n}</span><span style="color:${rc(Math.ceil(6-s.v))};font-weight:600">${f2(s.v,1)}</span>
   </div>`).join('');
@@ -2595,7 +2599,7 @@ function oSt(ticker){
   setTimeout(()=>{
     Plotly.newPlot('stockRadarDiv',[{
       type:'scatterpolar',r:[h.over,h.rev,h.val,h.qual,h.mom,h.stab,h.over],
-      theta:['Overall','Revenue','Value','Quality','Momentum','Stability','Overall'],
+      theta:['Overall','Revision','Value','Quality','Momentum','Stability','Overall'],
       fill:'toself',fillcolor:'rgba(59,130,246,.15)',line:{color:'#3b82f6',width:2},
       marker:{size:4,color:'#3b82f6'}
     }],{...plotBg,polar:{bgcolor:'transparent',radialaxis:{range:[0,5],gridcolor:'#334155',tickfont:{size:9,color:'#64748b'}},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},margin:{l:40,r:40,t:20,b:20},showlegend:false},plotCfg);
@@ -3166,7 +3170,7 @@ function oDrMetric(metric,range){
   let yRanges={te:[2,11],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
 
   let vals=hist.map(h=>h[metric]);
-  let dates=hist.map(h=>h.d);
+  let dates=hist.map(h=>isoDate(h.d));
   let current=vals[vals.length-1];
   let numVals=vals.filter(v=>v!=null);
   let min=numVals.length?Math.min(...numVals):null;
@@ -3850,6 +3854,8 @@ function emptyState(msg){
 // ===== FACTSET CSV PARSER v3 (section-driven, matches factset_parser_v3.py) =====
 function pf(s){if(!s||!String(s).trim())return null;let v=parseFloat(s);return isNaN(v)?null:v;}
 function r2(v){return v!=null?Math.round(v*100)/100:null;}
+function parseDate(d){if(!d)return null;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s)){return new Date(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6));}return new Date(s);}
+function isoDate(d){if(!d)return d;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s))return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6);return s;}
 function parseCSVLine(line){
   let result=[],cell='',inQ=false;
   for(let i=0;i<line.length;i++){

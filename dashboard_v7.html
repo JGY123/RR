@@ -629,10 +629,10 @@ function normalize(raw){
      st.hold.forEach(function(h){if(h.r>=1&&h.r<=5)qc[h.r]++;});
      if(st.ranks&&!Array.isArray(st.ranks)&&typeof st.ranks==='object'){
        let src=st.ranks.overall||st.ranks.Over||[];
-       st.ranks=src.map(function(q){return{r:q.q,l:'Quintile '+q.q,ct:qc[q.q]||0,p:q.w,a:q.aw};});
+       st.ranks=src.map(function(q){var ri=Math.round(parseFloat(q.q))||0;return{r:ri,l:'Quintile '+ri,ct:qc[ri]||0,p:q.w,a:q.aw};});
      }else if(Array.isArray(st.ranks)&&st.ranks.length&&st.ranks[0].q!=null){
        // Flat array [{q,w,bw,aw}] from parser
-       st.ranks=st.ranks.map(function(q){return{r:q.q,l:'Quintile '+q.q,ct:qc[q.q]||0,p:q.w,a:q.aw};});
+       st.ranks=st.ranks.map(function(q){var ri=Math.round(parseFloat(q.q))||0;return{r:ri,l:'Quintile '+ri,ct:qc[ri]||0,p:q.w,a:q.aw};});
      }else if(Array.isArray(st.ranks)&&st.ranks.length&&st.ranks[0].r!=null){
        // Already normalized [{r,l,ct,...}] — refresh counts
        st.ranks=st.ranks.map(function(q){return{...q,ct:qc[q.r]||0};});
@@ -681,12 +681,18 @@ function genSynthetic(){
       s.hold.push({t:ccy,n:'Cash '+ccy,sec:'Cash',co:'',p:+(0.3+Math.random()*1.5).toFixed(2),b:0,a:+(0.3+Math.random()*1.5).toFixed(2),mcr:0,tr:0,r:0,over:0,rev:0,val:0,qual:0,mom:0,stab:0});
     });
     s.sum.h=equityCount(s.hold);
-    // Ranks
-    s.ranks=[1,2,3,4,5].map(r=>{let ct=s.hold.filter(h=>h.r===r).length;let p=s.hold.filter(h=>h.r===r).reduce((a,h)=>a+h.p,0);return{r,l:r===1?'R1 (Best)':r===5?'R5 (Worst)':'R'+r,ct,p:+p.toFixed(2),a:+(p*(0.95+Math.random()*0.1)).toFixed(2)}});
-    // Chars
-    s.chars=[{m:'Market Cap ($B)',p:+(2000+Math.random()*8000).toFixed(0),b:+(3000+Math.random()*5000).toFixed(0)},{m:'ROE (%)',p:+(10+Math.random()*20).toFixed(1),b:+(8+Math.random()*15).toFixed(1)},{m:'FCF Yield (%)',p:+(2+Math.random()*5).toFixed(1),b:+(3+Math.random()*4).toFixed(1)},{m:'Div Yield (%)',p:+(0.5+Math.random()*3).toFixed(1),b:+(1+Math.random()*3).toFixed(1)},{m:'EPS Growth 3Y (%)',p:+(5+Math.random()*25).toFixed(1),b:+(3+Math.random()*15).toFixed(1)},{m:'Op. Margin (%)',p:+(10+Math.random()*20).toFixed(1),b:+(12+Math.random()*18).toFixed(1)}];
-    // Groups
-    s.groups=GROUPS_DEF.map(gd=>{let p=+(3+Math.random()*15).toFixed(2);let b=+(3+Math.random()*15).toFixed(2);return{g:gd.g,sg:gd.sg,p,b,a:+(p-b).toFixed(2)}});
+    // Ranks — only rebuild from holdings if parser didn't provide them
+    if(!s.ranks||!s.ranks.length||(Array.isArray(s.ranks)&&s.ranks.length===0)){
+      s.ranks=[1,2,3,4,5].map(r=>{let ct=s.hold.filter(h=>h.r===r).length;let p=s.hold.filter(h=>h.r===r).reduce((a,h)=>a+(h.p||0),0);return{r,l:'Quintile '+r,ct,p:+p.toFixed(2),a:+p.toFixed(2)};});
+    }
+    // Chars — only use synthetic if parser didn't provide them
+    if(!s.chars||!s.chars.length){
+      s.chars=[{m:'Market Cap ($M)',p:s.sum.mc,b:null},{m:'P/E Ratio',p:s.sum.pe_p,b:s.sum.pe_b},{m:'P/B Ratio',p:s.sum.pb_p,b:s.sum.pb_b}];
+    }
+    // Groups — keep parser data if present
+    if(!s.groups||!s.groups.length){
+      s.groups=[];
+    }
     // Unowned
     s.unowned=Array.from({length:8},(_,i)=>({t:'UNO'+i,n:'Unowned Stock '+(i+1),reg:REGS[i%REGS.length],b:+(0.1+Math.random()*0.5).toFixed(2),tr:+(-0.2-Math.random()*1.2).toFixed(2)}));
     out[def.id]=s;

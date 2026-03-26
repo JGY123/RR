@@ -280,16 +280,20 @@ class FactSetParserV2:
             "exposures": {},
         }
 
-        # Factor exposures: portfolio (23-39) and active (43-59)
+        # Factor data from RiskM section:
+        #   cols 23-39: "% of Variance" per factor  → stored as c (TE contribution %)
+        #   cols 43-59: "Active Exposure" per factor → stored as a (active vs benchmark)
+        # Both sections list all 17 RISKM_FACTORS in the same order (Local at fi=13 is present
+        # but skipped; fi=14..16 correctly map to cols 37/57, 38/58, 39/59 respectively).
         for fi, fname in enumerate(RISKM_FACTORS):
             if fname == "Local":
-                continue  # not in dashboard factor list
-            pc = RISKM_PORT_EXP_START + fi
-            ac = RISKM_ACTIVE_EXP_START + fi
-            e  = safe_float(row[pc]) if len(row) > pc else None
-            a  = safe_float(row[ac]) if len(row) > ac else None
-            bm = (e - a) if (e is not None and a is not None) else None
-            entry["exposures"][fname] = {"e": e, "bm": bm, "a": a}
+                continue  # Local is in the CSV but not displayed in the dashboard
+            pc = RISKM_PORT_EXP_START + fi    # col 23+fi → % of Variance (TE contribution)
+            ac = RISKM_ACTIVE_EXP_START + fi  # col 43+fi → Active Exposure
+            c  = safe_float(row[pc]) if len(row) > pc else None  # TE contribution %
+            a  = safe_float(row[ac]) if len(row) > ac else None  # active exposure
+            # e kept for dashboard backward-compat (used as exposure fallback in normalize())
+            entry["exposures"][fname] = {"e": c, "bm": None, "a": a, "c": c}
 
         bucket["_riskm"].append(entry)
 
@@ -548,9 +552,10 @@ class FactSetParserV2:
 
                 factors.append({
                     "n":    display,
-                    "e":    exp_data.get("e"),
+                    "e":    exp_data.get("e"),    # % of Variance (kept for dashboard compat)
                     "bm":   exp_data.get("bm"),
-                    "a":    exp_data.get("a"),
+                    "a":    exp_data.get("a"),    # Active Exposure (cols 43-59)
+                    "c":    exp_data.get("c"),    # TE contribution % (cols 23-39, % of Variance)
                     "ret":  snap_current.get("ret"),
                     "imp":  snap_current.get("imp"),
                     "dev":  snap_current.get("dev"),
@@ -631,7 +636,7 @@ class FactSetParserV2:
         return strategies, issues
 
     def _build_hist_fac(self, riskm_rows, snapshot):
-        """Build hist.fac: factor_name → [{d, e, bm}, ...] from RiskM rows."""
+        """Build hist.fac: factor_name → [{d, e, bm, a}, ...] from RiskM rows."""
         hist_fac = {}
         for rm in riskm_rows:
             d = rm["d"]
@@ -639,8 +644,9 @@ class FactSetParserV2:
                 display = FACTOR_DISPLAY_NAME.get(fname_raw, fname_raw)
                 hist_fac.setdefault(display, []).append({
                     "d":  d,
-                    "e":  exp_data.get("e"),
+                    "e":  exp_data.get("e"),    # % of Variance (TE contribution)
                     "bm": exp_data.get("bm"),
+                    "a":  exp_data.get("a"),    # Active Exposure per period
                 })
         return hist_fac
 

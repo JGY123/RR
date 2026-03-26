@@ -732,3 +732,127 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ── APPEND / MERGE MODE ──────────────────────────────────────────────────────
+# Usage:
+#   First load:    python3 factset_parser_v2.py full_history.csv latest_data.json
+#   Weekly append:  python3 factset_parser_v2.py new_week.csv latest_data.json --append
+#   New account:    python3 factset_parser_v2.py new_acct.csv latest_data.json --append
+
+def merge_data(existing_path, new_data):
+    """Merge new parsed data into existing JSON file.
+    
+    - New strategies are added
+    - Existing strategies: new holdings/sectors/factors REPLACE current
+    - History entries are APPENDED (deduplicated by date)
+    """
+    import json
+    
+    with open(existing_path) as f:
+        existing = json.load(f)
+    
+    ex_strats = existing.get('strategies', {})
+    new_strats = new_data.get('strategies', {})
+    
+    for sid, new_s in new_strats.items():
+        if sid not in ex_strats:
+            # Brand new account — add entirely
+            ex_strats[sid] = new_s
+            print(f"  + Added new strategy: {sid}")
+            continue
+        
+        ex_s = ex_strats[sid]
+        
+        # Replace current snapshot with newest data
+        ex_s['sum'] = new_s['sum']
+        ex_s['hold'] = new_s['hold']
+        ex_s['sectors'] = new_s['sectors']
+        ex_s['regions'] = new_s['regions']
+        ex_s['countries'] = new_s['countries']
+        ex_s['industries'] = new_s.get('industries', [])
+        ex_s['groups'] = new_s.get('groups', [])
+        ex_s['factors'] = new_s['factors']
+        ex_s['chars'] = new_s['chars']
+        ex_s['ranks'] = new_s.get('ranks', [])
+        
+        # Append history (deduplicate by date)
+        ex_hist = ex_s.get('hist', {})
+        new_hist = new_s.get('hist', {})
+        
+        # Summary history
+        ex_sum = {h['d']: h for h in ex_hist.get('sum', [])}
+        for h in new_hist.get('sum', []):
+            ex_sum[h['d']] = h  # overwrite if same date
+        ex_hist['sum'] = sorted(ex_sum.values(), key=lambda x: x.get('d', ''))
+        
+        # Factor history
+        ex_fac = ex_hist.get('fac', {})
+        new_fac = new_hist.get('fac', {})
+        for fname, entries in new_fac.items():
+            if fname not in ex_fac:
+                ex_fac[fname] = entries
+            else:
+                ex_dates = {e['d']: e for e in ex_fac[fname]}
+                for e in entries:
+                    ex_dates[e['d']] = e
+                ex_fac[fname] = sorted(ex_dates.values(), key=lambda x: x.get('d', ''))
+        ex_hist['fac'] = ex_fac
+        
+        # Sector history
+        ex_sec = ex_hist.get('sec', {})
+        new_sec = new_hist.get('sec', {})
+        for sname, entries in new_sec.items():
+            if sname not in ex_sec:
+                ex_sec[sname] = entries
+            else:
+                ex_dates = {e['d']: e for e in ex_sec[sname]}
+                for e in entries:
+                    ex_dates[e['d']] = e
+                ex_sec[sname] = sorted(ex_dates.values(), key=lambda x: x.get('d', ''))
+        ex_hist['sec'] = ex_sec
+        
+        ex_s['hist'] = ex_hist
+        print(f"  ↻ Updated {sid}: {len(ex_hist.get('sum', []))} history entries")
+    
+    existing['strategies'] = ex_strats
+    
+    with open(existing_path, 'w') as f:
+        json.dump(existing, f, separators=(',', ':'))
+    
+    print(f"\n✓ Merged into {existing_path}")
+    print(f"  Strategies: {list(ex_strats.keys())}")
+    total_hist = sum(len(s.get('hist', {}).get('sum', [])) for s in ex_strats.values())
+    print(f"  Total history entries: {total_hist}")
+
+
+if __name__ == '__main__':
+    import sys
+    
+    if len(sys.argv) < 3:
+        print("Usage:")
+        print("  python3 factset_parser_v2.py input.csv output.json          # Full parse")
+        print("  python3 factset_parser_v2.py new_data.csv existing.json --append  # Append/merge")
+        sys.exit(1)
+    
+    input_csv = sys.argv[1]
+    output_json = sys.argv[2]
+    append_mode = '--append' in sys.argv
+    
+    # Parse the CSV
+    parser = FactSetParserV2()
+    result = parser.parse(input_csv)
+    
+    if append_mode:
+        import os
+        if not os.path.exists(output_json):
+            print(f"No existing file at {output_json} — creating fresh")
+            append_mode = False
+    
+    if append_mode:
+        merge_data(output_json, result)
+    else:
+        import json
+        with open(output_json, 'w') as f:
+            json.dump(result, f, separators=(',', ':'))
+        print(f"Output: {output_json}")

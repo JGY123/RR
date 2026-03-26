@@ -4125,9 +4125,26 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   // Nuclear clear — wipe ALL localStorage every time
   try{localStorage.clear();}catch(e){}
-  // Show blank upload zone — no auto-load, no synthetic data, no cache
-  document.getElementById('content').style.display='none';
-  document.getElementById('uploadZone').style.display='flex';
+  // Auto-load latest_data.json if available (for server deployment)
+  // Falls back to upload zone if file not found
+  fetch('latest_data.json').then(r=>{
+    if(!r.ok)throw new Error('No auto-load file');
+    return r.json();
+  }).then(data=>{
+    A=normalize(data);
+    let keys=Object.keys(A);
+    if(keys.length){
+      document.getElementById('uploadZone').style.display='none';
+      document.getElementById('content').style.display='block';
+      let defaultStrat=keys.includes('EM')?'EM':keys[0];
+      go(defaultStrat);
+      showToast('Auto-loaded latest data — '+keys.length+' strategies','var(--pos)');
+    }else{throw new Error('No strategies');}
+  }).catch(()=>{
+    // No latest_data.json found — show upload zone (normal local usage)
+    document.getElementById('content').style.display='none';
+    document.getElementById('uploadZone').style.display='flex';
+  });
 });
 </script>
 </body>

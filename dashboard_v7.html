@@ -1198,13 +1198,13 @@ function rUpdateCorr(){
     facHist=s._synthFacHist;
     hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
   }
-  if(!hasFacData){wrap.innerHTML=rFCorr(s.fcorr);return;}
+  if(!hasFacData){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:16px;text-align:center">No factor history available</p>';return;}
 
   let allFacNames=Object.keys(facHist);
   let facNames=selFacs&&selFacs.length?allFacNames.filter(fn=>selFacs.includes(fn)):allFacNames;
   if(facNames.length<2){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:12px;text-align:center">Select at least 2 factors</p>';return;}
 
-  // Slice each factor series to period
+  // Slice each factor series to period — use ACTIVE exposure (e - bm)
   let sliced={};
   facNames.forEach(fn=>{
     let arr=facHist[fn]||[];
@@ -1213,7 +1213,7 @@ function rUpdateCorr(){
       let seen=new Set();
       arr=arr.filter(h=>{let m=h.d.slice(0,7);if(seen.has(m))return false;seen.add(m);return true;});
     }
-    sliced[fn]=arr.map(h=>+(h.e||0));
+    sliced[fn]=arr.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(+(h.e||0)));
   });
   function pearson(a,b){
     let n=Math.min(a.length,b.length);
@@ -1223,15 +1223,52 @@ function rUpdateCorr(){
     let num=0,da=0,db=0;
     for(let i=0;i<n;i++){num+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)**2;db+=(b[i]-mb)**2;}
     let denom=Math.sqrt(da*db);
-    return denom<1e-10?0:+(num/denom).toFixed(2);
+    return denom<1e-10?0:+(num/denom).toFixed(3);
   }
-  let m={};
-  facNames.forEach(f1=>{m[f1]={};facNames.forEach(f2=>{m[f1][f2]=f1===f2?1:pearson(sliced[f1]||[],sliced[f2]||[]);});});
   let minLen=Math.min(...facNames.map(fn=>(sliced[fn]||[]).length));
+  if(minLen<3){
+    wrap.innerHTML=`<p style="font-size:12px;color:var(--warn);padding:16px;text-align:center">⚠ Insufficient data — need at least 3 data points (have ${minLen})</p>`;
+    return;
+  }
+  // Build correlation matrix
+  let corrMatrix=facNames.map(f1=>facNames.map(f2=>f1===f2?1:pearson(sliced[f1]||[],sliced[f2]||[])));
+  // Build insights: ⚠ r>0.7, ✓ r<-0.5
+  let insights=[];
+  for(let i=0;i<facNames.length;i++){
+    for(let j=i+1;j<facNames.length;j++){
+      let r=corrMatrix[i][j];
+      if(r>0.7)insights.push(`⚠ <strong>${facNames[i]}</strong> & <strong>${facNames[j]}</strong>: r=${r.toFixed(2)} — high positive correlation`);
+      else if(r<-0.5)insights.push(`✓ <strong>${facNames[i]}</strong> & <strong>${facNames[j]}</strong>: r=${r.toFixed(2)} — diversifying`);
+    }
+  }
   let isSynth=!s.hist.fac||!Object.values(s.hist.fac).some(v=>v&&v.length>0);
-  let note=(minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Insufficient data — showing ${minLen} periods</div>`:'')
-    +(isSynth?`<div style="font-size:10px;color:#64748b;margin-bottom:6px">Synthetic data — awaiting 3-year file</div>`:'');
-  wrap.innerHTML=note+rFCorr(m);
+  let noteHtml=(isSynth?`<div style="font-size:10px;color:#64748b;margin-bottom:6px">ℹ Synthetic history — awaiting 3-year file</div>`:'')+
+    (minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Only ${minLen} data points in selected period</div>`:'');
+  // Render Plotly heatmap
+  let heatH=Math.max(260,facNames.length*36+80);
+  wrap.innerHTML=noteHtml+`<div id="corrHeatPlot" style="height:${heatH}px"></div>`;
+  setTimeout(()=>{
+    Plotly.newPlot('corrHeatPlot',[{
+      z:corrMatrix,x:facNames,y:facNames,type:'heatmap',
+      colorscale:[[0,'#ef4444'],[0.5,'#e2e8f0'],[1,'#3b82f6']],
+      zmin:-1,zmax:1,
+      text:corrMatrix.map(row=>row.map(v=>v.toFixed(2))),
+      texttemplate:'%{text}',textfont:{size:10,color:'#0f172a'},
+      hovertemplate:'%{y} × %{x}<br>r = %{z:.3f}<extra></extra>',
+      showscale:true,colorbar:{len:0.9,title:{text:'r',side:'right'},tickfont:{size:9},thickness:12}
+    }],{...plotBg,
+      xaxis:{...plotBg.xaxis,tickangle:-35,tickfont:{size:10},side:'bottom'},
+      yaxis:{...plotBg.yaxis,tickfont:{size:10},autorange:'reversed'},
+      margin:{l:150,r:60,t:20,b:110}
+    },plotCfg);
+  },0);
+  // Insights row
+  let insEl=document.getElementById('corrInsights');
+  if(insEl){
+    insEl.innerHTML=insights.length
+      ?`<div style="padding:8px 10px;background:var(--surf);border-radius:6px;font-size:11px;color:var(--txt);line-height:1.8">${insights.join('<br>')}</div>`
+      :`<div style="font-size:10px;color:var(--txt)">No high-correlation pairs in selected window</div>`;
+  }
 }
 
 // ===== CHART RENDERERS =====
@@ -1453,13 +1490,28 @@ function rRisk(){
     <div id="teStackedDiv" style="height:300px"></div>
   </div>
 
-  <!-- Beta History (full width) -->
-  <div class="card" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
-    <div class="flex-between" style="margin-bottom:4px">
-      <div class="card-title" style="margin:0">Beta History</div>
-      <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
+  <!-- Beta History + Key Stats side by side -->
+  <div class="grid g2" style="margin-bottom:16px">
+    <div class="card" style="cursor:pointer" onclick="oDrMetric('beta')">
+      <div class="flex-between" style="margin-bottom:4px">
+        <div class="card-title" style="margin:0">Beta History — Predicted</div>
+        <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
+      </div>
+      <div id="riskBetaMultiDiv" style="height:200px"></div>
     </div>
-    <div id="riskBetaMultiDiv" style="height:200px"></div>
+    <div class="card" style="display:flex;flex-direction:column;justify-content:center;gap:20px;padding:20px 24px">
+      <div style="text-align:center">
+        <div class="card-title" style="margin:0 0 6px">Active Share</div>
+        <div style="font-size:32px;font-weight:700;color:var(--txth)">${f2(s.sum.as,1)}<span style="font-size:16px;color:var(--txt);margin-left:2px">%</span></div>
+        <div style="font-size:10px;color:var(--txt);margin-top:2px">${gt(s.hist.sum,'as')} trend</div>
+      </div>
+      <div style="width:100%;height:1px;background:var(--grid)"></div>
+      <div style="text-align:center">
+        <div class="card-title" style="margin:0 0 6px">Holdings</div>
+        <div style="font-size:32px;font-weight:700;color:var(--txth)">${s.sum.h}<span style="font-size:16px;color:var(--txt);margin-left:4px">equity</span></div>
+        <div style="font-size:10px;color:var(--txt);margin-top:2px">${gt(s.hist.sum,'h')} trend</div>
+      </div>
+    </div>
   </div>
 
   <!-- Factor Contribution Bars with toggle -->
@@ -1551,7 +1603,8 @@ function rRisk(){
     <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
       ${s.factors.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" ${FAC_PRIMARY.has(f.n)?'checked':''} onchange="rUpdateCorr()"><span style="color:${FAC_PRIMARY.has(f.n)?'var(--txth)':'var(--txt)'}">${f.n}</span></label>`).join('')}
     </div>
-    <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%">${rFCorr(s.fcorr)}</div>
+    <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%"><div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--txt);font-size:11px">Computing correlation…</div></div>
+    <div id="corrInsights" style="margin-top:8px;font-size:11px"></div>
   </div>`;
 
   $('tab-risk').innerHTML=html;
@@ -1562,6 +1615,7 @@ function rRisk(){
     window._rfbData=facMCR;
     rRiskFacBarsMode();
     updateFacExpChart();
+    rUpdateCorr();
   },50);
 }
 
@@ -1582,15 +1636,15 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   });
   let facVals=hist.map((h,i)=>+(h.te-idioVals[i]).toFixed(3));
   Plotly.newPlot('teStackedDiv',[
-    {x:dates,y:idioVals,name:'Stock-Specific',type:'scatter',mode:'lines',
-      fill:'tozeroy',fillcolor:'rgba(20,184,166,0.2)',line:{color:'rgba(20,184,166,0.65)',width:1},
+    {x:dates,y:idioVals,name:'Idiosyncratic (Stock-Specific)',type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:'rgba(245,158,11,0.25)',line:{color:'rgba(245,158,11,0.8)',width:1},
       stackgroup:'te',hovertemplate:'Stock-Specific: %{y:.2f}%<extra></extra>'},
     {x:dates,y:facVals,name:'Factor',type:'scatter',mode:'lines',
-      fill:'tonexty',fillcolor:'rgba(59,130,246,0.22)',line:{color:'rgba(59,130,246,0.5)',width:1},
+      fill:'tonexty',fillcolor:'rgba(6,182,212,0.22)',line:{color:'rgba(6,182,212,0.65)',width:1},
       stackgroup:'te',hovertemplate:'Factor: %{y:.2f}%<extra></extra>'},
     {x:dates,y:teVals,name:'Total TE',type:'scatter',mode:'lines',
       line:{color:'#e2e8f0',width:2.5},fill:'none',
-      hovertemplate:'Total TE: %{y:.2f}%<extra></extra>'}
+      hovertemplate:'%{x|%b %d %Y} — TE: %{y:.2f}%<extra></extra>'}
   ],{...plotBg,
     xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',bordercolor:'#3b82f6',borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
     yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},

@@ -271,6 +271,17 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
 /* Plotly rangeslider custom styling */
 .rangeslider-handle-min,.rangeslider-handle-max{fill:#3b82f6!important;stroke:none!important}
 .rangeslider-slidebox{fill:rgba(59,130,246,0.12)!important;stroke:#3b82f6!important;stroke-width:1!important}
+/* Light theme */
+body.light-theme{--bg:#f8fafc;--card:#ffffff;--surf:#f1f5f9;--grid:#e2e8f0;--txt:#64748b;--txth:#1e293b}
+body.light-theme thead th{background:#fff}
+body.light-theme tr:hover td,body.light-theme tr.clickable:hover td{background:#f1f5f9}
+body.light-theme tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(241,245,249,.6)}
+body.light-theme .config-panel{background:#fff;border-left-color:#e2e8f0}
+body.light-theme .modal{background:#fff;border-color:#e2e8f0}
+body.light-theme .card{background:#fff;border-color:#e2e8f0}
+/* Presentation mode */
+body.presentation-mode .header,body.presentation-mode #tabBar,body.presentation-mode #validPanel{display:none!important}
+body.presentation-mode #content{padding-top:8px}
 /* Global form controls */
 input[type=checkbox],input[type=radio]{accent-color:#3b82f6}
 select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:8px;appearance:none;-webkit-appearance:none;padding:5px 28px 5px 10px;font-family:inherit;font-size:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
@@ -328,6 +339,29 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="config-field"><label>Strategy Mapping</label>
 <textarea id="cfgStratMap" rows="5" style="width:100%;padding:8px;background:var(--surf);border:1px solid var(--grid);border-radius:6px;color:var(--txth);font-size:11px;font-family:monospace;resize:vertical" placeholder='{"IDM":"PORT_001","ISC":"PORT_002"}'></textarea></div>
 <button class="btn btn-pri" onclick="saveConfig()" style="width:100%;margin-top:8px">Save Settings</button>
+<hr style="border:none;border-top:1px solid var(--grid);margin:18px 0">
+<h3 style="margin-bottom:14px">Preferences</h3>
+<div class="config-field"><label>Default Strategy</label>
+<select id="prefDefaultStrat" onchange="savePref('defaultStrat',this.value)" style="margin-top:4px;width:100%">
+  <option value="">— Last loaded —</option>
+</select></div>
+<div class="config-field"><label>Pinned Strategies</label>
+<div id="prefPinnedWrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>
+<div class="config-field"><label>Theme</label>
+<div style="display:flex;gap:6px;margin-top:4px">
+  <button class="toggle-btn active" id="themeDark" onclick="setThemePref('dark')">Dark</button>
+  <button class="toggle-btn" id="themeLight" onclick="setThemePref('light')">Light</button>
+</div></div>
+<div class="config-field"><label>Number Precision</label>
+<div style="display:flex;gap:6px;margin-top:4px">
+  <button class="toggle-btn active" id="precStd" onclick="setPrecisionPref('standard')">Standard (1dp)</button>
+  <button class="toggle-btn" id="precFull" onclick="setPrecisionPref('full')">Full (2dp)</button>
+</div></div>
+<div class="config-field"><label>Presentation Mode <span id="presModeStatus" style="color:var(--warn);font-size:10px;margin-left:4px"></span></label>
+<div style="margin-top:4px">
+  <button class="toggle-btn" id="presMode" onclick="togglePresMode()" style="width:100%">Toggle Presentation Mode</button>
+</div>
+<p style="font-size:10px;color:var(--txt);margin-top:4px">Hides header and nav for screen sharing</p></div>
 </div>
 <div class="tabs" id="tabBar" style="display:none">
 <button class="tab active" onclick="switchTab('exposures',this)">Exposures</button>
@@ -721,10 +755,13 @@ function init(){
   let keys=Object.keys(A);
   if(!keys.length){A=normalize(genSynthetic());keys=Object.keys(A)}
   cs=A['EM']||A[keys[0]];
-  // Build strategy buttons
+  // Build strategy buttons — pinned first
   let sel=$('stratSel');
-  let defaultKey=keys.includes('EM')?'EM':keys[0];
-  sel.innerHTML=`<select onchange="go(this.value)" style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">${keys.map(k=>`<option value="${k}" style="background:#0f172a"${k===defaultKey?' selected':''}>${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
+  let pinned=(_prefs.pinnedStrats||[]).filter(k=>keys.includes(k));
+  let unpinned=keys.filter(k=>!pinned.includes(k));
+  let orderedKeys=[...pinned,...unpinned];
+  let defaultKey=(_prefs.defaultStrat&&keys.includes(_prefs.defaultStrat))?_prefs.defaultStrat:(keys.includes('EM')?'EM':keys[0]);
+  sel.innerHTML=`<select onchange="go(this.value)" style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">${orderedKeys.map(k=>`<option value="${k}" style="background:#0f172a"${k===defaultKey?' selected':''}>${pinned.includes(k)?'★ ':''}${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
   $('uploadZone').style.display='none';
   $('content').style.display='block';
   $('clearBtn').style.display='inline-block';
@@ -2776,8 +2813,9 @@ function oSt(ticker){
 
 // Close modals on overlay click (handled by ALL_MODALS in modal management section below)
 
-// ===== COMPARISON MODAL (Full v2 style) =====
-let _compSel=null; // Set of selected strategy keys (null = all)
+// ===== COMPARISON MODAL =====
+let _compSel=null;
+const _cmpColors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
 function openComp(selOverride){
   let m=$('compModal');
   let allKeys=Object.keys(A);
@@ -2787,23 +2825,25 @@ function openComp(selOverride){
   let keys=allKeys.filter(k=>_compSel.has(k));
   if(keys.length<2)keys=allKeys;
 
-  // Summary stats table
-  let metrics=['TE','Active Share','Beta','Holdings','Selection Rate','Cash'];
-  let metricKeys=['te','as','beta','h','sr','cash'];
-  let statsRows=metrics.map((name,i)=>{
-    let k=metricKeys[i];
-    let cells=keys.map(sk=>{
-      let v=A[sk].sum[k];
-      if(k==='h')v=v||equityCount(A[sk].hold);
-      let fmt=k==='beta'?f2(v,3):f2(v);
-      let style='';
-      if(k==='te')style=v>=10?'color:var(--neg)':v<5?'color:var(--warn)':'color:var(--pos)';
-      return`<td class="r" style="${style}">${fmt}${k!=='h'&&k!=='beta'?'%':''}</td>`;
+  // Summary stats table (sortable)
+  let metricDefs=[
+    {name:'TE',fn:(sk)=>{let v=A[sk].sum.te;return{v,fmt:f2(v)+'%',sv:v||0,style:v>=10?'color:var(--neg)':v<5?'color:var(--warn)':'color:var(--pos)'}}},
+    {name:'Active Share',fn:(sk)=>{let v=A[sk].sum.as;return{v,fmt:f2(v)+'%',sv:v||0,style:''}}},
+    {name:'Beta',fn:(sk)=>{let v=A[sk].sum.beta;return{v,fmt:f2(v,3),sv:v||0,style:Math.abs(v-1)>0.1?'color:var(--warn)':'color:var(--pos)'}}},
+    {name:'Holdings',fn:(sk)=>{let v=A[sk].sum.h||equityCount(A[sk].hold);return{v,fmt:String(v),sv:v||0,style:''}}},
+    {name:'Cash%',fn:(sk)=>{let v=A[sk].sum.cash;return{v,fmt:f2(v)+'%',sv:v||0,style:''}}},
+    {name:'Top Factor Risk',fn:(sk)=>{let facs=[...A[sk].factors].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));let t=facs[0];return{v:t?Math.abs(t.c||0):0,fmt:t?t.n+' '+f2(t.c)+'%':'—',sv:t?Math.abs(t.c||0):0,style:''}}},
+    {name:'Idio%',fn:(sk)=>{let s=A[sk];let fc=s.factors.reduce((a,f)=>a+Math.abs(f.c||0),0);let idio=s.sum.te?+(100-Math.min(fc/s.sum.te*100,100)).toFixed(1):null;return{v:idio,fmt:idio!=null?idio+'%':'—',sv:idio||0,style:''}}}
+  ];
+  let statsRows=metricDefs.map((md,mi)=>{
+    let cells=keys.map((sk,ki)=>{
+      let r=md.fn(sk);
+      return`<td class="r" data-sv="${r.sv}" style="${r.style}">${r.fmt}</td>`;
     }).join('');
-    return`<tr><td class="metric-name">${name}</td>${cells}</tr>`;
+    return`<tr><td class="metric-name">${md.name}</td>${cells}</tr>`;
   }).join('');
 
-  let s1=A[keys[0]],s2=A[keys[1]];
+  let s1=A[keys[0]];
 
   // Sector heatmap — all strategies, color-coded active weights
   function secHeatColor(v){
@@ -2824,14 +2864,10 @@ function openComp(selOverride){
     <thead><tr><th style="padding:5px 10px;text-align:left">Sector</th>${keys.map(k=>`<th class="r" style="padding:5px 10px">${k}</th>`).join('')}</tr></thead>
     <tbody>${secHeatRows}</tbody></table></div>`;
 
-  // Holdings overlap — full cross-strategy shared holdings with weights
+  // Holdings overlap — cross-strategy shared holdings
   let allHoldSets=keys.map(k=>new Set(A[k].hold.filter(h=>!isCash(h)).map(h=>h.t)));
-  // Shared = appears in 2+ strategies
   let allTickers=new Set(keys.flatMap(k=>A[k].hold.filter(h=>!isCash(h)).map(h=>h.t)));
   let sharedTickers=[...allTickers].filter(t=>allHoldSets.filter(s=>s.has(t)).length>=2);
-  let unique1=[...allHoldSets[0]].filter(t=>!allHoldSets[1].has(t));
-  let unique2=[...allHoldSets[1]].filter(t=>!allHoldSets[0].has(t));
-  // Sort shared by weight in s1
   sharedTickers.sort((a,b)=>{let ha=s1.hold.find(h=>h.t===a);let hb=s1.hold.find(h=>h.t===b);return(hb?hb.p:0)-(ha?ha.p:0)});
 
   let sharedHtml=sharedTickers.slice(0,15).map(t=>{
@@ -2844,81 +2880,79 @@ function openComp(selOverride){
   }).join('');
   let sharedTable=sharedTickers.length?`<div style="overflow-x:auto;max-height:240px;overflow-y:auto"><table>
     <thead><tr><th>Ticker</th><th>Name</th>${keys.map(k=>`<th class="r">${k} Port%</th>`).join('')}</tr></thead>
-    <tbody>${sharedHtml}</tbody></table></div>`:'<div style="color:var(--txt);font-size:12px;padding:8px">No shared holdings between first two strategies</div>';
+    <tbody>${sharedHtml}</tbody></table></div>`:'<div style="color:var(--txt);font-size:12px;padding:8px">No shared holdings between selected strategies</div>';
 
   let checkboxes=allKeys.map(k=>{
     let sel=_compSel.has(k);
     return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border-radius:6px;background:${sel?'rgba(59,130,246,.18)':'rgba(51,65,85,.3)'};font-size:11px;font-weight:600;color:${sel?'var(--txth)':'var(--txt)'}">
-      <input type="checkbox" style="accent-color:var(--pri)" ${sel?'checked':''} onchange="(function(k,el){let s=new Set(_compSel);if(el.checked)s.add(k);else if(s.size>2)s.delete(k);else{el.checked=true;return};openComp(s)})('${k}',this)">${k}</label>`;
+      <input type="checkbox" ${sel?'checked':''} onchange="(function(k,el){let s=new Set(_compSel);if(el.checked)s.add(k);else if(s.size>2)s.delete(k);else{el.checked=true;return};openComp(s)})('${k}',this)">${k}</label>`;
   }).join('');
 
   $('compContent').innerHTML=`
     <h2>Cross-Strategy Comparison<button class="close" onclick="$('compModal').classList.remove('show')">&times;</button></h2>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center">
       <span style="font-size:11px;color:var(--txt);margin-right:2px">Show:</span>${checkboxes}
+      <button style="padding:3px 8px;background:rgba(59,130,246,.12);border:1px solid var(--pri);color:var(--pri);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit" onclick="openComp(new Set(Object.keys(A)))">Select All</button>
+      <button style="padding:3px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit" onclick="(function(){let k=Object.keys(A);openComp(new Set(k.slice(0,2)))})()">Clear</button>
     </div>
 
     <div class="card-title" style="margin-bottom:8px">Summary Statistics</div>
     <div style="overflow-x:auto;margin-bottom:20px">
-    <table class="comp-stats-table"><thead><tr><th>Metric</th>${keys.map(k=>`<th class="r">${k}</th>`).join('')}</tr></thead><tbody>${statsRows}</tbody></table>
+    <table id="tbl-cmp" class="comp-stats-table">
+      <thead><tr><th onclick="sortTbl('tbl-cmp',0)" style="cursor:pointer">Metric</th>${keys.map((k,i)=>`<th class="r" onclick="sortTbl('tbl-cmp',${i+1})" style="cursor:pointer">${k}</th>`).join('')}</tr></thead>
+      <tbody>${statsRows}</tbody></table>
     </div>
 
     <div class="grid g2" style="margin-bottom:20px">
       <div>
-        <div class="card-title" style="margin-bottom:8px">Risk Radar</div>
+        <div class="card-title" style="margin-bottom:8px">Risk Radar <span style="font-size:10px;color:var(--txt);font-weight:400">(normalized 0–1)</span></div>
         <div id="compRadarDiv" style="height:280px"></div>
       </div>
       <div>
-        <div class="card-title" style="margin-bottom:8px">Factor Exposures (${keys.slice(0,2).join(' vs ')})</div>
+        <div class="card-title" style="margin-bottom:8px">Factor Active Exposures</div>
         <div id="compFacDiv" style="height:280px"></div>
       </div>
     </div>
 
-    <div class="card-title" style="margin-bottom:8px">Sector Active Weight Heatmap (all strategies)</div>
+    <div class="card-title" style="margin-bottom:8px">Sector Active Weight Heatmap</div>
     <div style="margin-bottom:20px">${secHeatHtml}</div>
 
     <div class="card-title" style="margin-bottom:8px">Holdings Overlap</div>
-    <div style="display:flex;gap:16px;margin-bottom:12px">
-      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:100px">
+    <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:90px">
         <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Shared (2+ strats)</div>
         <div style="font-size:28px;font-weight:700;color:var(--pos)">${sharedTickers.length}</div>
       </div>
-      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:100px">
-        <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Only ${keys[0]}</div>
-        <div style="font-size:28px;font-weight:700;color:var(--pri)">${unique1.length}</div>
-      </div>
-      <div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:100px">
-        <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Only ${keys[1]}</div>
-        <div style="font-size:28px;font-weight:700;color:var(--acc)">${unique2.length}</div>
-      </div>
+      ${keys.map((k,i)=>`<div style="text-align:center;padding:12px 16px;background:var(--surf);border-radius:8px;min-width:90px">
+        <div style="font-size:11px;color:var(--txt);margin-bottom:4px">Only ${k}</div>
+        <div style="font-size:28px;font-weight:700;color:${_cmpColors[i%_cmpColors.length]}">${[...allHoldSets[i]].filter(t=>allHoldSets.every((s,j)=>j===i||!s.has(t))).length}</div>
+      </div>`).join('')}
     </div>
     <div class="card-title" style="margin-bottom:6px;font-size:10px">Shared Holdings (top 15 by ${keys[0]} weight)</div>
     ${sharedTable}`;
   m.classList.add('show');
 
   setTimeout(()=>{
-    // Radar
-    let colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
-    let traces=keys.map((k,i)=>{
-      let s=A[k];
-      return{type:'scatterpolar',name:k,
-        r:[s.sum.te,s.sum.as/10,s.sum.beta*5,(s.sum.h||equityCount(s.hold))/10,(s.sum.sr||0)/10,s.sum.te],
-        theta:['TE','AS/10','Beta*5','H/10','SR/10','TE'],
-        fill:'toself',fillcolor:colors[i%colors.length]+'20',line:{color:colors[i%colors.length],width:2}
-      };
+    // Radar — proper 0-1 normalization per axis
+    let radarAxes=['TE','Active Share','Beta','Holdings','Cash%'];
+    let radarGetters=[(k)=>A[k].sum.te||0,(k)=>A[k].sum.as||0,(k)=>Math.abs((A[k].sum.beta||1)-1),(k)=>A[k].sum.h||equityCount(A[k].hold)||0,(k)=>A[k].sum.cash||0];
+    let axRaw=radarGetters.map(g=>keys.map(k=>g(k)));
+    let axNorm=axRaw.map(vals=>{let mn=Math.min(...vals),mx=Math.max(...vals);return vals.map(v=>mx>mn?(v-mn)/(mx-mn):0.5)});
+    let radarTraces=keys.map((k,i)=>{
+      let r=axNorm.map(ax=>ax[i]);
+      return{type:'scatterpolar',name:k,r:[...r,r[0]],theta:[...radarAxes,radarAxes[0]],
+        fill:'toself',fillcolor:_cmpColors[i%_cmpColors.length]+'1a',line:{color:_cmpColors[i%_cmpColors.length],width:2},
+        hovertemplate:'%{theta}: %{r:.2f}<extra>'+k+'</extra>'};
     });
-    Plotly.newPlot('compRadarDiv',traces,{...plotBg,polar:{bgcolor:'transparent',radialaxis:{gridcolor:'#334155',tickfont:{size:9}},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},legend:{orientation:'h',y:-0.15,font:{size:10}},margin:{l:40,r:40,t:20,b:60}},plotCfg);
+    Plotly.newPlot('compRadarDiv',radarTraces,{...plotBg,polar:{bgcolor:'transparent',radialaxis:{range:[0,1],gridcolor:'#334155',tickfont:{size:9},tickvals:[0,.25,.5,.75,1]},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},legend:{orientation:'h',y:-0.15,font:{size:10}},margin:{l:40,r:40,t:20,b:60}},plotCfg);
 
-    // Factor exposure diff bar chart
-    let facDiff=FACS.map(f=>{
-      let f1=s1.factors.find(x=>x.n===f);
-      let f2f=s2.factors.find(x=>x.n===f);
-      return{n:f,v1:f1?f1.a??0:0,v2:f2f?f2f.a??0:0};
+    // Factor exposure — all selected strategies
+    let facNames=FACS;
+    let facTraces=keys.map((k,i)=>{
+      let facs=facNames.map(f=>{let fx=A[k].factors.find(x=>x.n===f);return fx?fx.a??0:0});
+      return{y:facNames,x:facs,name:k,type:'bar',orientation:'h',marker:{color:_cmpColors[i%_cmpColors.length]+'cc'}};
     });
-    Plotly.newPlot('compFacDiv',[
-      {y:facDiff.map(f=>f.n),x:facDiff.map(f=>f.v1),name:keys[0],type:'bar',orientation:'h',marker:{color:'#3b82f6'}},
-      {y:facDiff.map(f=>f.n),x:facDiff.map(f=>f.v2),name:keys[1],type:'bar',orientation:'h',marker:{color:'#10b981'}}
-    ],{...plotBg,barmode:'group',yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Exposure'},legend:{orientation:'h',y:1.12,font:{size:10}}},plotCfg);
+    Plotly.newPlot('compFacDiv',facTraces,{...plotBg,barmode:'group',yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure'},legend:{orientation:'h',y:1.12,font:{size:10}},margin:{...plotBg.margin,l:110}},plotCfg);
   },50);
 }
 
@@ -3203,7 +3237,10 @@ function copyValue(v){
 }
 
 // ===== CONFIG PANEL =====
-function toggleConfig(){$('configPanel').classList.toggle('open')}
+function toggleConfig(){
+  $('configPanel').classList.toggle('open');
+  if($('configPanel').classList.contains('open'))populatePrefPanel();
+}
 function setDataSrc(src){
   $('srcFile').classList.toggle('active',src==='file');
   $('srcLive').classList.toggle('active',src==='live');
@@ -3228,6 +3265,63 @@ function loadConfig(){
   }catch(e){}
 }
 
+// ===== USER PREFERENCES =====
+const PREFS_KEY='rr_prefs';
+let _prefs={defaultStrat:'',pinnedStrats:[],theme:'dark',precision:'standard',presentationMode:false};
+function loadPrefs(){
+  try{let saved=JSON.parse(localStorage.getItem(PREFS_KEY)||'{}');Object.assign(_prefs,saved);}catch(e){}
+  applyPrefs();
+}
+function savePrefs(){try{localStorage.setItem(PREFS_KEY,JSON.stringify(_prefs));}catch(e){}}
+function savePref(key,val){_prefs[key]=val;savePrefs();}
+function applyPrefs(){
+  document.body.classList.toggle('light-theme',_prefs.theme==='light');
+  document.body.classList.toggle('presentation-mode',!!_prefs.presentationMode);
+  let td=$('themeDark'),tl=$('themeLight');
+  if(td&&tl){td.classList.toggle('active',_prefs.theme!=='light');tl.classList.toggle('active',_prefs.theme==='light')}
+  let ps=$('precStd'),pf=$('precFull');
+  if(ps&&pf){ps.classList.toggle('active',_prefs.precision!=='full');pf.classList.toggle('active',_prefs.precision==='full')}
+  let pm=$('presModeStatus');if(pm)pm.textContent=_prefs.presentationMode?'ON':'';
+}
+function setThemePref(t){_prefs.theme=t;savePrefs();applyPrefs();}
+function setPrecisionPref(p){
+  _prefs.precision=p;savePrefs();applyPrefs();
+  // Rebind f2/fp to new precision if needed, then re-render
+  if(cs)upd();
+}
+function togglePresMode(){_prefs.presentationMode=!_prefs.presentationMode;savePrefs();applyPrefs();}
+function populatePrefPanel(){
+  let sel=$('prefDefaultStrat');
+  if(sel){
+    let keys=Object.keys(A);
+    sel.innerHTML='<option value="">— Last loaded —</option>'+keys.map(k=>`<option value="${k}"${_prefs.defaultStrat===k?' selected':''}>${k} — ${A[k]?A[k].name:k}</option>`).join('');
+  }
+  let wrap=$('prefPinnedWrap');
+  if(wrap){
+    let keys=Object.keys(A);
+    if(!keys.length){wrap.innerHTML='<span style="font-size:11px;color:var(--txt)">Load data to pin strategies</span>';return}
+    wrap.innerHTML=keys.map(k=>`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;padding:3px 6px;border-radius:4px;background:var(--surf)"><input type="checkbox" ${_prefs.pinnedStrats.includes(k)?'checked':''} onchange="togglePinned('${k}',this.checked)"> ★ ${k}</label>`).join('');
+  }
+}
+function togglePinned(k,checked){
+  if(checked&&!_prefs.pinnedStrats.includes(k))_prefs.pinnedStrats.push(k);
+  else if(!checked)_prefs.pinnedStrats=_prefs.pinnedStrats.filter(x=>x!==k);
+  savePrefs();
+  refreshStratSel();
+}
+function refreshStratSel(){
+  let keys=Object.keys(A);if(!keys.length)return;
+  let pinned=_prefs.pinnedStrats.filter(k=>keys.includes(k));
+  let unpinned=keys.filter(k=>!pinned.includes(k));
+  let ordered=[...pinned,...unpinned];
+  let cur=cs?cs.id:ordered[0];
+  let sel=$('stratSel');
+  if(!sel)return;
+  let dd=sel.querySelector('select');
+  if(dd){
+    dd.innerHTML=ordered.map(k=>`<option value="${k}"${k===cur?' selected':''}>${pinned.includes(k)?'★ ':''}${k} — ${A[k]?A[k].name:k}</option>`).join('');
+  }
+}
 // ===== FACTSET API WRAPPER =====
 async function fetchFromAPI(endpoint,params={}){
   let cfg={};
@@ -3898,88 +3992,151 @@ function exportAllHoldings(){
 
 function generateEmailSnapshot(){
   let s=cs;
-  let teColor=s.sum.te>=10?'#ef4444':s.sum.te<5?'#f59e0b':'#10b981';
-  let betaColor=Math.abs(s.sum.beta-1)>0.1?'#f59e0b':'#10b981';
-  let topOW=[...s.sectors].sort((a,b)=>b.a-a.a).slice(0,3);
-  let topUW=[...s.sectors].sort((a,b)=>a.a-b.a).slice(0,3);
-  let sigFac=s.factors.filter(f=>Math.abs(f.a??0)>0.15).sort((a,b)=>Math.abs(b.a??0)-Math.abs(a.a??0)).slice(0,8);
-  let topHold=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>b.p-a.p).slice(0,10);
   let dateStr=$('dataTimestamp').textContent||new Date().toLocaleDateString();
 
-  let sectorRows=[...topOW,...topUW].map(x=>`<tr>
-    <td style="padding:6px 10px;font-size:12px;color:#333">${x.n}</td>
-    <td style="padding:6px 10px;font-size:12px;text-align:right">${f2(x.p)}%</td>
-    <td style="padding:6px 10px;font-size:12px;text-align:right">${f2(x.b)}%</td>
-    <td style="padding:6px 10px;font-size:12px;text-align:right;color:${x.a>=0?'#059669':'#dc2626'};font-weight:600">${fp(x.a)}%</td>
+  // Deltas from hist.sum
+  let prevSum=s.hist&&s.hist.sum&&s.hist.sum.length>=2?s.hist.sum[s.hist.sum.length-2]:null;
+  let teDelta=prevSum&&s.sum.te!=null&&prevSum.te!=null?+(s.sum.te-prevSum.te).toFixed(2):null;
+  let asDelta=prevSum&&s.sum.as!=null&&prevSum.as!=null?+(s.sum.as-prevSum.as).toFixed(1):null;
+  let betaDelta=prevSum&&s.sum.beta!=null&&prevSum.beta!=null?+(s.sum.beta-prevSum.beta).toFixed(3):null;
+  let hDelta=prevSum&&prevSum.h?((s.sum.h||equityCount(s.hold))-prevSum.h):null;
+
+  // Factor/idio split
+  let totalFacTE=s.factors.reduce((a,f)=>a+Math.abs(f.c||0),0);
+  let facPct=s.sum.te?+(totalFacTE/s.sum.te*100).toFixed(1):null;
+  let idioPct=facPct!=null?+(100-facPct).toFixed(1):null;
+
+  // Colors
+  let teColor=s.sum.te>=10?'#dc2626':s.sum.te<5?'#d97706':'#059669';
+  let betaColor=Math.abs((s.sum.beta||1)-1)>0.1?'#d97706':'#059669';
+
+  // Delta formatter
+  const dFmt=(v,unit='',negGood=false)=>{
+    if(v==null)return'<span style="color:#94a3b8;font-size:10px">no prior</span>';
+    let good=negGood?v<0:v>0;
+    let col=v>0?(negGood?'#059669':'#dc2626'):(negGood?'#dc2626':'#059669');
+    if(v===0)col='#94a3b8';
+    let arrow=v>0?'↑':'↓';
+    return`<span style="font-size:10px;color:${col}">${arrow}${Math.abs(v).toFixed(v===Math.round(v)?0:2)}${unit} vs prior</span>`;
+  };
+
+  // Section 2: Top 5 by %T
+  let top5Risk=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>(b.tr||0)-(a.tr||0)).slice(0,5);
+  let hold5Rows=top5Risk.map((h,i)=>`<tr style="background:${i%2?'#f9fafb':'#fff'}">
+    <td style="padding:5px 10px;font-size:11px;font-weight:700;color:#1e293b">${h.t}</td>
+    <td style="padding:5px 10px;font-size:11px;color:#475569;max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${h.n}</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:right">${f2(h.p,1)}%</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">${fp(h.tr,2)}%</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:center;font-weight:700;color:${h.r!=null?(h.r<=2?'#059669':h.r>=4?'#dc2626':'#d97706'):'#94a3b8'}">${h.r!=null?'Q'+h.r:'—'}</td>
   </tr>`).join('');
 
-  let facRows=sigFac.map(f=>`<tr>
-    <td style="padding:6px 10px;font-size:12px;color:#333">${f.n}</td>
-    <td style="padding:6px 10px;font-size:12px;text-align:right;color:${(f.a??0)>=0?'#059669':'#dc2626'};font-weight:600">${fp(f.a,3)}</td>
-    <td style="padding:6px 10px;font-size:12px;text-align:right">${f2(f.c)}</td>
-  </tr>`).join('');
+  // Section 3: Primary factors
+  let sigFac=s.factors.filter(f=>Math.abs(f.a??0)>0.1).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).slice(0,8);
+  let facRows=sigFac.map(f=>{
+    let isProf=f.n==='Profitability';
+    return`<tr style="background:${isProf?'rgba(5,150,105,.04)':'transparent'}">
+      <td style="padding:5px 10px;font-size:11px;color:${isProf?'#059669':'#334155'};font-weight:${isProf?700:400}">${isProf?'✦ ':''}${f.n}</td>
+      <td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:700;color:${(f.a??0)>=0?'#059669':'#dc2626'}">${fp(f.a,3)}</td>
+      <td style="padding:5px 10px;font-size:11px;text-align:right;color:#475569">${f2(f.c,2)}%</td>
+    </tr>`;
+  }).join('');
 
-  let holdRows=topHold.map((h,i)=>`<tr style="background:${i%2?'#f9f9f9':'#fff'}">
-    <td style="padding:5px 10px;font-size:11px;font-weight:600;color:#333">${h.t}</td>
-    <td style="padding:5px 10px;font-size:11px;color:#555">${h.n}</td>
-    <td style="padding:5px 10px;font-size:11px;text-align:right">${f2(h.p)}%</td>
-    <td style="padding:5px 10px;font-size:11px;text-align:right;color:${(h.a||0)>=0?'#059669':'#dc2626'}">${fp(h.a)}%</td>
-    <td style="padding:5px 10px;font-size:11px;text-align:center">${h.r!=null?'Q'+h.r:'—'}</td>
-  </tr>`).join('');
+  // Section 4: Sector tilts
+  let topOW=[...s.sectors].sort((a,b)=>b.a-a.a).slice(0,5);
+  let topUW=[...s.sectors].sort((a,b)=>a.a-b.a).slice(0,5);
+  let owRows=topOW.map(x=>`<tr><td style="padding:4px 10px;font-size:11px;color:#334155">${x.n}</td><td style="padding:4px 10px;font-size:11px;text-align:right;font-weight:700;color:#059669">${fp(x.a)}%</td></tr>`).join('');
+  let uwRows=topUW.map(x=>`<tr><td style="padding:4px 10px;font-size:11px;color:#334155">${x.n}</td><td style="padding:4px 10px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">${fp(x.a)}%</td></tr>`).join('');
 
-  let emailHtml=`<!DOCTYPE html><html><head><style>
-    body{font-family:Arial,sans-serif;background:#f5f5f5;padding:20px}
-    .container{max-width:720px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1)}
-    .header{background:#080e1e;color:#e2e8f0;padding:20px 24px}
-    .header h1{margin:0;font-size:20px;font-weight:700}
-    .header .sub{color:#94a3b8;font-size:12px;margin-top:4px}
-    .metrics{display:flex;padding:16px 24px;gap:12px;border-bottom:1px solid #eee;flex-wrap:wrap}
-    .metric{flex:1;min-width:100px;text-align:center;padding:10px;border-radius:8px;background:#f8f9fa}
-    .metric .label{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px}
-    .metric .value{font-size:22px;font-weight:700;margin-top:4px}
-    .section{padding:14px 24px;border-bottom:1px solid #eee}
-    .section h3{font-size:12px;color:#666;text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px 0}
+  // Section 5: Changes this week
+  let changes=[];
+  if(teDelta!=null&&Math.abs(teDelta)>=0.01)changes.push(`Tracking error ${teDelta>0?'increased':'decreased'} to ${f2(s.sum.te)}% (${teDelta>0?'+':''}${teDelta.toFixed(2)}pp).`);
+  if(asDelta!=null&&Math.abs(asDelta)>=0.5)changes.push(`Active share ${asDelta>0?'increased':'decreased'} by ${Math.abs(asDelta).toFixed(1)}pp to ${f2(s.sum.as)}%.`);
+  if(s.hist&&s.hist.fac){
+    let moves=Object.entries(s.hist.fac).map(([n,h])=>{
+      if(!h||h.length<2)return null;
+      let pe=h[h.length-2].a??h[h.length-2].e??0;let ce=h[h.length-1].a??h[h.length-1].e??0;
+      return{n,d:ce-pe,abs:Math.abs(ce-pe)};
+    }).filter(Boolean).sort((a,b)=>b.abs-a.abs);
+    if(moves.length&&moves[0].abs>0.05)changes.push(`Largest factor move: ${moves[0].n} exposure ${moves[0].d>0?'increased':'decreased'} by ${Math.abs(moves[0].d).toFixed(3)}.`);
+  }
+  if(hDelta!=null&&hDelta!==0)changes.push(`Holdings count changed by ${hDelta>0?'+':''}${hDelta} to ${s.sum.h||equityCount(s.hold)}.`);
+  if(!changes.length)changes.push('No significant changes detected vs prior period.');
+
+  // Narratives
+  let teNarr=s.sum.te>=10?'Tracking error is elevated above 10% — review concentration and factor exposures.':s.sum.te<5?'Tracking error is below typical target range — consider active opportunities.':'Tracking error within normal range.';
+  let facNarr=sigFac.length?`Portfolio has ${(sigFac[0].a??0)>=0?'positive':'negative'} tilt in ${sigFac[0].n} (${fp(sigFac[0].a,3)} active exposure, ${f2(sigFac[0].c,2)}% TE contribution).`:'';
+
+  let emailHtml=`<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;background:#f1f5f9;padding:20px}
+    .container{max-width:740px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.12)}
+    .hdr{background:linear-gradient(135deg,#080e1e 0%,#0f172a 100%);color:#e2e8f0;padding:24px 28px}
+    .brand{font-size:10px;color:#475569;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+    .hdr h1{font-size:24px;font-weight:700;color:#fff;margin-bottom:3px;line-height:1.2}
+    .hdr .sub{color:#94a3b8;font-size:12px}
+    .metrics{display:flex;padding:0;border-bottom:2px solid #f1f5f9}
+    .met{flex:1;text-align:center;padding:16px 6px;border-right:1px solid #f1f5f9}
+    .met:last-child{border-right:none}
+    .met .lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+    .met .val{font-size:20px;font-weight:700;line-height:1}
+    .met .dlta{font-size:10px;color:#94a3b8;margin-top:3px}
+    .narr{padding:10px 28px;font-size:11px;color:#64748b;font-style:italic;background:#fafbfc;border-bottom:1px solid #f1f5f9}
+    .sec{padding:16px 28px;border-bottom:1px solid #f1f5f9}
+    .sec-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+    .sec-num{width:18px;height:18px;background:#1e293b;color:#fff;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sec-ttl{font-size:11px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:.5px}
     table{width:100%;border-collapse:collapse}
-    th{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;border-bottom:2px solid #eee;text-align:left}
+    th{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-bottom:2px solid #f1f5f9;text-align:left;font-weight:600}
     th.r{text-align:right}
-    .footer{padding:10px 24px;font-size:10px;color:#999;text-align:center}
-  </style></head><body>
-  <div class="container">
-    <div class="header">
-      <h1>REDWOOD Risk Control Panel</h1>
-      <div class="sub">${s.name} (${s.id}) &nbsp;|&nbsp; Benchmark: ${s.benchmark} &nbsp;|&nbsp; ${dateStr}</div>
+    .tcols{display:flex;gap:16px}
+    .tcols>div{flex:1}
+    .tcols>div+div{padding-left:16px;border-left:1px solid #f1f5f9}
+    .tcol-ttl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding:0 10px}
+    .changes{list-style:none}
+    .changes li{font-size:11px;color:#334155;padding:4px 10px 4px 22px;border-bottom:1px solid #f8fafc;position:relative}
+    .changes li::before{content:'›';position:absolute;left:10px;color:#3b82f6;font-weight:700}
+    .footer{padding:12px 28px;font-size:10px;color:#94a3b8;text-align:center;background:#f8fafc}
+  </style></head><body><div class="container">
+    <div class="hdr">
+      <div class="brand">Redwood Risk Control Panel</div>
+      <h1>Risk Report — ${dateStr}</h1>
+      <div class="sub">${s.name} (${s.id}) &nbsp;·&nbsp; Benchmark: ${s.benchmark}</div>
     </div>
     <div class="metrics">
-      <div class="metric"><div class="label">Tracking Error</div><div class="value" style="color:${teColor}">${f2(s.sum.te)}%</div></div>
-      <div class="metric"><div class="label">Active Share</div><div class="value">${f2(s.sum.as)}%</div></div>
-      <div class="metric"><div class="label">Beta</div><div class="value" style="color:${betaColor}">${f2(s.sum.beta,3)}</div></div>
-      <div class="metric"><div class="label">Holdings</div><div class="value">${s.sum.h||equityCount(s.hold)}</div></div>
-      <div class="metric"><div class="label">Cash</div><div class="value">${f2(s.sum.cash)}%</div></div>
+      <div class="met"><div class="lbl">Tracking Error</div><div class="val" style="color:${teColor}">${f2(s.sum.te)}%</div><div class="dlta">${dFmt(teDelta,'pp',true)}</div></div>
+      <div class="met"><div class="lbl">Idio Risk</div><div class="val" style="color:#1e293b">${idioPct!=null?idioPct+'%':'—'}</div><div class="dlta">${facPct!=null?facPct+'% factor':''}</div></div>
+      <div class="met"><div class="lbl">Active Share</div><div class="val">${f2(s.sum.as)}%</div><div class="dlta">${dFmt(asDelta,'pp',false)}</div></div>
+      <div class="met"><div class="lbl">Beta</div><div class="val" style="color:${betaColor}">${f2(s.sum.beta,3)}</div><div class="dlta">${dFmt(betaDelta,'',true)}</div></div>
+      <div class="met"><div class="lbl">Holdings</div><div class="val">${s.sum.h||equityCount(s.hold)}</div><div class="dlta">${dFmt(hDelta,'',false)}</div></div>
     </div>
-    <div class="section">
-      <h3>Sector Tilts (Top OW / UW)</h3>
-      <table><thead><tr><th>Sector</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead>
-      <tbody>${sectorRows}</tbody></table>
+    <div class="narr">${teNarr}</div>
+    <div class="sec">
+      <div class="sec-hdr"><span class="sec-num">2</span><span class="sec-ttl">Top 5 Holdings by TE Contribution</span></div>
+      <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">%T</th><th class="r">Rank</th></tr></thead><tbody>${hold5Rows}</tbody></table>
     </div>
-    ${sigFac.length?`<div class="section">
-      <h3>Significant Factor Tilts</h3>
-      <table><thead><tr><th>Factor</th><th class="r">Active Exp.</th><th class="r">TE Contrib%</th></tr></thead>
-      <tbody>${facRows}</tbody></table>
+    ${sigFac.length?`<div class="sec">
+      <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-ttl">Factor Exposures</span></div>
+      ${facNarr?`<p style="font-size:11px;color:#64748b;font-style:italic;margin-bottom:8px">${facNarr}</p>`:''}
+      <table><thead><tr><th>Factor</th><th class="r">Active Exp.</th><th class="r">TE Contrib%</th></tr></thead><tbody>${facRows}</tbody></table>
     </div>`:''}
-    ${holdRows?`<div class="section">
-      <h3>Top 10 Holdings</h3>
-      <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead>
-      <tbody>${holdRows}</tbody></table>
-    </div>`:''}
-    <div class="footer">Generated by Redwood Risk Control Panel &nbsp;|&nbsp; ${new Date().toLocaleString()}</div>
+    <div class="sec">
+      <div class="sec-hdr"><span class="sec-num">4</span><span class="sec-ttl">Sector Active Weights</span></div>
+      <div class="tcols">
+        <div><div class="tcol-ttl" style="color:#059669">▲ Top Overweights</div>
+          <table><thead><tr><th>Sector</th><th class="r">Active</th></tr></thead><tbody>${owRows}</tbody></table></div>
+        <div><div class="tcol-ttl" style="color:#dc2626">▼ Top Underweights</div>
+          <table><thead><tr><th>Sector</th><th class="r">Active</th></tr></thead><tbody>${uwRows}</tbody></table></div>
+      </div>
+    </div>
+    <div class="sec">
+      <div class="sec-hdr"><span class="sec-num">5</span><span class="sec-ttl">Changes This Period</span></div>
+      <ul class="changes">${changes.map(c=>`<li>${c}</li>`).join('')}</ul>
+    </div>
+    <div class="footer">Generated by Redwood Risk Control Panel &nbsp;·&nbsp; ${new Date().toLocaleString()}</div>
   </div></body></html>`;
 
-  // Copy to clipboard
-  navigator.clipboard.writeText(emailHtml).then(()=>{
-    showToast('Email snapshot copied — paste into your email client');
-  });
-  // Also open in new window for preview
-  let win=window.open('','_blank','width=750,height=700');
+  navigator.clipboard.writeText(emailHtml).then(()=>showToast('Email snapshot copied — paste into your email client'));
+  let win=window.open('','_blank','width=780,height=850');
   if(win){win.document.write(emailHtml);win.document.close()}
 }
 
@@ -4398,6 +4555,7 @@ function startLiveRefresh(){
 
 // ===== AUTO-LOAD WITH DEMO DATA =====
 window.addEventListener('DOMContentLoaded',()=>{
+  loadPrefs();
   loadConfig();
   // Check for shared state in URL hash
   if(location.hash){
@@ -4406,8 +4564,11 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(state.t)activeTab=state.t;
     }catch(e){}
   }
-  // Nuclear clear — wipe ALL localStorage every time
-  try{localStorage.clear();}catch(e){}
+  // Clear session data but preserve user preferences
+  let _sp='';
+  try{_sp=localStorage.getItem(PREFS_KEY)||'';}catch(e){}
+  try{localStorage.removeItem('rr_config');localStorage.removeItem('rr_history');}catch(e){}
+  try{if(_sp)localStorage.setItem(PREFS_KEY,_sp);}catch(e){}
   // Auto-load latest_data.json if available (for server deployment)
   // Falls back to upload zone if file not found
   fetch('latest_data.json').then(r=>{
@@ -4419,7 +4580,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(keys.length){
       document.getElementById('uploadZone').style.display='none';
       document.getElementById('content').style.display='block';
-      let defaultStrat=keys.includes('EM')?'EM':keys[0];
+      let defaultStrat=(_prefs.defaultStrat&&keys.includes(_prefs.defaultStrat))?_prefs.defaultStrat:(keys.includes('EM')?'EM':keys[0]);
       go(defaultStrat);
       showToast('Auto-loaded latest data — '+keys.length+' strategies','var(--pos)');
     }else{throw new Error('No strategies');}

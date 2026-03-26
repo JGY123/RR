@@ -156,6 +156,14 @@ th.sd::after{content:' ▼';font-size:9px;opacity:0.7}
 /* Sticky thead + alternating stripes */
 thead th{background:var(--card);position:sticky;top:0;z-index:1}
 tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(15,23,42,0.5)}
+/* Factor group pills */
+.fgp{padding:3px 12px;border-radius:12px;border:1px solid var(--grid);background:#1e293b;color:var(--txt);cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms}
+.fgp:hover{border-color:var(--pri);color:var(--txth)}
+.fgp.active{background:#3b82f6;color:#fff;border-color:#3b82f6;box-shadow:0 0 6px rgba(59,130,246,.35)}
+.fgp.prof.active{background:#10b981;border-color:#10b981;box-shadow:0 0 6px rgba(16,185,129,.35)}
+/* Threshold range slider */
+input[type=range].thresh-sl{-webkit-appearance:none;height:3px;background:#334155;border-radius:2px;outline:none}
+input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#3b82f6;cursor:pointer;box-shadow:0 0 3px rgba(59,130,246,.5)}
 
 /* Global search */
 .global-search{position:relative}
@@ -1613,14 +1621,21 @@ function rRisk(){
         </label>
       </div>
     </div>
-    <!-- Threshold slider + factor checkboxes -->
+    <!-- Group pills + threshold slider + factor checkboxes -->
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
+      <button class="fgp active" onclick="setFacGroup('all',this)">All</button>
+      <button class="fgp" onclick="setFacGroup('valGrowth',this)">Value / Growth</button>
+      <button class="fgp" onclick="setFacGroup('mktBehavior',this)">Market Behavior</button>
+      <button class="fgp prof" onclick="setFacGroup('profitability',this)">Profitability</button>
+      <button class="fgp" onclick="setFacGroup('secondary',this)">Secondary</button>
+    </div>
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
       <label style="font-size:11px;display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--txt)">
         Min |contrib|:
-        <input type="range" id="facThreshSlider" min="0" max="20" step="0.5" value="1"
+        <input type="range" class="thresh-sl" id="facThreshSlider" min="0" max="20" step="0.5" value="0"
           oninput="document.getElementById('facThreshVal').textContent=parseFloat(this.value).toFixed(1);setFacThresh()"
-          style="width:80px;accent-color:#3b82f6">
-        <span id="facThreshVal" style="font-weight:600;color:var(--txth);min-width:26px">1.0</span><span style="color:var(--txt)">%</span>
+          style="width:80px">
+        <span id="facThreshVal" style="font-weight:600;color:var(--txth);min-width:26px">0.0</span><span style="color:var(--txt)">%</span>
       </label>
       <div style="display:flex;gap:4px">
         <button onclick="setFacBarAll(true)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">All</button>
@@ -1628,9 +1643,15 @@ function rRisk(){
       </div>
     </div>
     <div id="facBarToggles" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-      ${facMCR.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" ${Math.abs(f.c||0)>=1?'checked':''} onchange="rRiskFacBarsMode()"><span style="color:var(--txth)">${f.n}</span></label>`).join('')}
+      ${facMCR.map(f=>{
+        let isProf=f.n==='Profitability';
+        return`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid ${isProf?'#10b981':' var(--grid)'}${isProf?';background:rgba(16,185,129,0.08)':''}"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" checked onchange="rRiskFacBarsMode()"><span style="color:${isProf?'#10b981':'var(--txth)'}">${f.n}${isProf?' ✦':''}</span></label>`;
+      }).join('')}
     </div>
-    <div id="riskFacBarDiv" style="height:${Math.max(200,facMCR.filter(f=>Math.abs(f.c||0)>=1).length*38+20)}px"></div>
+    <div id="profAlert" style="display:none;margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,.1);border-left:3px solid var(--warn);border-radius:0 4px 4px 0;font-size:11px;color:var(--warn)">
+      ⚠ Profitability exposure declining — monitor for intended vs unintended reduction
+    </div>
+    <div id="riskFacBarDiv" style="height:${Math.max(200,facMCR.length*36+20)}px"></div>
   </div>
 
   <!-- Factor Exposures Table -->
@@ -1800,21 +1821,26 @@ function rRiskFacBarsMode(){
   let traces=[];
   let layout={...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},margin:{l:140,r:80,t:10,b:40}};
 
+  // Profitability bar color helper
+  let facBarColor=f=>f.n==='Profitability'?((f.e??0)>=0?'#10b981':'#f59e0b'):(f.e??0)>=0?'#3b82f6':'#f59e0b';
+  let facShadowColor=f=>f.n==='Profitability'?'rgba(16,185,129,0.15)':(f.e??0)>=0?'rgba(59,130,246,0.15)':'rgba(245,158,11,0.15)';
+
   if(mode==='te'){
     let hasDev=facMCR.some(f=>f.devPct!=null&&f.devPct>0);
     if(hasDev){
-      // Shadow bar: same hue as main bar, 0.15 opacity
+      // Shadow bar showing factor return std dev — lighter opacity
       traces.push({
         y:facMCR.map(f=>f.n),x:facMCR.map(f=>Math.max(f.devPct||0,Math.abs(f.c||0))),type:'bar',orientation:'h',
-        name:'Factor σ',marker:{color:facMCR.map(f=>(f.e??0)>=0?'rgba(59,130,246,0.15)':'rgba(245,158,11,0.15)')},showlegend:false,
+        name:'Factor σ',marker:{color:facMCR.map(facShadowColor)},showlegend:false,
         hovertemplate:'%{y}<br>Factor σ: %{x:.1f}% of TE<extra></extra>'
       });
     }
     traces.push({
       y:facMCR.map(f=>f.n),x:facMCR.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib',
-      marker:{color:facMCR.map(f=>(f.e??0)>=0?'#3b82f6':'#f59e0b')},
+      marker:{color:facMCR.map(facBarColor)},
       text:facMCR.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
-      hovertemplate:'%{y}<br>TE Contribution: %{x:.1f}% of total TE<extra></extra>'
+      hovertemplate:'%{y}<br>TE Contribution: %{x:.1f}% of total TE<br>%{customdata}<extra></extra>',
+      customdata:facMCR.map(f=>f.n==='Profitability'?'Intentional — higher is desired':'')
     });
     layout.xaxis={...plotBg.xaxis,title:'% of Total TE'};
     if(hasDev)layout.barmode='overlay';
@@ -1822,7 +1848,7 @@ function rRiskFacBarsMode(){
     let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
     traces=[{
       y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.e||0),type:'bar',orientation:'h',name:'Active Exposure',
-      marker:{color:styleFacs.map(f=>(f.e||0)>=0?'#3b82f6':'#f59e0b')},
+      marker:{color:styleFacs.map(facBarColor)},
       text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
       hovertemplate:'%{y}<br>Active Exposure: %{x:.2f}<extra></extra>'
     }];
@@ -1850,13 +1876,42 @@ function rRiskFacBarsMode(){
   let nFacs=mode==='exp'||mode==='both'?facMCR.filter(f=>FAC_PRIMARY.has(f.n)).length:facMCR.length;
   document.getElementById('riskFacBarDiv').style.height=Math.max(200,nFacs*40+20)+'px';
   Plotly.newPlot('riskFacBarDiv',traces,layout,plotCfg);
+
+  // Profitability alert: check if active exposure decreased vs previous period
+  let profAlert=document.getElementById('profAlert');
+  if(profAlert){
+    let profHist=cs?.hist?.fac?.['Profitability']||cs?.hist?.fac?.['profitability']||[];
+    if(profHist.length>=2){
+      let prev=profHist[profHist.length-2];let curr=profHist[profHist.length-1];
+      let pe=prev.a??prev.e??0;let ce=curr.a??curr.e??0;
+      profAlert.style.display=(ce<pe-0.05)?'block':'none';
+    } else {profAlert.style.display='none';}
+  }
 }
 
 // Legacy alias
 function rRiskFacBars(s,facMCR){window._rfbData=facMCR;window._rfbMode='te';rRiskFacBarsMode();}
 
+// Factor group pill handler
+const FAC_GROUPS={
+  all:null,
+  valGrowth:['Value','Growth','Dividend Yield','Earnings Variability','Earnings Yield'],
+  mktBehavior:['Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility'],
+  profitability:['Profitability'],
+  secondary:['Size','Leverage','Liquidity','FX Sensitivity','Mid Cap','Earnings Variability']
+};
+function setFacGroup(group,btn){
+  document.querySelectorAll('.fgp').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  let grp=FAC_GROUPS[group];
+  document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
+    chk.checked=grp===null||grp.some(g=>chk.value.toLowerCase().includes(g.toLowerCase())||g.toLowerCase().includes(chk.value.toLowerCase()));
+  });
+  rRiskFacBarsMode();
+}
+
 function setFacThresh(){
-  let thresh=parseFloat(document.getElementById('facThreshSlider')?.value||'1');
+  let thresh=parseFloat(document.getElementById('facThreshSlider')?.value||'0');
   document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
     chk.checked=parseFloat(chk.dataset.c||'0')>=thresh;
   });
@@ -2593,64 +2648,98 @@ function oSt(ticker){
   if(!h)return;
   let m=$('stockModal');
 
-  // Quant scores
-  let scores=[{n:'Overall',v:h.over},{n:'Revision',v:h.rev},{n:'Value',v:h.val},{n:'Quality',v:h.qual},{n:'Momentum',v:h.mom},{n:'Stability',v:h.stab}];
-  let scoreHtml=scores.map(s=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(51,65,85,.3)">
-    <span>${s.n}</span><span style="color:${rc(Math.ceil(6-s.v))};font-weight:600">${f2(s.v,1)}</span>
-  </div>`).join('');
+  // Rank color (quintile 1=best=green)
+  let rankCol=h.r!=null?rc(h.r):'#475569';
 
-  // Peer comparison (same sector holdings)
-  let peers=cs.hold.filter(x=>x.sec===h.sec&&x.t!==h.t).sort((a,b)=>b.p-a.p).slice(0,5);
-  let peerRows=peers.map(p=>`<tr class="clickable" onclick="$('stockModal').classList.remove('show');oSt('${p.t}')">
-    <td style="color:var(--txth)">${p.t}</td><td class="r">${f2(p.p)}</td><td class="r ${activeStyle(p.a)}">${fp(p.a)}</td><td class="r">${rRVQ(p)}</td>
+  // 4 score chips: OVER, REV, VAL, QUAL (skip MOM/STAB)
+  let scoreDefs=[{k:'over',l:'Overall'},{k:'rev',l:'Revision'},{k:'val',l:'Value'},{k:'qual',l:'Quality'}];
+  let scoreChips=scoreDefs.map(({k,l})=>{
+    let v=h[k];if(v==null)return'';
+    let col=rc(Math.round(v));
+    return`<div style="text-align:center;padding:8px 10px;background:var(--surf);border-radius:8px;min-width:52px">
+      <div style="font-size:9px;color:var(--txt);margin-bottom:2px;text-transform:uppercase;letter-spacing:0.3px">${l}</div>
+      <div style="font-size:15px;font-weight:700;color:${col}">${f2(v,1)}</div>
+    </div>`;
+  }).join('');
+
+  // R·V·Q sub-line for OVER badge
+  let rvqParts=[];
+  if(h.rev!=null)rvqParts.push('R'+Math.round(h.rev));
+  if(h.val!=null)rvqParts.push('V'+Math.round(h.val));
+  if(h.qual!=null)rvqParts.push('Q'+Math.round(h.qual));
+  let rvqSub=rvqParts.join('·');
+
+  // Peer comparison sorted by %T desc
+  let peers=cs.hold.filter(x=>x.sec===h.sec&&x.t!==h.t).sort((a,b)=>(b.tr||0)-(a.tr||0)).slice(0,5);
+  let peerRows=peers.map(p=>`<tr class="clickable${p.t===ticker?' thresh-good':''}" onclick="$('stockModal').classList.remove('show');oSt('${p.t}')">
+    <td style="color:var(--txth);font-weight:600">${p.t}</td><td class="r">${f2(p.p,1)}</td><td class="r ${activeStyle(p.a)}">${fp(p.a,1)}</td>
+    <td class="r" style="color:${(p.tr||0)>=0?'var(--pos)':'var(--neg)'};font-weight:600">${fp(p.tr,1)}%</td>
+    <td class="r">${rRVQ(p)}</td>
   </tr>`).join('');
 
   // Synthetic weight history
   let wHist=[];let now=new Date();
   for(let i=11;i>=0;i--){let d=new Date(now);d.setMonth(d.getMonth()-i);wHist.push({d:d.toISOString().slice(0,10),p:+(h.p*(0.85+Math.random()*0.3)).toFixed(2)})}
 
+  let trCls=(h.tr||0)>0?'pos':'neg';
+
   $('stockContent').innerHTML=`
-    <h2>${h.t} — ${h.n}<button class="close" onclick="$('stockModal').classList.remove('show')">&times;</button></h2>
-    <div class="grid g3" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(h.p)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:20px;font-weight:700;color:${h.a>=0?'var(--pos)':'var(--neg)'}">${fp(h.a)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Rank</div><div style="font-size:20px;font-weight:700;color:${h.r!=null?rc(h.r):'#475569'}">${h.r!=null?'Q'+h.r:'—'}</div></div>
-    </div>
-    <div class="grid g2">
+    <h2>${h.t} — ${h.n}
+      ${h.sec?`<span class="chip" style="cursor:pointer;vertical-align:middle" onclick="$('stockModal').classList.remove('show');oDr('sec','${h.sec}')">${h.sec}</span>`:''}
+      ${h.co?`<span style="font-size:11px;color:var(--pri);cursor:pointer;vertical-align:middle;margin-left:4px" onclick="$('stockModal').classList.remove('show');oDrCountry('${h.co}')">${h.co}</span>`:''}
+      <button class="close" onclick="$('stockModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g2" style="margin-bottom:16px;align-items:start">
+      <!-- Score panel -->
+      <div class="card" style="text-align:center;padding:16px">
+        <div style="font-size:52px;font-weight:700;color:${rankCol};line-height:1">${h.r!=null?'Q'+h.r:'—'}</div>
+        <div style="font-size:10px;color:var(--txt);margin:4px 0 2px">Overall Rank</div>
+        ${rvqSub?`<div style="font-size:11px;color:var(--txt);margin-bottom:12px">${rvqSub}</div>`:'<div style="margin-bottom:12px"></div>'}
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${scoreChips}</div>
+      </div>
+      <!-- Key metrics -->
       <div>
+        <div class="card-title">Key Metrics</div>
         <table>
-          <tr><td>Sector</td><td class="r"><span class="chip" style="cursor:pointer" onclick="${h.sec?`$('stockModal').classList.remove('show');oDr('sec','${h.sec}')`:'void 0'}">${h.sec||'--'}</span></td></tr>
+          <tr><td>Port Weight</td><td class="r" style="font-weight:600">${f2(h.p,2)}%</td></tr>
+          <tr><td>Bench Weight</td><td class="r">${f2(h.b,2)}%</td></tr>
+          <tr><td>Active Weight</td><td class="r ${activeStyle(h.a)}" style="font-weight:600">${fp(h.a,2)}%</td></tr>
+          <tr><td>Sector</td><td class="r">${h.sec?`<span class="chip" style="cursor:pointer" onclick="$('stockModal').classList.remove('show');oDr('sec','${h.sec}')">${h.sec}</span>`:'--'}</td></tr>
           <tr><td>Country</td><td class="r" style="cursor:pointer;color:var(--pri)" onclick="${h.co?`$('stockModal').classList.remove('show');oDrCountry('${h.co}')`:'void 0'}">${h.co||'--'}</td></tr>
           <tr><td>Region</td><td class="r">${h.reg||CMAP[h.co]||'--'}</td></tr>
-          <tr><td>Bench Weight</td><td class="r">${f2(h.b)}%</td></tr>
-          <tr><td>%S (Specific TE)</td><td class="r">${f2(h.mcr)}</td></tr>
-          <tr><td>TE Contrib (%T)</td><td class="r">${f2(h.tr,1)}%</td></tr>
+          <tr><td>%S (Stock-Specific TE)</td><td class="r">${f2(h.mcr,2)}</td></tr>
+          <tr><td>%T (TE Contribution)</td><td class="r ${trCls}" style="font-weight:600">${fp(h.tr,2)}%</td></tr>
         </table>
       </div>
-      <div>
-        <div class="card-title">Quant Scores</div>
-        ${scoreHtml}
-      </div>
     </div>
-    <div class="grid g2" style="margin-top:12px">
-      <div><div class="card-title">Score Radar</div><div id="stockRadarDiv" style="height:220px"></div></div>
-      <div><div class="card-title">Weight History</div><div id="stockHistDiv" style="height:220px"></div></div>
+    <div class="grid g2" style="margin-bottom:12px">
+      <div><div class="card-title">Score Radar (Q1 = best, outer ring)</div><div id="stockRadarDiv" style="height:230px"></div></div>
+      <div><div class="card-title">Weight History (synthetic)</div><div id="stockHistDiv" style="height:230px"></div></div>
     </div>
-    ${peers.length&&h.sec?`<div style="margin-top:12px"><div class="card-title">Peer Comparison (${h.sec})</div>
-    <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead><tbody>${peerRows}</tbody></table></div>`:''}`;
+    ${peers.length&&h.sec?`<div><div class="card-title">Peers in ${h.sec} — sorted by TE contribution</div>
+    <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">%T</th><th class="r">Rank</th></tr></thead><tbody>${peerRows}</tbody></table></div>`:''}`;
   m.classList.add('show');
 
   setTimeout(()=>{
-    Plotly.newPlot('stockRadarDiv',[{
-      type:'scatterpolar',r:[h.over,h.rev,h.val,h.qual,h.mom,h.stab,h.over],
-      theta:['Overall','Revision','Value','Quality','Momentum','Stability','Overall'],
-      fill:'toself',fillcolor:'rgba(59,130,246,.15)',line:{color:'#3b82f6',width:2},
-      marker:{size:4,color:'#3b82f6'}
-    }],{...plotBg,polar:{bgcolor:'transparent',radialaxis:{range:[0,5],gridcolor:'#334155',tickfont:{size:9,color:'#64748b'}},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},margin:{l:40,r:40,t:20,b:20},showlegend:false},plotCfg);
+    // 4-axis radar: OVER, REV, VAL, QUAL — inverted scale [5,1] so Q1 appears largest
+    let radarAxes=[{l:'Overall',v:h.over},{l:'Revision',v:h.rev},{l:'Value',v:h.val},{l:'Quality',v:h.qual}].filter(a=>a.v!=null);
+    if(radarAxes.length>=3){
+      let rVals=[...radarAxes.map(a=>a.v),radarAxes[0].v];
+      let rTheta=[...radarAxes.map(a=>a.l),radarAxes[0].l];
+      let rFill=rankCol+'26';
+      Plotly.newPlot('stockRadarDiv',[{
+        type:'scatterpolar',r:rVals,theta:rTheta,
+        fill:'toself',fillcolor:rFill,line:{color:rankCol,width:2},marker:{size:5,color:rankCol}
+      }],{...plotBg,polar:{bgcolor:'transparent',
+        radialaxis:{range:[5,1],gridcolor:'#334155',tickfont:{size:9,color:'#64748b'},tickvals:[1,2,3,4,5],ticktext:['Q1','Q2','Q3','Q4','Q5']},
+        angularaxis:{gridcolor:'#334155',tickfont:{size:11,color:'#94a3b8'}}
+      },margin:{l:40,r:40,t:20,b:20},showlegend:false},plotCfg);
+    } else {
+      document.getElementById('stockRadarDiv').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:11px;color:var(--txt)">No score data</div>';
+    }
 
     Plotly.newPlot('stockHistDiv',[{
       x:wHist.map(w=>w.d),y:wHist.map(w=>w.p),type:'scatter',mode:'lines',
-      line:{color:'#3b82f6',width:2},fill:'tozeroy',fillcolor:'rgba(59,130,246,.08)'
+      line:{color:rankCol,width:2},fill:'tozeroy',fillcolor:rankCol+'14'
     }],{...plotBg,yaxis:{...plotBg.yaxis,title:'Weight %'},margin:{l:40,r:10,t:10,b:30}},plotCfg);
   },50);
 }

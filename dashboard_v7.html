@@ -52,8 +52,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .sum-card.warn{border-color:var(--warn);background:rgba(245,158,11,.05)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;padding:8px 10px;color:var(--txt);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;border-bottom:1px solid var(--grid);white-space:nowrap}
-td{padding:7px 10px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap}
-tr:hover td{background:rgba(59,130,246,.03)}
+td{padding:7px 10px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap;font-variant-numeric:tabular-nums}
+tr:hover td{background:#1e293b}
 th.r,td.r{text-align:right}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn-t{color:var(--warn)}
 .alert-t{color:var(--neg);font-weight:600}
@@ -121,7 +121,7 @@ th.r,td.r{text-align:right}
 
 /* Clickable rows */
 tr.clickable{cursor:pointer;transition:background .15s}
-tr.clickable:hover td{background:rgba(59,130,246,.08)}
+tr.clickable:hover td{background:#1e293b}
 tr.clickable:active td{background:rgba(59,130,246,.12)}
 
 /* Enhanced cards */
@@ -149,6 +149,13 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 .comp-stats-table td{padding:6px 8px}
 .comp-stats-table .metric-name{color:var(--txth);font-weight:500}
 .heatmap-cell{padding:4px 8px;text-align:center;font-size:10px;font-weight:600;border-radius:3px}
+/* Table sort indicators */
+th[onclick]{cursor:pointer;user-select:none}
+th.sa::after{content:' ▲';font-size:9px;opacity:0.7}
+th.sd::after{content:' ▼';font-size:9px;opacity:0.7}
+/* Sticky thead + alternating stripes */
+thead th{background:var(--card);position:sticky;top:0;z-index:1}
+tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(15,23,42,0.5)}
 
 /* Global search */
 .global-search{position:relative}
@@ -1062,6 +1069,36 @@ function rFacWaterfall(s){
   },plotCfg);
 }
 
+// ===== SORT HELPER =====
+const _srt={};
+function sortTbl(id,col){
+  let tbl=document.getElementById(id);if(!tbl)return;
+  let tbody=tbl.querySelector('tbody');if(!tbody)return;
+  let rows=[...tbody.querySelectorAll('tr')];
+  let key=id+':'+col;
+  let asc=_srt[key]!==true;_srt[key]=asc;
+  tbl.querySelectorAll('th').forEach((th,i)=>{th.classList.remove('sa','sd');if(i===col)th.classList.add(asc?'sa':'sd')});
+  rows.sort((a,b)=>{
+    let ac=a.cells[col],bc=b.cells[col];
+    let av=ac?.dataset?.sv??ac?.textContent?.trim()??'';
+    let bv=bc?.dataset?.sv??bc?.textContent?.trim()??'';
+    let an=+av,bn=+bv;
+    if(!isNaN(an)&&!isNaN(bn))return asc?an-bn:bn-an;
+    return asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+}
+// Rank badge: Q{r} colored + sub-line R·V·Q
+function rRVQ(h){
+  if(!h||h.r==null)return'<span style="color:#475569">—</span>';
+  let col=rc(h.r);
+  let parts=[];
+  if(h.rev!=null)parts.push('R'+Math.round(h.rev));
+  if(h.val!=null)parts.push('V'+Math.round(h.val));
+  if(h.qual!=null)parts.push('Q'+Math.round(h.qual));
+  let sub=parts.join('·');
+  return`<span style="font-weight:700;color:${col}">Q${h.r}</span>${sub?`<br><span style="font-size:9px;color:var(--txt)">${sub}</span>`:''}`;
+}
 // ===== TABLE RENDERERS =====
 // hold param: optional array of holdings (used for sector TE contribution computation)
 function rWt(data,type,hold){
@@ -1078,20 +1115,21 @@ function rWt(data,type,hold){
     let threshCls=Math.abs(d.a)>5?'thresh-alert':Math.abs(d.a)>3?'thresh-warn':'';
     let teC=type==='sec'?secTEMap[d.n]||0:null;
     // TE contribution bar for sectors
-    let teBar=type==='sec'?`<td class="r"><div class="bar-cell" style="justify-content:flex-end">
+    let teBar=type==='sec'?`<td class="r" data-sv="${teC}"><div class="bar-cell" style="justify-content:flex-end">
       <span style="min-width:28px;text-align:right;font-size:11px">${f2(teC,1)}%</span>
       <div style="width:${Math.min(teC*4,60).toFixed(0)}px;height:6px;background:var(--pri);border-radius:3px;opacity:0.7;margin-left:4px"></div>
     </div></td>`:'';
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
-      <td>${d.n}</td><td class="r">${f2(d.p,1)}</td><td class="r">${f2(d.b,1)}</td>
-      <td class="r ${cls}">${fp(d.a,1)}</td>
+      <td>${d.n}</td><td class="r" data-sv="${d.p}">${f2(d.p,1)}</td><td class="r" data-sv="${d.b}">${f2(d.b,1)}</td>
+      <td class="r ${cls}" data-sv="${d.a}">${fp(d.a,1)}</td>
       ${teBar}
-      ${d.s!=null&&type!=='sec'?`<td class="r">${f2(d.s,1)}</td>`:''}
+      ${d.s!=null&&type!=='sec'?`<td class="r" data-sv="${d.s}">${f2(d.s,1)}</td>`:''}
     </tr>`;
   }).join('');
+  let tblId=type==='sec'?'tbl-sec':'tbl-reg';
   let table=type==='sec'
-    ?`<table><thead><tr><th>Sector</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Active weight (port minus bench)">Active</th><th class="r tip" data-tip="Sector contribution to total tracking error (from holdings %T)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`
-    :`<table><thead><tr><th>Name</th><th class="r tip" data-tip="Portfolio weight">Port%</th><th class="r tip" data-tip="Benchmark weight">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
+    ?`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Sector</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Active weight (port minus bench)" onclick="sortTbl('${tblId}',3)">Active</th><th class="r tip" data-tip="Sector contribution to total tracking error (from holdings %T)" onclick="sortTbl('${tblId}',4)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`
+    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
     let totalW=data.reduce((s,d)=>s+(d.p||0),0);
@@ -1129,15 +1167,15 @@ function rFac(factors,hold){
     let nm=f.n.replace(/'/g,"\\'");
     return`<tr class="clickable" style="${rowStyle}cursor:pointer" onclick="oDrF('${nm}')">
       <td${profTip}>${isProfitability?'<span style="color:var(--pos);font-weight:600">'+f.n+' ✦</span>':f.n}</td>
-      <td class="r" style="${expStyle||((f.a??0)>0?'color:var(--pos)':'color:var(--neg)')}">${fp(f.a,2)}</td>
-      <td class="r">${f2(f.c,1)}%</td>
+      <td class="r" data-sv="${f.a??0}" style="${expStyle||((f.a??0)>0?'color:var(--pos)':'color:var(--neg)')}">${fp(f.a,2)}</td>
+      <td class="r" data-sv="${f.c??0}">${f2(f.c,1)}%</td>
       <td class="r">${spark}</td>
-      <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-      <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+      <td class="r" data-sv="${f.ret??0}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
+      <td class="r" data-sv="${f.imp??0}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
     </tr>`;
   }
 
-  let thead=`<thead><tr><th>Factor</th><th class="r tip" data-tip="Active exposure vs benchmark">Exposure</th><th class="r tip" data-tip="Contribution to tracking error">TE%</th><th class="r">12wk</th><th class="r tip" data-tip="Factor return for the period">Return</th><th class="r tip" data-tip="Exposure × Return impact">Impact</th></tr></thead>`;
+  let thead=`<thead><tr><th onclick="sortTbl('tbl-fac',0)">Factor</th><th class="r tip" data-tip="Active exposure vs benchmark" onclick="sortTbl('tbl-fac',1)">Exposure</th><th class="r tip" data-tip="Contribution to tracking error" onclick="sortTbl('tbl-fac',2)">TE%</th><th class="r" onclick="sortTbl('tbl-fac',3)">12wk</th><th class="r tip" data-tip="Factor return for the period" onclick="sortTbl('tbl-fac',4)">Return</th><th class="r tip" data-tip="Exposure × Return impact" onclick="sortTbl('tbl-fac',5)">Impact</th></tr></thead>`;
   let primaryHtml=primary.length?primary.map(f=>facRow(f,true)).join(''):'';
   let secondaryHtml=secondary.length?secondary.map(f=>facRow(f,false)).join(''):'';
 
@@ -1149,7 +1187,7 @@ function rFac(factors,hold){
     </tr>
     <tbody id="facSecBody" style="display:none">${secondaryHtml}</tbody>`:'';
 
-  return`<table>${thead}<tbody>${primaryHtml}</tbody>${secBlock}</table>`;
+  return`<table id="tbl-fac">${thead}<tbody>${primaryHtml}</tbody>${secBlock}</table>`;
 }
 
 function toggleFacSecondary(){
@@ -1163,8 +1201,8 @@ function toggleFacSecondary(){
 
 function rRnk(ranks){
   if(!ranks.length)return'<p style="color:var(--txt);font-size:12px">No rank data</p>';
-  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r">${r.ct}</td><td class="r">${f2(r.p)}%</td><td class="r">${r.a!=null?f2(r.a)+'%':'--'}</td></tr>`).join('');
-  return`<table><thead><tr><th>Rank</th><th class="r">Count</th><th class="r">Port%</th><th class="r">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
+  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td data-sv="${r.r}"><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r" data-sv="${r.ct}">${r.ct}</td><td class="r" data-sv="${r.p}">${f2(r.p)}%</td><td class="r" data-sv="${r.a??0}">${r.a!=null?f2(r.a)+'%':'--'}</td></tr>`).join('');
+  return`<table id="tbl-rnk"><thead><tr><th onclick="sortTbl('tbl-rnk',0)">Rank</th><th class="r" onclick="sortTbl('tbl-rnk',1)">Count</th><th class="r" onclick="sortTbl('tbl-rnk',2)">Port%</th><th class="r" onclick="sortTbl('tbl-rnk',3)">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function filterByRank(rank){
   activeTab='holdings';
@@ -1181,9 +1219,9 @@ function rChr(chars){
   if(!chars.length)return'<p style="color:var(--txt);font-size:12px">No characteristic data</p>';
   let rows=chars.map(c=>{
     let diff=c.b!=null?c.p-c.b:null;let cls=diff!=null&&diff>0?'pos':diff!=null?'neg':'';
-    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r">${f2(c.p,1)}</td><td class="r">${f2(c.b,1)}</td><td class="r ${cls}">${diff!=null?fp(diff,1):'--'}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r" data-sv="${c.p}">${f2(c.p,1)}</td><td class="r" data-sv="${c.b??0}">${f2(c.b,1)}</td><td class="r ${cls}" data-sv="${diff??0}">${diff!=null?fp(diff,1):'--'}</td></tr>`;
   }).join('');
-  return`<table><thead><tr><th>Metric</th><th class="r">Portfolio</th><th class="r">Benchmark</th><th class="r">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r" onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rCountryTable(countries){
@@ -1191,18 +1229,18 @@ function rCountryTable(countries){
   let sorted=[...countries].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
   let rows=sorted.map(c=>{
     let cls=activeStyle(c.a);
-    return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r">${f2(c.p)}</td><td class="r">${f2(c.b)}</td><td class="r ${cls}">${fp(c.a)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td></tr>`;
   }).join('');
-  return`<table><thead><tr><th>Country</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-ctry"><thead><tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-ctry',3)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rGroupTable(groups){
   if(!groups||!groups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
   let rows=groups.map(g=>{
     let cls=activeStyle(g.a);
-    return`<tr class="clickable" onclick="oDrGroup('${g.g}')"><td><span class="chip">${g.g}</span></td><td>${g.sg}</td><td class="r">${f2(g.p)}</td><td class="r">${f2(g.b)}</td><td class="r ${cls}">${fp(g.a)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrGroup('${g.g}')"><td><span class="chip">${g.g}</span></td><td>${g.sg}</td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td></tr>`;
   }).join('');
-  return`<table><thead><tr><th>Group</th><th>Subgroup</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th onclick="sortTbl('tbl-grp',1)">Subgroup</th><th class="r" onclick="sortTbl('tbl-grp',2)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',4)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rStressTable(stress){
@@ -2157,8 +2195,8 @@ function renderHoldRows(){
         <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
       </div></td>`;
     let isBmOnly=(!h.p||h.p===0)&&(h.b>0);
-    let rvq=(h.rev!=null&&h.val!=null&&h.qual!=null)?`<div style="font-size:9px;color:#64748b;margin-top:1px">R${Math.round(h.rev)} V${Math.round(h.val)} Q${Math.round(h.qual)}</div>`:'';
-    let rankBadge=h.r!=null?`<div style="display:inline-block;text-align:center"><span style="display:inline-block;padding:1px 6px;border-radius:10px;background:${rc(h.r)}22;color:${rc(h.r)};font-weight:700;font-size:10px">Q${h.r}</span>${rvq}</div>`:'--';
+    let rvq=(h.rev!=null&&h.val!=null&&h.qual!=null)?`<div style="font-size:9px;color:#64748b;margin-top:1px">R${Math.round(h.rev)}·V${Math.round(h.val)}·Q${Math.round(h.qual)}</div>`:'';
+    let rankBadge=h.r!=null?`<div style="display:inline-block;text-align:center"><span style="display:inline-block;padding:1px 6px;border-radius:10px;background:${rc(h.r)}22;color:${rc(h.r)};font-weight:700;font-size:10px">Q${h.r}</span>${rvq}</div>`:'—';
     let bmBadge=isBmOnly?`<span style="background:#334155;color:#94a3b8;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
     let newBadge=h.isNew?`<span style="background:#f59e0b;color:#0f172a;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
     return`<tr style="cursor:pointer${isBmOnly?';background:rgba(100,116,139,0.1)':''}" onclick="oSt('${h.t}')">
@@ -2327,10 +2365,10 @@ function oDr(type,name){
 
   let histHtml=`<div id="drillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
 
-  let holdRows=holdings.sort((a,b)=>b.a-a.a).map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')">
+  let holdRows=holdings.sort((a,b)=>(b.tr||0)-(a.tr||0)).map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')">
     <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
     <td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
-    <td class="r">${f2(h.mcr)}</td><td class="r"><span style="color:${rc(h.r)}">${h.r!=null?'R'+h.r:'—'}</span></td>
+    <td class="r">${f2(h.mcr)}</td><td class="r">${rRVQ(h)}</td>
   </tr>`).join('');
 
   // Country breakdown for region drills
@@ -2564,7 +2602,7 @@ function oSt(ticker){
   // Peer comparison (same sector holdings)
   let peers=cs.hold.filter(x=>x.sec===h.sec&&x.t!==h.t).sort((a,b)=>b.p-a.p).slice(0,5);
   let peerRows=peers.map(p=>`<tr class="clickable" onclick="$('stockModal').classList.remove('show');oSt('${p.t}')">
-    <td style="color:var(--txth)">${p.t}</td><td class="r">${f2(p.p)}</td><td class="r ${activeStyle(p.a)}">${fp(p.a)}</td><td class="r"><span style="color:${rc(p.r)}">${p.r!=null?'R'+p.r:'—'}</span></td>
+    <td style="color:var(--txth)">${p.t}</td><td class="r">${f2(p.p)}</td><td class="r ${activeStyle(p.a)}">${fp(p.a)}</td><td class="r">${rRVQ(p)}</td>
   </tr>`).join('');
 
   // Synthetic weight history
@@ -2576,7 +2614,7 @@ function oSt(ticker){
     <div class="grid g3" style="margin-bottom:16px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(h.p)}%</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:20px;font-weight:700;color:${h.a>=0?'var(--pos)':'var(--neg)'}">${fp(h.a)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Rank</div><div style="font-size:20px;font-weight:700;color:${h.r!=null?rc(h.r):'#475569'}">${h.r!=null?'R'+h.r:'—'}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Rank</div><div style="font-size:20px;font-weight:700;color:${h.r!=null?rc(h.r):'#475569'}">${h.r!=null?'Q'+h.r:'—'}</div></div>
     </div>
     <div class="grid g2">
       <div>
@@ -3126,7 +3164,7 @@ function oDrFacRiskBreak(){
       return`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
         <td style="color:var(--txth);font-weight:500">${f.n}</td>
         <td class="r" style="font-weight:700;color:${(f.c||0)>0?'var(--pos)':'var(--neg)'}">${f2(f.c,1)}%</td>
-        <td class="r">${isStyle?(f.a!=null?fp(f.a,2):'--'):'—'}</td>
+        <td class="r">${f.a!=null?fp(f.a,2):'—'}</td>
       </tr>`;
     }).join('')}</tbody></table>`;
   m.classList.add('show');
@@ -3151,7 +3189,7 @@ function oDrMetric(metric,range){
         <td style="color:var(--txth);font-weight:600">${h.t}</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
         <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,2)}%</td>
-        <td class="r"><span style="font-weight:700;color:${h.r!=null?rc(h.r):'#475569'}">${h.r!=null?'Q'+h.r:'—'}</span></td>
+        <td class="r">${rRVQ(h)}</td>
       </tr>`).join('')}</tbody></table>`;
     m.classList.add('show');
     return;
@@ -3427,7 +3465,7 @@ function oDrCountry(name){
 
   let holdRows=holdings.sort((a,b)=>b.p-a.p).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
     <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td>
-    <td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r"><span style="color:${h.r!=null?rc(h.r):'#475569'}">${h.r!=null?'R'+h.r:'—'}</span></td>
+    <td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${rRVQ(h)}</td>
   </tr>`).join('');
 
   $('countryContent').innerHTML=`
@@ -3767,7 +3805,7 @@ function generateEmailSnapshot(){
     <td style="padding:5px 10px;font-size:11px;color:#555">${h.n}</td>
     <td style="padding:5px 10px;font-size:11px;text-align:right">${f2(h.p)}%</td>
     <td style="padding:5px 10px;font-size:11px;text-align:right;color:${(h.a||0)>=0?'#059669':'#dc2626'}">${fp(h.a)}%</td>
-    <td style="padding:5px 10px;font-size:11px;text-align:center">${h.r!=null?'R'+h.r:'--'}</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:center">${h.r!=null?'Q'+h.r:'—'}</td>
   </tr>`).join('');
 
   let emailHtml=`<!DOCTYPE html><html><head><style>

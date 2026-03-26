@@ -42,7 +42,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .g12{grid-template-columns:1fr 2fr}
 .card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:hidden}
 .card-title{font-size:12px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
-.sum-cards{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:16px}
+.sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
 .sum-card:hover{border-color:var(--pri);transform:translateY(-2px)}
 .sum-card .label{font-size:10px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
@@ -695,7 +695,7 @@ function init(){
   // Build strategy buttons
   let sel=$('stratSel');
   let defaultKey=keys.includes('EM')?'EM':keys[0];
-  sel.innerHTML=`<select onchange="go(this.value)">${keys.map(k=>`<option value="${k}"${k===defaultKey?' selected':''}>${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
+  sel.innerHTML=`<select onchange="go(this.value)" style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">${keys.map(k=>`<option value="${k}" style="background:#0f172a"${k===defaultKey?' selected':''}>${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
   $('uploadZone').style.display='none';
   $('content').style.display='block';
   $('clearBtn').style.display='inline-block';

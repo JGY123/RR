@@ -488,15 +488,32 @@ function genFCorr(){
 // ===== NORMALIZE + INIT =====
 function normalize(raw){
   let out={};
+  // FINDING 5: Handle array output from parser v2 [strategies, issues, report_date, parse_stats]
+  if(Array.isArray(raw)){
+    if(raw[2]&&typeof raw[2]==='string')window._reportDate=raw[2];
+    raw=raw[0];
+  }
   let strats=raw.strategies||raw;
   for(let[id,s]of Object.entries(strats)){
     let st={...s,id:id,name:s.name||id,benchmark:s.benchmark||''};
     // Normalize summary
     if(!st.sum&&s.summary)st.sum=s.summary;
     if(!st.sum)st.sum={te:0,as:0,beta:1,h:0,bh:0,sr:0,cash:0};
+    // FINDING 4: v2 sum field name mapping (pe/bpe/pb/bpb/mcap → pe_p/pe_b/pb_p/pb_b/mc)
+    let sum=st.sum;
+    sum.pe_p=sum.pe_p??sum.pe??null;
+    sum.pe_b=sum.pe_b??sum.bpe??null;
+    sum.pb_p=sum.pb_p??sum.pb??null;
+    sum.pb_b=sum.pb_b??sum.bpb??null;
+    sum.mc=sum.mc??sum.mcap??null;
     // Preserve beta variants if present in source data
     if(s.sum&&s.sum.betas)st.sum.betas=s.sum.betas;
     else if(s.betas)st.sum.betas=s.betas;
+    // FINDING 1: Add total_risk; compute normalized idio/factor TE split for stacked area chart
+    if(sum.total_risk==null&&sum._total_risk!=null)sum.total_risk=sum._total_risk;
+    {let ps=sum.pct_specific||0,pf=sum.pct_factor||0,psum=ps+pf;
+     sum.idio_te_pct=psum>0?+(ps/psum*100).toFixed(2):60;
+     sum.factor_te_pct=psum>0?+(pf/psum*100).toFixed(2):40;}
     // Normalize sectors - compute benchmark weight from p-a if b missing
     if(st.sectors)st.sectors=st.sectors.map(x=>{
       if(x.b==null&&x.p!=null&&x.a!=null)x.b=+(x.p-x.a).toFixed(2);
@@ -511,6 +528,30 @@ function normalize(raw){
     if(!st.chars)st.chars=[];
     if(!st.groups)st.groups=[];
     if(!st.unowned)st.unowned=[];
+    // FINDING 4: v2 holdings field name mapping (w/bw/aw/pct_s/pct_t/over → p/b/a/mcr/tr/r)
+    st.hold=st.hold.map(h=>{
+      let hn={...h};
+      hn.p=hn.p??hn.w??0;
+      hn.b=hn.b??hn.bw??0;
+      hn.a=hn.a??hn.aw??(hn.p-hn.b);
+      hn.mcr=hn.mcr??hn.pct_s??0;
+      hn.tr=hn.tr??hn.pct_t??0;
+      if(hn.r==null&&hn.over!=null)hn.r=Math.round(Math.min(5,Math.max(1,hn.over)));
+      return hn;
+    });
+    // FINDING 3: Factor active exposure — merge from e or sum._fe if a is null
+    st.factors=st.factors.map(f=>{
+      let fn={...f};
+      fn.a=fn.a??fn.e??(sum._fe&&sum._fe[fn.n]!=null?sum._fe[fn.n]:null);
+      // Proxy TE contribution from |active exposure| × factor std dev when c is missing/zero
+      if((!fn.c||fn.c===0)&&fn.a!=null&&fn.dev!=null)
+        fn.c=+(Math.abs(fn.a)*(fn.dev||1)).toFixed(4);
+      return fn;
+    });
+    // Normalize factor contributions to sum to pct_factor
+    {let facCSum=st.factors.reduce((t,f)=>t+Math.abs(f.c||0),0);
+     if(facCSum>0&&sum.pct_factor>0){let scale=sum.pct_factor/facCSum;
+       st.factors=st.factors.map(f=>({...f,c:+(f.c*scale).toFixed(4)}));}}
     // Normalize history
     let h=s.hist||{};
     st.hist={
@@ -519,8 +560,17 @@ function normalize(raw){
       reg:h.reg||h.regions||{},
       fac:h.fac||h.factors||{}
     };
-    // Generate synthetic history if missing
-    if(!st.hist.sum.length)st.hist=genHist(st);
+    // FINDING 6: Build hist.sum from hist.fac dates when parser v2 left it empty
+    if(!st.hist.sum.length){
+      let facKeys=Object.keys(st.hist.fac);
+      if(facKeys.length&&facKeys.some(k=>(st.hist.fac[k]||[]).length)){
+        let dates=[...new Set(facKeys.flatMap(k=>(st.hist.fac[k]||[]).map(e=>e.d)))].sort();
+        if(dates.length)
+          st.hist.sum=dates.map(d=>({d,te:sum.te,as:sum.as,beta:sum.beta,h:sum.h,sr:sum.sr||0,cash:sum.cash||0}));
+      }
+      // If still empty (demo mode / no fac data), generate full synthetic history
+      if(!st.hist.sum.length)st.hist=genHist(st);
+    }
     // Enrich holdings
     st.hold=enrichHold(st.hold,st.sectors);
     // Recompute equity-only holdings count (exclude cash/currency baskets)

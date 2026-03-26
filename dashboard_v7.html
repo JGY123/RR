@@ -1490,28 +1490,13 @@ function rRisk(){
     <div id="teStackedDiv" style="height:300px"></div>
   </div>
 
-  <!-- Beta History + Key Stats side by side -->
-  <div class="grid g2" style="margin-bottom:16px">
-    <div class="card" style="cursor:pointer" onclick="oDrMetric('beta')">
-      <div class="flex-between" style="margin-bottom:4px">
-        <div class="card-title" style="margin:0">Beta History — Predicted</div>
-        <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
-      </div>
-      <div id="riskBetaMultiDiv" style="height:200px"></div>
+  <!-- Beta History (adjacent to TE chart) -->
+  <div class="card" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
+    <div class="flex-between" style="margin-bottom:4px">
+      <div class="card-title" style="margin:0">Beta History — Predicted</div>
+      <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
     </div>
-    <div class="card" style="display:flex;flex-direction:column;justify-content:center;gap:20px;padding:20px 24px">
-      <div style="text-align:center">
-        <div class="card-title" style="margin:0 0 6px">Active Share</div>
-        <div style="font-size:32px;font-weight:700;color:var(--txth)">${f2(s.sum.as,1)}<span style="font-size:16px;color:var(--txt);margin-left:2px">%</span></div>
-        <div style="font-size:10px;color:var(--txt);margin-top:2px">${gt(s.hist.sum,'as')} trend</div>
-      </div>
-      <div style="width:100%;height:1px;background:var(--grid)"></div>
-      <div style="text-align:center">
-        <div class="card-title" style="margin:0 0 6px">Holdings</div>
-        <div style="font-size:32px;font-weight:700;color:var(--txth)">${s.sum.h}<span style="font-size:16px;color:var(--txt);margin-left:4px">equity</span></div>
-        <div style="font-size:10px;color:var(--txt);margin-top:2px">${gt(s.hist.sum,'h')} trend</div>
-      </div>
-    </div>
+    <div id="riskBetaMultiDiv" style="height:180px"></div>
   </div>
 
   <!-- Factor Contribution Bars with toggle -->

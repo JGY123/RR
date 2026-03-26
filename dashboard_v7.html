@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Redwood Risk Control Panel</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<!-- Fonts: use system Inter or fallback -->
+<script src="plotly-2.27.0.min.js"></script>
+<script src="html2canvas.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -253,6 +253,9 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
   tr:hover td{background:transparent!important}
   a{color:#333!important;text-decoration:underline}
 }
+/* Plotly rangeslider custom styling */
+.rangeslider-handle-min,.rangeslider-handle-max{fill:#3b82f6!important;stroke:none!important}
+.rangeslider-slidebox{fill:rgba(59,130,246,0.12)!important;stroke:#3b82f6!important;stroke-width:1!important}
 </style>
 </head>
 <body>
@@ -1197,8 +1200,8 @@ function rUpdateCorr(){
   }
   if(!hasFacData){wrap.innerHTML=rFCorr(s.fcorr);return;}
 
-  let allFacNames=Object.keys(facHist).filter(fn=>FAC_PRIMARY.has(fn));
-  let facNames=selFacs?allFacNames.filter(fn=>selFacs.includes(fn)):allFacNames;
+  let allFacNames=Object.keys(facHist);
+  let facNames=selFacs&&selFacs.length?allFacNames.filter(fn=>selFacs.includes(fn)):allFacNames;
   if(facNames.length<2){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:12px;text-align:center">Select at least 2 factors</p>';return;}
 
   // Slice each factor series to period
@@ -1416,16 +1419,16 @@ function rRisk(){
   <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
     <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}">
       <div class="label">Total Risk (TE)</div>
-      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}%</div>
-      <div class="sub">annualized</div>
+      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}</div>
+      <div class="sub">annualized tracking error</div>
     </div>
-    <div class="sum-card">
-      <div class="label">Factor Risk</div>
+    <div class="sum-card" onclick="oDrFacRiskBreak()" title="Top factor contributors">
+      <div class="label">Factor Risk ↗</div>
       <div class="value" style="color:var(--pri)">${factorPct}%</div>
       <div class="sub">${f2(factorRisk,1)}% TE</div>
     </div>
-    <div class="sum-card">
-      <div class="label">Idiosyncratic Risk</div>
+    <div class="sum-card" onclick="oDrMetric('idio')" title="Top stock-specific contributors">
+      <div class="label">Idiosyncratic ↗</div>
       <div class="value" style="color:var(--acc)">${idioPct}%</div>
       <div class="sub">${f2(idioRisk,1)}% TE</div>
     </div>
@@ -1475,7 +1478,24 @@ function rRisk(){
         </label>
       </div>
     </div>
-    <div id="riskFacBarDiv" style="height:${Math.max(200,facMCR.length*36)}px"></div>
+    <!-- Threshold slider + factor checkboxes -->
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
+      <label style="font-size:11px;display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--txt)">
+        Min |contrib|:
+        <input type="range" id="facThreshSlider" min="0" max="20" step="0.5" value="1"
+          oninput="document.getElementById('facThreshVal').textContent=parseFloat(this.value).toFixed(1);setFacThresh()"
+          style="width:80px;accent-color:#3b82f6">
+        <span id="facThreshVal" style="font-weight:600;color:var(--txth);min-width:26px">1.0</span><span style="color:var(--txt)">%</span>
+      </label>
+      <div style="display:flex;gap:4px">
+        <button onclick="setFacBarAll(true)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">All</button>
+        <button onclick="setFacBarAll(false)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">Clear</button>
+      </div>
+    </div>
+    <div id="facBarToggles" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+      ${facMCR.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" ${Math.abs(f.c||0)>=1?'checked':''} onchange="rRiskFacBarsMode()"><span style="color:var(--txth)">${f.n}</span></label>`).join('')}
+    </div>
+    <div id="riskFacBarDiv" style="height:${Math.max(200,facMCR.filter(f=>Math.abs(f.c||0)>=1).length*38+20)}px"></div>
   </div>
 
   <!-- Factor Exposures Table -->
@@ -1529,7 +1549,7 @@ function rRisk(){
       </div>
     </div>
     <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
-      ${s.factors.filter(f=>FAC_PRIMARY.has(f.n)).map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" checked onchange="rUpdateCorr()"><span style="color:var(--txth)">${f.n}</span></label>`).join('')}
+      ${s.factors.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" ${FAC_PRIMARY.has(f.n)?'checked':''} onchange="rUpdateCorr()"><span style="color:${FAC_PRIMARY.has(f.n)?'var(--txth)':'var(--txt)'}">${f.n}</span></label>`).join('')}
     </div>
     <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%">${rFCorr(s.fcorr)}</div>
   </div>`;
@@ -1572,7 +1592,7 @@ function rTEStackedArea(s,factorRisk,idioRisk){
       line:{color:'#e2e8f0',width:2.5},fill:'none',
       hovertemplate:'Total TE: %{y:.2f}%<extra></extra>'}
   ],{...plotBg,
-    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#1e293b',bordercolor:'#334155',borderwidth:1,thickness:0.05},tickformat:'%b %Y',nticks:8},
+    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',bordercolor:'#3b82f6',borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
     yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},
     legend:{orientation:'h',y:1.12,font:{size:11}},
     hovermode:'x unified'
@@ -1611,7 +1631,7 @@ function rMultiBeta(s){
       line:{color:'#8b5cf6',width:1.5,dash:'dashdot'},
       hovertemplate:'MPT: '+f2(betas.mpt,3)+'<extra></extra>'});
   }
-  let betaAnnotations=[{x:1,xref:'paper',y:1,yref:'y',text:'β=1.0',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:6}];
+  let betaAnnotations=[];
   if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:'#10b981'},xanchor:'left',xshift:6});
   if(betas.historical!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.historical,yref:'y',text:'Hist Avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:6});
   if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:'#8b5cf6'},xanchor:'left',xshift:6});
@@ -1619,16 +1639,15 @@ function rMultiBeta(s){
     yaxis:{...plotBg.yaxis,title:'Beta'},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:6},
     legend:{orientation:'h',y:1.12,font:{size:10}},
-    shapes:[{type:'line',y0:1,y1:1,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}}],
     annotations:betaAnnotations,
     margin:{...plotBg.margin,r:70}
   },plotCfg);
 }
 
 function rRiskFacBarsMode(){
-  let facMCR=window._rfbData||[];
+  let allFacMCR=window._rfbData||[];
   let mode=window._rfbMode||'te';
-  if(!facMCR.length)return;
+  if(!allFacMCR.length)return;
   // Update toggle button styling
   document.querySelectorAll('#rfbLblTE,#rfbLblExp,#rfbLblBoth').forEach(el=>{
     el.style.background='var(--surf)';el.style.color='var(--txt)';
@@ -1636,15 +1655,21 @@ function rRiskFacBarsMode(){
   let activeEl=document.getElementById(mode==='te'?'rfbLblTE':mode==='exp'?'rfbLblExp':'rfbLblBoth');
   if(activeEl){activeEl.style.background='var(--pri)';activeEl.style.color='#fff';}
 
+  // Apply checkbox filter; fallback to all if nothing checked
+  let selChks=[...document.querySelectorAll('.fac-bar-chk:checked')].map(el=>el.value);
+  let facMCR=selChks.length?allFacMCR.filter(f=>selChks.includes(f.n)):allFacMCR;
+  if(!facMCR.length)facMCR=allFacMCR;
+
   let traces=[];
   let layout={...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},margin:{l:140,r:80,t:10,b:40}};
 
   if(mode==='te'){
     let hasDev=facMCR.some(f=>f.devPct!=null&&f.devPct>0);
     if(hasDev){
+      // Shadow bar: same hue as main bar, 0.15 opacity
       traces.push({
         y:facMCR.map(f=>f.n),x:facMCR.map(f=>Math.max(f.devPct||0,Math.abs(f.c||0))),type:'bar',orientation:'h',
-        name:'Factor σ',marker:{color:'rgba(148,163,184,0.18)'},showlegend:false,
+        name:'Factor σ',marker:{color:facMCR.map(f=>(f.e??0)>=0?'rgba(59,130,246,0.15)':'rgba(245,158,11,0.15)')},showlegend:false,
         hovertemplate:'%{y}<br>Factor σ: %{x:.1f}% of TE<extra></extra>'
       });
     }
@@ -1657,7 +1682,6 @@ function rRiskFacBarsMode(){
     layout.xaxis={...plotBg.xaxis,title:'% of Total TE'};
     if(hasDev)layout.barmode='overlay';
   } else if(mode==='exp'){
-    // Hide non-style factors in exposure mode
     let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
     traces=[{
       y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.e||0),type:'bar',orientation:'h',name:'Active Exposure',
@@ -1667,30 +1691,44 @@ function rRiskFacBarsMode(){
     }];
     layout.xaxis={...plotBg.xaxis,title:'Active Factor Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:1.5};
   } else {
-    // Both — grouped bars
+    // Both — dual x-axis: bottom = Active Exposure, top = % of TE
     let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
     traces=[
-      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib (%)',
-        marker:{color:'rgba(59,130,246,0.7)'},
-        text:styleFacs.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'auto',textfont:{size:9},
-        hovertemplate:'%{y}<br>TE Contrib: %{x:.1f}% of TE<extra></extra>'},
-      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.e||0)),type:'bar',orientation:'h',name:'|Exposure|',
-        marker:{color:'rgba(245,158,11,0.7)'},
-        text:styleFacs.map(f=>f2(Math.abs(f.e||0),2)),textposition:'auto',textfont:{size:9},
-        hovertemplate:'%{y}<br>|Exposure|: %{x:.2f}<extra></extra>'}
+      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.e||0),type:'bar',orientation:'h',name:'Active Exposure',xaxis:'x',
+        marker:{color:'rgba(59,130,246,0.75)'},
+        text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:9,color:'#94a3b8'},
+        hovertemplate:'%{y}<br>Exposure: %{x:.2f}<extra></extra>'},
+      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib %',xaxis:'x2',
+        marker:{color:'rgba(245,158,11,0.75)'},
+        text:styleFacs.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:9,color:'#94a3b8'},
+        hovertemplate:'%{y}<br>TE Contrib: %{x:.1f}% of TE<extra></extra>'}
     ];
-    layout.xaxis={...plotBg.xaxis,title:'Value'};
+    layout.xaxis={...plotBg.xaxis,title:'Active Exposure',anchor:'y'};
+    layout.xaxis2={...plotBg.xaxis,title:'% of Total TE',side:'top',overlaying:'x',zeroline:false,showgrid:false};
     layout.barmode='group';
-    layout.legend={orientation:'h',y:1.1,font:{size:10}};
+    layout.legend={orientation:'h',y:1.18,font:{size:10}};
+    layout.margin={l:140,r:80,t:50,b:40};
   }
 
-  let h=Math.max(200,(mode==='exp'||mode==='both'?facMCR.filter(f=>FAC_PRIMARY.has(f.n)).length:facMCR.length)*38);
-  document.getElementById('riskFacBarDiv').style.height=h+'px';
+  let nFacs=mode==='exp'||mode==='both'?facMCR.filter(f=>FAC_PRIMARY.has(f.n)).length:facMCR.length;
+  document.getElementById('riskFacBarDiv').style.height=Math.max(200,nFacs*40+20)+'px';
   Plotly.newPlot('riskFacBarDiv',traces,layout,plotCfg);
 }
 
 // Legacy alias
 function rRiskFacBars(s,facMCR){window._rfbData=facMCR;window._rfbMode='te';rRiskFacBarsMode();}
+
+function setFacThresh(){
+  let thresh=parseFloat(document.getElementById('facThreshSlider')?.value||'1');
+  document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
+    chk.checked=parseFloat(chk.dataset.c||'0')>=thresh;
+  });
+  rRiskFacBarsMode();
+}
+function setFacBarAll(v){
+  document.querySelectorAll('.fac-bar-chk').forEach(chk=>chk.checked=v);
+  rRiskFacBarsMode();
+}
 
 function _genFacHistory(s){
   // Synthetic factor history: derive from hist.sum dates + current factor exposures with slight drift
@@ -2674,7 +2712,7 @@ async function generateReport(skipAI){
   if(!window.PptxGenJS){
     await new Promise((res,rej)=>{
       let sc=document.createElement('script');
-      sc.src='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgenjs.bundle.js';
+      sc.src='pptxgenjs.bundle.js';
       sc.onload=res;sc.onerror=rej;document.head.appendChild(sc);
     });
   }

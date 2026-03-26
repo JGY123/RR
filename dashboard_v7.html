@@ -378,19 +378,16 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="tab-content active" id="tab-exposures"></div>
 <div class="tab-content" id="tab-risk"></div>
 <div class="tab-content" id="tab-holdings"></div>
-<div class="tab-content" id="tab-attribution" style="display:none"></div>
 </div>
 <div class="modal-overlay" id="drillModal"><div class="modal modal-lg" id="drillContent"></div></div>
 <div class="modal-overlay" id="stockModal"><div class="modal" id="stockContent"></div></div>
 <div class="modal-overlay" id="reportModal"><div class="modal modal-lg" id="reportContent"></div></div>
 <div class="modal-overlay" id="compModal"><div class="modal modal-lg" id="compContent"></div></div>
 <div class="modal-overlay" id="metricModal"><div class="modal" id="metricContent"></div></div>
-<div class="modal-overlay" id="stressModal"><div class="modal modal-lg" id="stressContent"></div></div>
 <div class="modal-overlay" id="countryModal"><div class="modal" id="countryContent"></div></div>
 <div class="modal-overlay" id="groupModal"><div class="modal modal-lg" id="groupContent"></div></div>
 <div class="modal-overlay" id="charModal"><div class="modal" id="charContent"></div></div>
 <div class="modal-overlay" id="corrModal"><div class="modal" id="corrContent"></div></div>
-<div class="modal-overlay" id="attrDrillModal"><div class="modal modal-lg" id="attrDrillContent"></div></div>
 <div class="modal-overlay" id="unownedModal"><div class="modal" id="unownedContent"></div></div>
 <div class="modal-overlay" id="riskBudgetModal"><div class="modal modal-lg" id="riskBudgetContent"></div></div>
 <script>
@@ -417,14 +414,6 @@ const GROUPS_DEF=[
 {g:'COMMODITY',sg:'COMMODITY',secs:['Materials','Energy']},
 {g:'RATE SENSITIVE',sg:'BANKS',secs:['Financials']},
 {g:'RATE SENSITIVE',sg:'BOND PROXIES',secs:['Utilities','Real Estate']}
-];
-const STRESS=[
-{name:'Global Recession',desc:'-20% equities, +rates',sectors:{Industrials:-22,Financials:-18,'Info Technology':-25,'Consumer Disc.':-24,Materials:-20,'Health Care':-8,'Consumer Staples':-6,Energy:-15,Utilities:-5,'Real Estate':-12,'Comm Services':-15}},
-{name:'Rate Shock +200bp',desc:'Rates up 200bp',sectors:{Industrials:-8,Financials:5,'Info Technology':-15,'Consumer Disc.':-10,Materials:-5,'Health Care':-3,'Consumer Staples':-2,Energy:2,Utilities:-12,'Real Estate':-18,'Comm Services':-8}},
-{name:'China Hard Landing',desc:'China GDP <3%',sectors:{Industrials:-15,Financials:-10,'Info Technology':-12,'Consumer Disc.':-8,Materials:-25,'Health Care':-3,'Consumer Staples':-2,Energy:-20,Utilities:0,'Real Estate':-5,'Comm Services':-5}},
-{name:'USD Strengthening',desc:'DXY +15%',sectors:{Industrials:-5,Financials:-3,'Info Technology':-8,'Consumer Disc.':-4,Materials:-10,'Health Care':-2,'Consumer Staples':-1,Energy:-12,Utilities:1,'Real Estate':-3,'Comm Services':-2}},
-{name:'Tech Correction',desc:'Tech -30%',sectors:{Industrials:-5,Financials:-3,'Info Technology':-30,'Consumer Disc.':-10,Materials:-2,'Health Care':-5,'Consumer Staples':2,Energy:3,Utilities:5,'Real Estate':0,'Comm Services':-20}},
-{name:'Inflation Surge',desc:'CPI >6%',sectors:{Industrials:2,Financials:5,'Info Technology':-12,'Consumer Disc.':-8,Materials:10,'Health Care':-3,'Consumer Staples':3,Energy:15,Utilities:-5,'Real Estate':-8,'Comm Services':-5}}
 ];
 
 // ===== STATE =====
@@ -508,31 +497,9 @@ function enrichHold(hold,sectors){
   });
 }
 
-function genAttrib(s){
-  // Return sector rows with null attribution effects — no synthetic/random values
-  return s.sectors.map(sec=>{
-    return{n:sec.n,pa:sec.p,ba:sec.b,aa:sec.a,pr:sec.t,br:sec.t,alloc:null,sel:null,inter:null,total:null};
-  });
-}
-
-function genStress(s){
-  return STRESS.map(sc=>{
-    let portImpact=0,benchImpact=0;
-    s.sectors.forEach(sec=>{
-      let shock=sc.sectors[sec.n]||0;
-      portImpact+=sec.p*shock/100;
-      benchImpact+=sec.b*shock/100;
-    });
-    return{name:sc.name,desc:sc.desc,port:+portImpact.toFixed(2),bench:+benchImpact.toFixed(2),active:+(portImpact-benchImpact).toFixed(2)};
-  });
-}
-
-function genFCorr(){
-  // No synthetic correlation data — computed from hist.fac in rUpdateCorr()
-  return null;
-}
 
 // ===== NORMALIZE + INIT =====
+// RULE: Parser data is SACRED. normalize() must NEVER overwrite fields set by factset_parser.py.
 function normalize(raw){
   let out={};
   // FINDING 5: Handle array output from parser v2 [strategies, issues, report_date, parse_stats]
@@ -638,10 +605,6 @@ function normalize(raw){
        st.ranks=st.ranks.map(function(q){return{...q,ct:qc[q.r]||0};});
      }
     }
-    // Generate derived data
-    st.attrib=genAttrib(st);
-    st.stress=genStress(st);
-    st.fcorr=genFCorr();
     out[id]=st;
   }
   return out;
@@ -898,7 +861,6 @@ function upd(){
   rExp();
   rRisk();
   rHold();
-  rAttr();  // factor attribution renders into Factors card on Exposures tab
 }
 
 // ===== EXPOSURES TAB =====
@@ -1068,13 +1030,6 @@ function rExp(){
     </div>
   </div>
 
-  <!-- Row 9: Stress Scenarios -->
-  <div class="card" id="cardStress">
-    <div class="flex-between"><div class="card-title tip" data-tip="Click a scenario for per-sector impact waterfall">Stress Scenarios</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardStress table','stress_scenarios')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardStress')">PNG</button></div></div>
-    ${rStressTable(s.stress)}
-  </div>
-
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
     <div class="flex-between"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail.">Unowned Risk Contributors</div>
@@ -1086,7 +1041,7 @@ function rExp(){
   <div class="card" id="cardCorr">
     <div class="flex-between"><div class="card-title tip" data-tip="Click any cell to see scatter plot of two factors">Factor Correlation Matrix</div>
     <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCorr table','factor_correlation')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
-    <div style="overflow-x:auto;max-width:100%">${rFCorr(s.fcorr)}</div>
+    <div style="overflow-x:auto;max-width:100%" id="corrMatrixCardArea"><p style="color:var(--txt);font-size:12px">Computed from historical factor data — see Risk tab.</p></div>
   </div>
 
   <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
@@ -1299,13 +1254,6 @@ function rGroupTable(groups){
   return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th onclick="sortTbl('tbl-grp',1)">Subgroup</th><th class="r" onclick="sortTbl('tbl-grp',2)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',4)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function rStressTable(stress){
-  let rows=stress.map((s,i)=>{
-    let cls=s.active>0?'pos':'neg';
-    return`<tr class="clickable" onclick="oDrStress(${i})"><td><strong style="color:var(--txth)">${s.name}</strong><br><span style="font-size:10px">${s.desc}</span></td><td class="r" style="color:var(--neg)">${fp(s.port)}</td><td class="r" style="color:var(--neg)">${fp(s.bench)}</td><td class="r ${cls}">${fp(s.active)}</td></tr>`;
-  }).join('');
-  return`<table><thead><tr><th>Scenario</th><th class="r">Portfolio</th><th class="r">Benchmark</th><th class="r">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
-}
 
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
@@ -1314,21 +1262,6 @@ function rUnowned(unowned){
   return`<table><thead><tr><th>Ticker</th><th>Name</th><th>Region</th><th class="r">Bench Wt%</th><th class="r">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function rFCorr(fcorr){
-  if(!fcorr)return'';
-  let names=Object.keys(fcorr);
-  if(!names.length)return'';
-  let hdr=names.map(f=>`<th class="r" style="font-size:9px;white-space:nowrap">${f.length>6?f.slice(0,5)+'…':f}</th>`).join('');
-  let rows=names.map(f1=>{
-    let cells=names.map(fn=>{
-      let v=fcorr[f1]?fcorr[f1][fn]:0;
-      let bg=f1===fn?'var(--pri)':v>0.5?'rgba(16,185,129,.3)':v<-0.5?'rgba(239,68,68,.3)':'transparent';
-      return`<td class="r" style="background:${bg};font-size:10px;cursor:${f1!==fn?'pointer':'default'}" ${f1!==fn?`onclick="oDrCorr('${f1}','${fn}')"`:''}>${f2(v,2)}</td>`;
-    }).join('');
-    return`<tr><td style="font-weight:600;font-size:10px;white-space:nowrap;padding-right:8px">${f1}</td>${cells}</tr>`;
-  }).join('');
-  return`<table style="font-size:10px;border-collapse:collapse"><thead><tr><th></th>${hdr}</tr></thead><tbody>${rows}</tbody></table>`;
-}
 
 function rUpdateCorr(){
   let s=cs;
@@ -1344,14 +1277,9 @@ function rUpdateCorr(){
   let selFacEls=document.querySelectorAll('.corr-fac-chk:checked');
   let selFacs=selFacEls.length?[...selFacEls].map(el=>el.value):null;
 
-  // Compute correlation from hist.fac; fall back to synthetic history
+  // Compute correlation from hist.fac
   let facHist=s.hist.fac;
   let hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
-  if(!hasFacData){
-    if(!s._synthFacHist)s._synthFacHist=_genFacHistory(s);
-    facHist=s._synthFacHist;
-    hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
-  }
   if(!hasFacData){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:16px;text-align:center">No factor history available</p>';return;}
 
   let allFacNames=Object.keys(facHist);
@@ -1970,37 +1898,12 @@ function setFacBarAll(v){
   rRiskFacBarsMode();
 }
 
-function _genFacHistory(s){
-  // Synthetic factor history: derive from hist.sum dates + current factor exposures with slight drift
-  let dates=s.hist.sum.map(h=>h.d);
-  if(!dates.length)return{};
-  let out={};
-  s.factors.forEach(f=>{
-    let base=f.a||0;
-    // Walk backwards from current value with small random steps
-    let vals=[base];
-    for(let i=1;i<dates.length;i++){
-      let prev=vals[vals.length-1];
-      vals.push(+(prev+(Math.random()-0.502)*Math.abs(base)*0.08+(-base*0.003)).toFixed(4));
-    }
-    vals.reverse();
-    out[f.n]=dates.map((d,i)=>({d,e:vals[i],bm:0}));
-  });
-  return out;
-}
 
 function updateFacExpChart(){
   let s=cs;
   let allFacs=window._riskAllFacs||[];
   let facColors=window._riskFacColors||['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899'];
-  // Build synthetic history if hist.fac is empty
-  let facHist=s.hist.fac;
-  let hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
-  if(!hasFacData){
-    if(!s._synthFacHist)s._synthFacHist=_genFacHistory(s);
-    facHist=s._synthFacHist;
-  }
-  if(!s._synthFacHist)s._synthFacHist=_genFacHistory(s);
+  let facHist=s.hist.fac||{};
   let traces=[];
   let colorIdx=0;
 
@@ -2012,7 +1915,6 @@ function updateFacExpChart(){
     let chk=document.querySelector(`.fac-exp-chk[data-fac="${CSS.escape(f.n)}"]`)||checkboxes[i];
     if(!chk||!chk.checked)return;
     let hist=facHist[f.n];
-    if(!hist||!hist.length)hist=(s._synthFacHist||{})[f.n];
     if(!hist||!hist.length)return;
     let col=facColors[colorIdx++%facColors.length];
     traces.push({
@@ -2365,95 +2267,6 @@ function rHoldConc(){
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Weight %'}},plotCfg);
 }
 
-// ===== ATTRIBUTION TAB =====
-function rAttr(){
-  let s=cs;
-  let attrib=s.attrib||[];
-  let totalAlloc=attrib.reduce((a,x)=>a+x.alloc,0);
-  let totalSel=attrib.reduce((a,x)=>a+x.sel,0);
-  let totalInter=attrib.reduce((a,x)=>a+x.inter,0);
-  let totalTotal=attrib.reduce((a,x)=>a+x.total,0);
-
-  let rows=attrib.map(a=>`<tr class="clickable" onclick="oDrAttrib('${a.n}')">
-    <td>${a.n}</td><td class="r">${f2(a.pa)}</td><td class="r">${f2(a.ba)}</td><td class="r ${activeStyle(a.aa)}">${fp(a.aa)}</td>
-    <td class="r" style="${a.pr>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.pr)}</td>
-    <td class="r" style="${a.br>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.br)}</td>
-    <td class="r" style="${a.alloc>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.alloc)}</td>
-    <td class="r" style="${a.sel>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.sel)}</td>
-    <td class="r" style="${a.inter>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.inter)}</td>
-    <td class="r" style="font-weight:600;${a.total>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(a.total)}</td>
-  </tr>`).join('');
-
-  let totalRow=`<tr style="border-top:2px solid var(--grid);font-weight:600">
-    <td>TOTAL</td><td class="r">100.00</td><td class="r">100.00</td><td class="r">--</td>
-    <td class="r">--</td><td class="r">--</td>
-    <td class="r" style="${totalAlloc>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(totalAlloc)}</td>
-    <td class="r" style="${totalSel>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(totalSel)}</td>
-    <td class="r" style="${totalInter>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(totalInter)}</td>
-    <td class="r" style="${totalTotal>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(totalTotal)}</td>
-  </tr>`;
-
-  let html=`
-  <div class="card" id="cardAttrib" style="margin-bottom:16px">
-    <div class="flex-between"><div class="card-title tip" data-tip="Click any sector row for holdings-level attribution decomposition">Brinson Attribution (Sector-Based)</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardAttrib table','attribution_${cs.id}')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardAttrib')">PNG</button></div></div>
-    <div style="overflow-x:auto">
-    <table><thead><tr>
-      <th>Sector</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th>
-      <th class="r">Port Ret</th><th class="r">Bench Ret</th>
-      <th class="r">Alloc</th><th class="r">Select</th><th class="r">Inter</th><th class="r">Total</th>
-    </tr></thead><tbody>${rows}${totalRow}</tbody></table>
-    </div>
-  </div>
-
-  <div class="grid g2">
-    <div class="card">
-      <div class="card-title">Attribution Waterfall</div>
-      <div id="attribWatDiv" style="height:300px"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Attribution by Component</div>
-      <div id="attribCompDiv" style="height:300px"></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Stress Scenarios</div>
-    ${rStressTable(s.stress)}
-  </div>`;
-
-  // Render into factor attribution area on Exposures tab (Attribution tab removed)
-  let target=$('facAttribArea');
-  if(target){target.innerHTML=html;}
-  else{
-    // Fallback: append to factor detail card area
-    let fc=$('cardFacDetail');
-    if(fc){
-      let area=document.createElement('div');
-      area.id='facAttribArea';
-      area.innerHTML=html;
-      fc.parentElement.after(area);
-    }
-  }
-  setTimeout(()=>{rAttribWat(attrib);rAttribComp(attrib)},50);
-}
-
-function rAttribWat(attrib){
-  let sorted=[...attrib].sort((a,b)=>b.total-a.total);
-  Plotly.newPlot('attribWatDiv',[{
-    y:sorted.map(a=>a.n),x:sorted.map(a=>a.total),type:'bar',orientation:'h',
-    marker:{color:sorted.map(a=>a.total>=0?'#10b981':'#ef4444')},
-    text:sorted.map(a=>fp(a.total)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Total Effect %'}},plotCfg);
-}
-
-function rAttribComp(attrib){
-  Plotly.newPlot('attribCompDiv',[
-    {x:attrib.map(a=>a.n),y:attrib.map(a=>a.alloc),name:'Allocation',type:'bar',marker:{color:'#3b82f6'}},
-    {x:attrib.map(a=>a.n),y:attrib.map(a=>a.sel),name:'Selection',type:'bar',marker:{color:'#10b981'}},
-    {x:attrib.map(a=>a.n),y:attrib.map(a=>a.inter),name:'Interaction',type:'bar',marker:{color:'#f59e0b'}}
-  ],{...plotBg,barmode:'group',xaxis:{...plotBg.xaxis,tickangle:-45},yaxis:{...plotBg.yaxis,title:'Effect %'},legend:{orientation:'h',y:1.12,font:{size:10}}},plotCfg);
-}
 
 // ===== DRILL MODALS =====
 let _drillRange='All';
@@ -2468,7 +2281,6 @@ function oDr(type,name,range){
   if(!hist.length&&fullHist&&fullHist.length)hist=fullHist;
   let holdings=cs.hold.filter(h=>type==='sec'?h.sec===name:h.reg===name);
   let dataRow=type==='sec'?cs.sectors.find(x=>x.n===name):cs.regions.find(x=>x.n===name);
-  let attr=type==='sec'?cs.attrib.find(a=>a.n===name):null;
 
   // TE contribution estimate
   let teContrib=holdings.reduce((a,h)=>a+(h.tr||0),0);
@@ -2514,17 +2326,6 @@ function oDr(type,name,range){
     }
   }
 
-  // Attribution for sector drills
-  let attrHtml='';
-  if(attr){
-    attrHtml=`<div class="grid g4" style="margin:16px 0">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Allocation</div><div style="font-size:16px;font-weight:700;color:${attr.alloc>=0?'var(--pos)':'var(--neg)'}">${fp(attr.alloc)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Selection</div><div style="font-size:16px;font-weight:700;color:${attr.sel>=0?'var(--pos)':'var(--neg)'}">${fp(attr.sel)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Interaction</div><div style="font-size:16px;font-weight:700;color:${attr.inter>=0?'var(--pos)':'var(--neg)'}">${fp(attr.inter)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Total Effect</div><div style="font-size:16px;font-weight:700;color:${attr.total>=0?'var(--pos)':'var(--neg)'}">${fp(attr.total)}</div></div>
-    </div>`;
-  }
-
   // Mini comparison to other sectors/regions
   let others=type==='sec'?cs.sectors:cs.regions;
   let miniCompare=others.sort((a,b)=>Math.abs(b.a)-Math.abs(a.a)).map(o=>{
@@ -2541,7 +2342,6 @@ function oDr(type,name,range){
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(teContrib)}</div></div>
     </div>
     ${facScoreHtml}
-    ${attrHtml}
     <div class="card-title">Historical Weight: Portfolio vs Benchmark</div>
     ${histHtml}
     <div class="grid g23">
@@ -2616,10 +2416,8 @@ function oDrF(name,range){
     histHtml=`<div class="range-btns">${rangeBtns}</div><div class="card-title">Active Exposure</div><div id="facDrillHistDiv" style="height:200px;margin-bottom:4px"></div>${retChartHtml}`;
   }
 
-  // Factor correlations
-  let corrList=FACS.filter(f=>f!==name).map(f=>({n:f,v:cs.fcorr[name]?cs.fcorr[name][f]:0})).sort((a,b)=>Math.abs(b.v)-Math.abs(a.v));
-  let corrHtml=corrList.map(c=>`<div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:11px;border-bottom:1px solid rgba(51,65,85,.3)">
-    <span>${c.n}</span><span style="color:${c.v>0?'var(--pos)':'var(--neg)'};font-weight:600">${f2(c.v,2)}</span></div>`).join('');
+  // Factor correlations (no data)
+  let corrHtml='<p style="font-size:11px;color:var(--txt)">—</p>';
 
   // Risk contribution detail
   let totalFacC=cs.factors.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
@@ -2750,9 +2548,6 @@ function oSt(ticker){
     <td class="r">${rRVQ(p)}</td>
   </tr>`).join('');
 
-  // Synthetic weight history
-  let wHist=[];let now=new Date();
-  for(let i=11;i>=0;i--){let d=new Date(now);d.setMonth(d.getMonth()-i);wHist.push({d:d.toISOString().slice(0,10),p:+(h.p*(0.85+Math.random()*0.3)).toFixed(2)})}
 
   let trCls=(h.tr||0)>0?'pos':'neg';
 
@@ -2786,7 +2581,7 @@ function oSt(ticker){
     </div>
     <div class="grid g2" style="margin-bottom:12px">
       <div><div class="card-title">Score Radar (Q1 = best, outer ring)</div><div id="stockRadarDiv" style="height:230px"></div></div>
-      <div><div class="card-title">Weight History (synthetic)</div><div id="stockHistDiv" style="height:230px"></div></div>
+      <div><div class="card-title">Weight History</div><div id="stockHistDiv" style="height:230px;display:flex;align-items:center;justify-content:center"><span style="font-size:11px;color:var(--txt)">No historical data available</span></div></div>
     </div>
     ${peers.length&&h.sec?`<div><div class="card-title">Peers in ${h.sec} — sorted by TE contribution</div>
     <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">%T</th><th class="r">Rank</th></tr></thead><tbody>${peerRows}</tbody></table></div>`:''}`;
@@ -2810,10 +2605,6 @@ function oSt(ticker){
       document.getElementById('stockRadarDiv').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:11px;color:var(--txt)">No score data</div>';
     }
 
-    Plotly.newPlot('stockHistDiv',[{
-      x:wHist.map(w=>w.d),y:wHist.map(w=>w.p),type:'scatter',mode:'lines',
-      line:{color:rankCol,width:2},fill:'tozeroy',fillcolor:rankCol+'14'
-    }],{...plotBg,yaxis:{...plotBg.yaxis,title:'Weight %'},margin:{l:40,r:10,t:10,b:30}},plotCfg);
   },50);
 }
 
@@ -2975,8 +2766,6 @@ function openReport(){
     {id:'holdings',label:'Top Holdings',desc:'Largest positions'},
     {id:'unowned',label:'Unowned Risk',desc:'Benchmark-only risk'},
     {id:'ranks',label:'Quant Rankings',desc:'R1-R5 distribution'},
-    {id:'attribution',label:'Attribution',desc:'Brinson decomposition'},
-    {id:'stress',label:'Stress Tests',desc:'Scenario analysis'},
     {id:'chars',label:'Characteristics',desc:'Portfolio vs Benchmark'}
   ];
 
@@ -3177,7 +2966,7 @@ document.body.addEventListener('drop',e=>{
 });
 
 // ===== MODAL MANAGEMENT =====
-const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','stressModal','countryModal','groupModal','charModal','corrModal','attrDrillModal','unownedModal','riskBudgetModal'];
+const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','corrModal','unownedModal','riskBudgetModal'];
 ALL_MODALS.forEach(id=>{
   let el=$(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show')});
@@ -3467,18 +3256,9 @@ function oDrMetric(metric,range){
   if(metric==='beta'){
     // Build beta variants — only show what has data
     let betas=cs.sum.betas||{};
-    // Synthetic demo data (only if nothing from JSON)
-    if(!Object.keys(betas).length){
-      betas={
-        'Beta (36M)':cs.sum.beta,
-        'Beta (52W)':+(cs.sum.beta*(0.95+Math.random()*0.1)).toFixed(3),
-        'Predicted Beta':+(cs.sum.beta*(0.97+Math.random()*0.06)).toFixed(3),
-        'Beta to Local Index':+(cs.sum.beta*(0.9+Math.random()*0.2)).toFixed(3),
-        'Up-Market Beta':+(cs.sum.beta*(1.0+Math.random()*0.15)).toFixed(3),
-        'Down-Market Beta':+(cs.sum.beta*(0.85+Math.random()*0.2)).toFixed(3),
-        'Bull Beta (60M)':+(cs.sum.beta*(1.02+Math.random()*0.1)).toFixed(3),
-        'Bear Beta (60M)':+(cs.sum.beta*(0.88+Math.random()*0.15)).toFixed(3)
-      };
+    // Show only real betas from parser; if none, show predicted beta only
+    if(!Object.keys(betas).length&&cs.sum.beta!=null){
+      betas={'Predicted Beta':cs.sum.beta};
     }
     // Store for chart overlay use
     window._betaVariants=betas;
@@ -3699,49 +3479,6 @@ function oDrCountry(name){
   m.classList.add('show');
 }
 
-// ===== STRESS SCENARIO DRILL =====
-function oDrStress(idx){
-  let m=$('stressModal');
-  let sc=STRESS[idx];
-  let stress=cs.stress[idx];
-  if(!sc||!stress)return;
-
-  // Per-sector impact
-  let sectorImpacts=cs.sectors.map(sec=>{
-    let shock=sc.sectors[sec.n]||0;
-    let portImpact=sec.p*shock/100;
-    let benchImpact=sec.b*shock/100;
-    return{n:sec.n,shock,portW:sec.p,benchW:sec.b,portImpact:+portImpact.toFixed(3),benchImpact:+benchImpact.toFixed(3),activeImpact:+(portImpact-benchImpact).toFixed(3)};
-  }).sort((a,b)=>a.activeImpact-b.activeImpact);
-
-  let rows=sectorImpacts.map(s=>`<tr>
-    <td>${s.n}</td><td class="r">${s.shock}%</td><td class="r">${f2(s.portW)}</td>
-    <td class="r" style="color:var(--neg)">${fp(s.portImpact,3)}</td>
-    <td class="r" style="color:var(--neg)">${fp(s.benchImpact,3)}</td>
-    <td class="r ${s.activeImpact>=0?'pos':'neg'}">${fp(s.activeImpact,3)}</td>
-  </tr>`).join('');
-
-  $('stressContent').innerHTML=`
-    <h2>${sc.name}<button class="close" onclick="$('stressModal').classList.remove('show')">&times;</button></h2>
-    <p style="font-size:12px;color:var(--txt);margin-bottom:16px">${sc.desc}</p>
-    <div class="grid g3" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Portfolio Impact</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(stress.port)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Impact</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(stress.bench)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Impact</div><div style="font-size:20px;font-weight:700;color:${stress.active>=0?'var(--pos)':'var(--neg)'}">${fp(stress.active)}%</div></div>
-    </div>
-    <div id="stressWaterfallDiv" style="height:300px;margin-bottom:16px"></div>
-    <div class="card-title">Per-Sector Impact Detail</div>
-    <table><thead><tr><th>Sector</th><th class="r">Shock</th><th class="r">Port Wt</th><th class="r">Port Impact</th><th class="r">Bench Impact</th><th class="r">Active Impact</th></tr></thead><tbody>${rows}</tbody></table>`;
-  m.classList.add('show');
-
-  setTimeout(()=>{
-    Plotly.newPlot('stressWaterfallDiv',[{
-      y:sectorImpacts.map(s=>s.n),x:sectorImpacts.map(s=>s.activeImpact),type:'bar',orientation:'h',
-      marker:{color:sectorImpacts.map(s=>s.activeImpact>=0?'#10b981':'#ef4444')},
-      text:sectorImpacts.map(s=>fp(s.activeImpact,3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
-    }],{...plotBg,yaxis:{...plotBg.yaxis},xaxis:{...plotBg.xaxis,title:'Active Impact %'}},plotCfg);
-  },50);
-}
 
 // ===== UNOWNED DRILL =====
 function oDrUnowned(ticker){
@@ -3801,14 +3538,6 @@ function oDrChar(metric){
   let m=$('charModal');
   let char=cs.chars.find(c=>c.m===metric);
   if(!char)return;
-  // Generate synthetic historical comparison
-  let hist=[];
-  let now=new Date();
-  for(let i=11;i>=0;i--){
-    let d=new Date(now);d.setMonth(d.getMonth()-i*3);
-    hist.push({d:d.toISOString().slice(0,10),p:+(char.p*(0.9+Math.random()*0.2)).toFixed(1),b:+(char.b*(0.9+Math.random()*0.2)).toFixed(1)});
-  }
-
   $('charContent').innerHTML=`
     <h2>${metric}<button class="close" onclick="$('charModal').classList.remove('show')">&times;</button></h2>
     <div class="grid g3" style="margin-bottom:16px">
@@ -3816,78 +3545,11 @@ function oDrChar(metric){
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark</div><div style="font-size:20px;font-weight:700;color:var(--txt)">${f2(char.b,1)}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Difference</div><div style="font-size:20px;font-weight:700;color:${(char.p-char.b)>=0?'var(--pos)':'var(--neg)'}">${fp(char.p-char.b,1)}</div></div>
     </div>
-    <div id="charHistDiv" style="height:250px"></div>`;
-  m.classList.add('show');
-
-  setTimeout(()=>{
-    Plotly.newPlot('charHistDiv',[
-      {x:hist.map(h=>h.d),y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#3b82f6',width:2}},
-      {x:hist.map(h=>h.d),y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#64748b',width:2,dash:'dot'}}
-    ],{...plotBg,yaxis:{...plotBg.yaxis,title:metric},legend:{orientation:'h',y:1.1,font:{size:10}}},plotCfg);
-  },50);
-}
-
-// ===== CORRELATION SCATTER DRILL =====
-function oDrCorr(f1Name,f2Name){
-  if(f1Name===f2Name)return;
-  let m=$('corrModal');
-  let corrVal=cs.fcorr[f1Name]?cs.fcorr[f1Name][f2Name]:0;
-  // Generate synthetic scatter data
-  let pts=cs.hold.slice(0,20).map(h=>({
-    x:+(Math.random()*2-1).toFixed(3),
-    y:+(corrVal*(Math.random()*2-1)+Math.random()*0.5).toFixed(3),
-    t:h.t
-  }));
-
-  $('corrContent').innerHTML=`
-    <h2>${f1Name} vs ${f2Name}<button class="close" onclick="$('corrModal').classList.remove('show')">&times;</button></h2>
-    <div style="text-align:center;margin-bottom:12px"><span style="font-size:14px;color:var(--txth)">Correlation: </span><span style="font-size:20px;font-weight:700;color:${corrVal>0?'var(--pos)':'var(--neg)'}">${f2(corrVal,2)}</span></div>
-    <div id="corrScatterDiv" style="height:300px"></div>`;
-  m.classList.add('show');
-
-  setTimeout(()=>{
-    Plotly.newPlot('corrScatterDiv',[{
-      x:pts.map(p=>p.x),y:pts.map(p=>p.y),mode:'markers+text',type:'scatter',
-      text:pts.map(p=>p.t),textposition:'top center',textfont:{size:8,color:'#64748b'},
-      marker:{size:8,color:'#3b82f6'},hovertemplate:'%{text}<br>'+f1Name+': %{x:.3f}<br>'+f2Name+': %{y:.3f}<extra></extra>'
-    }],{...plotBg,xaxis:{...plotBg.xaxis,title:f1Name+' Exposure',zeroline:true,zerolinecolor:'#64748b'},yaxis:{...plotBg.yaxis,title:f2Name+' Exposure',zeroline:true,zerolinecolor:'#64748b'}},plotCfg);
-  },50);
-}
-
-// ===== ATTRIBUTION DRILL =====
-function oDrAttrib(sectorName){
-  let m=$('attrDrillModal');
-  let attr=cs.attrib.find(a=>a.n===sectorName);
-  if(!attr)return;
-  let holdings=cs.hold.filter(h=>h.sec===sectorName).sort((a,b)=>b.p-a.p);
-
-  // Synthetic holdings-level attribution
-  let holdAttr=holdings.map(h=>{
-    let alloc=+(attr.alloc*h.p/Math.max(attr.pa,1)*0.5).toFixed(3);
-    let sel=+(attr.sel*h.p/Math.max(attr.pa,1)).toFixed(3);
-    return{...h,alloc,sel,total:+(alloc+sel).toFixed(3)};
-  });
-
-  let rows=holdAttr.map(h=>`<tr class="clickable" onclick="$('attrDrillModal').classList.remove('show');oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
-    <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
-    <td class="r" style="${h.alloc>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.alloc,3)}</td>
-    <td class="r" style="${h.sel>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.sel,3)}</td>
-    <td class="r" style="font-weight:600;${h.total>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(h.total,3)}</td>
-  </tr>`).join('');
-
-  $('attrDrillContent').innerHTML=`
-    <h2>${sectorName} — Attribution Detail<button class="close" onclick="$('attrDrillModal').classList.remove('show')">&times;</button></h2>
-    <div class="grid g4" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Allocation</div><div style="font-size:18px;font-weight:700;color:${attr.alloc>=0?'var(--pos)':'var(--neg)'}">${fp(attr.alloc)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Selection</div><div style="font-size:18px;font-weight:700;color:${attr.sel>=0?'var(--pos)':'var(--neg)'}">${fp(attr.sel)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Interaction</div><div style="font-size:18px;font-weight:700;color:${attr.inter>=0?'var(--pos)':'var(--neg)'}">${fp(attr.inter)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Total</div><div style="font-size:18px;font-weight:700;color:${attr.total>=0?'var(--pos)':'var(--neg)'}">${fp(attr.total)}</div></div>
-    </div>
-    <div class="card-title">Holdings-Level Decomposition</div>
-    <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Alloc</th><th class="r">Select</th><th class="r">Total</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <p style="font-size:12px;color:var(--txt)">No historical data available for this characteristic.</p>`;
   m.classList.add('show');
 }
+
+
 
 // ===== RISK BUDGET DETAILED DRILL =====
 function oDrRiskBudget(){

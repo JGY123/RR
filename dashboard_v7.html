@@ -19,7 +19,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .header h1{font-size:18px;font-weight:700;color:var(--txth);letter-spacing:-0.5px}
 .header h1 span{color:var(--pos);font-weight:300}
 .hdr-r{display:flex;align-items:center;gap:12px}
-.strat-sel{display:flex;gap:4px;background:var(--surf);border-radius:8px;padding:3px}
+.strat-sel{display:flex;align-items:center;gap:4px}
+.strat-sel select{font-size:12px;font-weight:600;padding:5px 28px 5px 10px;background:var(--surf);border:1px solid var(--pri);color:var(--txth);border-radius:8px;cursor:pointer;font-family:inherit;min-width:200px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
 .strat-btn{padding:6px 14px;border:none;background:none;color:var(--txt);font-size:12px;font-weight:500;border-radius:6px;cursor:pointer;transition:all .2s;font-family:inherit}
 .strat-btn.active{background:var(--pri);color:#fff}
 .strat-btn:hover:not(.active){background:var(--grid);color:var(--txth)}
@@ -641,7 +642,7 @@ function init(){
   // Build strategy buttons
   let sel=$('stratSel');
   let defaultKey=keys.includes('EM')?'EM':keys[0];
-  sel.innerHTML=`<select onchange="go(this.value)" style="font-size:12px;font-weight:600;padding:5px 10px;background:var(--surf);border:1px solid var(--pri);color:var(--txth);border-radius:8px;cursor:pointer;font-family:inherit;max-width:220px">${keys.map(k=>`<option value="${k}"${k===defaultKey?' selected':''}>${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
+  sel.innerHTML=`<select onchange="go(this.value)">${keys.map(k=>`<option value="${k}"${k===defaultKey?' selected':''}>${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
   $('uploadZone').style.display='none';
   $('content').style.display='block';
   $('clearBtn').style.display='inline-block';
@@ -658,8 +659,7 @@ function init(){
   _selectedWeek=null;
   initWeekSelector();
   $('globalSearchWrap').style.display='block';
-  $('stratFullName').style.display='inline';
-  $('stratFullName').textContent=cs.name;
+  $('stratFullName').style.display='none';
   $('dataTimestamp').style.display='inline';
   // Use report_date from JSON if available (format: YYYYMMDD or ISO string)
   let rDate=window._reportDate;
@@ -688,7 +688,6 @@ function go(id,btn){
   hp=1;sortCol=null;sortDir=1;
   _selectedWeek=null;
   initWeekSelector();
-  $('stratFullName').textContent=cs.name;
   // Brief loading shimmer
   showLoading('tab-'+activeTab);
   setTimeout(()=>upd(),120);
@@ -962,7 +961,7 @@ function rExp(){
   <div class="card" id="cardCorr">
     <div class="flex-between"><div class="card-title tip" data-tip="Click any cell to see scatter plot of two factors">Factor Correlation Matrix</div>
     <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCorr table','factor_correlation')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
-    ${rFCorr(s.fcorr)}
+    <div style="overflow-x:auto;max-width:100%">${rFCorr(s.fcorr)}</div>
   </div>
 
   <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
@@ -1184,25 +1183,35 @@ function rUpdateCorr(){
   let wrap=document.getElementById('corrMatrixWrap');
   if(!wrap)return;
 
-  // Compute correlation from hist.fac if available
+  // Get selected factors from checkboxes
+  let selFacEls=document.querySelectorAll('.corr-fac-chk:checked');
+  let selFacs=selFacEls.length?[...selFacEls].map(el=>el.value):null;
+
+  // Compute correlation from hist.fac; fall back to synthetic history
   let facHist=s.hist.fac;
   let hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
+  if(!hasFacData){
+    if(!s._synthFacHist)s._synthFacHist=_genFacHistory(s);
+    facHist=s._synthFacHist;
+    hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
+  }
   if(!hasFacData){wrap.innerHTML=rFCorr(s.fcorr);return;}
 
-  let facNames=Object.keys(facHist);
+  let allFacNames=Object.keys(facHist).filter(fn=>FAC_PRIMARY.has(fn));
+  let facNames=selFacs?allFacNames.filter(fn=>selFacs.includes(fn)):allFacNames;
+  if(facNames.length<2){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:12px;text-align:center">Select at least 2 factors</p>';return;}
+
   // Slice each factor series to period
   let sliced={};
   facNames.forEach(fn=>{
     let arr=facHist[fn]||[];
     if(wks<Infinity)arr=arr.slice(-wks);
-    // Sub-sample for monthly
     if(freq==='monthly'){
       let seen=new Set();
       arr=arr.filter(h=>{let m=h.d.slice(0,7);if(seen.has(m))return false;seen.add(m);return true;});
     }
     sliced[fn]=arr.map(h=>+(h.e||0));
   });
-  // Compute pairwise Pearson correlation
   function pearson(a,b){
     let n=Math.min(a.length,b.length);
     if(n<3)return 0;
@@ -1216,7 +1225,9 @@ function rUpdateCorr(){
   let m={};
   facNames.forEach(f1=>{m[f1]={};facNames.forEach(f2=>{m[f1][f2]=f1===f2?1:pearson(sliced[f1]||[],sliced[f2]||[]);});});
   let minLen=Math.min(...facNames.map(fn=>(sliced[fn]||[]).length));
-  let note=minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Insufficient data for selected range — showing available ${minLen} periods</div>`:'';
+  let isSynth=!s.hist.fac||!Object.values(s.hist.fac).some(v=>v&&v.length>0);
+  let note=(minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Insufficient data — showing ${minLen} periods</div>`:'')
+    +(isSynth?`<div style="font-size:10px;color:#64748b;margin-bottom:6px">Synthetic data — awaiting 3-year file</div>`:'');
   wrap.innerHTML=note+rFCorr(m);
 }
 
@@ -1362,7 +1373,8 @@ function rRisk(){
   let facMCR=s.factors.map(f=>{
     let contrib=Math.abs(f.c||0);
     let mcrTE=+(totalTE*contrib/100).toFixed(3);
-    return{n:f.n,e:f.a,c:f.c,mcrTE,ret:f.ret,imp:f.imp};
+    let devPct=f.dev!=null&&totalTE>0?+(f.dev/totalTE*100).toFixed(1):null;
+    return{n:f.n,e:f.a,c:f.c,mcrTE,ret:f.ret,imp:f.imp,dev:f.dev,devPct};
   }).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
 
   // Factor checkbox toggles for exposure history
@@ -1371,11 +1383,30 @@ function rRisk(){
   let facToggleHtml=allFacs.map((f,i)=>{
     let isPrimary=FAC_PRIMARY.has(f.n);
     let col=facColors[i%facColors.length];
-    return`<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;white-space:nowrap;padding:2px 6px;border-radius:4px;border:1px solid ${isPrimary?'var(--grid)':'rgba(51,65,85,.3)'}">
-      <input type="checkbox" class="fac-exp-chk" ${isPrimary?'checked':''} onchange="updateFacExpChart()" style="accent-color:${col}">
-      <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
-      <span style="color:${isPrimary?'var(--txth)':'var(--txt)'}">${f.n}</span>
-    </label>`;
+    if(isPrimary){
+      return`<label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;white-space:nowrap;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)">
+        <input type="checkbox" class="fac-exp-chk" data-fac="${f.n}" checked onchange="updateFacExpChart()" style="accent-color:${col}">
+        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></span>
+        <span style="color:var(--txth)">${f.n}</span>
+      </label>`;
+    }
+    // Non-primary: expandable dropdown showing individual components
+    let grpId='facGrp_'+f.n.replace(/[^a-z0-9]/gi,'_');
+    let isIndustry=/industr/i.test(f.n);
+    let isCountry=/countr/i.test(f.n);
+    let items=isIndustry?s.sectors.map(sec=>sec.n):isCountry?(s.countries||[]).map(c=>c.n):[];
+    let subHtml=items.length?items.map(item=>`<label style="display:flex;align-items:center;gap:4px;padding:3px 4px;font-size:11px;cursor:pointer;border-radius:3px;white-space:nowrap"><input type="checkbox" class="fac-sub-chk" data-grp="${f.n}" data-item="${item.replace(/"/g,'&quot;')}" onchange="updateFacExpChart()"><span style="color:var(--txth)">${item}</span></label>`).join('')
+      :`<p style="font-size:11px;color:var(--txt);padding:4px 2px;margin:0">No components available</p>`;
+    return`<div style="position:relative;display:inline-block">
+      <button onclick="(function(el){el.style.display=el.style.display==='block'?'none':'block'})(document.getElementById('${grpId}'))" style="font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid rgba(100,116,139,0.5);background:var(--surf);color:var(--txt);cursor:pointer;font-family:inherit">${f.n} <span style="font-size:9px">▾</span></button>
+      <div id="${grpId}" style="display:none;position:absolute;z-index:300;background:var(--card);border:1px solid var(--grid);border-radius:6px;padding:6px 8px;min-width:170px;max-height:220px;overflow-y:auto;top:28px;left:0;box-shadow:0 4px 16px rgba(0,0,0,.5)">
+        <div style="display:flex;gap:6px;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--grid)">
+          <button onclick="document.querySelectorAll('.fac-sub-chk[data-grp=\\'${f.n}\\']').forEach(c=>c.checked=true);updateFacExpChart()" style="font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">All</button>
+          <button onclick="document.querySelectorAll('.fac-sub-chk[data-grp=\\'${f.n}\\']').forEach(c=>c.checked=false);updateFacExpChart()" style="font-size:10px;padding:1px 5px;border-radius:3px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">None</button>
+        </div>
+        ${subHtml}
+      </div>
+    </div>`;
   }).join('');
   window._riskAllFacs=allFacs;
   window._riskFacColors=facColors;
@@ -1390,13 +1421,13 @@ function rRisk(){
     </div>
     <div class="sum-card">
       <div class="label">Factor Risk</div>
-      <div class="value" style="color:var(--pri)">${f2(factorRisk,1)}%</div>
-      <div class="sub">${factorPct}% of total</div>
+      <div class="value" style="color:var(--pri)">${factorPct}%</div>
+      <div class="sub">${f2(factorRisk,1)}% TE</div>
     </div>
     <div class="sum-card">
       <div class="label">Idiosyncratic Risk</div>
-      <div class="value" style="color:var(--acc)">${f2(idioRisk,1)}%</div>
-      <div class="sub">${idioPct}% of total</div>
+      <div class="value" style="color:var(--acc)">${idioPct}%</div>
+      <div class="sub">${f2(idioRisk,1)}% TE</div>
     </div>
     <div class="sum-card">
       <div class="label">Beta</div>
@@ -1497,6 +1528,9 @@ function rRisk(){
         </select>
       </div>
     </div>
+    <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
+      ${s.factors.filter(f=>FAC_PRIMARY.has(f.n)).map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" checked onchange="rUpdateCorr()"><span style="color:var(--txth)">${f.n}</span></label>`).join('')}
+    </div>
     <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%">${rFCorr(s.fcorr)}</div>
   </div>`;
 
@@ -1529,7 +1563,7 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   let facVals=hist.map((h,i)=>+(h.te-idioVals[i]).toFixed(3));
   Plotly.newPlot('teStackedDiv',[
     {x:dates,y:idioVals,name:'Stock-Specific',type:'scatter',mode:'lines',
-      fill:'tozeroy',fillcolor:'rgba(245,158,11,0.22)',line:{color:'rgba(245,158,11,0.5)',width:1},
+      fill:'tozeroy',fillcolor:'rgba(20,184,166,0.2)',line:{color:'rgba(20,184,166,0.65)',width:1},
       stackgroup:'te',hovertemplate:'Stock-Specific: %{y:.2f}%<extra></extra>'},
     {x:dates,y:facVals,name:'Factor',type:'scatter',mode:'lines',
       fill:'tonexty',fillcolor:'rgba(59,130,246,0.22)',line:{color:'rgba(59,130,246,0.5)',width:1},
@@ -1538,7 +1572,7 @@ function rTEStackedArea(s,factorRisk,idioRisk){
       line:{color:'#e2e8f0',width:2.5},fill:'none',
       hovertemplate:'Total TE: %{y:.2f}%<extra></extra>'}
   ],{...plotBg,
-    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.06},tickformat:'%b %Y',nticks:8},
+    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#1e293b',bordercolor:'#334155',borderwidth:1,thickness:0.05},tickformat:'%b %Y',nticks:8},
     yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},
     legend:{orientation:'h',y:1.12,font:{size:11}},
     hovermode:'x unified'
@@ -1577,13 +1611,17 @@ function rMultiBeta(s){
       line:{color:'#8b5cf6',width:1.5,dash:'dashdot'},
       hovertemplate:'MPT: '+f2(betas.mpt,3)+'<extra></extra>'});
   }
+  let betaAnnotations=[{x:1,xref:'paper',y:1,yref:'y',text:'β=1.0',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:6}];
+  if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:'#10b981'},xanchor:'left',xshift:6});
+  if(betas.historical!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.historical,yref:'y',text:'Hist Avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:6});
+  if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:'#8b5cf6'},xanchor:'left',xshift:6});
   Plotly.newPlot('riskBetaMultiDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:'Beta'},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:6},
     legend:{orientation:'h',y:1.12,font:{size:10}},
     shapes:[{type:'line',y0:1,y1:1,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}}],
-    annotations:[{x:1,xref:'paper',y:1,text:'β=1.0',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4}],
-    margin:{...plotBg.margin,r:50}
+    annotations:betaAnnotations,
+    margin:{...plotBg.margin,r:70}
   },plotCfg);
 }
 
@@ -1602,13 +1640,22 @@ function rRiskFacBarsMode(){
   let layout={...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},margin:{l:140,r:80,t:10,b:40}};
 
   if(mode==='te'){
-    traces=[{
-      y:facMCR.map(f=>f.n),x:facMCR.map(f=>f.mcrTE),type:'bar',orientation:'h',name:'TE Contrib',
+    let hasDev=facMCR.some(f=>f.devPct!=null&&f.devPct>0);
+    if(hasDev){
+      traces.push({
+        y:facMCR.map(f=>f.n),x:facMCR.map(f=>Math.max(f.devPct||0,Math.abs(f.c||0))),type:'bar',orientation:'h',
+        name:'Factor σ',marker:{color:'rgba(148,163,184,0.18)'},showlegend:false,
+        hovertemplate:'%{y}<br>Factor σ: %{x:.1f}% of TE<extra></extra>'
+      });
+    }
+    traces.push({
+      y:facMCR.map(f=>f.n),x:facMCR.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib',
       marker:{color:facMCR.map(f=>(f.e??0)>=0?'#3b82f6':'#f59e0b')},
-      text:facMCR.map(f=>f2(f.mcrTE,1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
-      hovertemplate:'%{y}<br>TE Contribution: %{x:.1f}%<extra></extra>'
-    }];
-    layout.xaxis={...plotBg.xaxis,title:'Contribution to TE %'};
+      text:facMCR.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+      hovertemplate:'%{y}<br>TE Contribution: %{x:.1f}% of total TE<extra></extra>'
+    });
+    layout.xaxis={...plotBg.xaxis,title:'% of Total TE'};
+    if(hasDev)layout.barmode='overlay';
   } else if(mode==='exp'){
     // Hide non-style factors in exposure mode
     let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
@@ -1623,10 +1670,10 @@ function rRiskFacBarsMode(){
     // Both — grouped bars
     let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
     traces=[
-      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.mcrTE),type:'bar',orientation:'h',name:'TE Contrib (%)',
+      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib (%)',
         marker:{color:'rgba(59,130,246,0.7)'},
-        text:styleFacs.map(f=>f2(f.mcrTE,1)+'%'),textposition:'auto',textfont:{size:9},
-        hovertemplate:'%{y}<br>TE Contrib: %{x:.1f}%<extra></extra>'},
+        text:styleFacs.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'auto',textfont:{size:9},
+        hovertemplate:'%{y}<br>TE Contrib: %{x:.1f}% of TE<extra></extra>'},
       {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.e||0)),type:'bar',orientation:'h',name:'|Exposure|',
         marker:{color:'rgba(245,158,11,0.7)'},
         text:styleFacs.map(f=>f2(Math.abs(f.e||0),2)),textposition:'auto',textfont:{size:9},
@@ -1675,29 +1722,71 @@ function updateFacExpChart(){
     if(!s._synthFacHist)s._synthFacHist=_genFacHistory(s);
     facHist=s._synthFacHist;
   }
+  if(!s._synthFacHist)s._synthFacHist=_genFacHistory(s);
   let traces=[];
+  let colorIdx=0;
+
+  // Style factor checkboxes
   let checkboxes=document.querySelectorAll('.fac-exp-chk');
   allFacs.forEach((f,i)=>{
-    let chk=checkboxes[i];
+    if(!FAC_PRIMARY.has(f.n))return;
+    // Find the matching checkbox by data-fac attribute or positional fallback
+    let chk=document.querySelector(`.fac-exp-chk[data-fac="${CSS.escape(f.n)}"]`)||checkboxes[i];
     if(!chk||!chk.checked)return;
     let hist=facHist[f.n];
+    if(!hist||!hist.length)hist=(s._synthFacHist||{})[f.n];
     if(!hist||!hist.length)return;
+    let col=facColors[colorIdx++%facColors.length];
     traces.push({
       x:hist.map(h=>h.d),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n,
-      line:{color:facColors[i%facColors.length],width:2},
+      line:{color:col,width:2},
       hovertemplate:f.n+'<br>%{x|%b %Y}<br>Exposure: %{y:.3f}<extra></extra>'
     });
   });
+
+  // Non-primary group sub-checkboxes (Industry sectors, Country weights)
+  document.querySelectorAll('.fac-sub-chk:checked').forEach(chk=>{
+    let grp=chk.dataset.grp;
+    let item=chk.dataset.item;
+    let isIndustry=/industr/i.test(grp);
+    let isCountry=/countr/i.test(grp);
+    let col=facColors[colorIdx++%facColors.length];
+    if(isIndustry){
+      let secHist=(s.hist.sec||{})[item];
+      if(secHist&&secHist.length){
+        traces.push({x:secHist.map(h=>h.d),y:secHist.map(h=>+(h.a||0).toFixed(3)),name:item,
+          line:{color:col,width:2,dash:'dot'},
+          hovertemplate:item+'<br>%{x|%b %Y}<br>Active Wt: %{y:.2f}%<extra></extra>'});
+      } else {
+        // Synthetic from current weight
+        let secCur=(s.sectors||[]).find(sec=>sec.n===item);
+        let baseW=secCur?secCur.a||0:0;
+        let dates=s.hist.sum.map(h=>h.d);
+        traces.push({x:dates,y:dates.map(()=>baseW),name:item+' (current)',
+          line:{color:col,width:1.5,dash:'dot'},
+          hovertemplate:item+'<br>Active Wt: %{y:.2f}% (no history)<extra></extra>'});
+      }
+    } else if(isCountry){
+      let cData=(s.countries||[]).find(c=>c.n===item);
+      let baseW=cData?cData.a||0:0;
+      let dates=s.hist.sum.map(h=>h.d);
+      traces.push({x:dates,y:dates.map(()=>baseW),name:item,
+        line:{color:col,width:1.5,dash:'dashdot'},
+        hovertemplate:item+'<br>Active Wt: %{y:.2f}% (current only)<extra></extra>'});
+    }
+  });
+
   let el=document.getElementById('riskExpHistDiv');
   if(!el)return;
   if(!traces.length){
     try{Plotly.purge('riskExpHistDiv')}catch(e){}
-    el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:20px;text-align:center">No factors selected — check boxes above to display exposures</p>';
+    el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:20px;text-align:center">No factors selected</p>';
     return;
   }
-  let syntheticNote=!hasFacData?[{text:'Synthetic data — awaiting 3-year file',xref:'paper',yref:'paper',x:0.5,y:1.05,showarrow:false,font:{size:9,color:'#64748b'}}]:[];
+  let isSynth=!s.hist.fac||!Object.values(s.hist.fac).some(v=>v&&v.length>0);
+  let syntheticNote=isSynth?[{text:'Synthetic data — awaiting 3-year file',xref:'paper',yref:'paper',x:0.5,y:1.05,showarrow:false,font:{size:9,color:'#64748b'}}]:[];
   Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
-    yaxis:{...plotBg.yaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
+    yaxis:{...plotBg.yaxis,title:'Active Exposure / Weight',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},
     legend:{orientation:'h',y:1.12,font:{size:10}},
     hovermode:'x unified',
@@ -2694,7 +2783,7 @@ document.addEventListener('keydown',e=>{
   let num=parseInt(e.key);
   if(num>=1&&num<=7&&!e.ctrlKey&&!e.metaKey){
     let keys=Object.keys(A);
-    if(keys[num-1]){let btns=document.querySelectorAll('.strat-btn');go(keys[num-1],btns[num-1])}
+    if(keys[num-1])go(keys[num-1]);
   }
   // Arrow keys for strategy switching
   if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
@@ -2702,8 +2791,7 @@ document.addEventListener('keydown',e=>{
     let idx=keys.indexOf(cs.id);
     if(e.key==='ArrowLeft')idx=Math.max(0,idx-1);
     else idx=Math.min(keys.length-1,idx+1);
-    let btns=document.querySelectorAll('.strat-btn');
-    go(keys[idx],btns[idx]);
+    go(keys[idx]);
   }
   // Tab key for tab switching (with shift for reverse)
   if(e.key==='Tab'&&!e.ctrlKey&&!e.metaKey){

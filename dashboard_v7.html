@@ -256,82 +256,6 @@ tr.clickable:active td{background:rgba(59,130,246,.12)}
 /* Plotly rangeslider custom styling */
 .rangeslider-handle-min,.rangeslider-handle-max{fill:#3b82f6!important;stroke:none!important}
 .rangeslider-slidebox{fill:rgba(59,130,246,0.12)!important;stroke:#3b82f6!important;stroke-width:1!important}
-
-/* ===== BLOOMBERG AESTHETICS UPGRADE ===== */
-
-/* Segmented pill control (replaces native radio + toggle-btn groups) */
-.seg-ctrl{display:inline-flex;background:var(--surf);border:1px solid var(--grid);border-radius:20px;padding:2px;gap:1px}
-.seg-ctrl button{border:none;background:transparent;color:var(--txt);font-size:11px;font-weight:500;padding:4px 12px;border-radius:16px;cursor:pointer;font-family:inherit;transition:all 150ms ease;white-space:nowrap;line-height:1.4}
-.seg-ctrl button.active{background:var(--pri);color:#fff;box-shadow:0 0 8px rgba(59,130,246,.35)}
-.seg-ctrl button:hover:not(.active){background:rgba(255,255,255,.06);color:var(--txth)}
-.seg-ctrl button:active{transform:scale(.98)}
-
-/* Range buttons override — pill style */
-.range-btns{display:flex;gap:0;margin-bottom:8px;width:fit-content;background:var(--surf);border:1px solid var(--grid);border-radius:14px;padding:2px}
-.range-btn{padding:3px 10px;background:transparent;border:none;color:var(--txt);border-radius:11px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms ease;white-space:nowrap}
-.range-btn.active{background:var(--pri);color:#fff}
-.range-btn:hover:not(.active){background:rgba(255,255,255,.06);color:var(--txth)}
-.range-btn:active{transform:scale(.98)}
-
-/* Table enhancements — alternating rows, monospace numbers, sticky header */
-thead th{position:sticky;top:0;z-index:2;background:var(--card)}
-tbody tr:nth-child(odd) td{background:rgba(15,23,42,.4)}
-tbody tr:nth-child(even) td{background:transparent}
-td,th{font-variant-numeric:tabular-nums}
-th.sort-active{color:var(--pri)}
-
-/* Card hover lift */
-.card{transition:border-color 150ms ease,transform 150ms ease,box-shadow 150ms ease}
-.card:hover{border-color:#475569;transform:translateY(-1px)}
-.sum-card{transition:border-color 150ms ease,transform 150ms ease}
-.sum-card:hover{border-color:var(--pri);transform:translateY(-2px)}
-
-/* NEW badge */
-.badge-new{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700;background:rgba(245,158,11,.2);color:var(--warn);letter-spacing:.3px;vertical-align:middle;margin-left:3px}
-
-/* BM-only row */
-tr.bm-only td{background:rgba(100,116,139,.06)!important;color:var(--txt)}
-.badge-bm{display:inline-block;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:600;background:rgba(100,116,139,.2);color:#64748b;margin-left:3px;vertical-align:middle}
-
-/* Rank spotlight display "R2 V5 Q1" */
-.rank-spot{display:inline-flex;gap:3px;align-items:center}
-.rank-spot .rs-over{padding:2px 6px;border-radius:3px;font-size:10px;font-weight:700}
-.rank-spot .rs-sub{font-size:9px;color:var(--txt);font-family:monospace}
-
-/* Factor grouping pills */
-.fac-grp-pills{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
-.fac-grp-pill{padding:3px 10px;border:1px solid var(--grid);border-radius:12px;font-size:11px;cursor:pointer;background:transparent;color:var(--txt);font-family:inherit;transition:all 150ms ease}
-.fac-grp-pill.active{background:var(--pri);color:#fff;border-color:var(--pri)}
-.fac-grp-pill.prof.active{background:var(--pos);border-color:var(--pos)}
-.fac-grp-pill:hover:not(.active){border-color:#475569;color:var(--txth)}
-
-/* Treemap container */
-.treemap-toggle{margin-bottom:8px}
-#secTreemapDiv{height:320px;border-radius:8px;overflow:hidden}
-
-/* Sector expand rows */
-.sec-expand-btn{background:none;border:none;color:var(--pri);cursor:pointer;font-size:10px;font-family:inherit;padding:0 4px}
-.sec-expand-content{display:none;padding:10px 12px;background:rgba(15,23,42,.5);border-bottom:1px solid var(--grid)}
-.sec-expand-content.open{display:block}
-
-/* Close button turns red on hover */
-.modal .close:hover{color:#ef4444}
-
-/* Profitability factor tint */
-.prof-row{background:rgba(16,185,129,.04)!important}
-
-/* Holdings sort pills bar */
-.hold-sort-bar{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-
-/* Summary card big number */
-.sum-card .value{font-variant-numeric:tabular-nums;letter-spacing:-.5px}
-
-/* Custom select — global override */
-select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:28px!important}
-select option{background:var(--card);color:var(--txth)}
-
-/* Interactive element focus ring */
-button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -386,10 +310,9 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 <button class="btn btn-pri" onclick="saveConfig()" style="width:100%;margin-top:8px">Save Settings</button>
 </div>
 <div class="tabs" id="tabBar" style="display:none">
-<button class="tab active" onclick="switchTab('exposures',this)">Overview</button>
-<button class="tab" onclick="switchTab('sectors',this)">Sectors</button>
-<button class="tab" id="tabHoldings" onclick="switchTab('holdings',this)">Holdings</button>
+<button class="tab active" onclick="switchTab('exposures',this)">Exposures</button>
 <button class="tab" onclick="switchTab('risk',this)">Risk</button>
+<button class="tab" id="tabHoldings" onclick="switchTab('holdings',this)">Holdings</button>
 </div>
 <div class="upload-zone" id="uploadZone">
 <label>Upload CSV or JSON<input type="file" accept=".csv,.txt,.json" onchange="upload(event)" hidden></label>
@@ -399,9 +322,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 <div id="content">
 <div id="validPanel" style="display:none;padding:16px 24px 0"></div>
 <div class="tab-content active" id="tab-exposures"></div>
-<div class="tab-content" id="tab-sectors"></div>
-<div class="tab-content" id="tab-holdings"></div>
 <div class="tab-content" id="tab-risk"></div>
+<div class="tab-content" id="tab-holdings"></div>
 <div class="tab-content" id="tab-attribution" style="display:none"></div>
 </div>
 <div class="modal-overlay" id="drillModal"><div class="modal modal-lg" id="drillContent"></div></div>
@@ -902,7 +824,6 @@ function updateTabBadges(){
 function upd(){
   updateTabBadges();
   rExp();
-  rSectors();
   rRisk();
   rHold();
   rAttr();  // factor attribution renders into Factors card on Exposures tab
@@ -946,43 +867,174 @@ function rExp(){
   let pctSpec=+(rawSpec/pctTotal*100).toFixed(0);
   let pctFac=+(rawFac/pctTotal*100).toFixed(0);
 
-  // TE display precision: 1 decimal, no % sign
-  let teDisplay=ws.te!=null?f2(ws.te,1):'--';
-
   let html=`${weekBannerHtml()}
-  <!-- 3 Hero Summary Cards -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px">
-    <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend" style="padding:20px;text-align:center;cursor:pointer">
-      <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark" style="font-size:11px;margin-bottom:8px">Tracking Error</div>
-      <div class="value" style="font-size:40px;font-weight:700;letter-spacing:-1px;${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${teDisplay}${riskDelta(ws.te,prevWs&&prevWs.te,1)}</div>
-      <div class="sub" style="margin-top:6px;font-size:11px;color:var(--txt)">Predicted</div>
+  <!-- Row 1: 3 Summary Cards -->
+  <div class="sum-cards" style="grid-template-columns:repeat(3,1fr)">
+    <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
+      <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark">Tracking Error</div>
+      <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(ws.te,1)}${riskDelta(ws.te,prevWs&&prevWs.te,1)}</div>
+      <div class="sub">${gt(s.hist.sum,'te')} ${s.hist.sum.length} wk trend</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Idiosyncratic risk breakdown" style="padding:20px;text-align:center;cursor:pointer">
-      <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error — click for top 5 contributors">Idiosyncratic Risk</div>
-      <div class="value" style="font-size:40px;font-weight:700;letter-spacing:-1px;color:var(--acc)">${pctSpec}%</div>
-      <div class="sub" style="margin-top:6px;font-size:11px;color:var(--txt)">of total TE</div>
+    <div class="sum-card" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Idiosyncratic risk breakdown">
+      <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error — click for top contributors">Idiosyncratic Risk</div>
+      <div class="value" style="color:var(--acc)">${pctSpec}%</div>
+      <div class="sub">of total TE</div>
     </div>
-    <div class="sum-card" onclick="oDrFacRiskBreak()" tabindex="0" role="button" aria-label="Factor risk breakdown" style="padding:20px;text-align:center;cursor:pointer">
+    <div class="sum-card" onclick="oDrFacRiskBreak()" tabindex="0" role="button" aria-label="Factor risk breakdown">
       <div class="label tip" data-tip="Factor-driven portion of tracking error — click for top factor contributors">Factor Risk</div>
-      <div class="value" style="font-size:40px;font-weight:700;letter-spacing:-1px;color:var(--pri)">${pctFac}%</div>
-      <div class="sub" style="margin-top:6px;font-size:11px;color:var(--txt)">of total TE</div>
+      <div class="value" style="color:var(--pri)">${pctFac}%</div>
+      <div class="sub">of total TE</div>
     </div>
   </div>
-  <!-- Info strip -->
-  <div style="display:flex;align-items:center;gap:16px;padding:6px 12px;background:var(--surf);border-radius:8px;font-size:11px;margin-bottom:0;border:1px solid var(--grid)">
-    <span style="color:var(--txt)">Benchmark:</span>
-    <span style="color:var(--txth);font-weight:600">${s.benchmark||s.name}</span>
-    <span style="color:var(--grid)">|</span>
+  <!-- Cash + Benchmark indicator strip -->
+  <div style="display:flex;align-items:center;gap:20px;padding:5px 10px;background:var(--surf);border-radius:6px;font-size:11px;margin-bottom:14px">
     <span style="color:var(--txt)">Cash:</span>
     <span style="color:var(--txth);font-weight:600">${isHistWeek?'--':f2(s.sum.cash,1)+'%'}</span>
+    <span style="color:var(--grid)">|</span>
+    <span style="color:var(--txt)">Benchmark:</span>
+    <span style="color:var(--txth);font-weight:600">${s.benchmark||s.name}</span>
+    <span style="font-size:10px;color:var(--txt)">(${s.id})</span>
     <span style="flex:1"></span>
-    <span style="font-size:10px;color:var(--pri);cursor:pointer" onclick="oDrMetric('cash')">Cash detail ›</span>
+    <span style="font-size:10px;color:var(--txt)" onclick="oDrMetric('cash')" style="cursor:pointer">Cash detail ›</span>
   </div>
 
+  <!-- Row 2: Sector Weights (Region moved to bottom) -->
+  <div class="card" id="cardSectors" style="margin-bottom:16px">
+    <div class="flex-between"><div class="card-title">Sector Active Weights</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#secTable table','sectors')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardSectors')">PNG</button></div>
+      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
+    </div></div>
+    <div id="secTable">${rWt(s.sectors,'sec',s.hold)}</div>
+    <div id="secChart" style="display:none"><div id="secChartDiv" style="height:320px"></div></div>
+  </div>
 
-`;
+  <!-- Row 3: Factor Exposures -->
+  <div class="grid g2">
+    <div class="card" id="cardFacButt">
+      <div class="flex-between"><div class="card-title">Factor Butterfly</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardFacButt')">PNG</button></div></div>
+      <div id="facButtDiv" style="height:300px"></div>
+    </div>
+    <div class="card" id="cardFacDetail">
+      <div class="flex-between"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail.">Factor Detail</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardFacDetail table','factors')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardFacDetail')">PNG</button></div></div>
+      ${rFac(s.factors,s.hold)}
+    </div>
+  </div>
+
+  <!-- Factor Attribution Waterfall -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-title">Factor Attribution — Return Impact</div>
+    <div id="facWaterfallDiv" style="height:${Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20}px"></div>
+  </div>
+
+  <!-- Row 4: Country Active Weights -->
+  <div class="grid g2">
+    <div class="card" id="cardCountryChart">
+      <div class="flex-between"><div class="card-title">Country Active Weights (Top OW / UW)</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardCountryChart')">PNG</button></div></div>
+      <div id="countryChartDiv" style="height:280px"></div>
+    </div>
+    <div class="card" id="cardCountryTable">
+      <div class="flex-between"><div class="card-title">All Countries</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCountryTable table','countries')">CSV</button></div></div>
+      <div style="max-height:280px;overflow-y:auto">${rCountryTable(s.countries)}</div>
+    </div>
+  </div>
+
+  <!-- Row 5: Redwood Groups -->
+  <div class="card" id="cardGroups">
+    <div class="flex-between"><div class="card-title">Redwood Groups</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#grpTable table','groups')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardGroups')">PNG</button></div>
+      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
+    </div></div>
+    <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
+    <div id="grpTable" style="display:none">${rGroupTable(s.groups)}</div>
+  </div>
+
+  <!-- Row 6: Quant Ranks + Characteristics -->
+  <div class="grid g2">
+    <div class="card" id="cardRanks">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click a rank to filter the Holdings tab">Quant Ranks</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardRanks table','ranks')">CSV</button></div></div>
+      ${rRnk(s.ranks)}
+    </div>
+    <div class="card" id="cardChars">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click a metric for historical comparison">Portfolio Characteristics</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardChars table','characteristics')">CSV</button></div></div>
+      ${rChr(s.chars)}
+    </div>
+  </div>
+
+  <!-- Row 7: Scatter + Treemap -->
+  <div class="grid g2">
+    <div class="card" id="cardScatter">
+      <div class="flex-between"><div class="card-title tip" data-tip="Marginal contribution to risk vs total return. Bubble size = port weight.">Risk/Return Scatter</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardScatter')">PNG</button></div></div>
+      <div id="scatDiv" style="height:320px"></div>
+    </div>
+    <div class="card" id="cardTreemap">
+      <div class="flex-between"><div class="card-title">Active Weight Treemap</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardTreemap')">PNG</button></div></div>
+      <div id="treeDiv" style="height:320px"></div>
+    </div>
+  </div>
+
+  <!-- Row 8: MCR + Risk Weight Budget -->
+  <div class="grid g2">
+    <div class="card" id="cardMCR">
+      <div class="flex-between"><div class="card-title tip" data-tip="Top holdings by marginal contribution to tracking error">Marginal Contribution to Risk (Top 10)</div>
+      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardMCR')">PNG</button></div></div>
+      <div id="mcrDiv" style="height:300px"></div>
+    </div>
+    <div class="card" id="cardFRB" style="cursor:pointer" onclick="oDrRiskBudget()">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click for detailed factor risk budget breakdown">Factor Risk Budget</div>
+      <div style="display:flex;gap:6px;align-items:center"><div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardFRB')">PNG</button></div><span style="font-size:10px;color:var(--pri)">Detail &#8594;</span></div></div>
+      <div id="frbDiv" style="height:260px"></div>
+    </div>
+  </div>
+
+  <!-- Row 9: Stress Scenarios -->
+  <div class="card" id="cardStress">
+    <div class="flex-between"><div class="card-title tip" data-tip="Click a scenario for per-sector impact waterfall">Stress Scenarios</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardStress table','stress_scenarios')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardStress')">PNG</button></div></div>
+    ${rStressTable(s.stress)}
+  </div>
+
+  <!-- Row 10: Unowned Risk Contributors -->
+  <div class="card" id="cardUnowned">
+    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail.">Unowned Risk Contributors</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button></div></div>
+    ${rUnowned(s.unowned)}
+  </div>
+
+  <!-- Row 11: Factor Correlation -->
+  <div class="card" id="cardCorr">
+    <div class="flex-between"><div class="card-title tip" data-tip="Click any cell to see scatter plot of two factors">Factor Correlation Matrix</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCorr table','factor_correlation')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
+    <div style="overflow-x:auto;max-width:100%">${rFCorr(s.fcorr)}</div>
+  </div>
+
+  <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
+  <div class="card" id="cardRegions" style="margin-top:16px">
+    <div class="flex-between"><div class="card-title">Region Active Weights</div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div style="font-size:10px;color:var(--txt);margin-right:4px">Region coverage may be low for US-focused strategies</div>
+      <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#regTable table','regions')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardRegions')">PNG</button></div>
+      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
+    </div></div>
+    <div id="regTable">${rWt(s.regions,'reg')}</div>
+    <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
+  </div>`;
 
   $('tab-exposures').innerHTML=html;
+  // Render charts after DOM update
+  setTimeout(()=>{
+    rSecChart(s);rRegChart(s);rFacButt(s);rCountryChart(s);rGroupChart(s);
+    rScat(s);rTree(s);rMCR(s);rFRB(s);rFacWaterfall(s);
+  },50);
 }
 
 function rFacWaterfall(s){
@@ -999,155 +1051,6 @@ function rFacWaterfall(s){
     xaxis:{...plotBg.xaxis,title:'Return Attribution (%)',zeroline:true,zerolinecolor:'#475569',zerolinewidth:1.5},
     margin:{l:130,r:60,t:8,b:36}
   },plotCfg);
-}
-
-// ===== SECTORS TAB =====
-let _secTreeMode='portfolio'; // 'portfolio' | 'active'
-function rSectors(){
-  let s=cs;
-  // Compute TE contribution per sector from holdings %T
-  let secTEMap={};
-  s.hold.forEach(h=>{if(h.sec)secTEMap[h.sec]=(secTEMap[h.sec]||0)+(h.tr||0);});
-  let secs=[...s.sectors].sort((a,b)=>(secTEMap[b.n]||0)-(secTEMap[a.n]||0));
-  let maxTE=Math.max(...secs.map(x=>secTEMap[x.n]||0),0.01);
-
-  // Build sector rows with expand feature
-  let secRows=secs.map((sec,idx)=>{
-    let cls=activeStyle(sec.a);
-    let threshCls=Math.abs(sec.a)>5?'thresh-alert':Math.abs(sec.a)>3?'thresh-warn':'';
-    let teC=secTEMap[sec.n]||0;
-    let barW=Math.min(teC/maxTE*60,60).toFixed(0);
-    // Sparkline from hist.sec
-    let secHist=(s.hist&&s.hist.sec)?s.hist.sec[sec.n]:null;
-    let sparkVals=secHist?secHist.map(h=>h.a||0):[];
-    let spark=sparkVals.length>=2?mkSparkline(sparkVals,50,16,sec.a>=0?'#10b981':'#ef4444'):'';
-    // Avg quant scores for this sector
-    let secHolds=s.hold.filter(h=>h.sec===sec.n&&!isCash(h));
-    let avgQ=k=>{let vs=secHolds.filter(h=>h[k]!=null);return vs.length?+(vs.reduce((a,h)=>a+h[k],0)/vs.length).toFixed(1):null};
-    let qR=avgQ('rev'),qV=avgQ('val'),qQ=avgQ('qual');
-    let qBadges=[{l:'R',v:qR,k:'rev'},{l:'V',v:qV,k:'val'},{l:'Q',v:qQ,k:'qual'}].map(b=>{
-      if(b.v==null)return'';
-      let qi=Math.round(b.v);
-      return`<span style="padding:1px 4px;border-radius:3px;font-size:9px;font-weight:700;background:${rc(qi)}22;color:${rc(qi)}">${b.l}${qi}</span>`;
-    }).join('');
-    let holdRows=secHolds.sort((a,b)=>(b.tr||0)-(a.tr||0)).slice(0,10).map(h=>{
-      let ri=h.r||0;
-      return`<tr onclick="oSt('${h.t.replace(/'/g,"\\'")}');document.querySelectorAll('.sec-expand-content').forEach(e=>e.classList.remove('open'))" style="cursor:pointer">
-        <td style="color:var(--txth);font-weight:600">${h.t}</td>
-        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
-        <td class="r">${f2(h.p,1)}</td>
-        <td class="r ${activeStyle(h.a)}">${fp(h.a,1)}</td>
-        <td class="r" style="color:${ri>0?'var(--txt)':'var(--txt)'}">${f2(h.tr,1)}%</td>
-        <td class="r"><span style="padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:${ri>0?rc(ri)+'22':'transparent'};color:${ri>0?rc(ri):'var(--txt)'}">${ri>0?'Q'+ri:'--'}</span></td>
-      </tr>`;
-    }).join('');
-    return`<tr class="clickable ${threshCls}" data-sec="${idx}">
-      <td><button class="sec-expand-btn" onclick="event.stopPropagation();toggleSecRow(${idx})" title="Expand">▶</button> ${sec.n}</td>
-      <td class="r">${f2(sec.p,1)}</td>
-      <td class="r">${f2(sec.b,1)}</td>
-      <td class="r ${cls}">${fp(sec.a,1)}</td>
-      <td class="r">
-        <div style="display:inline-flex;align-items:center;gap:4px">
-          <span style="min-width:28px;text-align:right;font-size:11px;font-weight:600">${f2(teC,1)}%</span>
-          <div style="width:${barW}px;height:5px;background:var(--pri);border-radius:2px;opacity:.7"></div>
-        </div>
-      </td>
-      <td class="r">${spark}</td>
-      <td><div style="display:inline-flex;gap:2px">${qBadges}</div></td>
-    </tr>
-    <tr><td colspan="7" style="padding:0">
-      <div class="sec-expand-content" id="secExp_${idx}">
-        <div style="font-size:11px;font-weight:600;color:var(--txth);margin-bottom:6px">${sec.n} — Top Holdings by TE Contribution</div>
-        <table style="font-size:11px"><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">%T</th><th class="r">Rank</th></tr></thead>
-        <tbody>${holdRows}</tbody></table>
-      </div>
-    </td></tr>`;
-  }).join('');
-
-  // Factor attribution waterfall data
-  let facWatHtml=`<div id="secFacWatDiv" style="height:${Math.max(120,s.factors.filter(f=>f.imp!=null).length*30+40)}px"></div>`;
-
-  let html=`
-  <div class="card" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:10px">
-      <div class="card-title" style="margin:0">Sector Allocation</div>
-      <div class="seg-ctrl treemap-toggle">
-        <button class="${_secTreeMode==='portfolio'?'active':''}" onclick="_secTreeMode='portfolio';rSecTreemap(cs);this.parentElement.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('active',i===0))">Portfolio Weight</button>
-        <button class="${_secTreeMode==='active'?'active':''}" onclick="_secTreeMode='active';rSecTreemap(cs);this.parentElement.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('active',i===1))">Active Weight</button>
-      </div>
-    </div>
-    <div id="secTreemapDiv" style="height:320px"></div>
-  </div>
-
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">Sector Detail — sorted by TE Contribution</div>
-    <div style="overflow-x:auto">
-      <table>
-        <thead><tr>
-          <th>Sector</th>
-          <th class="r tip" data-tip="Portfolio weight">Port%</th>
-          <th class="r tip" data-tip="Benchmark weight">Bench%</th>
-          <th class="r tip" data-tip="Active weight">Active</th>
-          <th class="r tip" data-tip="TE contribution from holdings">TE Contrib</th>
-          <th class="r">Trend</th>
-          <th>R·V·Q</th>
-        </tr></thead>
-        <tbody>${secRows}</tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">Factor Attribution — Return Impact</div>
-    ${facWatHtml}
-  </div>`;
-
-  $('tab-sectors').innerHTML=html;
-  setTimeout(()=>{
-    rSecTreemap(s);
-    let facs=s.factors.filter(f=>f.imp!=null).sort((a,b)=>Math.abs(b.imp||0)-Math.abs(a.imp||0));
-    if(facs.length&&document.getElementById('secFacWatDiv')){
-      Plotly.newPlot('secFacWatDiv',[{
-        y:facs.map(f=>f.n),x:facs.map(f=>f.imp||0),type:'bar',orientation:'h',
-        marker:{color:facs.map(f=>(f.imp||0)>=0?'#3b82f6':'#f59e0b')},
-        text:facs.map(f=>((f.imp||0)>=0?'+':'')+f2(f.imp,2)+'%'),
-        textposition:'outside',textfont:{size:10,color:'#94a3b8'},
-        hovertemplate:'%{y}<br>Impact: %{x:.2f}%<extra></extra>'
-      }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},
-        xaxis:{...plotBg.xaxis,title:'Return Attribution (%)',zeroline:true,zerolinecolor:'#475569',zerolinewidth:1.5},
-        margin:{l:140,r:60,t:8,b:36}},plotCfg);
-    }
-  },50);
-}
-
-function rSecTreemap(s){
-  let el=document.getElementById('secTreemapDiv');
-  if(!el)return;
-  let secs=s.sectors.filter(x=>_secTreeMode==='active'?Math.abs(x.a||0)>0:x.p>0);
-  let vals=secs.map(x=>_secTreeMode==='active'?Math.abs(x.a||0):x.p);
-  let colors=secs.map(x=>{
-    if(_secTreeMode==='active'){return(x.a||0)>=0?'#10b981':'#ef4444';}
-    return'#3b82f6';
-  });
-  Plotly.newPlot('secTreemapDiv',[{
-    type:'treemap',labels:secs.map(x=>x.n),parents:secs.map(()=>''),values:vals,
-    marker:{colors,line:{width:1,color:'#1e293b'}},
-    textfont:{size:11,color:'#e2e8f0'},
-    hovertemplate:_secTreeMode==='active'?'%{label}<br>Active: %{value:.1f}%<extra></extra>':'%{label}<br>Port Wt: %{value:.1f}%<extra></extra>'
-  }],{...plotBg,margin:{l:5,r:5,t:5,b:5}},plotCfg);
-}
-
-function toggleSecRow(idx){
-  let el=document.getElementById('secExp_'+idx);
-  if(!el)return;
-  let isOpen=el.classList.contains('open');
-  document.querySelectorAll('.sec-expand-content').forEach(e=>e.classList.remove('open'));
-  document.querySelectorAll('.sec-expand-btn').forEach(b=>b.textContent='▶');
-  if(!isOpen){
-    el.classList.add('open');
-    let btn=document.querySelector(`tr[data-sec="${idx}"] .sec-expand-btn`);
-    if(btn)btn.textContent='▼';
-  }
 }
 
 // ===== TABLE RENDERERS =====
@@ -1598,50 +1501,71 @@ function rRisk(){
   window._riskAllFacs=allFacs;
   window._riskFacColors=facColors;
 
-  // Factor grouping pills config
-  const FAC_GROUPS=[
-    {id:'value',label:'Value/Growth',facs:['Growth','Value','Dividend Yield','Earnings Yield']},
-    {id:'market',label:'Market Behavior',facs:['Momentum','Medium-Term Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility']},
-    {id:'prof',label:'Profitability',facs:['Profitability'],cls:'prof'},
-    {id:'secondary',label:'Secondary',facs:['Size','Leverage','Liquidity','Exchange Rate Sensitivity','FX Sensitivity']},
-    {id:'all',label:'All',facs:null}
-  ];
-  window._facGrpSel=window._facGrpSel||'all';
-
   let html=`
-  <!-- 1. TE Stacked Area (HERO, full width) -->
+  <!-- Risk Summary Cards -->
+  <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
+    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}">
+      <div class="label">Total Risk (TE)</div>
+      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}</div>
+      <div class="sub">annualized tracking error</div>
+    </div>
+    <div class="sum-card" onclick="oDrFacRiskBreak()" title="Top factor contributors">
+      <div class="label">Factor Risk ↗</div>
+      <div class="value" style="color:var(--pri)">${factorPct}%</div>
+      <div class="sub">${f2(factorRisk,1)}% TE</div>
+    </div>
+    <div class="sum-card" onclick="oDrMetric('idio')" title="Top stock-specific contributors">
+      <div class="label">Idiosyncratic ↗</div>
+      <div class="value" style="color:var(--acc)">${idioPct}%</div>
+      <div class="sub">${f2(idioRisk,1)}% TE</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Beta</div>
+      <div class="value">${f2(s.sum.beta,2)}</div>
+      <div class="sub">vs benchmark</div>
+    </div>
+    <div class="sum-card">
+      <div class="label">Active Share</div>
+      <div class="value">${f2(s.sum.as,1)}%</div>
+      <div class="sub">${gt(s.hist.sum,'as')} trend</div>
+    </div>
+  </div>
+
+  <!-- TE Stacked Area Chart (HERO, full width) -->
   <div class="card" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:6px">
-      <div class="card-title" style="margin:0">Tracking Error — Idiosyncratic vs Factor Decomposition</div>
-      <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} weeks</span>
+      <div class="card-title" style="margin:0">Tracking Error — Factor vs Stock-Specific Decomposition</div>
+      <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} weeks · drag range slider to zoom</span>
     </div>
     <div id="teStackedDiv" style="height:300px"></div>
   </div>
 
-  <!-- 2. Beta Chart (full width) -->
+  <!-- Beta History (adjacent to TE chart) -->
   <div class="card" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
-      <div class="card-title" style="margin:0">Beta History</div>
+      <div class="card-title" style="margin:0">Beta History — Predicted</div>
       <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
     </div>
-    <div id="riskBetaMultiDiv" style="height:200px"></div>
+    <div id="riskBetaMultiDiv" style="height:180px"></div>
   </div>
 
-  <!-- 3. Factor Contribution Bars (full width) with seg-ctrl toggle -->
+  <!-- Factor Contribution Bars with toggle -->
   <div class="card" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:10px">
+    <div class="flex-between" style="margin-bottom:8px">
       <div class="card-title" style="margin:0">Factor Contributions</div>
-      <div class="seg-ctrl" id="rfbSegCtrl">
-        <button class="active" id="rfbLblTE" onclick="window._rfbMode='te';rRiskFacBarsMode();this.parentElement.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('active',i===0))">TE Contrib</button>
-        <button id="rfbLblExp" onclick="window._rfbMode='exp';rRiskFacBarsMode();this.parentElement.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('active',i===1))">Exposure</button>
-        <button id="rfbLblBoth" onclick="window._rfbMode='both';rRiskFacBarsMode();this.parentElement.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('active',i===2))">Both</button>
+      <div style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
+        <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--riskFacMode,var(--pri));color:#fff" id="rfbLblTE">
+          <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
+        </label>
+        <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
+          <input type="radio" name="riskFacMode" value="exp" onchange="window._rfbMode='exp';rRiskFacBarsMode()" style="display:none"> Exposure
+        </label>
+        <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
+          <input type="radio" name="riskFacMode" value="both" onchange="window._rfbMode='both';rRiskFacBarsMode()" style="display:none"> Both
+        </label>
       </div>
     </div>
-    <!-- Factor group quick-select pills -->
-    <div class="fac-grp-pills">
-      ${FAC_GROUPS.map(g=>`<button class="fac-grp-pill${g.cls?' '+g.cls:''}${window._facGrpSel===g.id?' active':''}" onclick="setFacGrp('${g.id}')">${g.label}</button>`).join('')}
-    </div>
-    <!-- Threshold slider + All/Clear -->
+    <!-- Threshold slider + factor checkboxes -->
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
       <label style="font-size:11px;display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--txt)">
         Min |contrib|:
@@ -1651,20 +1575,41 @@ function rRisk(){
         <span id="facThreshVal" style="font-weight:600;color:var(--txth);min-width:26px">1.0</span><span style="color:var(--txt)">%</span>
       </label>
       <div style="display:flex;gap:4px">
-        <button onclick="setFacBarAll(true)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer;font-family:inherit">All</button>
-        <button onclick="setFacBarAll(false)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer;font-family:inherit">Clear</button>
+        <button onclick="setFacBarAll(true)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">All</button>
+        <button onclick="setFacBarAll(false)" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">Clear</button>
       </div>
     </div>
     <div id="facBarToggles" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-      ${facMCR.map(f=>{
-        let isProfitability=f.n==='Profitability';
-        return`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid ${isProfitability?'rgba(16,185,129,.4)':'var(--grid)'};${isProfitability?'background:rgba(16,185,129,.06)':''}"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" ${Math.abs(f.c||0)>=1?'checked':''} onchange="rRiskFacBarsMode()"><span style="color:${isProfitability?'var(--pos)':'var(--txth)'}${isProfitability?';font-weight:600':''}">${f.n}</span></label>`;
-      }).join('')}
+      ${facMCR.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" ${Math.abs(f.c||0)>=1?'checked':''} onchange="rRiskFacBarsMode()"><span style="color:var(--txth)">${f.n}</span></label>`).join('')}
     </div>
     <div id="riskFacBarDiv" style="height:${Math.max(200,facMCR.filter(f=>Math.abs(f.c||0)>=1).length*38+20)}px"></div>
   </div>
 
-  <!-- 4. Factor Exposure History (full width) -->
+  <!-- Factor Exposures Table -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">Factor Exposures — click row for time series drill</div>
+    <table><thead><tr>
+      <th>Factor</th><th class="r">Exposure</th><th class="r">Contrib %</th>
+      <th class="r">MCR to TE</th><th class="r">Return %</th><th class="r">Impact</th>
+      <th class="r">Trend</th>
+    </tr></thead><tbody>${facMCR.map(f=>{
+      let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
+      let facHist=s.hist.fac[f.n];
+      let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
+      return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
+        <td style="color:var(--txth);font-weight:500">${f.n}</td>
+        <td class="r ${cls}">${fp(f.e,3)}</td>
+        <td class="r">${f2(f.c,1)}</td>
+        <td class="r">${f2(f.mcrTE,3)}</td>
+        <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
+        <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+        <td class="r">${mkSparkline(sparkVals,60,22,null)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table>
+  </div>
+
+  <!-- Factor Exposure Time Series with toggles -->
   <div class="card" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
       <div class="card-title" style="margin:0">Factor Exposure History</div>
@@ -1677,8 +1622,8 @@ function rRisk(){
     <div id="riskExpHistDiv" style="height:280px"></div>
   </div>
 
-  <!-- 5. Factor Correlation Matrix (full width) -->
-  <div class="card" style="margin-bottom:16px">
+  <!-- Factor Correlation Matrix -->
+  <div class="card">
     <div class="flex-between" style="margin-bottom:8px">
       <div class="card-title" style="margin:0">Factor Correlation Matrix</div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1695,22 +1640,6 @@ function rRisk(){
     </div>
     <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%"><div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--txt);font-size:11px">Computing correlation…</div></div>
     <div id="corrInsights" style="margin-top:8px;font-size:11px"></div>
-  </div>
-
-  <!-- 6. Regions (de-emphasized, bottom) -->
-  <div class="card" style="opacity:.85">
-    <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Region Active Weights</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:10px;color:var(--txt)">Coverage may be low for US-focused strategies</span>
-        <div class="seg-ctrl">
-          <button class="active" onclick="toggleRegView2('table',this)">Table</button>
-          <button onclick="toggleRegView2('chart',this)">Chart</button>
-        </div>
-      </div>
-    </div>
-    <div id="regTable2">${rWt(s.regions,'reg')}</div>
-    <div id="regChart2" style="display:none"><div id="regChartDiv2" style="height:240px"></div></div>
   </div>`;
 
   $('tab-risk').innerHTML=html;
@@ -1808,9 +1737,12 @@ function rRiskFacBarsMode(){
   let allFacMCR=window._rfbData||[];
   let mode=window._rfbMode||'te';
   if(!allFacMCR.length)return;
-  // Sync seg-ctrl active state via classList
-  let activeId=mode==='te'?'rfbLblTE':mode==='exp'?'rfbLblExp':'rfbLblBoth';
-  document.querySelectorAll('#rfbSegCtrl button').forEach(btn=>btn.classList.toggle('active',btn.id===activeId));
+  // Update toggle button styling
+  document.querySelectorAll('#rfbLblTE,#rfbLblExp,#rfbLblBoth').forEach(el=>{
+    el.style.background='var(--surf)';el.style.color='var(--txt)';
+  });
+  let activeEl=document.getElementById(mode==='te'?'rfbLblTE':mode==='exp'?'rfbLblExp':'rfbLblBoth');
+  if(activeEl){activeEl.style.background='var(--pri)';activeEl.style.color='#fff';}
 
   // Apply checkbox filter; fallback to all if nothing checked
   let selChks=[...document.querySelectorAll('.fac-bar-chk:checked')].map(el=>el.value);
@@ -1885,49 +1817,6 @@ function setFacThresh(){
 function setFacBarAll(v){
   document.querySelectorAll('.fac-bar-chk').forEach(chk=>chk.checked=v);
   rRiskFacBarsMode();
-}
-
-function setFacGrp(id){
-  window._facGrpSel=id;
-  // Sync pill active states
-  document.querySelectorAll('.fac-grp-pill').forEach(btn=>{
-    let m=(btn.getAttribute('onclick')||'').match(/setFacGrp\('([^']+)'\)/);
-    btn.classList.toggle('active',m&&m[1]===id);
-  });
-  // Factor names per group
-  const GRP_FACS={
-    value:['Growth','Value','Dividend Yield','Earnings Yield'],
-    market:['Momentum','Medium-Term Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility'],
-    prof:['Profitability'],
-    secondary:['Size','Leverage','Liquidity','Exchange Rate Sensitivity','FX Sensitivity'],
-    all:null
-  };
-  let allowed=GRP_FACS[id];
-  document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
-    if(allowed===null){
-      chk.checked=parseFloat(chk.dataset.c||'0')>=1;
-    } else {
-      let nm=chk.value.toLowerCase();
-      chk.checked=allowed.some(n=>nm===n.toLowerCase()||nm.includes(n.toLowerCase())||n.toLowerCase().includes(nm));
-    }
-  });
-  rRiskFacBarsMode();
-}
-
-function toggleRegView2(v,btn){
-  let t=$('regTable2'),c=$('regChart2');
-  if(!t||!c)return;
-  t.style.display=v==='table'?'':'none';
-  c.style.display=v==='chart'?'':'none';
-  if(v==='chart'){
-    let d=(cs.regions||[]).sort((a,b)=>b.a-a.a);
-    Plotly.newPlot('regChartDiv2',[{
-      y:d.map(x=>x.n),x:d.map(x=>x.a),type:'bar',orientation:'h',
-      marker:{color:d.map(x=>x.a>=0?'#10b981':'#ef4444')},
-      text:d.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
-    }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Weight %'}},plotCfg);
-  }
-  btn.parentElement.querySelectorAll('button').forEach((b,i)=>b.classList.toggle('active',(i===0&&v==='table')||(i===1&&v==='chart')));
 }
 
 function _genFacHistory(s){
@@ -2159,14 +2048,6 @@ function rHold(){
   renderHoldTab();
 }
 
-function sortHoldQuick(type){
-  if(type==='risk'){fh.sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));sortCol='tr';sortDir=-1;}
-  else if(type==='weight'){fh.sort((a,b)=>(b.p||0)-(a.p||0));sortCol='p';sortDir=-1;}
-  else if(type==='rank'){fh.sort((a,b)=>(a.r||99)-(b.r||99));sortCol='r';sortDir=1;}
-  else if(type==='name'){fh.sort((a,b)=>a.t.localeCompare(b.t));sortCol='t';sortDir=1;}
-  hp=1;renderHoldTab();
-}
-
 function renderHoldTab(){
   let html=`
     <div class="card" id="cardHoldings" style="margin-bottom:16px">
@@ -2188,16 +2069,6 @@ function renderHoldTab(){
           </select>
         </div>
       </div>
-      <!-- Quick-sort pill buttons -->
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-        <span style="font-size:10px;color:var(--txt);white-space:nowrap">Sort:</span>
-        <div class="seg-ctrl" id="holdSortCtrl">
-          <button class="${sortCol==='tr'?'active':''}" onclick="sortHoldQuick('risk')">By Risk</button>
-          <button class="${sortCol==='p'?'active':''}" onclick="sortHoldQuick('weight')">By Weight</button>
-          <button class="${sortCol==='r'?'active':''}" onclick="sortHoldQuick('rank')">By Rank</button>
-          <button class="${sortCol==='t'?'active':''}" onclick="sortHoldQuick('name')">By Name</button>
-        </div>
-      </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
       <div style="overflow-x:auto">
         <table>
@@ -2212,7 +2083,7 @@ function renderHoldTab(){
             <th class="r" style="cursor:pointer" onclick="sortHold('a')">Active</th>
             <th class="r" style="cursor:pointer" onclick="sortHold('mcr')" title="Stock-specific TE component">%S</th>
             <th class="r" style="cursor:pointer;color:${sortCol==='tr'?'var(--pri)':'inherit'}" onclick="sortHold('tr')" title="% of total tracking error — sorted by default">%T ▼</th>
-            <th class="r" style="cursor:pointer" onclick="sortHold('r')">R · V · Q</th>
+            <th class="r" style="cursor:pointer" onclick="sortHold('r')">Rank</th>
           </tr></thead>
           <tbody>${renderHoldRows()}</tbody>
         </table>
@@ -2256,16 +2127,9 @@ function renderHoldRows(){
         <span style="font-size:11px;${trVal>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(trVal,1)}</span>
         <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
       </div></td>`;
-    let isBmOnly=h.p===0&&(h.b||0)>0;
-    let rv=h.rev!=null?Math.round(h.rev):null;
-    let rq=h.qual!=null?Math.round(h.qual):null;
-    let rankBadge=h.r!=null?`<span class="rank-spot">
-      <span class="rs-over" style="background:${rc(h.r)}22;color:${rc(h.r)};padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">R${h.r}</span>
-      ${rv!=null?`<span class="rs-sub" style="color:${rc(rv)}">V${rv}</span>`:''}
-      ${rq!=null?`<span class="rs-sub" style="color:${rc(rq)}">Q${rq}</span>`:''}
-    </span>`:'<span style="color:var(--txt);font-size:10px">--</span>';
-    return`<tr class="${isBmOnly?'bm-only':''}" style="cursor:pointer" onclick="oSt('${h.t}')">
-      <td style="color:${isBmOnly?'var(--txt)':'var(--txth)'};font-weight:600">${h.t}${h.isNew?`<span class="badge-new">NEW</span>`:''}${isBmOnly?`<span class="badge-bm">BM</span>`:''}</td>
+    let rankBadge=h.r!=null?`<span style="display:inline-block;padding:1px 6px;border-radius:10px;background:${rc(h.r)}22;color:${rc(h.r)};font-weight:700;font-size:10px">Q${h.r}</span>`:'--';
+    return`<tr style="cursor:pointer" onclick="oSt('${h.t}')">
+      <td style="color:var(--txth);font-weight:600">${h.t}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
       <td><span class="chip">${h.sec||'--'}</span></td>
       ${_showIndustry?`<td style="font-size:11px;color:var(--txt)">${h.ind||h.industry||'--'}</td>`:''}
@@ -3246,24 +3110,14 @@ function oDrMetric(metric,range){
     let top5=eqHold.slice(0,5);
     $('metricContent').innerHTML=`
       <h2>Idiosyncratic Risk — Top Contributors<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
-      <p style="font-size:11px;color:var(--txt);margin-bottom:12px">Top 5 securities by stock-specific TE contribution (%S). Click a row to view holding detail.</p>
-      <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">%S</th><th class="r">Port%</th><th class="r">R · V · Q</th></tr></thead>
-      <tbody>${top5.map(h=>{
-        let rv=h.rev!=null?Math.round(h.rev):null;
-        let rq=h.qual!=null?Math.round(h.qual):null;
-        let spot=`<span class="rank-spot">
-          <span class="rs-over" style="background:${rc(h.r)}22;color:${rc(h.r)};padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">R${h.r||'?'}</span>
-          ${rv!=null?`<span class="rs-sub" style="color:${rc(rv)}">V${rv}</span>`:''}
-          ${rq!=null?`<span class="rs-sub" style="color:${rc(rq)}">Q${rq}</span>`:''}
-        </span>`;
-        return`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
-          <td style="color:var(--txth);font-weight:600">${h.t}</td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
-          <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,2)}%</td>
-          <td class="r">${f2(h.p,1)}%</td>
-          <td class="r">${spot}</td>
-        </tr>`;
-      }).join('')}</tbody></table>`;
+      <p style="font-size:11px;color:var(--txt);margin-bottom:12px">Top 5 securities by stock-specific TE contribution. Click a row to view holding detail.</p>
+      <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">%S</th><th class="r">Rank</th></tr></thead>
+      <tbody>${top5.map(h=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
+        <td style="color:var(--txth);font-weight:600">${h.t}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
+        <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,2)}%</td>
+        <td class="r"><span style="font-weight:700;color:${rc(h.r)}">Q${h.r||'--'}</span></td>
+      </tr>`).join('')}</tbody></table>`;
     m.classList.add('show');
     return;
   }

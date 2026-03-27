@@ -978,18 +978,25 @@ function rExp(){
     <div id="facWaterfallDiv" style="height:${Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20}px"></div>
   </div>
 
-  <!-- Row 4: Country Active Weights -->
-  <div class="grid g2">
-    <div class="card" id="cardCountryChart">
-      <div class="flex-between"><div class="card-title">Country Active Weights (Top OW / UW)</div>
-      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardCountryChart')">PNG</button></div></div>
-      <div id="countryChartDiv" style="height:280px"></div>
+  <!-- Row 4: Country Exposure -->
+  <div class="card" id="cardCountry" style="grid-column:1/-1">
+    <div class="flex-between">
+      <div class="card-title">Country Exposure</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div class="export-bar">
+          <button class="export-btn" id="cntryPngBtn" onclick="screenshotCard('#cardCountry')">PNG</button>
+          <button class="export-btn" id="cntryCsvBtn" onclick="exportCSV('#countryTableWrap table','countries')" style="display:none">CSV</button>
+        </div>
+        <div class="toggle-wrap" style="margin:0">
+          <button class="toggle-btn active" onclick="toggleCountryView('map',this)">Map</button>
+          <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
+          <button class="toggle-btn" onclick="toggleCountryView('table',this)">Table</button>
+        </div>
+      </div>
     </div>
-    <div class="card" id="cardCountryTable">
-      <div class="flex-between"><div class="card-title">All Countries</div>
-      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCountryTable table','countries')">CSV</button></div></div>
-      <div style="max-height:280px;overflow-y:auto">${rCountryTable(s.countries)}</div>
-    </div>
+    <div id="countryMapDiv" style="height:320px"></div>
+    <div id="countryChartDiv" style="height:280px;display:none"></div>
+    <div id="countryTableWrap" style="max-height:320px;overflow-y:auto;display:none">${rCountryTable(s.countries)}</div>
   </div>
 
   <!-- Row 5: Redwood Groups -->
@@ -1074,7 +1081,7 @@ function rExp(){
   $('tab-exposures').innerHTML=html;
   // Render charts after DOM update
   setTimeout(()=>{
-    rSecChart(s);rRegChart(s);rFacButt(s);rCountryChart(s);rGroupChart(s);
+    rSecChart(s);rRegChart(s);rFacButt(s);rCountryMap(s);rCountryChart(s);rGroupChart(s);
     rScat(s);rTree(s);rMCR(s);rFRB(s);rFacWaterfall(s);
     applySectColVis();
     applyFacColVis();
@@ -1650,6 +1657,66 @@ function rFacButt(s){
     marker:{color:vals.map(v=>v>=0?'#6366f1':'#94a3b8')},
     text:vals.map(v=>v.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2}},plotCfg);
+}
+
+const COUNTRY_ISO3={
+  'United States':'USA','United Kingdom':'GBR','Japan':'JPN','Germany':'DEU',
+  'France':'FRA','Canada':'CAN','Switzerland':'CHE','Australia':'AUS',
+  'Netherlands':'NLD','Sweden':'SWE','Denmark':'DNK','Spain':'ESP',
+  'Italy':'ITA','Norway':'NOR','Finland':'FIN','Belgium':'BEL',
+  'Ireland':'IRL','Austria':'AUT','Portugal':'PRT','New Zealand':'NZL',
+  'Singapore':'SGP','Hong Kong':'HKG','Israel':'ISR','South Korea':'KOR',
+  'Korea':'KOR','Taiwan':'TWN','China':'CHN','India':'IND','Brazil':'BRA',
+  'Mexico':'MEX','South Africa':'ZAF','Thailand':'THA','Indonesia':'IDN',
+  'Malaysia':'MYS','Philippines':'PHL','Turkey':'TUR','Poland':'POL',
+  'Czech Republic':'CZE','Hungary':'HUN','Chile':'CHL','Colombia':'COL',
+  'Peru':'PER','Egypt':'EGY','Qatar':'QAT','Kuwait':'KWT',
+  'Saudi Arabia':'SAU','United Arab Emirates':'ARE','Greece':'GRC'
+};
+
+function rCountryMap(s){
+  if(!s.countries||!s.countries.length)return;
+  let mapped=s.countries.filter(c=>COUNTRY_ISO3[c.n]);
+  if(!mapped.length)return;
+  Plotly.newPlot('countryMapDiv',[{
+    type:'choropleth',
+    locations:mapped.map(c=>COUNTRY_ISO3[c.n]),
+    z:mapped.map(c=>c.a),
+    text:mapped.map(c=>c.n),
+    colorscale:[[0,'#d67272'],[0.5,'#12151e'],[1,'#10b981']],
+    zmid:0,
+    colorbar:{title:'Active %',ticksuffix:'%',len:0.6,thickness:12,
+      tickfont:{color:'#94a3b8',size:10},titlefont:{color:'#94a3b8',size:10}},
+    marker:{line:{color:'#334155',width:0.5}},
+    hovertemplate:'%{text}<br>Active: %{z:.1f}%<extra></extra>'
+  }],{
+    geo:{
+      bgcolor:'transparent',
+      showframe:false,
+      showcoastlines:true,coastlinecolor:'#334155',
+      showland:true,landcolor:'#1e293b',
+      showocean:true,oceancolor:'#080e1e',
+      showlakes:false,
+      projection:{type:'natural earth'},
+      lonaxis:{range:[-180,180]},
+      lataxis:{range:[-60,85]}
+    },
+    paper_bgcolor:'transparent',
+    margin:{l:0,r:0,t:0,b:0},
+    height:320
+  },plotCfg);
+}
+
+function toggleCountryView(v,btn){
+  $('countryMapDiv').style.display=v==='map'?'block':'none';
+  $('countryChartDiv').style.display=v==='chart'?'block':'none';
+  $('countryTableWrap').style.display=v==='table'?'block':'none';
+  $('cntryCsvBtn').style.display=v==='table'?'':'none';
+  $('cntryPngBtn').style.display=v==='table'?'none':'';
+  document.querySelectorAll('#cardCountry .toggle-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  if(v==='chart'&&cs)rCountryChart(cs);
+  if(v==='map'&&cs)rCountryMap(cs);
 }
 
 function rCountryChart(s){

@@ -1383,15 +1383,9 @@ function rCountryChart(s){
 
 function rGroupChart(s){
   if(!s.groups||!s.groups.length)return;
-  // Aggregate by group
-  let gmap={};
-  s.groups.forEach(g=>{
-    if(!gmap[g.g])gmap[g.g]={p:0,b:0};
-    gmap[g.g].p+=g.p;gmap[g.g].b+=g.b;
-  });
-  let names=Object.keys(gmap);
-  let pvals=names.map(n=>+gmap[n].p.toFixed(2));
-  let bvals=names.map(n=>+gmap[n].b.toFixed(2));
+  let names=s.groups.map(g=>g.n);
+  let pvals=s.groups.map(g=>+(g.p||0).toFixed(2));
+  let bvals=s.groups.map(g=>+(g.b||0).toFixed(2));
   Plotly.newPlot('grpChartDiv',[
     {y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',marker:{color:'#3b82f6'}},
     {y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',marker:{color:'#64748b'}}

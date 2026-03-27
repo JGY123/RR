@@ -1576,22 +1576,42 @@ const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
-  // Diverging horizontal bars: sorted by |active weight| desc, largest at top
-  let d=[...s.sectors].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
+  // Butterfly: portfolio (left, negated) vs benchmark (right, positive), sorted by active weight
+  let d=[...s.sectors].sort((a,b)=>b.a-a.a);
+  let names=d.map(x=>x.n);
+  let pvals=d.map(x=>+(x.p||0).toFixed(2));
+  let bvals=d.map(x=>+(x.b||0).toFixed(2));
   let h=Math.max(200,d.length*30+60);
   let el=$('secChartDiv');
   if(el)el.style.height=h+'px';
-  Plotly.newPlot('secChartDiv',[{
-    y:d.map(x=>x.n),x:d.map(x=>x.a),type:'bar',orientation:'h',
-    marker:{color:d.map(x=>x.a>=0?'#10b981':'#ef4444')},
-    text:d.map(x=>fp(x.a,1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
-    hovertemplate:'%{y}<br>Active: %{x:.1f}%<extra></extra>'
-  }],{
+  // X-axis: show absolute % values on both sides
+  let maxW=Math.max(...pvals,...bvals);
+  let xmax=Math.ceil(maxW/5)*5+5;
+  let tvStep=xmax>20?5:xmax>10?2:1;
+  let tickVals=[],tickText=[];
+  for(let v=-xmax;v<=xmax;v+=tvStep){tickVals.push(v);tickText.push(Math.abs(v)+'%');}
+  Plotly.newPlot('secChartDiv',[
+    {
+      y:names,x:pvals.map(v=>-v),name:'Portfolio',type:'bar',orientation:'h',
+      marker:{color:'#6366f1'},
+      customdata:pvals,
+      text:pvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+      hovertemplate:'%{y}<br>Portfolio: %{customdata:.1f}%<extra></extra>'
+    },
+    {
+      y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',
+      marker:{color:'#94a3b8',opacity:0.7},
+      text:bvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+      hovertemplate:'%{y}<br>Benchmark: %{x:.1f}%<extra></extra>'
+    }
+  ],{
     ...plotBg,
     height:h,
+    barmode:'overlay',
     margin:{l:145,r:65,t:10,b:40},
     yaxis:{...plotBg.yaxis,autorange:'reversed'},
-    xaxis:{...plotBg.xaxis,title:'Active Weight %',tickformat:'.1f',zeroline:true,zerolinewidth:2,zerolinecolor:'#475569'}
+    xaxis:{...plotBg.xaxis,range:[-xmax,xmax],zeroline:true,zerolinewidth:2,zerolinecolor:'#475569',tickvals:tickVals,ticktext:tickText,title:'Weight %'},
+    legend:{orientation:'h',y:1.05,font:{size:10},bgcolor:'transparent'}
   },plotCfg);
 }
 

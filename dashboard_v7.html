@@ -592,7 +592,7 @@ function normalize(raw){
     // FIX 5: Round hist.sum holdings counts to integers
     if(st.hist.sum.length)st.hist.sum=st.hist.sum.map(function(e){return{...e,h:e.h!=null?Math.round(e.h):st.sum.h};});
     // Ranks: ALWAYS build from holdings (parser ranks dict has randomized q values)
-    // This replaces any parser-provided ranks with accurate counts from actual holdings
+    st.ranks=[1,2,3,4,5].map(function(r){var hh=st.hold.filter(function(h){return h.r===r;});var ct=hh.length;var p=hh.reduce(function(a,h){return a+(h.p||0);},0);var ap=hh.reduce(function(a,h){return a+(h.a||0);},0);return{r:r,l:'Quintile '+r,ct:ct,p:+p.toFixed(2),a:+ap.toFixed(2)};});
     out[id]=st;
   }
   return out;

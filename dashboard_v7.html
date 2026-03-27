@@ -591,20 +591,8 @@ function normalize(raw){
     st.sum.h=equityCount(st.hold);
     // FIX 5: Round hist.sum holdings counts to integers
     if(st.hist.sum.length)st.hist.sum=st.hist.sum.map(function(e){return{...e,h:e.h!=null?Math.round(e.h):st.sum.h};});
-    // FIX 1: Normalize ranks to [{r,l,ct,p,a}]; compute actual quintile counts from holdings
-    {let qc={1:0,2:0,3:0,4:0,5:0};
-     st.hold.forEach(function(h){if(h.r>=1&&h.r<=5)qc[h.r]++;});
-     if(st.ranks&&!Array.isArray(st.ranks)&&typeof st.ranks==='object'){
-       let src=st.ranks.overall||st.ranks.Over||[];
-       st.ranks=src.map(function(q){var ri=Math.round(parseFloat(q.q))||0;return{r:ri,l:'Quintile '+ri,ct:qc[ri]||0,p:q.w,a:q.aw};});
-     }else if(Array.isArray(st.ranks)&&st.ranks.length&&st.ranks[0].q!=null){
-       // Flat array [{q,w,bw,aw}] from parser
-       st.ranks=st.ranks.map(function(q){var ri=Math.round(parseFloat(q.q))||0;return{r:ri,l:'Quintile '+ri,ct:qc[ri]||0,p:q.w,a:q.aw};});
-     }else if(Array.isArray(st.ranks)&&st.ranks.length&&st.ranks[0].r!=null){
-       // Already normalized [{r,l,ct,...}] — refresh counts
-       st.ranks=st.ranks.map(function(q){return{...q,ct:qc[q.r]||0};});
-     }
-    }
+    // Ranks: ALWAYS build from holdings (parser ranks dict has randomized q values)
+    // This replaces any parser-provided ranks with accurate counts from actual holdings
     out[id]=st;
   }
   return out;

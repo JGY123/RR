@@ -582,8 +582,8 @@ function normalize(raw){
         if(dates.length)
           st.hist.sum=dates.map(d=>({d,te:sum.te,as:sum.as,beta:sum.beta,h:sum.h,sr:sum.sr||0,cash:sum.cash||0}));
       }
-      // If still empty (demo mode / no fac data), generate full synthetic history
-      if(!st.hist.sum.length)st.hist=genHist(st);
+      // If still empty after real data extraction, leave empty — NO fake data
+      // genHist() only used by genSynthetic() demo mode, never on real uploads
     }
     // Enrich holdings
     st.hold=enrichHold(st.hold,st.sectors);

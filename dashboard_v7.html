@@ -418,6 +418,7 @@ const GROUPS_DEF=[
 // ===== STATE =====
 let A={},cs=null,ah=[],fh=[],hp=1,PPG=20,activeTab='exposures',sortCol=null,sortDir=1;
 let _selectedWeek=null;   // null = latest; else a date string from available_dates
+let _availDates=[];       // cached sorted available dates for current strategy
 
 // ===== HELPERS =====
 const $=id=>document.getElementById(id);
@@ -779,39 +780,42 @@ function initWeekSelector(){
   const wrap=$('weekSelWrap');
   const sel=$('weekSel');
   if(!wrap||!sel)return;
-  const dates=cs.available_dates||[];
-  if(dates.length<=1){wrap.style.display='none';return;}
+  // available_dates from v2 JSON; derive from hist.sum for CSV uploads (v3 parser)
+  let dates=cs.available_dates;
+  if(!dates||!dates.length){
+    let sumDates=[...new Set((cs.hist&&cs.hist.sum||[]).map(e=>e.d).filter(Boolean))];
+    if(sumDates.length)dates=sumDates.sort((a,b)=>parseDate(a)-parseDate(b));
+  }
+  _availDates=dates||[];
+  if(_availDates.length<=1){wrap.style.display='none';return;}
   wrap.style.display='flex';
-  sel.innerHTML=dates.slice().reverse().map(d=>{
+  sel.innerHTML=_availDates.slice().reverse().map(d=>{
     const dt=parseDate(d);
     const label=dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
-    return`<option value="${d}"${d===(_selectedWeek||dates[dates.length-1])?' selected':''}>${label}</option>`;
+    return`<option value="${d}"${d===(_selectedWeek||_availDates[_availDates.length-1])?' selected':''}>${label}</option>`;
   }).join('');
-  $('latestBtn').style.display=(_selectedWeek&&_selectedWeek!==dates[dates.length-1])?'inline':'none';
+  $('latestBtn').style.display=(_selectedWeek&&_selectedWeek!==_availDates[_availDates.length-1])?'inline':'none';
 }
 
 function changeWeek(date){
-  const dates=cs.available_dates||[];
-  const isLatest=!date||date===dates[dates.length-1];
+  const isLatest=!date||date===_availDates[_availDates.length-1];
   _selectedWeek=isLatest?null:date;
   $('latestBtn').style.display=isLatest?'none':'inline';
   upd();
 }
 
 function stepWeek(dir){
-  const dates=cs.available_dates||[];
-  if(!dates.length)return;
-  const cur=_selectedWeek||dates[dates.length-1];
-  const idx=dates.indexOf(cur);
-  const next=dates[idx+dir];
+  if(!_availDates.length)return;
+  const cur=_selectedWeek||_availDates[_availDates.length-1];
+  const idx=_availDates.indexOf(cur);
+  const next=_availDates[idx+dir];
   if(next)changeWeek(next);
 }
 
 function jumpToLatest(){
   _selectedWeek=null;
   const sel=$('weekSel');
-  const dates=cs.available_dates||[];
-  if(sel&&dates.length)sel.value=dates[dates.length-1];
+  if(sel&&_availDates.length)sel.value=_availDates[_availDates.length-1];
   $('latestBtn').style.display='none';
   upd();
 }
@@ -1232,11 +1236,13 @@ function rCountryTable(countries){
 
 function rGroupTable(groups){
   if(!groups||!groups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
-  let rows=groups.map(g=>{
+  let displayGroups=groups.filter(g=>g.n&&g.n!=='[Cash]');
+  if(!displayGroups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
+  let rows=displayGroups.map(g=>{
     let cls=activeStyle(g.a);
-    return`<tr class="clickable" onclick="oDrGroup('${g.g}')"><td><span class="chip">${g.g}</span></td><td>${g.sg}</td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrGroup('${g.n}')"><td><span class="chip">${g.n}</span></td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td></tr>`;
   }).join('');
-  return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th onclick="sortTbl('tbl-grp',1)">Subgroup</th><th class="r" onclick="sortTbl('tbl-grp',2)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',4)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -3478,16 +3484,16 @@ function oDrUnowned(ticker){
 // ===== GROUP DRILL =====
 function oDrGroup(groupName){
   let m=$('groupModal');
-  let subgroups=cs.groups.filter(g=>g.g===groupName);
-  // Find all holdings in sectors belonging to this group
-  let groupDef=GROUPS_DEF.filter(gd=>gd.g===groupName);
+  let subgroups=cs.groups.filter(g=>g.n===groupName);
+  // Find all holdings in sectors belonging to this group (match by subgroup name in GROUPS_DEF)
+  let groupDef=GROUPS_DEF.filter(gd=>gd.sg===groupName||gd.sg===groupName.toUpperCase());
   let groupSecs=new Set();
   groupDef.forEach(gd=>gd.secs.forEach(s=>groupSecs.add(s)));
   let holdings=cs.hold.filter(h=>groupSecs.has(h.sec)).sort((a,b)=>b.p-a.p);
-  let totalP=subgroups.reduce((a,g)=>a+g.p,0);
-  let totalB=subgroups.reduce((a,g)=>a+g.b,0);
+  let totalP=subgroups.reduce((a,g)=>a+(g.p||0),0);
+  let totalB=subgroups.reduce((a,g)=>a+(g.b||0),0);
 
-  let sgRows=subgroups.map(sg=>`<tr><td>${sg.sg}</td><td class="r">${f2(sg.p)}</td><td class="r">${f2(sg.b)}</td><td class="r ${activeStyle(sg.a)}">${fp(sg.a)}</td></tr>`).join('');
+  let sgRows=subgroups.map(sg=>`<tr><td>${sg.n}</td><td class="r">${f2(sg.p)}</td><td class="r">${f2(sg.b)}</td><td class="r ${activeStyle(sg.a)}">${fp(sg.a)}</td></tr>`).join('');
   let holdRows=holdings.slice(0,15).map(h=>`<tr class="clickable" onclick="$('groupModal').classList.remove('show');oSt('${h.t}')">
     <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td><span class="chip">${h.sec||'—'}</span></td>
     <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
@@ -3818,7 +3824,7 @@ function emptyState(msg){
 function pf(s){if(!s||!String(s).trim())return null;let v=parseFloat(s);return isNaN(v)?null:v;}
 function r2(v){return v!=null?Math.round(v*100)/100:null;}
 function parseDate(d){if(!d)return null;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s)){return new Date(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6));}return new Date(s);}
-function isoDate(d){if(!d)return d;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s))return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6);return s;}
+function isoDate(d){if(!d)return d;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s))return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6);var m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');return s;}
 function parseCSVLine(line){
   let result=[],cell='',inQ=false;
   for(let i=0;i<line.length;i++){

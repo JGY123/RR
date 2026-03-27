@@ -644,10 +644,8 @@ function genSynthetic(){
       s.hold.push({t:ccy,n:'Cash '+ccy,sec:'Cash',co:'',p:+(0.3+Math.random()*1.5).toFixed(2),b:0,a:+(0.3+Math.random()*1.5).toFixed(2),mcr:0,tr:0,r:0,over:0,rev:0,val:0,qual:0,mom:0,stab:0});
     });
     s.sum.h=equityCount(s.hold);
-    // Ranks — only rebuild from holdings if parser didn't provide them
-    if(!s.ranks||!s.ranks.length||(Array.isArray(s.ranks)&&s.ranks.length===0)){
-      s.ranks=[1,2,3,4,5].map(r=>{let ct=s.hold.filter(h=>h.r===r).length;let p=s.hold.filter(h=>h.r===r).reduce((a,h)=>a+(h.p||0),0);return{r,l:'Quintile '+r,ct,p:+p.toFixed(2),a:+p.toFixed(2)};});
-    }
+    // Ranks — ALWAYS rebuild from holdings (parser ranks may have randomized q values)
+    s.ranks=[1,2,3,4,5].map(r=>{let hh=s.hold.filter(h=>h.r===r);let ct=hh.length;let p=hh.reduce((a,h)=>a+(h.p||0),0);let ap=hh.reduce((a,h)=>a+(h.a||0),0);return{r,l:'Quintile '+r,ct,p:+p.toFixed(2),a:+ap.toFixed(2)};});
     // Chars — only use synthetic if parser didn't provide them
     if(!s.chars||!s.chars.length){
       s.chars=[{m:'Market Cap ($M)',p:s.sum.mc,b:null},{m:'P/E Ratio',p:s.sum.pe_p,b:s.sum.pe_b},{m:'P/B Ratio',p:s.sum.pb_p,b:s.sum.pb_b}];

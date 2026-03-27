@@ -10,12 +10,18 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
---bg:#080e1e;--card:#0f172a;--surf:#1e293b;--grid:#334155;--txt:#94a3b8;--txth:#e2e8f0;
+--bg:#0a0e1a;--card:#0f172a;--surf:#1a2035;--grid:#334155;--txt:#94a3b8;--txth:#e2e8f0;
 --pos:#10b981;--neg:#ef4444;--warn:#f59e0b;--pri:#3b82f6;--acc:#8b5cf6;--cyan:#06b6d4;
+--teal:#14b8a6;--gold:#f59e0b;
 --r1:#10b981;--r2:#22c55e;--r3:#eab308;--r4:#f97316;--r5:#ef4444;
+--border-inner:#1e293b;--shadow-card:0 2px 8px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.03);
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
-.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--grid);position:sticky;top:0;z-index:100}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#475569}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:rgba(10,14,26,0.95);backdrop-filter:blur(12px);border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:100}
 .header h1{font-size:18px;font-weight:700;color:var(--txth);letter-spacing:-0.5px}
 .header h1 span{color:var(--pos);font-weight:300}
 .hdr-r{display:flex;align-items:center;gap:12px}
@@ -24,8 +30,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .strat-btn{padding:6px 14px;border:none;background:none;color:var(--txt);font-size:12px;font-weight:500;border-radius:6px;cursor:pointer;transition:all .2s;font-family:inherit}
 .strat-btn.active{background:var(--pri);color:#fff}
 .strat-btn:hover:not(.active){background:var(--grid);color:var(--txth)}
-.tabs{display:flex;gap:2px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--grid)}
-.tab{padding:10px 20px;border:none;background:none;color:var(--txt);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit}
+.tabs{display:flex;gap:2px;padding:0 24px;background:rgba(10,14,26,0.95);backdrop-filter:blur(12px);border-bottom:1px solid #1e293b}
+.tab{padding:10px 20px;border:none;background:none;color:#64748b;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all 150ms;font-family:inherit;letter-spacing:0.5px;text-transform:uppercase}
 .tab.active{color:var(--pri);border-bottom-color:var(--pri)}
 .tab:hover:not(.active){color:var(--txth)}
 .upload-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;height:calc(100vh - 100px);gap:16px}
@@ -40,20 +46,31 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .g23{grid-template-columns:2fr 3fr}
 .g32{grid-template-columns:3fr 2fr}
 .g12{grid-template-columns:1fr 2fr}
-.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
-.card-title{font-size:12px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
+.card{background:linear-gradient(160deg,#0f172a 0%,#0c1628 100%);border:1px solid #1e293b;border-radius:12px;padding:16px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.02)}
+.card-title{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
 .sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-.sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
-.sum-card:hover{border-color:var(--pri);transform:translateY(-2px)}
-.sum-card .label{font-size:10px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
-.sum-card .value{font-size:22px;font-weight:700;color:var(--txth)}
-.sum-card .sub{font-size:10px;color:var(--txt);margin-top:4px}
-.sum-card.alert{border-color:var(--neg);background:rgba(239,68,68,.05)}
-.sum-card.warn{border-color:var(--warn);background:rgba(245,158,11,.05)}
+.sum-card{background:linear-gradient(160deg,#0f172a 0%,#0c1628 100%);border:1px solid #1e293b;border-radius:10px;padding:16px 14px 14px;text-align:center;cursor:pointer;transition:border-color 150ms,transform 150ms,box-shadow 150ms;position:relative;overflow:hidden}
+.sum-card::before{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--sc-accent,#334155);opacity:0.8}
+.sum-card:hover{border-color:#475569;transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.35)}
+.sum-card:active{transform:scale(0.98)}
+.sum-card .label{font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+.sum-card .value{font-size:28px;font-weight:700;color:var(--txth);font-variant-numeric:tabular-nums;line-height:1.1}
+.sum-card .sub{font-size:10px;color:#64748b;margin-top:5px;letter-spacing:0.3px}
+.sum-card.alert{border-color:rgba(239,68,68,0.4);background:linear-gradient(160deg,rgba(239,68,68,0.06) 0%,#0c1628 60%)}
+.sum-card.alert::before{background:var(--neg)}
+.sum-card.warn{border-color:rgba(245,158,11,0.35);background:linear-gradient(160deg,rgba(245,158,11,0.05) 0%,#0c1628 60%)}
+.sum-card.warn::before{background:var(--warn)}
+.sc-te::before{background:#e2e8f0!important}
+.sc-idio::before{background:#f59e0b!important}
+.sc-fac::before{background:#14b8a6!important}
+.sc-beta::before{background:#3b82f6!important}
+.sc-as::before{background:#8b5cf6!important}
+.sc-hold::before{background:#06b6d4!important}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;padding:8px 10px;color:var(--txt);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;border-bottom:1px solid var(--grid);white-space:nowrap}
-td{padding:7px 10px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap;font-variant-numeric:tabular-nums}
-tr:hover td{background:#1e293b}
+th{text-align:left;padding:8px 10px;color:#64748b;font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.8px;border-bottom:1px solid #1e293b;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid rgba(30,41,59,0.6);white-space:nowrap;font-variant-numeric:tabular-nums;color:#94a3b8}
+td:first-child{color:#cbd5e1}
+tr:hover td{background:rgba(30,41,59,0.5)!important}
 th.r,td.r{text-align:right}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn-t{color:var(--warn)}
 .alert-t{color:var(--neg);font-weight:600}
@@ -154,8 +171,8 @@ th[onclick]{cursor:pointer;user-select:none}
 th.sa::after{content:' ▲';font-size:9px;opacity:0.7}
 th.sd::after{content:' ▼';font-size:9px;opacity:0.7}
 /* Sticky thead + alternating stripes */
-thead th{background:var(--card);position:sticky;top:0;z-index:1}
-tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(15,23,42,0.5)}
+thead th{background:#0f172a;position:sticky;top:0;z-index:1;backdrop-filter:blur(4px)}
+tbody tr:nth-child(even):not(.thresh-warn):not(.thresh-alert) td{background:rgba(15,23,42,0.3)}
 /* Factor group pills */
 .fgp{padding:3px 12px;border-radius:12px;border:1px solid var(--grid);background:#1e293b;color:var(--txt);cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms}
 .fgp:hover{border-color:var(--pri);color:var(--txth)}
@@ -287,6 +304,32 @@ input[type=checkbox],input[type=radio]{accent-color:#3b82f6}
 select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:8px;appearance:none;-webkit-appearance:none;padding:5px 28px 5px 10px;font-family:inherit;font-size:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
 input[type=range]{-webkit-appearance:none;height:4px;background:#334155;border-radius:2px;outline:none;cursor:pointer}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#3b82f6;cursor:pointer;box-shadow:0 0 4px rgba(59,130,246,.5)}
+
+/* Premium enhancements */
+.card:hover{border-color:#334155}
+.card-title{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.chip{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500;background:rgba(30,41,59,0.8);color:#94a3b8;border:1px solid #1e293b;margin-right:4px;letter-spacing:0.3px}
+.toggle-btn{padding:4px 12px;background:#0f172a;border:1px solid #1e293b;color:#64748b;border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms;font-weight:500}
+.toggle-btn.active{background:#3b82f6;color:#fff;border-color:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,0.3)}
+.toggle-btn:hover:not(.active){border-color:#334155;color:#94a3b8}
+.export-btn{padding:3px 8px;background:#0a0e1a;border:1px solid #1e293b;color:#64748b;border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;transition:all 150ms;letter-spacing:0.3px}
+.export-btn:hover{border-color:#3b82f6;color:#94a3b8}
+.btn-sec{background:#0f172a;color:#94a3b8;border:1px solid #1e293b}.btn-sec:hover{border-color:#334155;color:#e2e8f0}
+.range-btn{padding:3px 10px;background:#0f172a;border:1px solid #1e293b;color:#64748b;border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms;font-weight:500}
+.range-btn.active{background:#3b82f6;color:#fff;border-color:#3b82f6;box-shadow:0 0 6px rgba(59,130,246,0.25)}
+.fgp{padding:3px 12px;border-radius:20px;border:1px solid #1e293b;background:#0f172a;color:#64748b;cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms;font-weight:500}
+.fgp:hover{border-color:#334155;color:#94a3b8}
+.fgp.active{background:#3b82f6;color:#fff;border-color:#3b82f6;box-shadow:0 0 8px rgba(59,130,246,0.3)}
+.fgp.prof.active{background:#10b981;border-color:#10b981;box-shadow:0 0 8px rgba(16,185,129,0.3)}
+tr.clickable{cursor:pointer;transition:background 100ms}
+.modal{background:linear-gradient(160deg,#0f172a 0%,#0c1628 100%);border:1px solid #1e293b}
+.modal h2{color:#e2e8f0;font-size:15px;font-weight:700;letter-spacing:-0.3px}
+.pag button{background:#0f172a;border:1px solid #1e293b;color:#64748b;border-radius:6px;cursor:pointer;font-family:inherit;font-size:11px;transition:all 150ms}
+.pag button:hover{border-color:#3b82f6;color:#94a3b8}
+.search-box{background:#0a0e1a;border:1px solid #1e293b;border-radius:8px;color:#e2e8f0;font-size:12px;font-family:inherit;padding:8px 12px}
+.search-box:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,0.1)}
+.thresh-warn{background:rgba(245,158,11,0.06);border-left:3px solid rgba(245,158,11,0.6)}
+.thresh-alert{background:rgba(239,68,68,0.06);border-left:3px solid rgba(239,68,68,0.6)}
 </style>
 </head>
 <body>
@@ -893,19 +936,19 @@ function rExp(){
   let html=`${weekBannerHtml()}
   <!-- Row 1: 3 Summary Cards -->
   <div class="sum-cards" style="grid-template-columns:repeat(3,1fr)">
-    <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
+    <div class="sum-card sc-te ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
       <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark">Tracking Error</div>
-      <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(ws.te,1)}${riskDelta(ws.te,prevWs&&prevWs.te,1)}</div>
+      <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:#e2e8f0'}">${f2(ws.te,1)}${riskDelta(ws.te,prevWs&&prevWs.te,1)}</div>
       <div class="sub">${gt(s.hist.sum,'te')} ${s.hist.sum.length} wk trend</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Idiosyncratic risk breakdown">
+    <div class="sum-card sc-idio" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Idiosyncratic risk breakdown">
       <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error — click for top contributors">Idiosyncratic Risk</div>
-      <div class="value" style="color:var(--acc)">${pctSpec}%</div>
+      <div class="value" style="color:#f59e0b">${pctSpec}%</div>
       <div class="sub">of total TE</div>
     </div>
-    <div class="sum-card" onclick="oDrFacRiskBreak()" tabindex="0" role="button" aria-label="Factor risk breakdown">
+    <div class="sum-card sc-fac" onclick="oDrFacRiskBreak()" tabindex="0" role="button" aria-label="Factor risk breakdown">
       <div class="label tip" data-tip="Factor-driven portion of tracking error — click for top factor contributors">Factor Risk</div>
-      <div class="value" style="color:var(--pri)">${pctFac}%</div>
+      <div class="value" style="color:#14b8a6">${pctFac}%</div>
       <div class="sub">of total TE</div>
     </div>
   </div>
@@ -1201,7 +1244,7 @@ function toggleFacSecondary(){
 
 function rRnk(ranks){
   if(!ranks.length)return'<p style="color:var(--txt);font-size:12px">No rank data</p>';
-  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td data-sv="${r.r}"><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r" data-sv="${r.ct}">${r.ct}</td><td class="r" data-sv="${r.p}">${f2(r.p)}%</td><td class="r" data-sv="${r.a??0}">${r.a!=null?f2(r.a)+'%':'—'}</td></tr>`).join('');
+  let rows=ranks.map(r=>`<tr class="clickable" style="border-left:3px solid ${rc(r.r)}" onclick="filterByRank(${r.r})"><td data-sv="${r.r}" style="padding-left:12px"><span style="color:${rc(r.r)};font-weight:700;font-size:11px">${r.l}</span></td><td class="r" data-sv="${r.ct}" style="color:#e2e8f0;font-weight:600">${r.ct}</td><td class="r" data-sv="${r.p}" style="font-variant-numeric:tabular-nums">${f2(r.p)}%</td><td class="r" data-sv="${r.a??0}" style="font-variant-numeric:tabular-nums">${r.a!=null?fp(r.a)+'%':'—'}</td></tr>`).join('');
   return`<table id="tbl-rnk"><thead><tr><th onclick="sortTbl('tbl-rnk',0)">Rank</th><th class="r" onclick="sortTbl('tbl-rnk',1)">Count</th><th class="r" onclick="sortTbl('tbl-rnk',2)">Port%</th><th class="r" onclick="sortTbl('tbl-rnk',3)">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function filterByRank(rank){
@@ -1343,7 +1386,7 @@ function rUpdateCorr(){
 }
 
 // ===== CHART RENDERERS =====
-const plotBg={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:'#94a3b8',size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:'#334155',zerolinecolor:'#334155'},yaxis:{gridcolor:'#334155',zerolinecolor:'#334155'}};
+const plotBg={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:'#64748b',size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:'#1e293b',zerolinecolor:'#334155',tickfont:{color:'#64748b',size:10}},yaxis:{gridcolor:'#1e293b',zerolinecolor:'#334155',tickfont:{color:'#64748b',size:10}}};
 const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
@@ -1519,29 +1562,29 @@ function rRisk(){
   let html=`
   <!-- Risk Summary Cards -->
   <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
-    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}" onclick="oDrMetric('te')" title="Tracking error detail">
+    <div class="sum-card sc-te ${totalTE>7?'alert':totalTE>5?'warn':''}" onclick="oDrMetric('te')" title="Tracking error detail">
       <div class="label">Total Risk (TE)</div>
-      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}</div>
+      <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':'color:#e2e8f0'}">${f2(totalTE,1)}</div>
       <div class="sub">annualized tracking error</div>
     </div>
-    <div class="sum-card" onclick="oDrFacRiskBreak()" title="Top factor contributors">
+    <div class="sum-card sc-fac" onclick="oDrFacRiskBreak()" title="Top factor contributors">
       <div class="label">Factor Risk ↗</div>
-      <div class="value" style="color:var(--pri)">${factorPct}%</div>
+      <div class="value" style="color:#14b8a6">${factorPct}%</div>
       <div class="sub">${f2(factorRisk,1)}% TE</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('idio')" title="Top stock-specific contributors">
+    <div class="sum-card sc-idio" onclick="oDrMetric('idio')" title="Top stock-specific contributors">
       <div class="label">Idiosyncratic ↗</div>
-      <div class="value" style="color:var(--acc)">${idioPct}%</div>
+      <div class="value" style="color:#f59e0b">${idioPct}%</div>
       <div class="sub">${f2(idioRisk,1)}% TE</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('beta')" title="Beta detail">
+    <div class="sum-card sc-beta" onclick="oDrMetric('beta')" title="Beta detail">
       <div class="label">Beta</div>
       <div class="value">${f2(s.sum.beta,2)}</div>
       <div class="sub">vs benchmark</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('as')" title="Active share detail">
+    <div class="sum-card sc-as" onclick="oDrMetric('as')" title="Active share detail">
       <div class="label">Active Share</div>
-      <div class="value">${f2(s.sum.as,1)}%</div>
+      <div class="value" style="color:#8b5cf6">${f2(s.sum.as,1)}%</div>
       <div class="sub">${gt(s.hist.sum,'as')} trend</div>
     </div>
   </div>
@@ -1699,20 +1742,20 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   });
   let facVals=hist.map((h,i)=>+(h.te-idioVals[i]).toFixed(3));
   Plotly.newPlot('teStackedDiv',[
-    {x:dates,y:idioVals,name:'Idiosyncratic (Stock-Specific)',type:'scatter',mode:'lines',
-      fill:'tozeroy',fillcolor:'rgba(245,158,11,0.25)',line:{color:'rgba(245,158,11,0.8)',width:1},
-      stackgroup:'te',hovertemplate:'Stock-Specific: %{y:.2f}%<extra></extra>'},
+    {x:dates,y:idioVals,name:'Idiosyncratic',type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:'rgba(245,158,11,0.18)',line:{color:'rgba(245,158,11,0.9)',width:1.5},
+      stackgroup:'te',hovertemplate:'Stock-Specific: <b>%{y:.2f}%</b><extra></extra>'},
     {x:dates,y:facVals,name:'Factor',type:'scatter',mode:'lines',
-      fill:'tonexty',fillcolor:'rgba(6,182,212,0.22)',line:{color:'rgba(6,182,212,0.65)',width:1},
-      stackgroup:'te',hovertemplate:'Factor: %{y:.2f}%<extra></extra>'},
+      fill:'tonexty',fillcolor:'rgba(20,184,166,0.15)',line:{color:'rgba(20,184,166,0.85)',width:1.5},
+      stackgroup:'te',hovertemplate:'Factor: <b>%{y:.2f}%</b><extra></extra>'},
     {x:dates,y:teVals,name:'Total TE',type:'scatter',mode:'lines',
       line:{color:'#e2e8f0',width:2.5},fill:'none',
-      hovertemplate:'%{x|%b %d %Y} — TE: %{y:.2f}%<extra></extra>'}
+      hovertemplate:'%{x|%b %d, %Y} — TE: <b>%{y:.2f}%</b><extra></extra>'}
   ],{...plotBg,
-    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',bordercolor:'#3b82f6',borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
-    yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},
-    legend:{orientation:'h',y:1.12,font:{size:11}},
-    hovermode:'x unified'
+    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0a0e1a',bordercolor:'#3b82f6',borderwidth:1,thickness:0.05},tickformat:'%b %Y',nticks:8},
+    yaxis:{...plotBg.yaxis,title:{text:'TE %',font:{size:10,color:'#64748b'}},zeroline:false,gridcolor:'#1e293b'},
+    legend:{orientation:'h',y:1.14,font:{size:10,color:'#94a3b8'},bgcolor:'transparent'},
+    hovermode:'x unified',hoverlabel:{bgcolor:'#1e293b',bordercolor:'#334155',font:{family:'Inter',size:11}}
   },{...plotCfg,scrollZoom:true});
 }
 

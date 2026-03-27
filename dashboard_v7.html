@@ -10,9 +10,9 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
---bg:#0c0e14;--card:#12151e;--surf:#1a1e2b;--grid:#2a2f3d;--txt:#8b93a6;--txth:#e8eaf0;
---pos:#5cb8a4;--neg:#d67272;--warn:#c4956a;--pri:#64a1d6;--acc:#9ba3b5;--cyan:#64a1d6;
---r1:#5cb8a4;--r2:#7dc9b8;--r3:#bbb474;--r4:#c4956a;--r5:#d67272;
+--bg:#080e1e;--card:#0f172a;--surf:#1e293b;--grid:#334155;--txt:#94a3b8;--txth:#e2e8f0;
+--pos:#10b981;--neg:#ef4444;--warn:#a78bfa;--pri:#6366f1;--acc:#8b5cf6;--cyan:#38bdf8;
+--r1:#10b981;--r2:#22c55e;--r3:#eab308;--r4:#f97316;--r5:#ef4444;
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
 .header{display:flex;align-items:center;gap:16px;padding:10px 24px;background:var(--card);border-bottom:1px solid var(--grid);position:sticky;top:0;z-index:100}
@@ -20,7 +20,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .header h1 span{color:var(--pos);font-weight:300}
 .hdr-r{display:flex;align-items:center;gap:12px}
 .strat-sel{display:flex;align-items:center;gap:4px}
-.strat-sel select{font-size:12px;font-weight:600;padding:5px 28px 5px 10px;background:var(--surf);border:1px solid var(--pri);color:var(--txth);border-radius:8px;cursor:pointer;font-family:inherit;min-width:200px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%238b93a6'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.strat-sel select{font-size:12px;font-weight:600;padding:5px 28px 5px 10px;background:var(--surf);border:1px solid var(--pri);color:var(--txth);border-radius:8px;cursor:pointer;font-family:inherit;min-width:200px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
 .strat-btn{padding:6px 14px;border:none;background:none;color:var(--txt);font-size:12px;font-weight:500;border-radius:6px;cursor:pointer;transition:all .2s;font-family:inherit}
 .strat-btn.active{background:var(--pri);color:#fff}
 .strat-btn:hover:not(.active){background:var(--grid);color:var(--txth)}
@@ -53,12 +53,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;padding:8px 10px;color:var(--txt);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;border-bottom:1px solid var(--grid);white-space:nowrap}
 td{padding:7px 10px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap;font-variant-numeric:tabular-nums}
-tr:hover td{background:#1a1e2b}
+tr:hover td{background:#1e293b}
 th.r,td.r{text-align:right}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn-t{color:var(--warn)}
 .alert-t{color:var(--neg);font-weight:600}
 .pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
-.pill-pos{background:rgba(92,184,164,.15);color:var(--pos)}
+.pill-pos{background:rgba(16,185,129,.15);color:var(--pos)}
 .pill-neg{background:rgba(239,68,68,.15);color:var(--neg)}
 .bar-cell{display:flex;align-items:center;gap:6px}
 .bar-bg{height:6px;background:var(--surf);border-radius:3px;flex:1;overflow:hidden}
@@ -114,19 +114,19 @@ th.r,td.r{text-align:right}
 
 /* Tooltips */
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
-.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1a1e2b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .tip:hover::after{opacity:1}
-.tip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1a1e2b;opacity:0;pointer-events:none;transition:opacity .2s;z-index:301}
+.tip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1e293b;opacity:0;pointer-events:none;transition:opacity .2s;z-index:301}
 .tip:hover::before{opacity:1}
 
 /* Clickable rows */
 tr.clickable{cursor:pointer;transition:background .15s}
-tr.clickable:hover td{background:#1a1e2b}
-tr.clickable:active td{background:rgba(100,161,214,.12)}
+tr.clickable:hover td{background:#1e293b}
+tr.clickable:active td{background:rgba(99,102,241,.12)}
 
 /* Enhanced cards */
 .sum-card{position:relative;overflow:hidden}
-.sum-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 60%,rgba(100,161,214,.03));pointer-events:none}
+.sum-card::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent 60%,rgba(99,102,241,.03));pointer-events:none}
 .sum-card:focus{outline:2px solid var(--pri);outline-offset:2px}
 .card:focus-within{border-color:var(--pri)}
 
@@ -165,13 +165,13 @@ th.sd::after{content:' ▼';font-size:9px;opacity:0.7}
 thead th{background:var(--card);position:sticky;top:0;z-index:1}
 tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(15,23,42,0.5)}
 /* Factor group pills */
-.fgp{padding:3px 12px;border-radius:12px;border:1px solid var(--grid);background:#1a1e2b;color:var(--txt);cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms}
+.fgp{padding:3px 12px;border-radius:12px;border:1px solid var(--grid);background:#1e293b;color:var(--txt);cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms}
 .fgp:hover{border-color:var(--pri);color:var(--txth)}
-.fgp.active{background:#64a1d6;color:#fff;border-color:#64a1d6;box-shadow:0 0 6px rgba(100,161,214,.35)}
-.fgp.prof.active{background:#5cb8a4;border-color:#5cb8a4;box-shadow:0 0 6px rgba(92,184,164,.35)}
+.fgp.active{background:#6366f1;color:#fff;border-color:#6366f1;box-shadow:0 0 6px rgba(99,102,241,.35)}
+.fgp.prof.active{background:#fb923c;border-color:#fb923c;box-shadow:0 0 6px rgba(251,146,60,.35)}
 /* Threshold range slider */
-input[type=range].thresh-sl{-webkit-appearance:none;height:3px;background:#2a2f3d;border-radius:2px;outline:none}
-input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#64a1d6;cursor:pointer;box-shadow:0 0 3px rgba(100,161,214,.5)}
+input[type=range].thresh-sl{-webkit-appearance:none;height:3px;background:#334155;border-radius:2px;outline:none}
+input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#6366f1;cursor:pointer;box-shadow:0 0 3px rgba(99,102,241,.5)}
 
 /* Global search */
 .global-search{position:relative}
@@ -205,7 +205,7 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
 .kbd{display:inline-block;padding:1px 5px;background:var(--surf);border:1px solid var(--grid);border-radius:3px;font-size:9px;color:var(--txt);font-family:monospace;vertical-align:middle;margin-left:4px}
 /* Tab count badges */
 .tab-badge{display:inline-block;background:var(--surf);color:var(--txt);border-radius:10px;font-size:9px;font-weight:600;padding:1px 6px;margin-left:5px;border:1px solid var(--grid);vertical-align:middle}
-.tab.active .tab-badge{background:rgba(100,161,214,.2);color:var(--pri);border-color:rgba(100,161,214,.3)}
+.tab.active .tab-badge{background:rgba(99,102,241,.2);color:var(--pri);border-color:rgba(99,102,241,.3)}
 
 /* History dropdown */
 .hist-wrap{position:relative}
@@ -213,7 +213,7 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
 .hist-panel.open{display:block}
 .hist-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(51,65,85,.3);font-size:11px;display:flex;justify-content:space-between;align-items:center;transition:background .15s}
 .hist-item:hover{background:var(--surf)}
-.hist-item.active-hist{background:rgba(100,161,214,.08);border-left:2px solid var(--pri)}
+.hist-item.active-hist{background:rgba(99,102,241,.08);border-left:2px solid var(--pri)}
 .hist-item .hist-name{color:var(--txth);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
 .hist-item .hist-meta{color:var(--txt);font-size:10px;white-space:nowrap}
 .hist-footer{padding:8px 14px;font-size:10px;color:var(--txt);text-align:right;cursor:pointer}
@@ -277,10 +277,10 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
   a{color:#333!important;text-decoration:underline}
 }
 /* Plotly rangeslider custom styling */
-.rangeslider-handle-min,.rangeslider-handle-max{fill:#64a1d6!important;stroke:none!important}
-.rangeslider-slidebox{fill:rgba(100,161,214,0.12)!important;stroke:#64a1d6!important;stroke-width:1!important}
+.rangeslider-handle-min,.rangeslider-handle-max{fill:#6366f1!important;stroke:none!important}
+.rangeslider-slidebox{fill:rgba(99,102,241,0.12)!important;stroke:#6366f1!important;stroke-width:1!important}
 /* Light theme */
-body.light-theme{--bg:#f8fafc;--card:#ffffff;--surf:#f1f5f9;--grid:#e2e8f0;--txt:#8b93a6;--txth:#1a1e2b}
+body.light-theme{--bg:#f8fafc;--card:#ffffff;--surf:#f1f5f9;--grid:#e2e8f0;--txt:#64748b;--txth:#1e293b}
 body.light-theme thead th{background:#fff}
 body.light-theme tr:hover td,body.light-theme tr.clickable:hover td{background:#f1f5f9}
 body.light-theme tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(241,245,249,.6)}
@@ -291,10 +291,10 @@ body.light-theme .card{background:#fff;border-color:#e2e8f0}
 body.presentation-mode .header,body.presentation-mode #tabBar,body.presentation-mode #validPanel{display:none!important}
 body.presentation-mode #content{padding-top:8px}
 /* Global form controls */
-input[type=checkbox],input[type=radio]{accent-color:#64a1d6}
-select{background:#12151e;border:1px solid #2a2f3d;color:#e2e8f0;border-radius:8px;appearance:none;-webkit-appearance:none;padding:5px 28px 5px 10px;font-family:inherit;font-size:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%238b93a6'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
-input[type=range]{-webkit-appearance:none;height:4px;background:#2a2f3d;border-radius:2px;outline:none;cursor:pointer}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#64a1d6;cursor:pointer;box-shadow:0 0 4px rgba(100,161,214,.5)}
+input[type=checkbox],input[type=radio]{accent-color:#6366f1}
+select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:8px;appearance:none;-webkit-appearance:none;padding:5px 28px 5px 10px;font-family:inherit;font-size:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
+input[type=range]{-webkit-appearance:none;height:4px;background:#334155;border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#6366f1;cursor:pointer;box-shadow:0 0 4px rgba(99,102,241,.5)}
 </style>
 </head>
 <body>
@@ -734,7 +734,7 @@ function init(){
   let unpinned=keys.filter(k=>!pinned.includes(k));
   let orderedKeys=[...pinned,...unpinned];
   let defaultKey=(_prefs.defaultStrat&&keys.includes(_prefs.defaultStrat))?_prefs.defaultStrat:(keys.includes('EM')?'EM':keys[0]);
-  sel.innerHTML=`<select onchange="go(this.value)" style="background:#12151e;border:1px solid #2a2f3d;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">${orderedKeys.map(k=>`<option value="${k}" style="background:#12151e"${k===defaultKey?' selected':''}>${pinned.includes(k)?'★ ':''}${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
+  sel.innerHTML=`<select onchange="go(this.value)" style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">${orderedKeys.map(k=>`<option value="${k}" style="background:#0f172a"${k===defaultKey?' selected':''}>${pinned.includes(k)?'★ ':''}${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
   $('uploadZone').style.display='none';
   $('content').style.display='block';
   $('clearBtn').style.display='inline-block';
@@ -1086,13 +1086,13 @@ function rFacWaterfall(s){
   if(!facs.length||!document.getElementById('facWaterfallDiv'))return;
   Plotly.newPlot('facWaterfallDiv',[{
     y:facs.map(f=>f.n),x:facs.map(f=>f.imp),type:'bar',orientation:'h',
-    marker:{color:facs.map(f=>(f.imp||0)>=0?'#64a1d6':'#c4956a')},
+    marker:{color:facs.map(f=>(f.imp||0)>=0?'#6366f1':'#a78bfa')},
     text:facs.map(f=>((f.imp||0)>=0?'+':'')+f2(f.imp,2)+'%'),
-    textposition:'outside',textfont:{size:10,color:'#8b93a6'},
+    textposition:'outside',textfont:{size:10,color:'#94a3b8'},
     hovertemplate:'%{y}<br>Impact: %{x:.2f}%<extra></extra>'
   }],{...plotBg,
     yaxis:{...plotBg.yaxis,autorange:'reversed'},
-    xaxis:{...plotBg.xaxis,title:'Return Attribution (%)',zeroline:true,zerolinecolor:'#2a2f3d',zerolinewidth:1.5},
+    xaxis:{...plotBg.xaxis,title:'Return Attribution (%)',zeroline:true,zerolinecolor:'#334155',zerolinewidth:1.5},
     margin:{l:130,r:60,t:8,b:36}
   },plotCfg);
 }
@@ -1118,7 +1118,7 @@ function sortTbl(id,col){
 }
 // Rank badge: Q{r} colored + sub-line R·V·Q (used in detail pop-ups)
 function rRVQ(h){
-  if(!h||h.r==null)return'<span style="color:#2a2f3d">—</span>';
+  if(!h||h.r==null)return'<span style="color:#334155">—</span>';
   let col=rc(h.r);
   let parts=[];
   if(h.rev!=null)parts.push('R'+Math.round(h.rev));
@@ -1130,16 +1130,16 @@ function rRVQ(h){
 // 4 separate O|R|V|Q cells — first cell gets left separator to visually group rank cols
 function rORVQCells(h){
   const qc=(v,first)=>{
-    let s=`text-align:center;font-size:11px;padding:4px 6px;background:rgba(100,161,214,0.04)${first?';border-left:1px solid rgba(100,161,214,0.18)':''}`;
+    let s=`text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04)${first?';border-left:1px solid rgba(99,102,241,0.18)':''}`;
     return v!=null
       ?`<td style="${s};font-weight:700;color:${rc(Math.round(v))}">${Math.round(v)}</td>`
-      :`<td style="${s};color:#2a2f3d">—</td>`;
+      :`<td style="${s};color:#334155">—</td>`;
   };
   return qc(h.over,true)+qc(h.rev,false)+qc(h.val,false)+qc(h.qual,false);
 }
-const ORVQ_TH='<th style="text-align:center;cursor:pointer;border-left:1px solid rgba(100,161,214,0.25);background:rgba(100,161,214,0.07)" class="tip" data-tip="Overall MFR rank (1=best)" onclick="sortHold(\'over\')">O</th><th style="text-align:center;cursor:pointer;background:rgba(100,161,214,0.07)" class="tip" data-tip="Revision signal rank" onclick="sortHold(\'rev\')">R</th><th style="text-align:center;cursor:pointer;background:rgba(100,161,214,0.07)" class="tip" data-tip="Value signal rank" onclick="sortHold(\'val\')">V</th><th style="text-align:center;cursor:pointer;background:rgba(100,161,214,0.07)" class="tip" data-tip="Quality signal rank" onclick="sortHold(\'qual\')">Q</th>';
+const ORVQ_TH='<th style="text-align:center;cursor:pointer;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" class="tip" data-tip="Overall MFR rank (1=best)" onclick="sortHold(\'over\')">O</th><th style="text-align:center;cursor:pointer;background:rgba(99,102,241,0.07)" class="tip" data-tip="Revision signal rank" onclick="sortHold(\'rev\')">R</th><th style="text-align:center;cursor:pointer;background:rgba(99,102,241,0.07)" class="tip" data-tip="Value signal rank" onclick="sortHold(\'val\')">V</th><th style="text-align:center;cursor:pointer;background:rgba(99,102,241,0.07)" class="tip" data-tip="Quality signal rank" onclick="sortHold(\'qual\')">Q</th>';
 // Simpler ORVQ header without sortHold (for drill/popup tables)
-const ORVQ_TH_PLAIN='<th style="text-align:center;border-left:1px solid rgba(100,161,214,0.25);background:rgba(100,161,214,0.07)" class="tip" data-tip="Overall MFR rank (1=best)">O</th><th style="text-align:center;background:rgba(100,161,214,0.07)" class="tip" data-tip="Revision">R</th><th style="text-align:center;background:rgba(100,161,214,0.07)" class="tip" data-tip="Value">V</th><th style="text-align:center;background:rgba(100,161,214,0.07)" class="tip" data-tip="Quality">Q</th>';
+const ORVQ_TH_PLAIN='<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" class="tip" data-tip="Overall MFR rank (1=best)">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" class="tip" data-tip="Revision">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" class="tip" data-tip="Value">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" class="tip" data-tip="Quality">Q</th>';
 
 // ===== SECTOR TABLE STATE =====
 let _secRankMode='wtd'; // 'wtd'=portfolio-weight-weighted, 'avg'=simple average
@@ -1219,14 +1219,14 @@ function rWt(data,type,hold){
     let teFactor=type==='sec'?+(teTotal-teMCR).toFixed(1):null;
     // TE Contrib: number with proportional light-blue background fill
     let tePct=type==='sec'?Math.min((teTotal/maxTE)*100,100).toFixed(1):'0';
-    let teBar=type==='sec'?`<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(100,161,214,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`:'';
+    let teBar=type==='sec'?`<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`:'';
     let stockTeCell=type==='sec'?`<td class="r" data-col="stock_te" data-sv="${+(teMCR).toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`:'';
     let factorTeCell=type==='sec'?`<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`:'';
     // O·R·V·Q Spotlight rank cells
     let rvqCells='';
     if(type==='sec'){
       const rankCell=(avg,col)=>{
-        let c=avg!=null?rc(Math.round(avg)):'#2a2f3d';
+        let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td class="r" data-col="${col}" data-sv="${avg!=null?+avg.toFixed(2):''}" style="font-size:11px;font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
       rvqCells=rankCell(sAvg(secOS[d.n]||0,secOC[d.n]||0,secOW[d.n]||0,secOPW[d.n]||0),'o')
@@ -1247,7 +1247,7 @@ function rWt(data,type,hold){
   let secThead=`<thead>
     <tr style="font-size:9px">
       <th colspan="7" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>
-      <th colspan="4" style="text-align:center;background:rgba(100,161,214,0.09);border-left:1px solid rgba(100,161,214,0.25);border-bottom:1px solid rgba(100,161,214,0.25);padding:2px 6px">
+      <th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px">
         <span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>
         <button id="secRankWtd" class="toggle-btn${wtd?' active':''}" onclick="event.stopPropagation();setSecRankMode('wtd')" style="padding:1px 6px;font-size:9px">Wtd</button>
         <button id="secRankAvg" class="toggle-btn${!wtd?' active':''}" onclick="event.stopPropagation();setSecRankMode('avg')" style="padding:1px 6px;font-size:9px">Avg</button>
@@ -1261,10 +1261,10 @@ function rWt(data,type,hold){
       <th class="r tip" data-col="te_contrib" data-tip="Total sector TE contribution (sum of holdings %T)" onclick="sortTbl('tbl-sec',4)">TE Contrib</th>
       <th class="r tip" data-col="stock_te" data-tip="Stock-specific TE (sum of holdings %S — idiosyncratic)" onclick="sortTbl('tbl-sec',5)">Stock TE%</th>
       <th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-sec',6)">Factor TE%</th>
-      <th class="r tip" data-col="o" data-tip="Avg Overall MFR rank — weighted by port weight by default (1=best, 5=worst)" onclick="sortTbl('tbl-sec',7)" style="background:rgba(100,161,214,0.07);border-left:1px solid rgba(100,161,214,0.2)">O</th>
-      <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',8)" style="background:rgba(100,161,214,0.07)">R</th>
-      <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',9)" style="background:rgba(100,161,214,0.07)">V</th>
-      <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',10)" style="background:rgba(100,161,214,0.07)">Q</th>
+      <th class="r tip" data-col="o" data-tip="Avg Overall MFR rank — weighted by port weight by default (1=best, 5=worst)" onclick="sortTbl('tbl-sec',7)" style="background:rgba(99,102,241,0.07);border-left:1px solid rgba(99,102,241,0.2)">O</th>
+      <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',8)" style="background:rgba(99,102,241,0.07)">R</th>
+      <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',9)" style="background:rgba(99,102,241,0.07)">V</th>
+      <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',10)" style="background:rgba(99,102,241,0.07)">Q</th>
     </tr>
   </thead>`;
   let table=type==='sec'
@@ -1286,10 +1286,10 @@ const FAC_PRIMARY=new Set(['Momentum (Medium-Term)','Momentum','Volatility','Gro
 
 // ===== FACTOR TABLE STATE =====
 const FAC_GROUP_DEFS=[
-  {id:'vg',label:'Value·Growth',color:'#64a1d6',factors:['Value','Growth','Dividend Yield','Earnings Yield']},
+  {id:'vg',label:'Value·Growth',color:'#6366f1',factors:['Value','Growth','Dividend Yield','Earnings Yield']},
   {id:'mb',label:'Market Behavior',color:'#a855f7',factors:['Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility']},
-  {id:'pf',label:'Profitability',color:'#5cb8a4',factors:['Profitability']},
-  {id:'sec',label:'Secondary',color:'#8b93a6',factors:null}  // null = all non-primary
+  {id:'pf',label:'Profitability',color:'#fb923c',factors:['Profitability']},
+  {id:'sec',label:'Secondary',color:'#94a3b8',factors:null}  // null = all non-primary
 ];
 const FAC_COLS=[
   {id:'name',label:'Factor'},{id:'exp',label:'Exposure'},{id:'te',label:'TE%'},
@@ -1388,22 +1388,22 @@ function rFacTable(factors,hold){
     // Diverging bar: blue=positive right, amber=negative left; fills from center
     let pct=Math.round((expAbs/maxExp)*45);  // max 45% width so text stays readable
     let barBg=expVal>=0
-      ?`linear-gradient(to right, transparent 50%, rgba(100,161,214,0.22) 50%, rgba(100,161,214,0.22) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`
+      ?`linear-gradient(to right, transparent 50%, rgba(99,102,241,0.22) 50%, rgba(99,102,241,0.22) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`
       :`linear-gradient(to left, transparent 50%, rgba(245,158,11,0.22) 50%, rgba(245,158,11,0.22) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`;
     // Profitability: reversed color (positive exposure = good)
     let expColor=isProfitability
       ?(expVal>0.1?'var(--pos)':expVal<-0.1?'var(--neg)':'var(--txth)')
       :(expVal>0?'var(--pos)':'var(--neg)');
-    let rowBase=isProfitability?'background:rgba(92,184,164,0.06);border-left:4px solid #5cb8a4;':'border-left:4px solid transparent;';
+    let rowBase=isProfitability?'background:rgba(251,146,60,0.06);border-left:4px solid #fb923c;':'border-left:4px solid transparent;';
     // Profitability amber warning: exposure decreased vs prior week
     let profWarn='';
     if(isProfitability&&priorExpMap['Profitability']!=null&&priorExpMap['Profitability']<-0.05){
-      profWarn=' <span class="tip" data-tip="Profitability exposure decreased vs prior week" style="color:#c4956a;font-size:10px">⚠</span>';
+      profWarn=' <span class="tip" data-tip="Profitability exposure decreased vs prior week" style="color:#fb923c;font-size:10px">⚠</span>';
     }
     let profTip=isProfitability?' class="tip" data-tip="Intentional exposure — higher profitability is desired. Green=increasing (good), Red=decreasing (risk)."':'';
     let facHist=(cs.hist&&cs.hist.fac)?cs.hist.fac[f.n]:null;
     let sparkVals=facHist?facHist.slice(-12).map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
-    let spark=sparkVals.length>=2?mkSparkline(sparkVals,48,18,isProfitability?'#5cb8a4':null):'';
+    let spark=sparkVals.length>=2?mkSparkline(sparkVals,48,18,isProfitability?'#fb923c':null):'';
     let nm=f.n.replace(/'/g,"\\'");
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
       <td data-col="name"${profTip}>${isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n}</td>
@@ -1549,10 +1549,10 @@ function rUpdateCorr(){
   setTimeout(()=>{
     Plotly.newPlot('corrHeatPlot',[{
       z:corrMatrix,x:facNames,y:facNames,type:'heatmap',
-      colorscale:[[0,'#d67272'],[0.5,'#e2e8f0'],[1,'#64a1d6']],
+      colorscale:[[0,'#ef4444'],[0.5,'#e2e8f0'],[1,'#6366f1']],
       zmin:-1,zmax:1,
       text:corrMatrix.map(row=>row.map(v=>v.toFixed(2))),
-      texttemplate:'%{text}',textfont:{size:10,color:'#12151e'},
+      texttemplate:'%{text}',textfont:{size:10,color:'#0f172a'},
       hovertemplate:'%{y} × %{x}<br>r = %{z:.3f}<extra></extra>',
       showscale:true,colorbar:{len:0.9,title:{text:'r',side:'right'},tickfont:{size:9},thickness:12}
     }],{...plotBg,
@@ -1571,7 +1571,7 @@ function rUpdateCorr(){
 }
 
 // ===== CHART RENDERERS =====
-const plotBg={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:'#8b93a6',size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:'#2a2f3d',zerolinecolor:'#2a2f3d'},yaxis:{gridcolor:'#2a2f3d',zerolinecolor:'#2a2f3d'}};
+const plotBg={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:'#94a3b8',size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:'#334155',zerolinecolor:'#334155'},yaxis:{gridcolor:'#334155',zerolinecolor:'#334155'}};
 const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
@@ -1580,14 +1580,14 @@ function rSecChart(s){
   let d=[...s.sectors].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
   Plotly.newPlot('secChartDiv',[{
     y:d.map(x=>x.n),x:d.map(x=>x.a),type:'bar',orientation:'h',
-    marker:{color:d.map(x=>x.a>=0?'#5cb8a4':'#d67272')},
-    text:d.map(x=>fp(x.a,1)),textposition:'outside',textfont:{size:10,color:'#8b93a6'},
+    marker:{color:d.map(x=>x.a>=0?'#10b981':'#ef4444')},
+    text:d.map(x=>fp(x.a,1)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
     hovertemplate:'%{y}<br>Active: %{x:.1f}%<extra></extra>'
   }],{
     ...plotBg,
     margin:{l:145,r:65,t:10,b:40},
     yaxis:{...plotBg.yaxis,autorange:'reversed'},
-    xaxis:{...plotBg.xaxis,title:'Active Weight %',tickformat:'.1f',zeroline:true,zerolinewidth:2,zerolinecolor:'#2a2f3d'}
+    xaxis:{...plotBg.xaxis,title:'Active Weight %',tickformat:'.1f',zeroline:true,zerolinewidth:2,zerolinecolor:'#334155'}
   },plotCfg);
 }
 
@@ -1595,7 +1595,7 @@ function rRegChart(s){
   let d=s.regions.sort((a,b)=>b.a-a.a);
   Plotly.newPlot('regChartDiv',[{
     y:d.map(x=>x.n),x:d.map(x=>x.a),type:'bar',orientation:'h',
-    marker:{color:d.map(x=>x.a>=0?'#5cb8a4':'#d67272')},text:d.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:'#8b93a6'}
+    marker:{color:d.map(x=>x.a>=0?'#10b981':'#ef4444')},text:d.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Weight %'}},plotCfg);
 }
 
@@ -1605,9 +1605,9 @@ function rFacButt(s){
   let vals=facs.map(f=>f.a??0);
   Plotly.newPlot('facButtDiv',[{
     y:names,x:vals,type:'bar',orientation:'h',
-    marker:{color:vals.map(v=>v>=0?'#64a1d6':'#c4956a')},
-    text:vals.map(v=>v.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#8b93a6'}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#8b93a6',zerolinewidth:2}},plotCfg);
+    marker:{color:vals.map(v=>v>=0?'#6366f1':'#a78bfa')},
+    text:vals.map(v=>v.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
+  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#94a3b8',zerolinewidth:2}},plotCfg);
 }
 
 function rCountryChart(s){
@@ -1618,8 +1618,8 @@ function rCountryChart(s){
   let all=[...top5,...bot5];
   Plotly.newPlot('countryChartDiv',[{
     y:all.map(x=>x.n),x:all.map(x=>x.a),type:'bar',orientation:'h',
-    marker:{color:all.map(x=>x.a>=0?'#5cb8a4':'#d67272')},
-    text:all.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:'#8b93a6'}
+    marker:{color:all.map(x=>x.a>=0?'#10b981':'#ef4444')},
+    text:all.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Weight %'}},plotCfg);
 }
 
@@ -1629,8 +1629,8 @@ function rGroupChart(s){
   let pvals=s.groups.map(g=>+(g.p||0).toFixed(2));
   let bvals=s.groups.map(g=>+(g.b||0).toFixed(2));
   Plotly.newPlot('grpChartDiv',[
-    {y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',marker:{color:'#64a1d6'}},
-    {y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',marker:{color:'#8b93a6'}}
+    {y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',marker:{color:'#6366f1'}},
+    {y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',marker:{color:'#94a3b8'}}
   ],{...plotBg,barmode:'group',yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Weight %'},legend:{x:0.7,y:1.1,orientation:'h',font:{size:10}}},plotCfg);
 }
 
@@ -1638,8 +1638,8 @@ function rScat(s){
   let hold=s.hold.filter(h=>h.p>0&&!isCash(h));
   Plotly.newPlot('scatDiv',[{
     x:hold.map(h=>h.mcr||0),y:hold.map(h=>h.tr||0),mode:'markers+text',type:'scatter',
-    text:hold.map(h=>h.t),textposition:'top center',textfont:{size:8,color:'#8b93a6'},
-    marker:{size:hold.map(h=>Math.max(h.p*3,6)),color:hold.map(h=>h.a),colorscale:[[0,'#d67272'],[0.5,'#8b93a6'],[1,'#5cb8a4']],showscale:true,colorbar:{title:'Active',titlefont:{size:10},tickfont:{size:9},len:0.8}},
+    text:hold.map(h=>h.t),textposition:'top center',textfont:{size:8,color:'#94a3b8'},
+    marker:{size:hold.map(h=>Math.max(h.p*3,6)),color:hold.map(h=>h.a),colorscale:[[0,'#ef4444'],[0.5,'#94a3b8'],[1,'#10b981']],showscale:true,colorbar:{title:'Active',titlefont:{size:10},tickfont:{size:9},len:0.8}},
     hovertemplate:'%{text}<br>MCR: %{x:.2f}<br>Return: %{y:.1f}%<extra></extra>'
   }],{...plotBg,xaxis:{...plotBg.xaxis,title:'Marginal Contribution to Risk'},yaxis:{...plotBg.yaxis,title:'Total Return %'}},plotCfg);
 }
@@ -1648,14 +1648,14 @@ function rTree(s){
   let secData={};
   s.hold.filter(h=>!isCash(h)&&h.sec).forEach(h=>{if(!secData[h.sec])secData[h.sec]=0;secData[h.sec]+=Math.abs(h.a)});
   let labels=[],parents=[],values=[],colors=[];
-  labels.push('Portfolio');parents.push('');values.push(0);colors.push('#12151e');
+  labels.push('Portfolio');parents.push('');values.push(0);colors.push('#0f172a');
   Object.keys(secData).forEach(sec=>{
     labels.push(sec);parents.push('Portfolio');values.push(+secData[sec].toFixed(2));
     let secRow=s.sectors.find(x=>x.n===sec);
-    colors.push(secRow&&secRow.a>=0?'#5cb8a4':'#d67272');
+    colors.push(secRow&&secRow.a>=0?'#10b981':'#ef4444');
   });
   Plotly.newPlot('treeDiv',[{type:'treemap',labels,parents,values,
-    marker:{colors,line:{width:1,color:'#1a1e2b'}},textfont:{size:11,color:'#e2e8f0'},
+    marker:{colors,line:{width:1,color:'#1e293b'}},textfont:{size:11,color:'#e2e8f0'},
     hovertemplate:'%{label}<br>|Active|: %{value:.2f}%<extra></extra>'
   }],{...plotBg,margin:{l:5,r:5,t:5,b:5}},plotCfg);
 }
@@ -1664,7 +1664,7 @@ function rMCR(s){
   let top=s.hold.filter(h=>!isCash(h)).sort((a,b)=>(b.mcr||0)-(a.mcr||0)).slice(0,10);
   Plotly.newPlot('mcrDiv',[{
     y:top.map(h=>h.t),x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
-    marker:{color:'#9ba3b5'},text:top.map(h=>f2(h.mcr)),textposition:'outside',textfont:{size:10,color:'#8b93a6'}
+    marker:{color:'#8b5cf6'},text:top.map(h=>f2(h.mcr)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'MCR %'}},plotCfg);
 }
 
@@ -1673,7 +1673,7 @@ function rFRB(s){
   let total=facs.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
   Plotly.newPlot('frbDiv',[{
     labels:facs.map(f=>f.n),values:facs.map(f=>Math.abs(f.c||0)),type:'pie',
-    marker:{colors:['#64a1d6','#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5']},
+    marker:{colors:['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899']},
     hole:0.4,textinfo:'label+percent',textfont:{size:10,color:'#e2e8f0'},
     hovertemplate:'%{label}<br>Contrib: %{value:.2f}%<br>%{percent}<extra></extra>'
   }],{...plotBg,margin:{l:20,r:20,t:10,b:10},showlegend:false},plotCfg);
@@ -1720,7 +1720,7 @@ function rRisk(){
 
   // Factor checkbox toggles for exposure history
   let allFacs=[...s.factors].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
-  let facColors=['#64a1d6','#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5','#c4956a','#7dc9b8','#9ba3b5'];
+  let facColors=['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899','#f97316','#22c55e','#a78bfa'];
   let facToggleHtml=allFacs.map((f,i)=>{
     let isPrimary=FAC_PRIMARY.has(f.n);
     let col=facColors[i%facColors.length];
@@ -1840,7 +1840,7 @@ function rRisk(){
     <div id="facBarToggles" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
       ${facMCR.map(f=>{
         let isProf=f.n==='Profitability';
-        return`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid ${isProf?'#5cb8a4':' var(--grid)'}${isProf?';background:rgba(92,184,164,0.08)':''}"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" checked onchange="rRiskFacBarsMode()"><span style="color:${isProf?'#5cb8a4':'var(--txth)'}">${f.n}${isProf?' ✦':''}</span></label>`;
+        return`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid ${isProf?'#fb923c':' var(--grid)'}${isProf?';background:rgba(251,146,60,0.08)':''}"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" checked onchange="rRiskFacBarsMode()"><span style="color:${isProf?'#fb923c':'var(--txth)'}">${f.n}${isProf?' ✦':''}</span></label>`;
       }).join('')}
     </div>
     <div id="profAlert" style="display:none;margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,.1);border-left:3px solid var(--warn);border-radius:0 4px 4px 0;font-size:11px;color:var(--warn)">
@@ -1945,7 +1945,7 @@ function rTEStackedArea(s,factorRisk,idioRisk){
       line:{color:'#e2e8f0',width:2.5},fill:'none',
       hovertemplate:'%{x|%b %d %Y} — TE: %{y:.2f}%<extra></extra>'}
   ],{...plotBg,
-    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#12151e',bordercolor:'#64a1d6',borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
+    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',bordercolor:'#6366f1',borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
     yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},
     legend:{orientation:'h',y:1.12,font:{size:11}},
     hovermode:'x unified'
@@ -1960,7 +1960,7 @@ function rMultiBeta(s){
   // Main line: realized beta time series (solid, thick)
   let traces=[
     {x:dates,y:betaVals,name:'Beta',type:'scatter',mode:'lines',
-      line:{color:'#64a1d6',width:2.5},
+      line:{color:'#6366f1',width:2.5},
       hovertemplate:'%{x|%b %Y}<br>Beta: %{y:.3f}<extra></extra>'}
   ];
   // Reference lines from betas object (thin, dotted/dashed)
@@ -1969,25 +1969,25 @@ function rMultiBeta(s){
   if(betas.predicted!=null){
     traces.push({x:[d0,dN],y:[betas.predicted,betas.predicted],
       name:'Predicted ('+f2(betas.predicted,3)+')',type:'scatter',mode:'lines',
-      line:{color:'#5cb8a4',width:1.5,dash:'dot'},
+      line:{color:'#10b981',width:1.5,dash:'dot'},
       hovertemplate:'Predicted: '+f2(betas.predicted,3)+'<extra></extra>'});
   }
   if(betas.historical!=null){
     traces.push({x:[d0,dN],y:[betas.historical,betas.historical],
       name:'Hist Ref ('+f2(betas.historical,3)+')',type:'scatter',mode:'lines',
-      line:{color:'#8b93a6',width:1.5,dash:'dot'},
+      line:{color:'#94a3b8',width:1.5,dash:'dot'},
       hovertemplate:'Hist Ref: '+f2(betas.historical,3)+'<extra></extra>'});
   }
   if(betas.mpt!=null){
     traces.push({x:[d0,dN],y:[betas.mpt,betas.mpt],
       name:'MPT ('+f2(betas.mpt,3)+')',type:'scatter',mode:'lines',
-      line:{color:'#9ba3b5',width:1.5,dash:'dashdot'},
+      line:{color:'#8b5cf6',width:1.5,dash:'dashdot'},
       hovertemplate:'MPT: '+f2(betas.mpt,3)+'<extra></extra>'});
   }
   let betaAnnotations=[];
-  if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:'#5cb8a4'},xanchor:'left',xshift:6});
-  if(betas.historical!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.historical,yref:'y',text:'Hist Avg',showarrow:false,font:{size:9,color:'#8b93a6'},xanchor:'left',xshift:6});
-  if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:'#9ba3b5'},xanchor:'left',xshift:6});
+  if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:'#10b981'},xanchor:'left',xshift:6});
+  if(betas.historical!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.historical,yref:'y',text:'Hist Avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:6});
+  if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:'#8b5cf6'},xanchor:'left',xshift:6});
   Plotly.newPlot('riskBetaMultiDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:'Beta'},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:6},
@@ -2017,8 +2017,8 @@ function rRiskFacBarsMode(){
   let layout={...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},margin:{l:140,r:80,t:10,b:40}};
 
   // Profitability bar color helper
-  let facBarColor=f=>f.n==='Profitability'?((f.e??0)>=0?'#5cb8a4':'#c4956a'):(f.e??0)>=0?'#64a1d6':'#c4956a';
-  let facShadowColor=f=>f.n==='Profitability'?'rgba(92,184,164,0.15)':(f.e??0)>=0?'rgba(100,161,214,0.15)':'rgba(245,158,11,0.15)';
+  let facBarColor=f=>f.n==='Profitability'?((f.e??0)>=0?'#fb923c':'#fb923c'):(f.e??0)>=0?'#6366f1':'#a78bfa';
+  let facShadowColor=f=>f.n==='Profitability'?'rgba(251,146,60,0.15)':(f.e??0)>=0?'rgba(99,102,241,0.15)':'rgba(167,139,250,0.15)';
 
   if(mode==='te'){
     let hasDev=facMCR.some(f=>f.devPct!=null&&f.devPct>0);
@@ -2033,7 +2033,7 @@ function rRiskFacBarsMode(){
     traces.push({
       y:facMCR.map(f=>f.n),x:facMCR.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib',
       marker:{color:facMCR.map(facBarColor)},
-      text:facMCR.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:10,color:'#8b93a6'},
+      text:facMCR.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
       hovertemplate:'%{y}<br>TE Contribution: %{x:.1f}% of total TE<br>%{customdata}<extra></extra>',
       customdata:facMCR.map(f=>f.n==='Profitability'?'Intentional — higher is desired':'')
     });
@@ -2044,21 +2044,21 @@ function rRiskFacBarsMode(){
     traces=[{
       y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.e||0),type:'bar',orientation:'h',name:'Active Exposure',
       marker:{color:styleFacs.map(facBarColor)},
-      text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:10,color:'#8b93a6'},
+      text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
       hovertemplate:'%{y}<br>Active Exposure: %{x:.2f}<extra></extra>'
     }];
-    layout.xaxis={...plotBg.xaxis,title:'Active Factor Exposure',zeroline:true,zerolinecolor:'#8b93a6',zerolinewidth:1.5};
+    layout.xaxis={...plotBg.xaxis,title:'Active Factor Exposure',zeroline:true,zerolinecolor:'#94a3b8',zerolinewidth:1.5};
   } else {
     // Both — dual x-axis: bottom = Active Exposure, top = % of TE
     let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
     traces=[
       {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.e||0),type:'bar',orientation:'h',name:'Active Exposure',xaxis:'x',
-        marker:{color:'rgba(100,161,214,0.75)'},
-        text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:9,color:'#8b93a6'},
+        marker:{color:'rgba(99,102,241,0.75)'},
+        text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:9,color:'#94a3b8'},
         hovertemplate:'%{y}<br>Exposure: %{x:.2f}<extra></extra>'},
       {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib %',xaxis:'x2',
         marker:{color:'rgba(245,158,11,0.75)'},
-        text:styleFacs.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:9,color:'#8b93a6'},
+        text:styleFacs.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:9,color:'#94a3b8'},
         hovertemplate:'%{y}<br>TE Contrib: %{x:.1f}% of TE<extra></extra>'}
     ];
     layout.xaxis={...plotBg.xaxis,title:'Active Exposure',anchor:'y'};
@@ -2121,7 +2121,7 @@ function setFacBarAll(v){
 function updateFacExpChart(){
   let s=cs;
   let allFacs=window._riskAllFacs||[];
-  let facColors=window._riskFacColors||['#64a1d6','#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5'];
+  let facColors=window._riskFacColors||['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899'];
   let facHist=s.hist.fac||{};
   let traces=[];
   let colorIdx=0;
@@ -2183,7 +2183,7 @@ function updateFacExpChart(){
     return;
   }
   Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
-    yaxis:{...plotBg.yaxis,title:'Active Exposure / Weight',zeroline:true,zerolinecolor:'#8b93a6',zerolinewidth:2},
+    yaxis:{...plotBg.yaxis,title:'Active Exposure / Weight',zeroline:true,zerolinecolor:'#94a3b8',zerolinewidth:2},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},
     legend:{orientation:'h',y:1.12,font:{size:10}},
     hovermode:'x unified'
@@ -2280,25 +2280,25 @@ function oDrFRisk(name,range){
       let numExp=expVals.filter(v=>v!=null);
       let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
       let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
-      let rfShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:isoDate(last.d),line:{color:'#8b93a6',dash:'dot'}}];
-      let rfAnno=[{x:isoDate(last.d),y:last.e||last.a,text:'Current: '+(last.e||last.a).toFixed(3),showarrow:true,arrowcolor:'#64a1d6',font:{size:10,color:'#e2e8f0'},bgcolor:'#1a1e2b',bordercolor:'#64a1d6',borderwidth:1,borderpad:4}];
+      let rfShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:isoDate(last.d),line:{color:'#94a3b8',dash:'dot'}}];
+      let rfAnno=[{x:isoDate(last.d),y:last.e||last.a,text:'Current: '+(last.e||last.a).toFixed(3),showarrow:true,arrowcolor:'#6366f1',font:{size:10,color:'#e2e8f0'},bgcolor:'#1e293b',bordercolor:'#6366f1',borderwidth:1,borderpad:4}];
       let rfTraces=[];
       if(expAvg!=null&&expSd>0){
         rfTraces.push(
           {x:expDates,y:expDates.map(()=>expAvg+expSd),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
           {x:expDates,y:expDates.map(()=>expAvg-expSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip'}
         );
-        rfShapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:'#8b93a6',dash:'dash',width:1}});
-        rfAnno.push({x:1,xref:'paper',y:expAvg,text:'avg',showarrow:false,font:{size:9,color:'#8b93a6'},xanchor:'left',xshift:4});
+        rfShapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
+        rfAnno.push({x:1,xref:'paper',y:expAvg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
       }
-      rfTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#64a1d6',width:2.5},fill:'tozeroy',fillcolor:'rgba(100,161,214,.08)'});
-      let xRf={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#12151e',thickness:0.08}};
-      Plotly.newPlot('riskFacHistDiv',rfTraces,{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#8b93a6',zerolinewidth:2},xaxis:xRf,shapes:rfShapes,annotations:rfAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
+      rfTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#6366f1',width:2.5},fill:'tozeroy',fillcolor:'rgba(99,102,241,.08)'});
+      let xRf={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
+      Plotly.newPlot('riskFacHistDiv',rfTraces,{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:'#94a3b8',zerolinewidth:2},xaxis:xRf,shapes:rfShapes,annotations:rfAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
 
       if(document.getElementById('riskFacRetDiv')){
         Plotly.newPlot('riskFacRetDiv',[
-          {x:expDates,y:histSlice.map(h=>h.ret??null),name:'Factor Return',line:{color:'#c4956a',width:2},mode:'lines'},
-          {x:expDates,y:histSlice.map(h=>h.imp??null),name:'Factor Impact',line:{color:'#5cb8a4',width:2,dash:'dot'},mode:'lines'}
+          {x:expDates,y:histSlice.map(h=>h.ret??null),name:'Factor Return',line:{color:'#a78bfa',width:2},mode:'lines'},
+          {x:expDates,y:histSlice.map(h=>h.imp??null),name:'Factor Impact',line:{color:'#10b981',width:2,dash:'dot'},mode:'lines'}
         ],{...plotBg,xaxis:{...plotBg.xaxis},yaxis:{...plotBg.yaxis,title:''},legend:{orientation:'h',y:1.15,font:{size:10}},margin:{...plotBg.margin,r:20}},modalPlotCfg);
       }
     },50);
@@ -2356,7 +2356,7 @@ function renderHoldTab(){
       </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
       <div style="display:inline-flex;gap:4px;margin-bottom:8px">
-        ${[['risk','By Risk'],['weight','By Weight'],['rank','By Rank'],['name','By Name']].map(([m,lbl])=>`<button onclick="setHoldSort('${m}')" style="padding:4px 12px;border-radius:16px;background:${_holdSortMode===m?'#64a1d6':'#1a1e2b'};color:${_holdSortMode===m?'white':'#8b93a6'};font-size:11px;border:none;cursor:pointer;font-family:inherit">${lbl}</button>`).join('')}
+        ${[['risk','By Risk'],['weight','By Weight'],['rank','By Rank'],['name','By Name']].map(([m,lbl])=>`<button onclick="setHoldSort('${m}')" style="padding:4px 12px;border-radius:16px;background:${_holdSortMode===m?'#6366f1':'#1e293b'};color:${_holdSortMode===m?'white':'#94a3b8'};font-size:11px;border:none;cursor:pointer;font-family:inherit">${lbl}</button>`).join('')}
       </div>
       <div style="overflow-x:auto">
         <table>
@@ -2416,8 +2416,8 @@ function renderHoldRows(){
         <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
       </div></td>`;
     let isBmOnly=(!h.p||h.p===0)&&(h.b>0);
-    let bmBadge=isBmOnly?`<span style="background:#2a2f3d;color:#8b93a6;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
-    let newBadge=h.isNew?`<span style="background:#c4956a;color:#12151e;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
+    let bmBadge=isBmOnly?`<span style="background:#334155;color:#94a3b8;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
+    let newBadge=h.isNew?`<span style="background:#a78bfa;color:#0f172a;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
     return`<tr style="cursor:pointer${isBmOnly?';background:rgba(100,116,139,0.1)':''}" onclick="oSt('${h.t}')">
       <td style="color:var(--txth);font-weight:600">${h.t}${bmBadge}${newBadge}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
@@ -2469,7 +2469,7 @@ function rRankDist(){
   Plotly.newPlot('rankDistDiv',[{
     x:ranks.map(r=>r.l),y:ranks.map(r=>r.p),type:'bar',
     marker:{color:ranks.map(r=>rc(r.r).replace('var(','').replace(')',''))},
-    text:ranks.map(r=>f2(r.p)+'%'),textposition:'outside',textfont:{size:10,color:'#8b93a6'}
+    text:ranks.map(r=>f2(r.p)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
   }],{...plotBg,yaxis:{...plotBg.yaxis,title:'Portfolio Weight %'}},plotCfg);
 }
 
@@ -2477,7 +2477,7 @@ function rHoldConc(){
   let top10=[...cs.hold].filter(h=>!isCash(h)).sort((a,b)=>b.p-a.p).slice(0,10);
   Plotly.newPlot('holdConcDiv',[{
     y:top10.map(h=>h.t),x:top10.map(h=>h.p),type:'bar',orientation:'h',
-    marker:{color:'#64a1d6'},text:top10.map(h=>f2(h.p)+'%'),textposition:'outside',textfont:{size:10,color:'#8b93a6'}
+    marker:{color:'#6366f1'},text:top10.map(h=>f2(h.p)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Weight %'}},plotCfg);
 }
 
@@ -2544,7 +2544,7 @@ function oDr(type,name,range){
   let others=type==='sec'?cs.sectors:cs.regions;
   let miniCompare=others.sort((a,b)=>Math.abs(b.a)-Math.abs(a.a)).map(o=>{
     let isCurrent=o.n===name;
-    return`<div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:10px;${isCurrent?'background:rgba(100,161,214,.1);border-radius:4px;font-weight:600':''}">
+    return`<div style="display:flex;justify-content:space-between;padding:3px 6px;font-size:10px;${isCurrent?'background:rgba(99,102,241,.1);border-radius:4px;font-weight:600':''}">
       <span style="${isCurrent?'color:var(--txth)':''}">${o.n}</span><span class="${activeStyle(o.a)}">${fp(o.a)}</span></div>`;
   }).join('');
 
@@ -2587,21 +2587,21 @@ function oDr(type,name,range){
       if(actAvg!=null&&actSd>0){
         traces.push(
           {x:dx,y:dx.map(()=>actAvg+actSd),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip',yaxis:'y2'},
-          {x:dx,y:dx.map(()=>actAvg-actSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(92,184,164,0.08)',showlegend:false,hoverinfo:'skip',yaxis:'y2'}
+          {x:dx,y:dx.map(()=>actAvg-actSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(16,185,129,0.08)',showlegend:false,hoverinfo:'skip',yaxis:'y2'}
         );
-        shapes.push({type:'line',y0:actAvg,y1:actAvg,xref:'paper',x0:0,x1:1,yref:'y2',line:{color:'#5cb8a4',dash:'dash',width:1}});
-        annos.push({x:1,xref:'paper',y:actAvg,yref:'y2',text:'avg',showarrow:false,font:{size:9,color:'#5cb8a4'},xanchor:'left',xshift:4});
+        shapes.push({type:'line',y0:actAvg,y1:actAvg,xref:'paper',x0:0,x1:1,yref:'y2',line:{color:'#10b981',dash:'dash',width:1}});
+        annos.push({x:1,xref:'paper',y:actAvg,yref:'y2',text:'avg',showarrow:false,font:{size:9,color:'#10b981'},xanchor:'left',xshift:4});
       }
       traces.push(
-        {x:dx,y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#64a1d6',width:2}},
-        {x:dx,y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#8b93a6',width:2,dash:'dot'}},
-        {x:dx,y:actVals,name:'Active',line:{color:'#5cb8a4',width:2},yaxis:'y2'}
+        {x:dx,y:hist.map(h=>h.p),name:'Portfolio',line:{color:'#6366f1',width:2}},
+        {x:dx,y:hist.map(h=>h.b),name:'Benchmark',line:{color:'#94a3b8',width:2,dash:'dot'}},
+        {x:dx,y:actVals,name:'Active',line:{color:'#10b981',width:2},yaxis:'y2'}
       );
-      let xDr={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#12151e',thickness:0.08}};
-      Plotly.newPlot('drillHistDiv',traces,{...plotBg,xaxis:xDr,yaxis:{...plotBg.yaxis,title:'Weight %'},yaxis2:{overlaying:'y',side:'right',title:'Active %',gridcolor:'transparent',titlefont:{color:'#5cb8a4'},tickfont:{color:'#5cb8a4'}},shapes,annotations:annos,legend:{orientation:'h',y:1.12,font:{size:10}}},modalPlotCfg);
+      let xDr={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
+      Plotly.newPlot('drillHistDiv',traces,{...plotBg,xaxis:xDr,yaxis:{...plotBg.yaxis,title:'Weight %'},yaxis2:{overlaying:'y',side:'right',title:'Active %',gridcolor:'transparent',titlefont:{color:'#10b981'},tickfont:{color:'#10b981'}},shapes,annotations:annos,legend:{orientation:'h',y:1.12,font:{size:10}}},modalPlotCfg);
     } else {
       // Generate placeholder chart even without history
-      Plotly.newPlot('drillHistDiv',[{x:[],y:[],type:'scatter'}],{...plotBg,annotations:[{text:'Historical data not available',showarrow:false,font:{size:14,color:'#8b93a6'}}]},modalPlotCfg);
+      Plotly.newPlot('drillHistDiv',[{x:[],y:[],type:'scatter'}],{...plotBg,annotations:[{text:'Historical data not available',showarrow:false,font:{size:14,color:'#94a3b8'}}]},modalPlotCfg);
     }
   },50);
 }
@@ -2667,7 +2667,7 @@ function oDrF(name,range){
       let numExp=expVals.filter(v=>v!=null);
       let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
       let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
-      let expShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:expDates[expDates.length-1],line:{color:'#8b93a6',dash:'dot'}}];
+      let expShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:expDates[expDates.length-1],line:{color:'#94a3b8',dash:'dot'}}];
       let expAnno=[];
       let expTraces=[];
       if(expAvg!=null&&expSd>0){
@@ -2675,11 +2675,11 @@ function oDrF(name,range){
           {x:expDates,y:expDates.map(()=>expAvg+expSd),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
           {x:expDates,y:expDates.map(()=>expAvg-expSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip'}
         );
-        expShapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:'#8b93a6',dash:'dash',width:1}});
-        expAnno.push({x:1,xref:'paper',y:expAvg,text:'avg',showarrow:false,font:{size:9,color:'#8b93a6'},xanchor:'left',xshift:4});
+        expShapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
+        expAnno.push({x:1,xref:'paper',y:expAvg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
       }
-      expTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#64a1d6',width:2},fill:'tozeroy',fillcolor:'rgba(100,161,214,.1)'});
-      let xFac={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#12151e',thickness:0.08}};
+      expTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#6366f1',width:2},fill:'tozeroy',fillcolor:'rgba(99,102,241,.1)'});
+      let xFac={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
       Plotly.newPlot('facDrillHistDiv',expTraces,{...plotBg,xaxis:xFac,yaxis:{...plotBg.yaxis,title:'Exposure'},shapes:expShapes,annotations:expAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
 
       // Second chart: Factor Return & Impact (if data present)
@@ -2687,8 +2687,8 @@ function oDrF(name,range){
         let retVals=histSlice.map(h=>h.ret??null);
         let impVals=histSlice.map(h=>h.imp??null);
         Plotly.newPlot('facDrillRetDiv',[
-          {x:expDates,y:retVals,name:'Factor Return',line:{color:'#c4956a',width:2},mode:'lines'},
-          {x:expDates,y:impVals,name:'Factor Impact',line:{color:'#5cb8a4',width:2,dash:'dot'},mode:'lines'}
+          {x:expDates,y:retVals,name:'Factor Return',line:{color:'#a78bfa',width:2},mode:'lines'},
+          {x:expDates,y:impVals,name:'Factor Impact',line:{color:'#10b981',width:2,dash:'dot'},mode:'lines'}
         ],{...plotBg,xaxis:{...plotBg.xaxis},yaxis:{...plotBg.yaxis,title:''},legend:{orientation:'h',y:1.15,font:{size:10}},margin:{...plotBg.margin,r:20}},modalPlotCfg);
       }
     },50);
@@ -2715,15 +2715,15 @@ function oDrS(range){
 
   setTimeout(()=>{
     Plotly.newPlot('sumDrillDiv',[
-      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.te),name:'TE %',line:{color:'#d67272',width:2}},
-      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.as),name:'Active Share %',line:{color:'#64a1d6',width:2},yaxis:'y2'},
-      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.beta),name:'Beta',line:{color:'#5cb8a4',width:2,dash:'dot'},yaxis:'y3'}
+      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.te),name:'TE %',line:{color:'#ef4444',width:2}},
+      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.as),name:'Active Share %',line:{color:'#6366f1',width:2},yaxis:'y2'},
+      {x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.beta),name:'Beta',line:{color:'#10b981',width:2,dash:'dot'},yaxis:'y3'}
     ],{...plotBg,
-      yaxis:{...plotBg.yaxis,title:'TE %',titlefont:{color:'#d67272'},tickfont:{color:'#d67272'}},
-      yaxis2:{overlaying:'y',side:'right',title:'Active Share %',titlefont:{color:'#64a1d6'},tickfont:{color:'#64a1d6'},gridcolor:'transparent'},
-      yaxis3:{overlaying:'y',side:'right',position:0.95,title:'Beta',titlefont:{color:'#5cb8a4'},tickfont:{color:'#5cb8a4'},gridcolor:'transparent',showgrid:false},
+      yaxis:{...plotBg.yaxis,title:'TE %',titlefont:{color:'#ef4444'},tickfont:{color:'#ef4444'}},
+      yaxis2:{overlaying:'y',side:'right',title:'Active Share %',titlefont:{color:'#6366f1'},tickfont:{color:'#6366f1'},gridcolor:'transparent'},
+      yaxis3:{overlaying:'y',side:'right',position:0.95,title:'Beta',titlefont:{color:'#10b981'},tickfont:{color:'#10b981'},gridcolor:'transparent',showgrid:false},
       legend:{orientation:'h',y:1.1,font:{size:10}},
-      shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#5cb8a4',dash:'dash',width:1}},{type:'line',y0:10,y1:10,xref:'paper',x0:0,x1:1,line:{color:'#d67272',dash:'dash',width:1}}]
+      shapes:[{type:'line',y0:5,y1:5,xref:'paper',x0:0,x1:1,line:{color:'#10b981',dash:'dash',width:1}},{type:'line',y0:10,y1:10,xref:'paper',x0:0,x1:1,line:{color:'#ef4444',dash:'dash',width:1}}]
     },plotCfg);
   },50);
 }
@@ -2734,7 +2734,7 @@ function oSt(ticker){
   let m=$('stockModal');
 
   // Rank color (quintile 1=best=green)
-  let rankCol=h.r!=null?rc(h.r):'#2a2f3d';
+  let rankCol=h.r!=null?rc(h.r):'#334155';
 
   // 4 score chips: OVER, REV, VAL, QUAL (skip MOM/STAB)
   let scoreDefs=[{k:'over',l:'Overall'},{k:'rev',l:'Revision'},{k:'val',l:'Value'},{k:'qual',l:'Quality'}];
@@ -2812,8 +2812,8 @@ function oSt(ticker){
         type:'scatterpolar',r:rVals,theta:rTheta,
         fill:'toself',fillcolor:rFill,line:{color:rankCol,width:2},marker:{size:5,color:rankCol}
       }],{...plotBg,polar:{bgcolor:'transparent',
-        radialaxis:{range:[5,1],gridcolor:'#2a2f3d',tickfont:{size:9,color:'#8b93a6'},tickvals:[1,2,3,4,5],ticktext:['Q1','Q2','Q3','Q4','Q5']},
-        angularaxis:{gridcolor:'#2a2f3d',tickfont:{size:11,color:'#8b93a6'}}
+        radialaxis:{range:[5,1],gridcolor:'#334155',tickfont:{size:9,color:'#94a3b8'},tickvals:[1,2,3,4,5],ticktext:['Q1','Q2','Q3','Q4','Q5']},
+        angularaxis:{gridcolor:'#334155',tickfont:{size:11,color:'#94a3b8'}}
       },margin:{l:40,r:40,t:20,b:20},showlegend:false},plotCfg);
     } else {
       document.getElementById('stockRadarDiv').innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:11px;color:var(--txt)">No score data</div>';
@@ -2826,7 +2826,7 @@ function oSt(ticker){
 
 // ===== COMPARISON MODAL =====
 let _compSel=null;
-const _cmpColors=['#64a1d6','#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5'];
+const _cmpColors=['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899'];
 function openComp(selOverride){
   let m=$('compModal');
   let allKeys=Object.keys(A);
@@ -2860,7 +2860,7 @@ function openComp(selOverride){
   function secHeatColor(v){
     if(v==null)return'rgba(51,65,85,.1)';
     let abs=Math.min(Math.abs(v)/6,1);
-    return v>0?`rgba(92,184,164,${abs*0.7+0.05})`:`rgba(239,68,68,${abs*0.7+0.05})`;
+    return v>0?`rgba(16,185,129,${abs*0.7+0.05})`:`rgba(239,68,68,${abs*0.7+0.05})`;
   }
   let secHeatRows=SECS.map(sec=>{
     let cells=keys.map(k=>{
@@ -2895,7 +2895,7 @@ function openComp(selOverride){
 
   let checkboxes=allKeys.map(k=>{
     let sel=_compSel.has(k);
-    return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border-radius:6px;background:${sel?'rgba(100,161,214,.18)':'rgba(51,65,85,.3)'};font-size:11px;font-weight:600;color:${sel?'var(--txth)':'var(--txt)'}">
+    return`<label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:3px 8px;border-radius:6px;background:${sel?'rgba(99,102,241,.18)':'rgba(51,65,85,.3)'};font-size:11px;font-weight:600;color:${sel?'var(--txth)':'var(--txt)'}">
       <input type="checkbox" ${sel?'checked':''} onchange="(function(k,el){let s=new Set(_compSel);if(el.checked)s.add(k);else if(s.size>2)s.delete(k);else{el.checked=true;return};openComp(s)})('${k}',this)">${k}</label>`;
   }).join('');
 
@@ -2903,7 +2903,7 @@ function openComp(selOverride){
     <h2>Cross-Strategy Comparison<button class="close" onclick="$('compModal').classList.remove('show')">&times;</button></h2>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center">
       <span style="font-size:11px;color:var(--txt);margin-right:2px">Show:</span>${checkboxes}
-      <button style="padding:3px 8px;background:rgba(100,161,214,.12);border:1px solid var(--pri);color:var(--pri);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit" onclick="openComp(new Set(Object.keys(A)))">Select All</button>
+      <button style="padding:3px 8px;background:rgba(99,102,241,.12);border:1px solid var(--pri);color:var(--pri);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit" onclick="openComp(new Set(Object.keys(A)))">Select All</button>
       <button style="padding:3px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit" onclick="(function(){let k=Object.keys(A);openComp(new Set(k.slice(0,2)))})()">Clear</button>
     </div>
 
@@ -2955,7 +2955,7 @@ function openComp(selOverride){
         fill:'toself',fillcolor:_cmpColors[i%_cmpColors.length]+'1a',line:{color:_cmpColors[i%_cmpColors.length],width:2},
         hovertemplate:'%{theta}: %{r:.2f}<extra>'+k+'</extra>'};
     });
-    Plotly.newPlot('compRadarDiv',radarTraces,{...plotBg,polar:{bgcolor:'transparent',radialaxis:{range:[0,1],gridcolor:'#2a2f3d',tickfont:{size:9},tickvals:[0,.25,.5,.75,1]},angularaxis:{gridcolor:'#2a2f3d',tickfont:{size:10,color:'#8b93a6'}}},legend:{orientation:'h',y:-0.15,font:{size:10}},margin:{l:40,r:40,t:20,b:60}},plotCfg);
+    Plotly.newPlot('compRadarDiv',radarTraces,{...plotBg,polar:{bgcolor:'transparent',radialaxis:{range:[0,1],gridcolor:'#334155',tickfont:{size:9},tickvals:[0,.25,.5,.75,1]},angularaxis:{gridcolor:'#334155',tickfont:{size:10,color:'#94a3b8'}}},legend:{orientation:'h',y:-0.15,font:{size:10}},margin:{l:40,r:40,t:20,b:60}},plotCfg);
 
     // Factor exposure — all selected strategies
     let facNames=FACS;
@@ -3429,8 +3429,8 @@ function oDrMetric(metric,range){
   let labels={te:'Tracking Error',as:'Active Share',beta:'Beta',h:'Holdings Count',sr:'Selection Rate',cash:'Cash %'};
   let units={te:'%',as:'%',beta:'',h:'',sr:'%',cash:'%'};
   let thresholds={
-    te:[{v:5,c:'#5cb8a4',l:'5% floor',dir:'floor'},{v:10,c:'#d67272',l:'10% ceiling',dir:'ceil'}],
-    beta:[{v:0.9,c:'#c4956a',l:'0.9',dir:'floor'},{v:1.1,c:'#c4956a',l:'1.1',dir:'ceil'}]
+    te:[{v:5,c:'#10b981',l:'5% floor',dir:'floor'},{v:10,c:'#ef4444',l:'10% ceiling',dir:'ceil'}],
+    beta:[{v:0.9,c:'#a78bfa',l:'0.9',dir:'floor'},{v:1.1,c:'#a78bfa',l:'1.1',dir:'ceil'}]
   };
   // Per-metric y-axis range
   let yRanges={te:[2,11],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
@@ -3477,7 +3477,7 @@ function oDrMetric(metric,range){
     // Store for chart overlay use
     window._betaVariants=betas;
     window._betaSelected=window._betaSelected||new Set();
-    let betaColors=['#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5','#c4956a','#7dc9b8'];
+    let betaColors=['#10b981','#a78bfa','#ef4444','#8b5cf6','#6366f1','#ec4899','#f97316','#22c55e'];
     let betaEntries=Object.entries(betas);
     let betaRows=betaEntries.map(([k,v],i)=>{
       if(v==null)return'';
@@ -3485,7 +3485,7 @@ function oDrMetric(metric,range){
       let cls=dev>0.15?'neg':dev>0.08?'warn-t':'pos';
       let sel=window._betaSelected.has(k);
       let col=betaColors[i%betaColors.length];
-      return`<tr class="clickable" style="${sel?'background:rgba(100,161,214,.1)':''}" onclick="toggleBetaOverlay('${k.replace(/'/g,"\\'")}',this)">
+      return`<tr class="clickable" style="${sel?'background:rgba(99,102,241,.1)':''}" onclick="toggleBetaOverlay('${k.replace(/'/g,"\\'")}',this)">
         <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:6px;vertical-align:middle;${sel?'box-shadow:0 0 4px '+col:'opacity:.4'}"></span><span style="color:var(--txth)">${k}</span></td>
         <td class="r ${cls}" style="font-weight:600">${f2(v,3)}</td>
         <td class="r" style="font-size:10px;color:var(--txt)">${v>1?'+':''}${f2((v-1)*100,1)}%</td>
@@ -3622,16 +3622,16 @@ function oDrMetric(metric,range){
       shapes.push({type:'line',y0:t.v,y1:t.v,xref:'paper',x0:0,x1:1,line:{color:t.c,dash:'dash',width:1}});
     });
     if(metric==='te'){
-      shapes.push({type:'rect',y0:5,y1:10,xref:'paper',x0:0,x1:1,fillcolor:'rgba(92,184,164,.06)',line:{width:0}});
+      shapes.push({type:'rect',y0:5,y1:10,xref:'paper',x0:0,x1:1,fillcolor:'rgba(16,185,129,.06)',line:{width:0}});
     }
-    let annotations=breaches.slice(-5).map(b=>({x:b.date,y:b.val,text:'!',showarrow:true,arrowhead:2,arrowcolor:'#d67272',font:{size:10,color:'#d67272'}}));
+    let annotations=breaches.slice(-5).map(b=>({x:b.date,y:b.val,text:'!',showarrow:true,arrowhead:2,arrowcolor:'#ef4444',font:{size:10,color:'#ef4444'}}));
     let yRange=yRanges[metric]||undefined;
     let yaxis={...plotBg.yaxis,title:labels[metric]+(units[metric]?' ('+units[metric]+')':'')};
     if(yRange)yaxis.range=yRange;
     if(metric==='h'){yaxis.rangemode='tozero';yaxis.dtick=Math.max(1,Math.ceil((max-min)/6))}
     let maxTicks=Math.min(8,Math.ceil(dates.length/12));
-    let xaxis={...plotBg.xaxis,tickangle:0,nticks:maxTicks,tickformat:'%b %Y',tickfont:{size:10,color:'#8b93a6'}};
-    let fillColor=metric==='beta'?'rgba(100,161,214,.04)':'rgba(100,161,214,.08)';
+    let xaxis={...plotBg.xaxis,tickangle:0,nticks:maxTicks,tickformat:'%b %Y',tickfont:{size:10,color:'#94a3b8'}};
+    let fillColor=metric==='beta'?'rgba(99,102,241,.04)':'rgba(99,102,241,.08)';
     let fill=metric==='beta'?'none':'tozeroy';
     // Build traces: [upper_band, lower_band(fill), main_line]
     let allTraces=[];
@@ -3640,13 +3640,13 @@ function oDrMetric(metric,range){
         {x:dates,y:dates.map(()=>avg+stddev),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
         {x:dates,y:dates.map(()=>avg-stddev),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip',name:'±1σ'}
       );
-      shapes.push({type:'line',y0:avg,y1:avg,xref:'paper',x0:0,x1:1,line:{color:'#8b93a6',dash:'dash',width:1}});
-      annotations.push({x:1,xref:'paper',y:avg,text:'avg',showarrow:false,font:{size:9,color:'#8b93a6'},xanchor:'left',xshift:4});
+      shapes.push({type:'line',y0:avg,y1:avg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
+      annotations.push({x:1,xref:'paper',y:avg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
     }
-    allTraces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],line:{color:'#64a1d6',width:2},fill,fillcolor:fillColor});
+    allTraces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],line:{color:'#6366f1',width:2},fill,fillcolor:fillColor});
     // Beta overlays
     if(metric==='beta'&&window._betaVariants&&window._betaSelected){
-      let betaColors=['#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5','#c4956a','#7dc9b8'];
+      let betaColors=['#10b981','#a78bfa','#ef4444','#8b5cf6','#6366f1','#ec4899','#f97316','#22c55e'];
       let entries=Object.entries(window._betaVariants);
       entries.forEach(([k,v],i)=>{
         if(window._betaSelected.has(k)&&v!=null){
@@ -3655,7 +3655,7 @@ function oDrMetric(metric,range){
         }
       });
     }
-    let xaxisFinal={...xaxis,rangeslider:{visible:true,bgcolor:'#12151e',thickness:0.08}};
+    let xaxisFinal={...xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
     Plotly.newPlot('metricChartDiv',allTraces,{...plotBg,xaxis:xaxisFinal,yaxis,shapes,annotations,margin:{...plotBg.margin,r:metric==='beta'?80:20}},modalPlotCfg);
   },50);
 }
@@ -3803,13 +3803,13 @@ function oDrRiskBudget(){
   setTimeout(()=>{
     Plotly.newPlot('rbPieDiv',[{
       labels:details.map(d=>d.n),values:details.map(d=>d.pct),type:'pie',hole:0.45,
-      marker:{colors:['#64a1d6','#5cb8a4','#c4956a','#d67272','#9ba3b5','#64a1d6','#9ba3b5']},
+      marker:{colors:['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899']},
       textinfo:'label+percent',textfont:{size:10,color:'#e2e8f0'}
     }],{...plotBg,margin:{l:10,r:10,t:10,b:10},showlegend:false},plotCfg);
 
     Plotly.newPlot('rbBarDiv',[
-      {x:details.map(d=>d.n),y:details.map(d=>d.pct),type:'bar',name:'% of Total Risk',marker:{color:details.map(d=>d.intentional?'#64a1d6':'#d67272')},
-      text:details.map(d=>f2(d.pct,1)+'%'),textposition:'outside',textfont:{size:10,color:'#8b93a6'}}
+      {x:details.map(d=>d.n),y:details.map(d=>d.pct),type:'bar',name:'% of Total Risk',marker:{color:details.map(d=>d.intentional?'#6366f1':'#ef4444')},
+      text:details.map(d=>f2(d.pct,1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}}
     ],{...plotBg,yaxis:{...plotBg.yaxis,title:'% of Total Risk'},xaxis:{...plotBg.xaxis}},plotCfg);
   },50);
 }
@@ -3895,10 +3895,10 @@ function generateEmailSnapshot(){
 
   // Delta formatter
   const dFmt=(v,unit='',negGood=false)=>{
-    if(v==null)return'<span style="color:#8b93a6;font-size:10px">no prior</span>';
+    if(v==null)return'<span style="color:#94a3b8;font-size:10px">no prior</span>';
     let good=negGood?v<0:v>0;
     let col=v>0?(negGood?'#059669':'#dc2626'):(negGood?'#dc2626':'#059669');
-    if(v===0)col='#8b93a6';
+    if(v===0)col='#94a3b8';
     let arrow=v>0?'↑':'↓';
     return`<span style="font-size:10px;color:${col}">${arrow}${Math.abs(v).toFixed(v===Math.round(v)?0:2)}${unit} vs prior</span>`;
   };
@@ -3906,11 +3906,11 @@ function generateEmailSnapshot(){
   // Section 2: Top 5 by %T
   let top5Risk=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>(b.tr||0)-(a.tr||0)).slice(0,5);
   let hold5Rows=top5Risk.map((h,i)=>`<tr style="background:${i%2?'#f9fafb':'#fff'}">
-    <td style="padding:5px 10px;font-size:11px;font-weight:700;color:#1a1e2b">${h.t}</td>
-    <td style="padding:5px 10px;font-size:11px;color:#2a2f3d;max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${h.n}</td>
+    <td style="padding:5px 10px;font-size:11px;font-weight:700;color:#1e293b">${h.t}</td>
+    <td style="padding:5px 10px;font-size:11px;color:#334155;max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${h.n}</td>
     <td style="padding:5px 10px;font-size:11px;text-align:right">${f2(h.p,1)}%</td>
     <td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">${fp(h.tr,2)}%</td>
-    <td style="padding:5px 10px;font-size:11px;text-align:center;font-weight:700;color:${h.r!=null?(h.r<=2?'#059669':h.r>=4?'#dc2626':'#d97706'):'#8b93a6'}">${h.r!=null?'Q'+h.r:'—'}</td>
+    <td style="padding:5px 10px;font-size:11px;text-align:center;font-weight:700;color:${h.r!=null?(h.r<=2?'#059669':h.r>=4?'#dc2626':'#d97706'):'#94a3b8'}">${h.r!=null?'Q'+h.r:'—'}</td>
   </tr>`).join('');
 
   // Section 3: Primary factors
@@ -3918,17 +3918,17 @@ function generateEmailSnapshot(){
   let facRows=sigFac.map(f=>{
     let isProf=f.n==='Profitability';
     return`<tr style="background:${isProf?'rgba(5,150,105,.04)':'transparent'}">
-      <td style="padding:5px 10px;font-size:11px;color:${isProf?'#059669':'#2a2f3d'};font-weight:${isProf?700:400}">${isProf?'✦ ':''}${f.n}</td>
+      <td style="padding:5px 10px;font-size:11px;color:${isProf?'#059669':'#334155'};font-weight:${isProf?700:400}">${isProf?'✦ ':''}${f.n}</td>
       <td style="padding:5px 10px;font-size:11px;text-align:right;font-weight:700;color:${(f.a??0)>=0?'#059669':'#dc2626'}">${fp(f.a,3)}</td>
-      <td style="padding:5px 10px;font-size:11px;text-align:right;color:#2a2f3d">${f2(f.c,2)}%</td>
+      <td style="padding:5px 10px;font-size:11px;text-align:right;color:#334155">${f2(f.c,2)}%</td>
     </tr>`;
   }).join('');
 
   // Section 4: Sector tilts
   let topOW=[...s.sectors].sort((a,b)=>b.a-a.a).slice(0,5);
   let topUW=[...s.sectors].sort((a,b)=>a.a-b.a).slice(0,5);
-  let owRows=topOW.map(x=>`<tr><td style="padding:4px 10px;font-size:11px;color:#2a2f3d">${x.n}</td><td style="padding:4px 10px;font-size:11px;text-align:right;font-weight:700;color:#059669">${fp(x.a)}%</td></tr>`).join('');
-  let uwRows=topUW.map(x=>`<tr><td style="padding:4px 10px;font-size:11px;color:#2a2f3d">${x.n}</td><td style="padding:4px 10px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">${fp(x.a)}%</td></tr>`).join('');
+  let owRows=topOW.map(x=>`<tr><td style="padding:4px 10px;font-size:11px;color:#334155">${x.n}</td><td style="padding:4px 10px;font-size:11px;text-align:right;font-weight:700;color:#059669">${fp(x.a)}%</td></tr>`).join('');
+  let uwRows=topUW.map(x=>`<tr><td style="padding:4px 10px;font-size:11px;color:#334155">${x.n}</td><td style="padding:4px 10px;font-size:11px;text-align:right;font-weight:700;color:#dc2626">${fp(x.a)}%</td></tr>`).join('');
 
   // Section 5: Changes this week
   let changes=[];
@@ -3953,32 +3953,32 @@ function generateEmailSnapshot(){
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:Arial,sans-serif;background:#f1f5f9;padding:20px}
     .container{max-width:740px;margin:0 auto;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.12)}
-    .hdr{background:linear-gradient(135deg,#080e1e 0%,#12151e 100%);color:#e2e8f0;padding:24px 28px}
-    .brand{font-size:10px;color:#2a2f3d;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+    .hdr{background:linear-gradient(135deg,#080e1e 0%,#0f172a 100%);color:#e2e8f0;padding:24px 28px}
+    .brand{font-size:10px;color:#334155;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
     .hdr h1{font-size:24px;font-weight:700;color:#fff;margin-bottom:3px;line-height:1.2}
-    .hdr .sub{color:#8b93a6;font-size:12px}
+    .hdr .sub{color:#94a3b8;font-size:12px}
     .metrics{display:flex;padding:0;border-bottom:2px solid #f1f5f9}
     .met{flex:1;text-align:center;padding:16px 6px;border-right:1px solid #f1f5f9}
     .met:last-child{border-right:none}
-    .met .lbl{font-size:9px;color:#8b93a6;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+    .met .lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
     .met .val{font-size:20px;font-weight:700;line-height:1}
-    .met .dlta{font-size:10px;color:#8b93a6;margin-top:3px}
-    .narr{padding:10px 28px;font-size:11px;color:#8b93a6;font-style:italic;background:#fafbfc;border-bottom:1px solid #f1f5f9}
+    .met .dlta{font-size:10px;color:#94a3b8;margin-top:3px}
+    .narr{padding:10px 28px;font-size:11px;color:#94a3b8;font-style:italic;background:#fafbfc;border-bottom:1px solid #f1f5f9}
     .sec{padding:16px 28px;border-bottom:1px solid #f1f5f9}
     .sec-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-    .sec-num{width:18px;height:18px;background:#1a1e2b;color:#fff;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-    .sec-ttl{font-size:11px;font-weight:700;color:#1a1e2b;text-transform:uppercase;letter-spacing:.5px}
+    .sec-num{width:18px;height:18px;background:#1e293b;color:#fff;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+    .sec-ttl{font-size:11px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:.5px}
     table{width:100%;border-collapse:collapse}
-    th{font-size:9px;color:#8b93a6;text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-bottom:2px solid #f1f5f9;text-align:left;font-weight:600}
+    th{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-bottom:2px solid #f1f5f9;text-align:left;font-weight:600}
     th.r{text-align:right}
     .tcols{display:flex;gap:16px}
     .tcols>div{flex:1}
     .tcols>div+div{padding-left:16px;border-left:1px solid #f1f5f9}
     .tcol-ttl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding:0 10px}
     .changes{list-style:none}
-    .changes li{font-size:11px;color:#2a2f3d;padding:4px 10px 4px 22px;border-bottom:1px solid #f8fafc;position:relative}
-    .changes li::before{content:'›';position:absolute;left:10px;color:#64a1d6;font-weight:700}
-    .footer{padding:12px 28px;font-size:10px;color:#8b93a6;text-align:center;background:#f8fafc}
+    .changes li{font-size:11px;color:#334155;padding:4px 10px 4px 22px;border-bottom:1px solid #f8fafc;position:relative}
+    .changes li::before{content:'›';position:absolute;left:10px;color:#6366f1;font-weight:700}
+    .footer{padding:12px 28px;font-size:10px;color:#94a3b8;text-align:center;background:#f8fafc}
   </style></head><body><div class="container">
     <div class="hdr">
       <div class="brand">Redwood Risk Control Panel</div>
@@ -3987,7 +3987,7 @@ function generateEmailSnapshot(){
     </div>
     <div class="metrics">
       <div class="met"><div class="lbl">Tracking Error</div><div class="val" style="color:${teColor}">${f2(s.sum.te)}%</div><div class="dlta">${dFmt(teDelta,'pp',true)}</div></div>
-      <div class="met"><div class="lbl">Idio Risk</div><div class="val" style="color:#1a1e2b">${idioPct!=null?idioPct+'%':'—'}</div><div class="dlta">${facPct!=null?facPct+'% factor':''}</div></div>
+      <div class="met"><div class="lbl">Idio Risk</div><div class="val" style="color:#1e293b">${idioPct!=null?idioPct+'%':'—'}</div><div class="dlta">${facPct!=null?facPct+'% factor':''}</div></div>
       <div class="met"><div class="lbl">Active Share</div><div class="val">${f2(s.sum.as)}%</div><div class="dlta">${dFmt(asDelta,'pp',false)}</div></div>
       <div class="met"><div class="lbl">Beta</div><div class="val" style="color:${betaColor}">${f2(s.sum.beta,3)}</div><div class="dlta">${dFmt(betaDelta,'',true)}</div></div>
       <div class="met"><div class="lbl">Holdings</div><div class="val">${s.sum.h||equityCount(s.hold)}</div><div class="dlta">${dFmt(hDelta,'',false)}</div></div>
@@ -3999,7 +3999,7 @@ function generateEmailSnapshot(){
     </div>
     ${sigFac.length?`<div class="sec">
       <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-ttl">Factor Exposures</span></div>
-      ${facNarr?`<p style="font-size:11px;color:#8b93a6;font-style:italic;margin-bottom:8px">${facNarr}</p>`:''}
+      ${facNarr?`<p style="font-size:11px;color:#94a3b8;font-style:italic;margin-bottom:8px">${facNarr}</p>`:''}
       <table><thead><tr><th>Factor</th><th class="r">Active Exp.</th><th class="r">TE Contrib%</th></tr></thead><tbody>${facRows}</tbody></table>
     </div>`:''}
     <div class="sec">

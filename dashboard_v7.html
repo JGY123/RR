@@ -1576,52 +1576,59 @@ const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
-  // True butterfly: Portfolio LEFT (negative x), Benchmark RIGHT (positive x), names centered via annotations
+  // TRUE butterfly via two separate x-axis domains:
+  // xaxis  (left half,  domain [0.00–0.43], REVERSED range [xmax→0]) — Portfolio bars grow right→left
+  // xaxis2 (right half, domain [0.57–1.00], NORMAL   range [0→xmax]) — Benchmark bars grow left→right
+  // Both share yaxis:'y'. Sector names as paper-anchored annotations in the center gap.
   let d=[...s.sectors]
     .filter(x=>x.n&&!/cash/i.test(x.n))
     .sort((a,b)=>b.a-a.a);
   let names=d.map(x=>x.n);
   let pvals=d.map(x=>+(x.p||0).toFixed(2));
   let bvals=d.map(x=>+(x.b||0).toFixed(2));
-  let h=Math.max(200,d.length*34+80);
+  let h=Math.max(220,d.length*34+80);
   let el=$('secChartDiv');
   if(el)el.style.height=h+'px';
-  // X-axis absolute-value tick labels
   let maxW=Math.max(...pvals,...bvals);
   let xmax=Math.ceil(maxW/5)*5+5;
   let tvStep=xmax>25?5:xmax>10?2:1;
   let tickVals=[],tickText=[];
-  for(let v=-xmax;v<=xmax;v+=tvStep){tickVals.push(+v.toFixed(4));tickText.push(Math.abs(v)+'%');}
-  // Sector name annotations pinned to the center axis (x=0)
-  let bg=getComputedStyle(document.documentElement).getPropertyValue('--bg').trim()||'#080e1e';
+  for(let v=0;v<=xmax;v+=tvStep){tickVals.push(v);tickText.push(v+'%');}
+  // Center-gap annotations for sector names (paper x=0.5)
   let annotations=names.map(name=>({
-    x:0,y:name,text:'<b>'+name+'</b>',showarrow:false,
-    font:{size:10,color:'#e2e8f0'},xanchor:'center',yanchor:'middle',
-    bgcolor:bg||'#080e1e',borderpad:3
+    x:0.5,y:name,text:name,showarrow:false,
+    xref:'paper',yref:'y',
+    font:{size:10,color:'#e2e8f0'},xanchor:'center',yanchor:'middle'
   }));
+  // Vertical center axis shape
+  let shapes=[{type:'line',x0:0.5,x1:0.5,y0:0,y1:1,xref:'paper',yref:'paper',line:{color:'#475569',width:2}}];
+  let axBase={gridcolor:'#334155',zeroline:false,tickvals:tickVals,ticktext:tickText,tickfont:{color:'#94a3b8',size:10},title:'',showline:false};
   Plotly.newPlot('secChartDiv',[
     {
-      y:names,x:pvals.map(v=>-v),name:'Portfolio',type:'bar',orientation:'h',
-      marker:{color:'#6366f1'},customdata:pvals,
+      y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',
+      xaxis:'x',yaxis:'y',
+      marker:{color:'#6366f1'},
       text:pvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',
       textfont:{size:10,color:'#6366f1'},
-      hovertemplate:'%{y}<br>Portfolio: %{customdata:.1f}%<extra></extra>'
+      hovertemplate:'%{y}<br>Portfolio: %{x:.1f}%<extra></extra>'
     },
     {
       y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',
+      xaxis:'x2',yaxis:'y',
       marker:{color:'#4b5563'},
       text:bvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',
       textfont:{size:10,color:'#94a3b8'},
       hovertemplate:'%{y}<br>Benchmark: %{x:.1f}%<extra></extra>'
     }
   ],{
-    ...plotBg,
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{family:'Inter',color:'#94a3b8',size:11},
     height:h,
-    barmode:'overlay',
     margin:{l:10,r:10,t:30,b:35},
-    annotations,
-    yaxis:{...plotBg.yaxis,showticklabels:false,autorange:'reversed'},
-    xaxis:{...plotBg.xaxis,range:[-xmax,xmax],zeroline:true,zerolinewidth:2,zerolinecolor:'#475569',tickvals:tickVals,ticktext:tickText,title:''},
+    annotations,shapes,
+    yaxis:{gridcolor:'#334155',zerolinecolor:'#334155',anchor:'x',autorange:'reversed',showticklabels:false,domain:[0,1]},
+    xaxis:{...axBase,domain:[0,0.43],range:[xmax,0],anchor:'y'},   // reversed → bars grow leftward
+    xaxis2:{...axBase,domain:[0.57,1],range:[0,xmax],anchor:'y'},  // normal  → bars grow rightward
     legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
   },plotCfg);
 }
@@ -1640,9 +1647,9 @@ function rFacButt(s){
   let vals=facs.map(f=>f.a??0);
   Plotly.newPlot('facButtDiv',[{
     y:names,x:vals,type:'bar',orientation:'h',
-    marker:{color:vals.map(v=>v>=0?'#6366f1':'#a78bfa')},
+    marker:{color:vals.map(v=>v>=0?'#6366f1':'#94a3b8')},
     text:vals.map(v=>v.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#94a3b8',zerolinewidth:2}},plotCfg);
+  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2}},plotCfg);
 }
 
 function rCountryChart(s){

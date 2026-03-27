@@ -40,7 +40,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .g23{grid-template-columns:2fr 3fr}
 .g32{grid-template-columns:3fr 2fr}
 .g12{grid-template-columns:1fr 2fr}
-.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:hidden}
+.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .card-title{font-size:12px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
 .sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
@@ -387,7 +387,6 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="modal-overlay" id="countryModal"><div class="modal" id="countryContent"></div></div>
 <div class="modal-overlay" id="groupModal"><div class="modal modal-lg" id="groupContent"></div></div>
 <div class="modal-overlay" id="charModal"><div class="modal" id="charContent"></div></div>
-<div class="modal-overlay" id="corrModal"><div class="modal" id="corrContent"></div></div>
 <div class="modal-overlay" id="unownedModal"><div class="modal" id="unownedContent"></div></div>
 <div class="modal-overlay" id="riskBudgetModal"><div class="modal modal-lg" id="riskBudgetContent"></div></div>
 <script>
@@ -915,7 +914,7 @@ function rExp(){
     <span style="color:var(--txth);font-weight:600">${s.benchmark||s.name}</span>
     <span style="font-size:10px;color:var(--txt)">(${s.id})</span>
     <span style="flex:1"></span>
-    <span style="font-size:10px;color:var(--txt)" onclick="oDrMetric('cash')" style="cursor:pointer">Cash detail ›</span>
+    <span style="font-size:10px;color:var(--txt);cursor:pointer" onclick="oDrMetric('cash')">Cash detail ›</span>
   </div>
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
@@ -1025,8 +1024,8 @@ function rExp(){
 
   <!-- Row 11: Factor Correlation -->
   <div class="card" id="cardCorr">
-    <div class="flex-between"><div class="card-title tip" data-tip="Click any cell to see scatter plot of two factors">Factor Correlation Matrix</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardCorr table','factor_correlation')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
+    <div class="flex-between"><div class="card-title tip" data-tip="Factor correlations computed from historical exposure data. Full heatmap available in Risk tab.">Factor Correlation Matrix</div>
+    <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
     <div style="overflow-x:auto;max-width:100%" id="corrMatrixCardArea"><p style="color:var(--txt);font-size:12px">Computed from historical factor data — see Risk tab.</p></div>
   </div>
 
@@ -1244,8 +1243,8 @@ function rGroupTable(groups){
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
   let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr)-Math.abs(a.tr));
-  let rows=sorted.map(u=>`<tr class="clickable" onclick="oDrUnowned('${u.t}')"><td style="color:var(--txth);font-weight:500">${u.t}</td><td>${u.n}</td><td>${u.reg||'—'}</td><td class="r">${f2(u.b)}</td><td class="r" style="color:var(--neg);font-weight:600">${fp(u.tr)}</td></tr>`).join('');
-  return`<table><thead><tr><th>Ticker</th><th>Name</th><th>Region</th><th class="r">Bench Wt%</th><th class="r">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
+  let rows=sorted.map(u=>`<tr class="clickable" onclick="oDrUnowned('${u.t}')"><td data-sv="${u.t}" style="color:var(--txth);font-weight:500">${u.t}</td><td>${u.n}</td><td data-sv="${u.reg||''}">${u.reg||'—'}</td><td class="r" data-sv="${u.b}">${f2(u.b)}</td><td class="r" data-sv="${u.tr}" style="color:var(--neg);font-weight:600">${fp(u.tr)}</td></tr>`).join('');
+  return`<table id="tbl-unowned"><thead><tr><th onclick="sortTbl('tbl-unowned',0)">Ticker</th><th onclick="sortTbl('tbl-unowned',1)">Name</th><th onclick="sortTbl('tbl-unowned',2)">Region</th><th class="r" onclick="sortTbl('tbl-unowned',3)">Bench Wt%</th><th class="r" onclick="sortTbl('tbl-unowned',4)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -1309,9 +1308,7 @@ function rUpdateCorr(){
       else if(r<-0.5)insights.push(`✓ <strong>${facNames[i]}</strong> & <strong>${facNames[j]}</strong>: r=${r.toFixed(2)} — diversifying`);
     }
   }
-  let isSynth=!s.hist.fac||!Object.values(s.hist.fac).some(v=>v&&v.length>0);
-  let noteHtml=(isSynth?`<div style="font-size:10px;color:#64748b;margin-bottom:6px">ℹ Synthetic history — awaiting 3-year file</div>`:'')+
-    (minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Only ${minLen} data points in selected period</div>`:'');
+  let noteHtml=minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Only ${minLen} data points in selected period</div>`:'';
   // Render Plotly heatmap
   let heatH=Math.max(260,facNames.length*36+80);
   wrap.innerHTML=noteHtml+`<div id="corrHeatPlot" style="height:${heatH}px"></div>`;
@@ -1522,7 +1519,7 @@ function rRisk(){
   let html=`
   <!-- Risk Summary Cards -->
   <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
-    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}">
+    <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}" onclick="oDrMetric('te')" title="Tracking error detail">
       <div class="label">Total Risk (TE)</div>
       <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}</div>
       <div class="sub">annualized tracking error</div>
@@ -1537,12 +1534,12 @@ function rRisk(){
       <div class="value" style="color:var(--acc)">${idioPct}%</div>
       <div class="sub">${f2(idioRisk,1)}% TE</div>
     </div>
-    <div class="sum-card">
+    <div class="sum-card" onclick="oDrMetric('beta')" title="Beta detail">
       <div class="label">Beta</div>
       <div class="value">${f2(s.sum.beta,2)}</div>
       <div class="sub">vs benchmark</div>
     </div>
-    <div class="sum-card">
+    <div class="sum-card" onclick="oDrMetric('as')" title="Active share detail">
       <div class="label">Active Share</div>
       <div class="value">${f2(s.sum.as,1)}%</div>
       <div class="sub">${gt(s.hist.sum,'as')} trend</div>
@@ -1949,14 +1946,11 @@ function updateFacExpChart(){
     el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:20px;text-align:center">No factors selected</p>';
     return;
   }
-  let isSynth=!s.hist.fac||!Object.values(s.hist.fac).some(v=>v&&v.length>0);
-  let syntheticNote=isSynth?[{text:'Synthetic data — awaiting 3-year file',xref:'paper',yref:'paper',x:0.5,y:1.05,showarrow:false,font:{size:9,color:'#64748b'}}]:[];
   Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:'Active Exposure / Weight',zeroline:true,zerolinecolor:'#64748b',zerolinewidth:2},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},
     legend:{orientation:'h',y:1.12,font:{size:10}},
-    hovermode:'x unified',
-    annotations:syntheticNote
+    hovermode:'x unified'
   },plotCfg);
 }
 
@@ -2952,7 +2946,7 @@ document.body.addEventListener('drop',e=>{
 });
 
 // ===== MODAL MANAGEMENT =====
-const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','corrModal','unownedModal','riskBudgetModal'];
+const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','unownedModal','riskBudgetModal'];
 ALL_MODALS.forEach(id=>{
   let el=$(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show')});
@@ -3503,6 +3497,7 @@ function oDrGroup(groupName){
   let holdRows=holdings.slice(0,15).map(h=>`<tr class="clickable" onclick="$('groupModal').classList.remove('show');oSt('${h.t}')">
     <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td><span class="chip">${h.sec||'—'}</span></td>
     <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
+    <td class="r">${rRVQ(h)}</td>
   </tr>`).join('');
 
   $('groupContent').innerHTML=`
@@ -3515,7 +3510,7 @@ function oDrGroup(groupName){
     <div class="card-title">Subgroups</div>
     <table><thead><tr><th>Subgroup</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th></tr></thead><tbody>${sgRows}</tbody></table>
     <div class="card-title" style="margin-top:16px">Holdings (${holdings.length})</div>
-    <div style="max-height:300px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${holdRows}</tbody></table></div>`;
+    <div style="max-height:300px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th><th class="r">Rank</th></tr></thead><tbody>${holdRows}</tbody></table></div>`;
   m.classList.add('show');
 }
 

@@ -1576,18 +1576,22 @@ const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
-  // Diverging chart: sort by |active weight| desc — largest over/underweight at top
+  // Diverging horizontal bars: sorted by |active weight| desc, largest at top
   let d=[...s.sectors].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
+  let h=Math.max(200,d.length*30+60);
+  let el=$('secChartDiv');
+  if(el)el.style.height=h+'px';
   Plotly.newPlot('secChartDiv',[{
     y:d.map(x=>x.n),x:d.map(x=>x.a),type:'bar',orientation:'h',
     marker:{color:d.map(x=>x.a>=0?'#10b981':'#ef4444')},
-    text:d.map(x=>fp(x.a,1)),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+    text:d.map(x=>fp(x.a,1)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'},
     hovertemplate:'%{y}<br>Active: %{x:.1f}%<extra></extra>'
   }],{
     ...plotBg,
+    height:h,
     margin:{l:145,r:65,t:10,b:40},
     yaxis:{...plotBg.yaxis,autorange:'reversed'},
-    xaxis:{...plotBg.xaxis,title:'Active Weight %',tickformat:'.1f',zeroline:true,zerolinewidth:2,zerolinecolor:'#334155'}
+    xaxis:{...plotBg.xaxis,title:'Active Weight %',tickformat:'.1f',zeroline:true,zerolinewidth:2,zerolinecolor:'#475569'}
   },plotCfg);
 }
 

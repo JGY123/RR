@@ -40,7 +40,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .g23{grid-template-columns:2fr 3fr}
 .g32{grid-template-columns:3fr 2fr}
 .g12{grid-template-columns:1fr 2fr}
-.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:visible;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .card-title{font-size:12px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
 .sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
@@ -114,7 +114,7 @@ th.r,td.r{text-align:right}
 
 /* Tooltips */
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
-.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:normal;max-width:300px;word-wrap:break-word;opacity:0;pointer-events:none;transition:opacity .2s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .tip:hover::after{opacity:1}
 .tip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1e293b;opacity:0;pointer-events:none;transition:opacity .2s;z-index:301}
 .tip:hover::before{opacity:1}
@@ -872,6 +872,7 @@ function upd(){
 // ===== EXPOSURES TAB =====
 function rExp(){
   let s=cs;
+  let isUSOnly=s.hold&&s.hold.filter(h=>!isCash(h)).length>0&&s.hold.filter(h=>!isCash(h)).every(h=>/^(united states|usa)$/i.test((h.co||'').trim()));
   let ws=getSelectedWeekSum();  // current or historical week stats
   let isHistWeek=!!_selectedWeek;
   let teClass=ws.te>=10?'alert':ws.te<5?'warn':'';
@@ -978,8 +979,9 @@ function rExp(){
     <div id="facWaterfallDiv" style="height:${Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20}px"></div>
   </div>
 
+  ${isUSOnly?`<div style="margin-top:16px;padding:10px 14px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;font-size:11px;color:var(--txt)">ⓘ US-focused strategy — country and region analysis not applicable</div>`:''}
   <!-- Row 4: Country Exposure -->
-  <div class="card" id="cardCountry" style="grid-column:1/-1">
+  <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between">
       <div class="card-title">Country Exposure</div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -1067,7 +1069,7 @@ function rExp(){
   </div>
 
   <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
-  <div class="card" id="cardRegions" style="margin-top:16px">
+  <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
     <div class="flex-between"><div class="card-title">Region Active Weights</div>
     <div style="display:flex;gap:6px;align-items:center">
       <div style="font-size:10px;color:var(--txt);margin-right:4px">Region coverage may be low for US-focused strategies</div>
@@ -1583,59 +1585,48 @@ const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
-  // TRUE butterfly via two separate x-axis domains:
-  // xaxis  (left half,  domain [0.00–0.43], REVERSED range [xmax→0]) — Portfolio bars grow right→left
-  // xaxis2 (right half, domain [0.57–1.00], NORMAL   range [0→xmax]) — Benchmark bars grow left→right
-  // Both share yaxis:'y'. Sector names as paper-anchored annotations in the center gap.
+  // TRUE butterfly: portfolio bars extend LEFT (negative x), benchmark RIGHT (positive x)
+  // No textposition:'outside' — conflicts with barmode:'overlay' and causes empty render
   let d=[...s.sectors]
     .filter(x=>x.n&&!/cash/i.test(x.n))
     .sort((a,b)=>b.a-a.a);
+  if(!d.length)return;
   let names=d.map(x=>x.n);
   let pvals=d.map(x=>+(x.p||0).toFixed(2));
   let bvals=d.map(x=>+(x.b||0).toFixed(2));
-  let h=Math.max(220,d.length*34+80);
+  let h=Math.max(280,d.length*36+80);
   let el=$('secChartDiv');
   if(el)el.style.height=h+'px';
-  let maxW=Math.max(...pvals,...bvals);
-  let xmax=Math.ceil(maxW/5)*5+5;
-  let tvStep=xmax>25?5:xmax>10?2:1;
-  let tickVals=[],tickText=[];
-  for(let v=0;v<=xmax;v+=tvStep){tickVals.push(v);tickText.push(v+'%');}
-  // Center-gap annotations for sector names (paper x=0.5)
-  let annotations=names.map(name=>({
-    x:0.5,y:name,text:name,showarrow:false,
-    xref:'paper',yref:'y',
-    font:{size:10,color:'#e2e8f0'},xanchor:'center',yanchor:'middle'
-  }));
-  // Vertical center axis shape
-  let shapes=[{type:'line',x0:0.5,x1:0.5,y0:0,y1:1,xref:'paper',yref:'paper',line:{color:'#475569',width:2}}];
-  let axBase={gridcolor:'#334155',zeroline:false,tickvals:tickVals,ticktext:tickText,tickfont:{color:'#94a3b8',size:10},title:'',showline:false};
+  let maxW=Math.max(...pvals,...bvals,5);
+  let xmax=Math.ceil((maxW+5)/5)*5;
+  let tvStep=xmax>=20?5:2;
+  let tickVals=[0],tickText=['0'];
+  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
   Plotly.newPlot('secChartDiv',[
     {
-      y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',
-      xaxis:'x',yaxis:'y',
-      marker:{color:'#6366f1'},
-      text:pvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',
-      textfont:{size:10,color:'#6366f1'},
-      hovertemplate:'%{y}<br>Portfolio: %{x:.1f}%<extra></extra>'
+      name:'Portfolio',type:'bar',orientation:'h',
+      y:names,x:pvals.map(v=>-v),
+      marker:{color:'rgba(99,102,241,0.85)'},
+      customdata:pvals,
+      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'
     },
     {
-      y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',
-      xaxis:'x2',yaxis:'y',
-      marker:{color:'#4b5563'},
-      text:bvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',
-      textfont:{size:10,color:'#94a3b8'},
-      hovertemplate:'%{y}<br>Benchmark: %{x:.1f}%<extra></extra>'
+      name:'Benchmark',type:'bar',orientation:'h',
+      y:names,x:bvals,
+      marker:{color:'rgba(75,85,99,0.85)'},
+      hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'
     }
   ],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'Inter',color:'#94a3b8',size:11},
     height:h,
-    margin:{l:10,r:10,t:30,b:35},
-    annotations,shapes,
-    yaxis:{gridcolor:'#334155',zerolinecolor:'#334155',anchor:'x',autorange:'reversed',showticklabels:false,domain:[0,1]},
-    xaxis:{...axBase,domain:[0,0.43],range:[xmax,0],anchor:'y'},   // reversed → bars grow leftward
-    xaxis2:{...axBase,domain:[0.57,1],range:[0,xmax],anchor:'y'},  // normal  → bars grow rightward
+    barmode:'overlay',
+    margin:{l:10,r:20,t:30,b:30},
+    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
+           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
+    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
+           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
+           tickfont:{color:'#94a3b8',size:10}},
     legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
   },plotCfg);
 }
@@ -1649,14 +1640,49 @@ function rRegChart(s){
 }
 
 function rFacButt(s){
+  // TRUE butterfly: portfolio exposure LEFT (negative x), benchmark RIGHT (positive x)
+  // No textposition:'outside' — conflicts with barmode:'overlay' and causes empty render
   let facs=s.factors;
   let names=facs.map(f=>f.n);
-  let vals=facs.map(f=>f.a??0);
-  Plotly.newPlot('facButtDiv',[{
-    y:names,x:vals,type:'bar',orientation:'h',
-    marker:{color:vals.map(v=>v>=0?'#6366f1':'#94a3b8')},
-    text:vals.map(v=>v.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2}},plotCfg);
+  let evals=facs.map(f=>+(f.e!=null?f.e:(f.a??0)).toFixed(3));
+  let bvals=facs.map(f=>+(f.bm??0).toFixed(3));
+  let maxE=Math.max(...evals.map(Math.abs),...bvals.map(Math.abs),0.3);
+  let xmax=Math.ceil(maxE*10)/10+0.2;
+  let tvStep=xmax>1?0.5:xmax>0.5?0.2:0.1;
+  let tickVals=[0],tickText=['0'];
+  for(let v=tvStep;v<=xmax+0.001;v=Math.round((v+tvStep)*100)/100){
+    tickVals.push(v,-v);tickText.push(v.toFixed(1),v.toFixed(1));
+  }
+  let h=Math.max(280,facs.length*30+60);
+  let el=document.getElementById('facButtDiv');
+  if(el)el.style.height=h+'px';
+  Plotly.newPlot('facButtDiv',[
+    {
+      name:'Portfolio',type:'bar',orientation:'h',
+      y:names,x:evals.map(v=>-v),
+      marker:{color:'rgba(99,102,241,0.85)'},
+      customdata:evals,
+      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.3f}<extra></extra>'
+    },
+    {
+      name:'Benchmark',type:'bar',orientation:'h',
+      y:names,x:bvals,
+      marker:{color:'rgba(75,85,99,0.85)'},
+      hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.3f}<extra></extra>'
+    }
+  ],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{family:'Inter',color:'#94a3b8',size:11},
+    height:h,
+    barmode:'overlay',
+    margin:{l:10,r:20,t:30,b:30},
+    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
+           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
+    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
+           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
+           tickfont:{color:'#94a3b8',size:9},title:'Factor Exposure'},
+    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
+  },plotCfg);
 }
 
 const COUNTRY_ISO3={
@@ -1705,6 +1731,9 @@ function rCountryMap(s){
     margin:{l:0,r:0,t:0,b:0},
     height:320
   },plotCfg);
+  document.getElementById('countryMapDiv').on('plotly_click',function(data){
+    if(data.points&&data.points.length)oDrCountry(data.points[0].text);
+  });
 }
 
 function toggleCountryView(v,btn){
@@ -3785,9 +3814,15 @@ function oDrCountry(name){
   let region=CMAP[name]||'Other';
   let regData=cs.regions.find(r=>r.n===region);
 
-  let holdRows=holdings.sort((a,b)=>b.p-a.p).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td>
-    <td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>${rORVQCells(h)}
+  let holdRows=holdings.sort((a,b)=>(b.tr||0)-(a.tr||0)).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
+    <td style="color:var(--txth);font-weight:600">${h.t}</td>
+    <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
+    <td><span class="chip">${h.sec||'—'}</span></td>
+    <td class="r">${f2(h.p,1)}</td>
+    <td class="r ${activeStyle(h.a)}">${fp(h.a,1)}</td>
+    <td class="r">${f2(h.mcr,2)}</td>
+    <td class="r" style="color:var(--pos);font-weight:600">${fp(h.tr,1)}</td>
+    ${rORVQCells(h)}
   </tr>`).join('');
 
   $('countryContent').innerHTML=`
@@ -3798,7 +3833,7 @@ function oDrCountry(name){
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${region}</div><div style="font-size:10px;color:var(--txt)">Active: ${regData?fp(regData.a):'—'}%</div></div>
     </div>
     <div class="card-title">Holdings in ${name} (${holdings.length})</div>
-    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
+    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th><th class="r tip" data-tip="Stock-specific TE component">%S</th><th class="r tip" data-tip="% of total portfolio tracking error">Total TE%</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
   m.classList.add('show');
 }
 

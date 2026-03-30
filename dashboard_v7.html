@@ -3702,7 +3702,7 @@ function oDrMetric(metric,range){
     beta:[{v:0.9,c:'#a78bfa',l:'0.9',dir:'floor'},{v:1.1,c:'#a78bfa',l:'1.1',dir:'ceil'}]
   };
   // Per-metric y-axis range
-  let yRanges={te:[2,11],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
+  let yRanges={as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
 
   let vals=hist.map(h=>h[metric]);
   let dates=hist.map(h=>isoDate(h.d));

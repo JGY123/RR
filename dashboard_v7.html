@@ -1640,13 +1640,13 @@ function rRegChart(s){
 }
 
 function rFacButt(s){
-  // TRUE butterfly: portfolio exposure LEFT (negative x), benchmark RIGHT (positive x)
-  // No textposition:'outside' — conflicts with barmode:'overlay' and causes empty render
+  // Single-trace diverging bar: f.a (active exposure) only
+  // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
   let facs=s.factors;
+  if(!facs||!facs.length)return;
   let names=facs.map(f=>f.n);
-  let evals=facs.map(f=>+(f.e!=null?f.e:(f.a??0)).toFixed(3));
-  let bvals=facs.map(f=>+(f.bm??0).toFixed(3));
-  let maxE=Math.max(...evals.map(Math.abs),...bvals.map(Math.abs),0.3);
+  let vals=facs.map(f=>+(f.a??0).toFixed(3));
+  let maxE=Math.max(...vals.map(Math.abs),0.3);
   let xmax=Math.ceil(maxE*10)/10+0.2;
   let tvStep=xmax>1?0.5:xmax>0.5?0.2:0.1;
   let tickVals=[0],tickText=['0'];
@@ -1656,32 +1656,22 @@ function rFacButt(s){
   let h=Math.max(280,facs.length*30+60);
   let el=document.getElementById('facButtDiv');
   if(el)el.style.height=h+'px';
-  Plotly.newPlot('facButtDiv',[
-    {
-      name:'Portfolio',type:'bar',orientation:'h',
-      y:names,x:evals.map(v=>-v),
-      marker:{color:'rgba(99,102,241,0.85)'},
-      customdata:evals,
-      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.3f}<extra></extra>'
-    },
-    {
-      name:'Benchmark',type:'bar',orientation:'h',
-      y:names,x:bvals,
-      marker:{color:'rgba(75,85,99,0.85)'},
-      hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.3f}<extra></extra>'
-    }
-  ],{
+  Plotly.newPlot('facButtDiv',[{
+    name:'Active Exposure',type:'bar',orientation:'h',
+    y:names,x:vals,
+    marker:{color:vals.map(v=>v>=0?'#6366f1':'#a78bfa')},
+    hovertemplate:'<b>%{y}</b><br>Active Exposure: %{x:.3f}<extra></extra>'
+  }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'Inter',color:'#94a3b8',size:11},
     height:h,
-    barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
+    margin:{l:10,r:20,t:10,b:30},
     yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
            tickfont:{size:10,color:'#e2e8f0'},automargin:true},
     xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
            range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:9},title:'Factor Exposure'},
-    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
+           tickfont:{color:'#94a3b8',size:9},title:'Active Exposure'},
+    showlegend:false
   },plotCfg);
 }
 

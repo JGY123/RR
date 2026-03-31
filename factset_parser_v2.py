@@ -72,13 +72,21 @@ FACTOR_DISPLAY_NAME = {
 
 # ── Column layout constants ───────────────────────────────────────────────────
 # Standard sections (Sector Weights, Industry, Region, Country, Group, Overall, REV, VAL, QUAL)
-# 5 groups; each group = 19 cols starting at date column
-STD_DATE_COLS   = [7, 26, 45, 64, 83]   # period start date column for each group
+# Dynamic groups; each group = 19 cols starting at date column
 STD_GROUP_SIZE  = 19
 
 # Security section
-# 5 groups; each group = 24 cols (1 date + 5 classification + 18 metrics)
-SEC_DATE_COLS   = [7, 31, 55, 79, 103]
+# Dynamic groups; each group = 24 cols (1 date + 5 classification + 18 metrics)
+SEC_GROUP_SIZE  = 24
+
+def build_date_cols(row_len, start=7, group_size=19):
+    """Dynamically detect all weekly group date columns based on row length."""
+    cols = []
+    col = start
+    while col < row_len:
+        cols.append(col)
+        col += group_size
+    return cols
 SEC_GROUP_SIZE  = 24
 
 # 18 Style Snapshot
@@ -133,21 +141,26 @@ def safe_float(s):
         return None
 
 def parse_date(s):
-    """Convert 'M/D/YYYY' → 'YYYYMMDD'. Returns None if unparseable."""
+    """Convert date string → 'YYYYMMDD'. Handles M/D/YYYY, YYYY-MM-DD, YYYYMMDD."""
     s = s.strip()
     if not s:
         return None
-    try:
-        return datetime.strptime(s, "%m/%d/%Y").strftime("%Y%m%d")
-    except ValueError:
-        return None
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%Y%m%d"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y%m%d")
+        except ValueError:
+            continue
+    return None
 
 def date_key(mdY_str):
-    """Return datetime for sort key. Handles M/D/YYYY format."""
-    try:
-        return datetime.strptime(mdY_str.strip(), "%m/%d/%Y")
-    except (ValueError, AttributeError):
-        return datetime.min
+    """Return datetime for sort key. Handles M/D/YYYY and YYYY-MM-DD."""
+    s = str(mdY_str).strip()
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%Y%m%d"):
+        try:
+            return datetime.strptime(s, fmt)
+        except (ValueError, AttributeError):
+            continue
+    return datetime.min
 
 def _g_offset(date_cols, group_idx):
     """Return date-column start offset for group at 0-based group_idx."""
@@ -235,26 +248,38 @@ class FactSetParserV2:
         if level2 in ("Data", "@NA", "[Unassigned]"):
             return
 
-        # [Cash] → capture cash weight from current group (group 5)
+        # [Cash] → capture cash weight from LAST group (most recent)
+        date_cols = build_date_cols(len(row), start=7, group_size=STD_GROUP_SIZE)
         if level2 == "[Cash]":
-            dc = STD_DATE_COLS[-1]  # 83
+            dc = date_cols[-1] if date_cols else 7
             bucket["_cash"] = safe_float(row[dc + 1]) if len(row) > dc + 1 else None
             return
 
-        # Regular sector row — collect all 5 period snapshots
+        # Regular sector row — collect ALL period snapshots
         name = level2.strip()
-        for gi, dc in enumerate(STD_DATE_COLS):
+        for gi, dc in enumerate(date_cols):
             if len(row) <= dc:
                 continue
             d = parse_date(row[dc])
             if not d:
                 continue
-            w   = safe_float(row[dc + 1])
-            bw  = safe_float(row[dc + 2])
-            aw  = safe_float(row[dc + 3])
+            w    = safe_float(row[dc + 1])
+            bw   = safe_float(row[dc + 2])
+            aw   = safe_float(row[dc + 3])
+            pct_s = safe_float(row[dc + 4]) if len(row) > dc + 4 else None  # %S
+            pct_t = safe_float(row[dc + 5]) if len(row) > dc + 5 else None  # %T
+            # dc+6 = %T_Check (skip)
+            over = safe_float(row[dc + 7]) if len(row) > dc + 7 else None   # OVER_WAvg
+            rev  = safe_float(row[dc + 8]) if len(row) > dc + 8 else None   # REV_WAvg
+            val  = safe_float(row[dc + 9]) if len(row) > dc + 9 else None   # VAL_WAvg
+            qual = safe_float(row[dc + 10]) if len(row) > dc + 10 else None # QUAL_WAvg
 
-            if gi == 4:  # current (group 5)
-                bucket["_sectors"].append({"n": name, "p": w, "b": bw, "a": aw})
+            if gi == len(date_cols) - 1:  # current (last group)
+                bucket["_sectors"].append({
+                    "n": name, "p": w, "b": bw, "a": aw,
+                    "mcr": pct_s, "tr": pct_t,
+                    "over": over, "rev": rev, "val": val, "qual": qual
+                })
 
             # All periods → hist.sec
             bucket["_hist_sec"].setdefault(name, []).append({"d": d, "p": w, "b": bw, "a": aw})
@@ -337,15 +362,25 @@ class FactSetParserV2:
         if level2 in ("Data", "@NA", "[Unassigned]", "[Cash]"):
             return
         name = level2.strip()
-        dc = STD_DATE_COLS[-1]  # current group
+        dc = build_date_cols(len(row), 7, STD_GROUP_SIZE)[-1] if len(row) > 7 else 7  # current group
         if len(row) <= dc + 2:
             return
-        w   = safe_float(row[dc + 1])
-        bw  = safe_float(row[dc + 2])
-        aw  = safe_float(row[dc + 3]) if len(row) > dc + 3 else None
+        w    = safe_float(row[dc + 1])
+        bw   = safe_float(row[dc + 2])
+        aw   = safe_float(row[dc + 3]) if len(row) > dc + 3 else None
+        pct_s = safe_float(row[dc + 4]) if len(row) > dc + 4 else None
+        pct_t = safe_float(row[dc + 5]) if len(row) > dc + 5 else None
+        over = safe_float(row[dc + 7]) if len(row) > dc + 7 else None
+        rev  = safe_float(row[dc + 8]) if len(row) > dc + 8 else None
+        val  = safe_float(row[dc + 9]) if len(row) > dc + 9 else None
+        qual = safe_float(row[dc + 10]) if len(row) > dc + 10 else None
         if aw is None and w is not None and bw is not None:
             aw = w - bw
-        bucket["_geo"].setdefault(key, []).append({"n": name, "p": w, "b": bw, "a": aw})
+        bucket["_geo"].setdefault(key, []).append({
+            "n": name, "p": w, "b": bw, "a": aw,
+            "mcr": pct_s, "tr": pct_t,
+            "over": over, "rev": rev, "val": val, "qual": qual
+        })
 
     def _handle_security(self, bucket, row):
         """Security (holdings) — 5 groups, each with classification + metrics."""
@@ -363,7 +398,7 @@ class FactSetParserV2:
         ticker = level2.strip()
 
         # Use current group (group 5, date at col 103)
-        dc = SEC_DATE_COLS[-1]   # 103
+        dc = build_date_cols(len(row), 7, SEC_GROUP_SIZE)[-1] if len(row) > 7 else 7   # 103
         if len(row) <= dc + 23:
             return
 
@@ -416,7 +451,7 @@ class FactSetParserV2:
         if name:
             return  # individual holding row within a quintile bucket — skip
 
-        dc = STD_DATE_COLS[-1]
+        dc = build_date_cols(len(row), 7, STD_GROUP_SIZE)[-1] if len(row) > 7 else 7
         if len(row) <= dc + 1:
             return
         w  = safe_float(row[dc + 1])
@@ -509,14 +544,17 @@ class FactSetParserV2:
             else:
                 s["current_date"] = None
 
-            # ── available_dates (from Sector Weights — 5 per month) ───────────
-            all_dates = sorted(set(
-                e["d"]
-                for entries in bucket["_hist_sec"].values()
-                for e in entries
-                if e.get("d")
-            ))
-            s["available_dates"] = all_dates
+            # ── available_dates (from Portfolio Characteristics — every week) ──
+            pc_dates = sorted(set(e["d"] for e in pc_rows if e.get("d")))
+            if not pc_dates:
+                # Fallback to sector history dates
+                pc_dates = sorted(set(
+                    e["d"]
+                    for entries in bucket["_hist_sec"].values()
+                    for e in entries
+                    if e.get("d")
+                ))
+            s["available_dates"] = pc_dates
 
             # ── Holdings ──────────────────────────────────────────────────────
             s["hold"] = bucket["_holds"]

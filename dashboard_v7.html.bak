@@ -40,7 +40,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .g23{grid-template-columns:2fr 3fr}
 .g32{grid-template-columns:3fr 2fr}
 .g12{grid-template-columns:1fr 2fr}
-.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:visible;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .card-title{font-size:12px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
 .sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
@@ -114,7 +114,7 @@ th.r,td.r{text-align:right}
 
 /* Tooltips */
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
-.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:normal;max-width:300px;word-wrap:break-word;opacity:0;pointer-events:none;transition:opacity .2s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .2s;z-index:300;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .tip:hover::after{opacity:1}
 .tip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1e293b;opacity:0;pointer-events:none;transition:opacity .2s;z-index:301}
 .tip:hover::before{opacity:1}
@@ -459,7 +459,54 @@ function activeStyle(v){
   return v>0?'pos':'neg';
 }
 
-// ===== NO SYNTHETIC DATA — Real data only =====
+// ===== DATA GENERATION (synthetic fallback) =====
+// Synthetic inception dates per strategy (months of history)
+const INCEPTION_MONTHS={IDM:120,ISC:84,IOP:96,GSC:60,SCG:108,EM:72,ACWI:48};
+
+function genHist(s){
+  let h={sum:[],sec:{},reg:{},fac:{}};
+  let now=new Date();
+  let months=INCEPTION_MONTHS[s.id]||72;
+  for(let i=months-1;i>=0;i--){
+    let d=new Date(now);d.setMonth(d.getMonth()-i);
+    let ds=d.toISOString().slice(0,10);
+    // Early months (first 6) have more volatile/anomalous data to simulate ramp-up
+    let earlyFactor=i>(months-7)?1.5+Math.random():1;
+    let te=s.sum.te*(0.85+Math.random()*0.3)*earlyFactor;
+    h.sum.push({d:ds,te:+te.toFixed(2),as:+(s.sum.as*(0.98+Math.random()*0.04)/earlyFactor).toFixed(2),beta:+(s.sum.beta*(0.97+Math.random()*0.06)*earlyFactor).toFixed(3),h:Math.max(5,s.sum.h+Math.floor(Math.random()*6-3)-Math.floor((months-1-i<6?(6-months+1+i)*3:0))),sr:+(s.sum.sr*(0.95+Math.random()*0.1)).toFixed(2),cash:+((s.sum.cash||2)*(0.8+Math.random()*0.4)*earlyFactor).toFixed(2)});
+  }
+  SECS.forEach(sec=>{
+    let row=s.sectors.find(x=>x.n===sec);if(!row)return;
+    h.sec[sec]=[];
+    for(let i=5;i>=0;i--){
+      let d=new Date(now);d.setMonth(d.getMonth()-i*6);
+      let ds=d.toISOString().slice(0,10);
+      let drift=(Math.random()-0.5)*3;
+      h.sec[sec].push({d:ds,p:+(row.p+drift).toFixed(2),b:+(row.b+(Math.random()-0.5)).toFixed(2),a:+(row.a+drift).toFixed(2)});
+    }
+  });
+  REGS.forEach(reg=>{
+    let row=s.regions.find(x=>x.n===reg);if(!row)return;
+    h.reg[reg]=[];
+    for(let i=5;i>=0;i--){
+      let d=new Date(now);d.setMonth(d.getMonth()-i*6);
+      let ds=d.toISOString().slice(0,10);
+      let drift=(Math.random()-0.5)*3;
+      h.reg[reg].push({d:ds,p:+(row.p+drift).toFixed(2),b:+(row.b+(Math.random()-0.5)).toFixed(2),a:+(row.a+drift).toFixed(2)});
+    }
+  });
+  FACS.forEach(fac=>{
+    let row=s.factors.find(x=>x.n===fac);if(!row)return;
+    h.fac[fac]=[];
+    for(let i=5;i>=0;i--){
+      let d=new Date(now);d.setMonth(d.getMonth()-i*6);
+      let ds=d.toISOString().slice(0,10);
+      let drift=(Math.random()-0.5)*0.15;
+      h.fac[fac].push({d:ds,e:+(row.e+drift).toFixed(3),b:0,a:+(row.e+drift).toFixed(3)});
+    }
+  });
+  return h;
+}
 
 function enrichHold(hold,sectors){
   return hold.map(h=>{
@@ -569,7 +616,56 @@ function normalize(raw){
   return out;
 }
 
-// No synthetic data generator — dashboard requires real FactSet data
+function genSynthetic(){
+  let out={};
+  STRATS.forEach(def=>{
+    let te=3+Math.random()*5;
+    let s={id:def.id,name:def.name,benchmark:def.bm,
+      sum:{te:+te.toFixed(2),as:+(85+Math.random()*12).toFixed(2),beta:+(0.9+Math.random()*0.2).toFixed(3),h:30+Math.floor(Math.random()*30),bh:500+Math.floor(Math.random()*2000),sr:+(60+Math.random()*20).toFixed(2),cash:+(1+Math.random()*4).toFixed(2)},
+      sectors:SECS.map(n=>{let p=+(3+Math.random()*20).toFixed(2);let b=+(3+Math.random()*20).toFixed(2);return{n,p,b,a:+(p-b).toFixed(2),s:+(Math.random()*15).toFixed(2),t:+((Math.random()-0.3)*15).toFixed(2)}}),
+      regions:REGS.map(n=>{let p=+(2+Math.random()*30).toFixed(2);let b=+(2+Math.random()*30).toFixed(2);return{n,p,b,a:+(p-b).toFixed(2)}}),
+      countries:[],factors:[],hold:[],ranks:[],chars:[],groups:[],unowned:[]
+    };
+    // Normalize weights to 100
+    let tp=s.sectors.reduce((a,x)=>a+x.p,0);let tb=s.sectors.reduce((a,x)=>a+x.b,0);
+    s.sectors=s.sectors.map(x=>({...x,p:+(x.p/tp*100).toFixed(2),b:+(x.b/tb*100).toFixed(2),a:+((x.p/tp-x.b/tb)*100).toFixed(2)}));
+    tp=s.regions.reduce((a,x)=>a+x.p,0);tb=s.regions.reduce((a,x)=>a+x.b,0);
+    s.regions=s.regions.map(x=>({...x,p:+(x.p/tp*100).toFixed(2),b:+(x.b/tb*100).toFixed(2),a:+((x.p/tp-x.b/tb)*100).toFixed(2)}));
+    // Countries from regions
+    let countries=['Japan','United Kingdom','Germany','France','Italy','Canada','Switzerland','Sweden','Australia','Netherlands','Denmark','Spain','South Korea','Brazil','India','Hong Kong'];
+    s.countries=countries.map(n=>{let p=+(Math.random()*10).toFixed(2);let b=+(Math.random()*10).toFixed(2);return{n,p,b,a:+(p-b).toFixed(2)}});
+    let tcp=s.countries.reduce((a,x)=>a+x.p,0);let tcb=s.countries.reduce((a,x)=>a+x.b,0);
+    s.countries=s.countries.map(x=>({...x,p:+(x.p/tcp*100).toFixed(2),b:+(x.b/tcb*100).toFixed(2),a:+((x.p/tcp-x.b/tcb)*100).toFixed(2)}));
+    // Factors
+    s.factors=FACS.map(n=>{let e=+((Math.random()-0.5)*1.2).toFixed(3);return{n,a:e,bm:0,e,c:+(Math.random()*6).toFixed(2),ret:+((Math.random()-0.5)*8).toFixed(2),imp:+((Math.random()-0.5)*2).toFixed(2)}});
+    // Holdings
+    let tickers=['AAPL','MSFT','TSM','ASML','SAP','NVO','TM','SONY','RIO','UL','SAN','BHP','SHOP','MELI','BABA','005930','7203','9984','6758','8306','MC','LVMH','SIE','DTE','ALV','NESN','ROG','ABB','NOVO','DSM'];
+    let names=['Alpha Corp','Beta Ltd','Gamma Tech','Delta Fin','Epsilon Ind','Zeta Health','Eta Energy','Theta Mat','Iota Util','Kappa RE','Lambda Comm','Mu Staples','Nu Disc','Xi Semi','Omicron Bank','Pi Pharma','Rho Mining','Sigma Auto','Tau Retail','Upsilon Aero','Phi Chem','Chi Defense','Psi Telecom','Omega Logistics','AlphaB Soft','BetaB Food','GammaB Elec','DeltaB Trans','EpsilonB Insur','ZetaB Bio'];
+    s.hold=tickers.map((t,i)=>{
+      let p=+(0.5+Math.random()*4).toFixed(2);let b=+(Math.random()*0.3).toFixed(2);
+      return{t,n:names[i]||t,sec:SECS[i%SECS.length],co:countries[i%countries.length],p,b,a:+(p-b).toFixed(2),mcr:+(Math.random()*8).toFixed(2),tr:+(Math.random()*12).toFixed(2),r:1+Math.floor(Math.random()*5),over:+(1+Math.random()*4).toFixed(1),rev:+(1+Math.random()*4).toFixed(1),val:+(1+Math.random()*4).toFixed(1),qual:+(1+Math.random()*4).toFixed(1),mom:+(1+Math.random()*4).toFixed(1),stab:+(1+Math.random()*4).toFixed(1)};
+    });
+    // Add cash/currency baskets (should be excluded from equity holdings count)
+    ['USD','EUR','JPY'].forEach(ccy=>{
+      s.hold.push({t:ccy,n:'Cash '+ccy,sec:'Cash',co:'',p:+(0.3+Math.random()*1.5).toFixed(2),b:0,a:+(0.3+Math.random()*1.5).toFixed(2),mcr:0,tr:0,r:0,over:0,rev:0,val:0,qual:0,mom:0,stab:0});
+    });
+    s.sum.h=equityCount(s.hold);
+    // Ranks — ALWAYS rebuild from holdings (parser ranks may have randomized q values)
+    s.ranks=[1,2,3,4,5].map(r=>{let hh=s.hold.filter(h=>h.r===r);let ct=hh.length;let p=hh.reduce((a,h)=>a+(h.p||0),0);let ap=hh.reduce((a,h)=>a+(h.a||0),0);return{r,l:'Quintile '+r,ct,p:+p.toFixed(2),a:+ap.toFixed(2)};});
+    // Chars — only use synthetic if parser didn't provide them
+    if(!s.chars||!s.chars.length){
+      s.chars=[{m:'Market Cap ($M)',p:s.sum.mc,b:null},{m:'P/E Ratio',p:s.sum.pe_p,b:s.sum.pe_b},{m:'P/B Ratio',p:s.sum.pb_p,b:s.sum.pb_b}];
+    }
+    // Groups — keep parser data if present
+    if(!s.groups||!s.groups.length){
+      s.groups=[];
+    }
+    // Unowned
+    s.unowned=Array.from({length:8},(_,i)=>({t:'UNO'+i,n:'Unowned Stock '+(i+1),reg:REGS[i%REGS.length],b:+(0.1+Math.random()*0.5).toFixed(2),tr:+(-0.2-Math.random()*1.2).toFixed(2)}));
+    out[def.id]=s;
+  });
+  return out;
+}
 
 function upload(e){
   let f=e.target.files[0];if(!f)return;
@@ -630,7 +726,7 @@ function clearDashboard(){
 
 function init(){
   let keys=Object.keys(A);
-  if(!keys.length){$('uploadZone').style.display='flex';$('content').style.display='none';return;}
+  if(!keys.length){A=normalize(genSynthetic());keys=Object.keys(A)}
   cs=A['EM']||A[keys[0]];
   // Build strategy buttons — pinned first
   let sel=$('stratSel');
@@ -776,7 +872,6 @@ function upd(){
 // ===== EXPOSURES TAB =====
 function rExp(){
   let s=cs;
-  let isUSOnly=s.hold&&s.hold.filter(h=>!isCash(h)).length>0&&s.hold.filter(h=>!isCash(h)).every(h=>/^(united states|usa)$/i.test((h.co||'').trim()));
   let ws=getSelectedWeekSum();  // current or historical week stats
   let isHistWeek=!!_selectedWeek;
   let teClass=ws.te>=10?'alert':ws.te<5?'warn':'';
@@ -883,13 +978,15 @@ function rExp(){
     <div id="facWaterfallDiv" style="height:${Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20}px"></div>
   </div>
 
-  ${isUSOnly?`<div style="margin-top:16px;padding:10px 14px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;font-size:11px;color:var(--txt)">ⓘ US-focused strategy — country and region analysis not applicable</div>`:''}
   <!-- Row 4: Country Exposure -->
-  <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
+  <div class="card" id="cardCountry" style="grid-column:1/-1">
     <div class="flex-between">
       <div class="card-title">Country Exposure</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardCountry');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#countryTableWrap table','countries');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
+        <div class="export-bar">
+          <button class="export-btn" id="cntryPngBtn" onclick="screenshotCard('#cardCountry')">PNG</button>
+          <button class="export-btn" id="cntryCsvBtn" onclick="exportCSV('#countryTableWrap table','countries')" style="display:none">CSV</button>
+        </div>
         <div class="toggle-wrap" style="margin:0">
           <button class="toggle-btn active" onclick="toggleCountryView('map',this)">Map</button>
           <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
@@ -899,30 +996,30 @@ function rExp(){
     </div>
     <div id="countryMapDiv" style="height:320px"></div>
     <div id="countryChartDiv" style="height:280px;display:none"></div>
-    <div id="countryTableWrap" style="max-height:320px;overflow-y:auto;display:none">${rCountryTable(s.countries,s.hold)}</div>
+    <div id="countryTableWrap" style="max-height:320px;overflow-y:auto;display:none">${rCountryTable(s.countries)}</div>
   </div>
 
   <!-- Row 5: Redwood Groups -->
   <div class="card" id="cardGroups">
     <div class="flex-between"><div class="card-title">Redwood Groups</div>
     <div style="display:flex;gap:6px;align-items:center">
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardGroups');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#grpTable table','groups');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#grpTable table','groups')">CSV</button><button class="export-btn" onclick="screenshotCard('#cardGroups')">PNG</button></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
     </div></div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
-    <div id="grpTable" style="display:none">${rGroupTable(s.groups,s.hold)}</div>
+    <div id="grpTable" style="display:none">${rGroupTable(s.groups)}</div>
   </div>
 
   <!-- Row 6: Quant Ranks + Characteristics -->
   <div class="grid g2">
     <div class="card" id="cardRanks">
       <div class="flex-between"><div class="card-title tip" data-tip="Click a rank to filter the Holdings tab">Quant Ranks</div>
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardRanks');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#cardRanks table','ranks');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div></div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardRanks table','ranks')">CSV</button></div></div>
       ${rRnk(s.ranks)}
     </div>
     <div class="card" id="cardChars">
       <div class="flex-between"><div class="card-title tip" data-tip="Click a metric for historical comparison">Portfolio Characteristics</div>
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardChars');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#cardChars table','characteristics');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div></div>
+      <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardChars table','characteristics')">CSV</button></div></div>
       ${rChr(s.chars)}
     </div>
   </div>
@@ -970,14 +1067,14 @@ function rExp(){
   </div>
 
   <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
-  <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
+  <div class="card" id="cardRegions" style="margin-top:16px">
     <div class="flex-between"><div class="card-title">Region Active Weights</div>
     <div style="display:flex;gap:6px;align-items:center">
       <div style="font-size:10px;color:var(--txt);margin-right:4px">Region coverage may be low for US-focused strategies</div>
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardRegions');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#regTable table','regions');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
+      <div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();exportCSV('#regTable table','regions')">CSV</button><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardRegions')">PNG</button></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
     </div></div>
-    <div id="regTable">${rWt(s.regions,'reg',s.hold)}</div>
+    <div id="regTable">${rWt(s.regions,'reg')}</div>
     <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
   </div>`;
 
@@ -992,32 +1089,18 @@ function rExp(){
 }
 
 function rFacWaterfall(s){
-  // Sort: most positive at top, most negative at bottom
-  let facs=s.factors.filter(f=>f.imp!=null).sort((a,b)=>(b.imp||0)-(a.imp||0));
+  let facs=s.factors.filter(f=>f.imp!=null).sort((a,b)=>Math.abs(b.imp||0)-Math.abs(a.imp||0));
   if(!facs.length||!document.getElementById('facWaterfallDiv'))return;
-  let vals=facs.map(f=>+(f.imp||0));
-  let maxAbs=Math.max(...vals.map(Math.abs),0.1);
-  let xmax=+(Math.ceil(maxAbs*10)/10+0.1).toFixed(2);
-  // Period label from current_date
-  let periodStr='';
-  let cd=s.current_date||(s.available_dates&&s.available_dates[s.available_dates.length-1]);
-  if(cd){let d=parseDate(cd);if(d)periodStr='Period ending '+d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
   Plotly.newPlot('facWaterfallDiv',[{
-    y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
-    marker:{color:vals.map(v=>v>=0?'#10b981':'#ef4444')},
-    hovertemplate:'<b>%{y}</b><br>Impact: %{x:+.3f}%<extra></extra>'
-  }],{
-    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},
-    margin:{l:10,r:20,t:periodStr?28:10,b:36},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
-           range:[-xmax,xmax],title:'Impact (%)',tickfont:{color:'#94a3b8',size:9}},
-    annotations:periodStr?[{
-      text:periodStr,x:0.5,y:1.0,xref:'paper',yref:'paper',
-      showarrow:false,font:{size:10,color:'#94a3b8'},xanchor:'center',yanchor:'bottom'
-    }]:[]
+    y:facs.map(f=>f.n),x:facs.map(f=>f.imp),type:'bar',orientation:'h',
+    marker:{color:facs.map(f=>(f.imp||0)>=0?'#6366f1':'#a78bfa')},
+    text:facs.map(f=>((f.imp||0)>=0?'+':'')+f2(f.imp,2)+'%'),
+    textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+    hovertemplate:'%{y}<br>Impact: %{x:.2f}%<extra></extra>'
+  }],{...plotBg,
+    yaxis:{...plotBg.yaxis,autorange:'reversed'},
+    xaxis:{...plotBg.xaxis,title:'Return Attribution (%)',zeroline:true,zerolinecolor:'#334155',zerolinewidth:1.5},
+    margin:{l:130,r:60,t:8,b:36}
   },plotCfg);
 }
 
@@ -1129,23 +1212,6 @@ function rWt(data,type,hold){
       if(h.qual!=null){secQS[h.sec]=(secQS[h.sec]||0)+h.qual;secQC[h.sec]=(secQC[h.sec]||0)+1;secQW[h.sec]=(secQW[h.sec]||0)+h.qual*w;secQPW[h.sec]=(secQPW[h.sec]||0)+w;}
     });
   }
-  // Region ORVQ: group by CMAP[h.co]
-  let regOS={},regOC={},regOW={},regOPW={};
-  let regRS={},regRC={},regRW={},regRPW={};
-  let regVS={},regVC={},regVW={},regVPW={};
-  let regQS={},regQC={},regQW={},regQPW={};
-  if(type==='reg'&&hold){
-    hold.forEach(h=>{
-      if(isCash(h)||!h.co)return;
-      let reg=CMAP[h.co]||'Other';
-      let w=h.p>0?h.p:0;
-      if(h.over!=null){regOS[reg]=(regOS[reg]||0)+h.over;regOC[reg]=(regOC[reg]||0)+1;regOW[reg]=(regOW[reg]||0)+h.over*w;regOPW[reg]=(regOPW[reg]||0)+w;}
-      if(h.rev!=null){regRS[reg]=(regRS[reg]||0)+h.rev;regRC[reg]=(regRC[reg]||0)+1;regRW[reg]=(regRW[reg]||0)+h.rev*w;regRPW[reg]=(regRPW[reg]||0)+w;}
-      if(h.val!=null){regVS[reg]=(regVS[reg]||0)+h.val;regVC[reg]=(regVC[reg]||0)+1;regVW[reg]=(regVW[reg]||0)+h.val*w;regVPW[reg]=(regVPW[reg]||0)+w;}
-      if(h.qual!=null){regQS[reg]=(regQS[reg]||0)+h.qual;regQC[reg]=(regQC[reg]||0)+1;regQW[reg]=(regQW[reg]||0)+h.qual*w;regQPW[reg]=(regQPW[reg]||0)+w;}
-    });
-  }
-  let hasRegRanks=type==='reg'&&hold&&Object.keys(regOC).length>0;
   let wtd=_secRankMode==='wtd';
   function sAvg(sS,cS,sW,pW){return wtd?(pW>0?sW/pW:null):(cS>0?sS/cS:null);}
   // Sort sectors by TE contribution descending; regions stay as-is
@@ -1174,16 +1240,6 @@ function rWt(data,type,hold){
               +rankCell(sAvg(secRS[d.n]||0,secRC[d.n]||0,secRW[d.n]||0,secRPW[d.n]||0),'r')
               +rankCell(sAvg(secVS[d.n]||0,secVC[d.n]||0,secVW[d.n]||0,secVPW[d.n]||0),'v')
               +rankCell(sAvg(secQS[d.n]||0,secQC[d.n]||0,secQW[d.n]||0,secQPW[d.n]||0),'q');
-    }
-    if(type==='reg'&&hasRegRanks){
-      const rankCellR=(avg)=>{
-        let c=avg!=null?rc(Math.round(avg)):'#334155';
-        return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
-      };
-      rvqCells=rankCellR(sAvg(regOS[d.n]||0,regOC[d.n]||0,regOW[d.n]||0,regOPW[d.n]||0))
-              +rankCellR(sAvg(regRS[d.n]||0,regRC[d.n]||0,regRW[d.n]||0,regRPW[d.n]||0))
-              +rankCellR(sAvg(regVS[d.n]||0,regVC[d.n]||0,regVW[d.n]||0,regVPW[d.n]||0))
-              +rankCellR(sAvg(regQS[d.n]||0,regQC[d.n]||0,regQW[d.n]||0,regQPW[d.n]||0));
     }
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
       <td>${d.n}</td>
@@ -1220,7 +1276,7 @@ function rWt(data,type,hold){
   </thead>`;
   let table=type==='sec'
     ?`<table id="${tblId}">${secThead}<tbody>${rows}</tbody></table>`
-    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${hasRegRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',7)">Q</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
     let totalW=data.reduce((s,d)=>s+(d.p||0),0);
@@ -1403,87 +1459,25 @@ function rChr(chars){
   return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r" onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function rCountryTable(countries,hold){
+function rCountryTable(countries){
   if(!countries||!countries.length)return'<p style="color:var(--txt);font-size:12px">No country data</p>';
-  // Compute weighted-avg ORVQ per country from holdings
-  let coOS={},coOC={},coOW={},coOPW={};
-  let coRS={},coRC={},coRW={},coRPW={};
-  let coVS={},coVC={},coVW={},coVPW={};
-  let coQS={},coQC={},coQW={},coQPW={};
-  if(hold){
-    hold.forEach(h=>{
-      if(!h.co||isCash(h))return;
-      let w=h.p>0?h.p:0;
-      if(h.over!=null){coOS[h.co]=(coOS[h.co]||0)+h.over;coOC[h.co]=(coOC[h.co]||0)+1;coOW[h.co]=(coOW[h.co]||0)+h.over*w;coOPW[h.co]=(coOPW[h.co]||0)+w;}
-      if(h.rev!=null){coRS[h.co]=(coRS[h.co]||0)+h.rev;coRC[h.co]=(coRC[h.co]||0)+1;coRW[h.co]=(coRW[h.co]||0)+h.rev*w;coRPW[h.co]=(coRPW[h.co]||0)+w;}
-      if(h.val!=null){coVS[h.co]=(coVS[h.co]||0)+h.val;coVC[h.co]=(coVC[h.co]||0)+1;coVW[h.co]=(coVW[h.co]||0)+h.val*w;coVPW[h.co]=(coVPW[h.co]||0)+w;}
-      if(h.qual!=null){coQS[h.co]=(coQS[h.co]||0)+h.qual;coQC[h.co]=(coQC[h.co]||0)+1;coQW[h.co]=(coQW[h.co]||0)+h.qual*w;coQPW[h.co]=(coQPW[h.co]||0)+w;}
-    });
-  }
-  function coWAvg(S,C,W,PW){return PW>0?W/PW:(C>0?S/C:null);}
-  const rankCell=(avg)=>{
-    if(avg==null)return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:#334155">—</td>`;
-    return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
-  };
-  let hasRanks=hold&&Object.keys(coOC).length>0;
   let sorted=[...countries].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
   let rows=sorted.map(c=>{
     let cls=activeStyle(c.a);
-    let rvq=hasRanks?(
-      rankCell(coWAvg(coOS[c.n]||0,coOC[c.n]||0,coOW[c.n]||0,coOPW[c.n]||0))+
-      rankCell(coWAvg(coRS[c.n]||0,coRC[c.n]||0,coRW[c.n]||0,coRPW[c.n]||0))+
-      rankCell(coWAvg(coVS[c.n]||0,coVC[c.n]||0,coVW[c.n]||0,coVPW[c.n]||0))+
-      rankCell(coWAvg(coQS[c.n]||0,coQC[c.n]||0,coQW[c.n]||0,coQPW[c.n]||0))
-    ):'';
-    return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${rvq}</tr>`;
+    return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td></tr>`;
   }).join('');
-  let rvqTh=hasRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',7)">Q</th>':'';
-  return`<table id="tbl-ctry"><thead><tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-ctry',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-ctry"><thead><tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-ctry',3)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
-function rGroupTable(groups,hold){
+function rGroupTable(groups){
   if(!groups||!groups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
   let displayGroups=groups.filter(g=>g.n&&g.n!=='[Cash]');
   if(!displayGroups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
-  // Compute weighted-avg ORVQ per group via GROUPS_DEF sector→subgroup mapping
-  let grpOS={},grpOC={},grpOW={},grpOPW={};
-  let grpRS={},grpRC={},grpRW={},grpRPW={};
-  let grpVS={},grpVC={},grpVW={},grpVPW={};
-  let grpQS={},grpQC={},grpQW={},grpQPW={};
-  if(hold){
-    let secToSg={};
-    GROUPS_DEF.forEach(gd=>{gd.secs.forEach(sec=>{if(!secToSg[sec])secToSg[sec]=[];secToSg[sec].push(gd.sg);});});
-    hold.forEach(h=>{
-      if(!h.sec||isCash(h))return;
-      let sgs=secToSg[h.sec]||[];
-      sgs.forEach(sg=>{
-        let w=h.p>0?h.p:0;
-        if(h.over!=null){grpOS[sg]=(grpOS[sg]||0)+h.over;grpOC[sg]=(grpOC[sg]||0)+1;grpOW[sg]=(grpOW[sg]||0)+h.over*w;grpOPW[sg]=(grpOPW[sg]||0)+w;}
-        if(h.rev!=null){grpRS[sg]=(grpRS[sg]||0)+h.rev;grpRC[sg]=(grpRC[sg]||0)+1;grpRW[sg]=(grpRW[sg]||0)+h.rev*w;grpRPW[sg]=(grpRPW[sg]||0)+w;}
-        if(h.val!=null){grpVS[sg]=(grpVS[sg]||0)+h.val;grpVC[sg]=(grpVC[sg]||0)+1;grpVW[sg]=(grpVW[sg]||0)+h.val*w;grpVPW[sg]=(grpVPW[sg]||0)+w;}
-        if(h.qual!=null){grpQS[sg]=(grpQS[sg]||0)+h.qual;grpQC[sg]=(grpQC[sg]||0)+1;grpQW[sg]=(grpQW[sg]||0)+h.qual*w;grpQPW[sg]=(grpQPW[sg]||0)+w;}
-      });
-    });
-  }
-  function grpWAvg(S,C,W,PW){return PW>0?W/PW:(C>0?S/C:null);}
-  const rankCell=(avg)=>{
-    if(avg==null)return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:#334155">—</td>`;
-    return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
-  };
-  let hasRanks=hold&&Object.keys(grpOC).length>0;
   let rows=displayGroups.map(g=>{
     let cls=activeStyle(g.a);
-    let gn=g.n;
-    let rvq=hasRanks?(
-      rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0))+
-      rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0))+
-      rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0))+
-      rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0))
-    ):'';
-    return`<tr class="clickable" onclick="oDrGroup('${g.n}')"><td><span class="chip">${g.n}</span></td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td>${rvq}</tr>`;
+    return`<tr class="clickable" onclick="oDrGroup('${g.n}')"><td><span class="chip">${g.n}</span></td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td></tr>`;
   }).join('');
-  let rvqTh=hasRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',7)">Q</th>':'';
-  return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -1589,118 +1583,80 @@ const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
-  // TRUE butterfly: portfolio bars extend LEFT (negative x), benchmark RIGHT (positive x)
-  // No textposition:'outside' — conflicts with barmode:'overlay' and causes empty render
+  // TRUE butterfly via two separate x-axis domains:
+  // xaxis  (left half,  domain [0.00–0.43], REVERSED range [xmax→0]) — Portfolio bars grow right→left
+  // xaxis2 (right half, domain [0.57–1.00], NORMAL   range [0→xmax]) — Benchmark bars grow left→right
+  // Both share yaxis:'y'. Sector names as paper-anchored annotations in the center gap.
   let d=[...s.sectors]
     .filter(x=>x.n&&!/cash/i.test(x.n))
     .sort((a,b)=>b.a-a.a);
-  if(!d.length)return;
   let names=d.map(x=>x.n);
   let pvals=d.map(x=>+(x.p||0).toFixed(2));
   let bvals=d.map(x=>+(x.b||0).toFixed(2));
-  let h=Math.max(280,d.length*36+80);
+  let h=Math.max(220,d.length*34+80);
   let el=$('secChartDiv');
   if(el)el.style.height=h+'px';
-  let maxW=Math.max(...pvals,...bvals,5);
-  let xmax=Math.ceil((maxW+5)/5)*5;
-  let tvStep=xmax>=20?5:2;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
+  let maxW=Math.max(...pvals,...bvals);
+  let xmax=Math.ceil(maxW/5)*5+5;
+  let tvStep=xmax>25?5:xmax>10?2:1;
+  let tickVals=[],tickText=[];
+  for(let v=0;v<=xmax;v+=tvStep){tickVals.push(v);tickText.push(v+'%');}
+  // Center-gap annotations for sector names (paper x=0.5)
+  let annotations=names.map(name=>({
+    x:0.5,y:name,text:name,showarrow:false,
+    xref:'paper',yref:'y',
+    font:{size:10,color:'#e2e8f0'},xanchor:'center',yanchor:'middle'
+  }));
+  // Vertical center axis shape
+  let shapes=[{type:'line',x0:0.5,x1:0.5,y0:0,y1:1,xref:'paper',yref:'paper',line:{color:'#475569',width:2}}];
+  let axBase={gridcolor:'#334155',zeroline:false,tickvals:tickVals,ticktext:tickText,tickfont:{color:'#94a3b8',size:10},title:'',showline:false};
   Plotly.newPlot('secChartDiv',[
     {
-      name:'Portfolio',type:'bar',orientation:'h',
-      y:names,x:pvals.map(v=>-v),
-      marker:{color:'rgba(99,102,241,0.85)'},
-      customdata:pvals,
-      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'
+      y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',
+      xaxis:'x',yaxis:'y',
+      marker:{color:'#6366f1'},
+      text:pvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',
+      textfont:{size:10,color:'#6366f1'},
+      hovertemplate:'%{y}<br>Portfolio: %{x:.1f}%<extra></extra>'
     },
     {
-      name:'Benchmark',type:'bar',orientation:'h',
-      y:names,x:bvals,
-      marker:{color:'rgba(75,85,99,0.85)'},
-      hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'
+      y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',
+      xaxis:'x2',yaxis:'y',
+      marker:{color:'#4b5563'},
+      text:bvals.map(v=>v.toFixed(1)+'%'),textposition:'outside',
+      textfont:{size:10,color:'#94a3b8'},
+      hovertemplate:'%{y}<br>Benchmark: %{x:.1f}%<extra></extra>'
     }
   ],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'Inter',color:'#94a3b8',size:11},
     height:h,
-    barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:10}},
+    margin:{l:10,r:10,t:30,b:35},
+    annotations,shapes,
+    yaxis:{gridcolor:'#334155',zerolinecolor:'#334155',anchor:'x',autorange:'reversed',showticklabels:false,domain:[0,1]},
+    xaxis:{...axBase,domain:[0,0.43],range:[xmax,0],anchor:'y'},   // reversed → bars grow leftward
+    xaxis2:{...axBase,domain:[0.57,1],range:[0,xmax],anchor:'y'},  // normal  → bars grow rightward
     legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
   },plotCfg);
 }
 
 function rRegChart(s){
-  let d=[...s.regions].filter(x=>x.n).sort((a,b)=>b.a-a.a);
-  if(!d.length)return;
-  let names=d.map(x=>x.n);
-  let pvals=d.map(x=>+(x.p||0).toFixed(2));
-  let bvals=d.map(x=>+(x.b||0).toFixed(2));
-  let h=Math.max(200,d.length*36+80);
-  let el=$('regChartDiv');if(el)el.style.height=h+'px';
-  let maxW=Math.max(...pvals,...bvals,5);
-  let xmax=Math.ceil((maxW+5)/5)*5;
-  let tvStep=xmax>=20?5:2;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
-  Plotly.newPlot('regChartDiv',[
-    {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
-     marker:{color:'rgba(99,102,241,0.85)'},customdata:pvals,
-     hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
-    {name:'Benchmark',type:'bar',orientation:'h',y:names,x:bvals,
-     marker:{color:'rgba(75,85,99,0.85)'},
-     hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'}
-  ],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},height:h,barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:10}},
-    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
-  },plotCfg);
+  let d=s.regions.sort((a,b)=>b.a-a.a);
+  Plotly.newPlot('regChartDiv',[{
+    y:d.map(x=>x.n),x:d.map(x=>x.a),type:'bar',orientation:'h',
+    marker:{color:d.map(x=>x.a>=0?'#10b981':'#ef4444')},text:d.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
+  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Weight %'}},plotCfg);
 }
 
 function rFacButt(s){
-  // Single-trace diverging bar: f.a (active exposure) only
-  // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
   let facs=s.factors;
-  if(!facs||!facs.length)return;
   let names=facs.map(f=>f.n);
-  let vals=facs.map(f=>+(f.a??0).toFixed(3));
-  let maxE=Math.max(...vals.map(Math.abs),0.3);
-  let xmax=Math.ceil(maxE*10)/10+0.2;
-  let tvStep=xmax>1?0.5:xmax>0.5?0.2:0.1;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax+0.001;v=Math.round((v+tvStep)*100)/100){
-    tickVals.push(v,-v);tickText.push(v.toFixed(1),v.toFixed(1));
-  }
-  let h=Math.max(280,facs.length*30+60);
-  let el=document.getElementById('facButtDiv');
-  if(el)el.style.height=h+'px';
+  let vals=facs.map(f=>f.a??0);
   Plotly.newPlot('facButtDiv',[{
-    name:'Active Exposure',type:'bar',orientation:'h',
-    y:names,x:vals,
-    marker:{color:vals.map(v=>v>=0?'#6366f1':'#a78bfa')},
-    hovertemplate:'<b>%{y}</b><br>Active Exposure: %{x:.3f}<extra></extra>'
-  }],{
-    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},
-    height:h,
-    margin:{l:10,r:20,t:10,b:30},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:9},title:'Active Exposure'},
-    showlegend:false
-  },plotCfg);
+    y:names,x:vals,type:'bar',orientation:'h',
+    marker:{color:vals.map(v=>v>=0?'#6366f1':'#94a3b8')},
+    text:vals.map(v=>v.toFixed(3)),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
+  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Exposure',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2}},plotCfg);
 }
 
 const COUNTRY_ISO3={
@@ -1749,15 +1705,14 @@ function rCountryMap(s){
     margin:{l:0,r:0,t:0,b:0},
     height:320
   },plotCfg);
-  document.getElementById('countryMapDiv').on('plotly_click',function(data){
-    if(data.points&&data.points.length)oDrCountry(data.points[0].text);
-  });
 }
 
 function toggleCountryView(v,btn){
   $('countryMapDiv').style.display=v==='map'?'block':'none';
   $('countryChartDiv').style.display=v==='chart'?'block':'none';
   $('countryTableWrap').style.display=v==='table'?'block':'none';
+  $('cntryCsvBtn').style.display=v==='table'?'':'none';
+  $('cntryPngBtn').style.display=v==='table'?'none':'';
   document.querySelectorAll('#cardCountry .toggle-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(v==='chart'&&cs)rCountryChart(cs);
@@ -1779,35 +1734,13 @@ function rCountryChart(s){
 
 function rGroupChart(s){
   if(!s.groups||!s.groups.length)return;
-  let d=s.groups.filter(g=>g.n&&g.n!=='[Cash]');
-  if(!d.length)return;
-  let names=d.map(g=>g.n);
-  let pvals=d.map(g=>+(g.p||0).toFixed(2));
-  let bvals=d.map(g=>+(g.b||0).toFixed(2));
-  let h=Math.max(220,d.length*36+80);
-  let el=$('grpChartDiv');if(el)el.style.height=h+'px';
-  let maxW=Math.max(...pvals,...bvals,5);
-  let xmax=Math.ceil((maxW+5)/5)*5;
-  let tvStep=xmax>=20?5:2;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
+  let names=s.groups.map(g=>g.n);
+  let pvals=s.groups.map(g=>+(g.p||0).toFixed(2));
+  let bvals=s.groups.map(g=>+(g.b||0).toFixed(2));
   Plotly.newPlot('grpChartDiv',[
-    {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
-     marker:{color:'rgba(99,102,241,0.85)'},customdata:pvals,
-     hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
-    {name:'Benchmark',type:'bar',orientation:'h',y:names,x:bvals,
-     marker:{color:'rgba(75,85,99,0.85)'},
-     hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'}
-  ],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},height:h,barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:10}},
-    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
-  },plotCfg);
+    {y:names,x:pvals,name:'Portfolio',type:'bar',orientation:'h',marker:{color:'#6366f1'}},
+    {y:names,x:bvals,name:'Benchmark',type:'bar',orientation:'h',marker:{color:'#94a3b8'}}
+  ],{...plotBg,barmode:'group',yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Weight %'},legend:{x:0.7,y:1.1,orientation:'h',font:{size:10}}},plotCfg);
 }
 
 function rScat(s){
@@ -2515,7 +2448,10 @@ function renderHoldTab(){
       <div class="flex-between" style="margin-bottom:10px">
         <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>
         <div style="display:flex;gap:8px;align-items:center">
-          <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardHoldings');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportAllHoldings();this.closest('.dl-drop').classList.remove('open')">Export All CSV</div></div></div>
+          <div class="export-bar">
+            <button class="export-btn" onclick="exportAllHoldings()" title="Export all holdings including all pages">Export All CSV</button>
+            <button class="export-btn" onclick="screenshotCard('#cardHoldings')">PNG</button>
+          </div>
           <button class="export-btn" onclick="_showIndustry=!_showIndustry;renderHoldTab()" title="Toggle Industry column" style="${_showIndustry?'border-color:var(--pri);color:var(--pri)':''}">Industry ${_showIndustry?'▲':'▼'}</button>
           <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by sector">
             <option value="">All Sectors</option>
@@ -3590,8 +3526,8 @@ function oDrMetric(metric,range){
     return;
   }
 
-  let fullHist=cs.hist.sum||cs.hist.summary||[];
-  if(!fullHist||!fullHist.length){console.warn('oDrMetric: no history data for',metric);return;}
+  let fullHist=cs.hist.sum;
+  if(!fullHist||!fullHist.length)return;
   if(range!=null)_metricRange=range;
   // Slice to range: 3M≈13wk, 6M≈26wk, 1Y≈52wk, 3Y≈156wk, All=all
   let rangeWks={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
@@ -3606,11 +3542,10 @@ function oDrMetric(metric,range){
     beta:[{v:0.9,c:'#a78bfa',l:'0.9',dir:'floor'},{v:1.1,c:'#a78bfa',l:'1.1',dir:'ceil'}]
   };
   // Per-metric y-axis range
-  let yRanges={te:[3,10],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
+  let yRanges={te:[2,11],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
 
-  let vals=hist.map(h=>{let v=h[metric];return typeof v==='number'?v:parseFloat(v)||0;});
+  let vals=hist.map(h=>h[metric]);
   let dates=hist.map(h=>isoDate(h.d));
-  console.log('METRIC DEBUG:',metric,'dates[0..2]:',dates.slice(0,3),'vals[0..2]:',vals.slice(0,3),'nullCount:',vals.filter(v=>v==null||isNaN(v)).length,'typeof vals[0]:',typeof vals[0]);
   let current=vals[vals.length-1];
   let numVals=vals.filter(v=>v!=null);
   let min=numVals.length?Math.min(...numVals):null;
@@ -3801,7 +3736,7 @@ function oDrMetric(metric,range){
     let annotations=breaches.slice(-5).map(b=>({x:b.date,y:b.val,text:'!',showarrow:true,arrowhead:2,arrowcolor:'#ef4444',font:{size:10,color:'#ef4444'}}));
     let yRange=yRanges[metric]||undefined;
     let yaxis={...plotBg.yaxis,title:labels[metric]+(units[metric]?' ('+units[metric]+')':'')};
-    if(yRange){yaxis.range=yRange;yaxis.autorange=false;}
+    if(yRange)yaxis.range=yRange;
     if(metric==='h'){yaxis.rangemode='tozero';yaxis.dtick=Math.max(1,Math.ceil((max-min)/6))}
     let maxTicks=Math.min(8,Math.ceil(dates.length/12));
     let xaxis={...plotBg.xaxis,tickangle:0,nticks:maxTicks,tickformat:'%b %Y',tickfont:{size:10,color:'#94a3b8'}};
@@ -3817,10 +3752,7 @@ function oDrMetric(metric,range){
       shapes.push({type:'line',y0:avg,y1:avg,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dash',width:1}});
       annotations.push({x:1,xref:'paper',y:avg,text:'avg',showarrow:false,font:{size:9,color:'#94a3b8'},xanchor:'left',xshift:4});
     }
-    // Main data line — on top, always visible
-    allTraces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],
-      line:{color:'#e2e8f0',width:2.5},connectgaps:true,
-      hovertemplate:'%{x|%b %d %Y}<br>'+labels[metric]+': %{y:.2f}'+(units[metric]||'')+'<extra></extra>'});
+    allTraces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],line:{color:'#6366f1',width:2},fill,fillcolor:fillColor});
     // Beta overlays
     if(metric==='beta'&&window._betaVariants&&window._betaSelected){
       let betaColors=['#10b981','#a78bfa','#ef4444','#8b5cf6','#6366f1','#ec4899','#f97316','#22c55e'];
@@ -3832,9 +3764,8 @@ function oDrMetric(metric,range){
         }
       });
     }
-    let xaxisFinal={...xaxis,type:'date',rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
-    console.log('PLOTLY TRACES:',allTraces.length,'dates[0..2]:',dates.slice(0,3),'vals[0..2]:',vals.slice(0,3),'yaxis:',JSON.stringify(yaxis));
-    Plotly.newPlot('metricChartDiv',allTraces,{...plotBg,xaxis:xaxisFinal,yaxis,shapes,annotations,hovermode:'x unified',margin:{...plotBg.margin,r:metric==='beta'?80:20}},modalPlotCfg);
+    let xaxisFinal={...xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.08}};
+    Plotly.newPlot('metricChartDiv',allTraces,{...plotBg,xaxis:xaxisFinal,yaxis,shapes,annotations,margin:{...plotBg.margin,r:metric==='beta'?80:20}},modalPlotCfg);
   },50);
 }
 
@@ -3854,15 +3785,9 @@ function oDrCountry(name){
   let region=CMAP[name]||'Other';
   let regData=cs.regions.find(r=>r.n===region);
 
-  let holdRows=holdings.sort((a,b)=>(b.tr||0)-(a.tr||0)).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td>
-    <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
-    <td><span class="chip">${h.sec||'—'}</span></td>
-    <td class="r">${f2(h.p,1)}</td>
-    <td class="r ${activeStyle(h.a)}">${fp(h.a,1)}</td>
-    <td class="r">${f2(h.mcr,2)}</td>
-    <td class="r" style="color:var(--pos);font-weight:600">${fp(h.tr,1)}</td>
-    ${rORVQCells(h)}
+  let holdRows=holdings.sort((a,b)=>b.p-a.p).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
+    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td>
+    <td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>${rORVQCells(h)}
   </tr>`).join('');
 
   $('countryContent').innerHTML=`
@@ -3873,7 +3798,7 @@ function oDrCountry(name){
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${region}</div><div style="font-size:10px;color:var(--txt)">Active: ${regData?fp(regData.a):'—'}%</div></div>
     </div>
     <div class="card-title">Holdings in ${name} (${holdings.length})</div>
-    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th><th class="r tip" data-tip="Stock-specific TE component">%S</th><th class="r tip" data-tip="% of total portfolio tracking error">Total TE%</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
+    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Bench%</th><th class="r">Active</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
   m.classList.add('show');
 }
 

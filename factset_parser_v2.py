@@ -666,20 +666,36 @@ class FactSetParserV2:
             s["factors"] = factors
 
             # ── 18 Style Snapshot attribution (countries, industries, currencies) ─
+            # Last entry is a full-period summary row (d_start=inception, d_end=latest)
+            # Detect by: d_start == first period's d_start AND d == last weekly d
             snap_attrib = bucket.get("_snap_attrib", {})
             if snap_attrib:
                 s["snap_attrib"] = {}
                 for item_name, periods in snap_attrib.items():
-                    if periods:
-                        latest = periods[-1]
-                        s["snap_attrib"][item_name] = {
-                            "exp": latest.get("exp"),
-                            "ret": latest.get("ret"),
-                            "imp": latest.get("imp"),
-                            "dev": latest.get("dev"),
-                            "cimp": latest.get("cimp"),
-                            "hist": periods,  # full time series
-                        }
+                    if not periods:
+                        continue
+                    # Exclude summary row: last entry where d_start spans to inception
+                    weekly = [p for p in periods
+                              if not (p.get("d_start") and p.get("d_end")
+                                      and p["d_start"] != p["d_end"]
+                                      and len(periods) > 2
+                                      and p["d_start"] == periods[0].get("d_start")
+                                      and p is periods[-1])]
+                    if not weekly:
+                        weekly = periods  # fallback
+                    latest = weekly[-1]
+                    # Full-period summary (from the excluded row, if present)
+                    summary = periods[-1] if len(periods) > len(weekly) else latest
+                    s["snap_attrib"][item_name] = {
+                        "exp": latest.get("exp"),
+                        "ret": latest.get("ret"),
+                        "imp": latest.get("imp"),
+                        "dev": latest.get("dev"),
+                        "cimp": latest.get("cimp"),
+                        "full_period_imp": summary.get("imp"),   # compounded full-period impact
+                        "full_period_cimp": summary.get("cimp"), # same (sanity check)
+                        "hist": weekly,
+                    }
 
             # ── Characteristics (chars) ───────────────────────────────────────
             # Now fully populated with benchmark data

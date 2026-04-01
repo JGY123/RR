@@ -969,7 +969,29 @@ function rExp(){
     <div style="overflow-x:auto;max-width:100%" id="corrMatrixCardArea"><p style="color:var(--txt);font-size:12px">Computed from historical factor data — see Risk tab.</p></div>
   </div>
 
-  <!-- Row 12: Region Active Weights (de-prioritized, bottom of page) -->
+  <!-- Row 12: Factor Attribution (from 18 Style Snapshot) -->
+  <div class="card" id="cardAttrib">
+    <div class="flex-between">
+      <div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot. Shows how each country, industry, and currency contributed to portfolio returns over time.">Factor Attribution</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
+          <option value="all">All</option>
+          <option value="country">Countries</option>
+          <option value="industry">Industries</option>
+          <option value="currency">Currencies</option>
+        </select>
+        <select id="attribSort" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
+          <option value="imp">By Impact</option>
+          <option value="exp">By Exposure</option>
+          <option value="dev">By Volatility</option>
+        </select>
+      </div>
+    </div>
+    <div id="attribTableArea"></div>
+    <div id="attribChartDiv" style="height:280px;margin-top:12px"></div>
+  </div>
+
+  <!-- Row 13: Region Active Weights (de-prioritized, bottom of page) -->
   <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
     <div class="flex-between"><div class="card-title">Region Active Weights</div>
     <div style="display:flex;gap:6px;align-items:center">
@@ -985,7 +1007,7 @@ function rExp(){
   // Render charts after DOM update
   setTimeout(()=>{
     rSecChart(s);rRegChart(s);rFacButt(s);rCountryMap(s);rCountryChart(s);rGroupChart(s);
-    rScat(s);rTree(s);rMCR(s);rFRB(s);rFacWaterfall(s);
+    rScat(s);rTree(s);rMCR(s);rFRB(s);rFacWaterfall(s);rAttribTable();
     applySectColVis();
     applyFacColVis();
   },50);
@@ -1494,6 +1516,147 @@ function rUnowned(unowned){
   return`<table id="tbl-unowned"><thead><tr><th onclick="sortTbl('tbl-unowned',0)">Ticker</th><th onclick="sortTbl('tbl-unowned',1)">Name</th><th onclick="sortTbl('tbl-unowned',2)">Region</th><th class="r" onclick="sortTbl('tbl-unowned',3)">Bench Wt%</th><th class="r" onclick="sortTbl('tbl-unowned',4)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+
+// ===== FACTOR ATTRIBUTION (18 Style Snapshot) =====
+const KNOWN_CURRENCIES=new Set(['AUD','CAD','CHF','CNY','DKK','EUR','GBP','HKD','ILS','JPY','NGN','NOK','NZD','SEK','SGD','USD','TWD','KRW','BRL','MXN','INR','ZAR','THB','IDR','MYR','PLN','CZK','HUF','TRY','CLP','COP','PEN','EGP','QAR','KWD','SAR','AED','PHP','VND','PKR']);
+function classifyAttrib(name){
+  if(KNOWN_CURRENCIES.has(name))return'currency';
+  // Countries tend to be 1-3 words, capitalized, no &
+  if(name.length<25&&!name.includes('&')&&!name.includes(',')&&name[0]===name[0].toUpperCase()&&/^[A-Z][a-z]/.test(name))return'country';
+  return'industry';
+}
+
+function rAttribTable(){
+  let sa=cs.snap_attrib;
+  if(!sa||!Object.keys(sa).length){
+    $('attribTableArea').innerHTML='<p style="color:var(--txt);font-size:12px">No attribution data</p>';
+    return;
+  }
+  let cat=$('attribCategory').value;
+  let sortBy=$('attribSort').value;
+
+  // Build items with classification
+  let items=Object.entries(sa).map(([name,d])=>{
+    let type=classifyAttrib(name);
+    return{name,type,...d};
+  });
+
+  // Filter by category
+  if(cat!=='all')items=items.filter(i=>i.type===cat);
+
+  // Sort
+  if(sortBy==='imp')items.sort((a,b)=>Math.abs(b.full_period_imp||0)-Math.abs(a.full_period_imp||0));
+  else if(sortBy==='exp')items.sort((a,b)=>Math.abs(b.exp||0)-Math.abs(a.exp||0));
+  else if(sortBy==='dev')items.sort((a,b)=>(b.dev||0)-(a.dev||0));
+
+  // Show top 20
+  let top=items.slice(0,20);
+  let typeIcon={country:'🌍',industry:'🏭',currency:'💱'};
+  let rows=top.map(i=>{
+    let impCls=i.full_period_imp>0?'pos':'neg';
+    let expCls=i.exp>0?'pos':i.exp<0?'neg':'';
+    return`<tr class="clickable" onclick="oDrAttrib('${i.name.replace(/'/g,"\\'")}')">
+      <td><span style="font-size:10px;margin-right:4px">${typeIcon[i.type]||''}</span><span style="color:var(--txth);font-weight:500">${i.name}</span></td>
+      <td class="r ${expCls}" style="font-size:11px">${fp(i.exp,2)}</td>
+      <td class="r" style="font-size:11px">${f2(i.dev,1)}</td>
+      <td class="r" style="font-size:11px;font-weight:600;color:${i.full_period_imp>0?'var(--pos)':'var(--neg)'}">${fp(i.full_period_imp,2)}%</td>
+    </tr>`;
+  }).join('');
+
+  $('attribTableArea').innerHTML=`<table id="tbl-attrib"><thead><tr>
+    <th onclick="sortTbl('tbl-attrib',0)">Factor</th>
+    <th class="r" onclick="sortTbl('tbl-attrib',1)">Exposure</th>
+    <th class="r" onclick="sortTbl('tbl-attrib',2)">Std Dev</th>
+    <th class="r" onclick="sortTbl('tbl-attrib',3)">Impact (%)</th>
+  </tr></thead><tbody>${rows}</tbody></table>
+  <p style="font-size:9px;color:var(--txt);margin-top:6px">${items.length} items · Impact = compounded return attribution over full period · Click row for time series</p>`;
+
+  // Chart: top 10 by impact as horizontal bar
+  let chart10=items.slice(0,10);
+  Plotly.newPlot('attribChartDiv',[{
+    y:chart10.map(i=>i.name),
+    x:chart10.map(i=>i.full_period_imp||0),
+    type:'bar',orientation:'h',
+    marker:{color:chart10.map(i=>(i.full_period_imp||0)>0?'#10b981':'#ef4444')},
+    text:chart10.map(i=>fp(i.full_period_imp,2)+'%'),
+    textposition:'outside',textfont:{size:10,color:'#94a3b8'},
+    hovertemplate:'%{y}<br>Impact: %{x:.2f}%<br>Exposure: '+chart10.map(i=>f2(i.exp,2)).join(',')+'<extra></extra>'
+  }],{...plotBg,
+    yaxis:{...plotBg.yaxis,autorange:'reversed'},
+    xaxis:{...plotBg.xaxis,title:'Cumulative Impact (%)'},
+    margin:{...plotBg.margin,l:180}
+  },plotCfg);
+}
+
+// Attribution drill — show cumulative impact time series for one item
+function oDrAttrib(name){
+  let sa=cs.snap_attrib;
+  if(!sa||!sa[name])return;
+  let item=sa[name];
+  let hist=item.hist;
+  if(!hist||!hist.length)return;
+
+  let m=$('metricModal');
+  let type=classifyAttrib(name);
+  let typeLabel={country:'Country',industry:'Industry',currency:'Currency'}[type]||'Factor';
+
+  // Compute our own cumulative from weekly impacts (for arbitrary zoom)
+  let dates=hist.map(h=>isoDate(h.d));
+  let weeklyImp=hist.map(h=>h.imp||0);
+  let cumulative=[];
+  let running=0;
+  // Simple addition for display (close enough for weekly, true compounding TBD after FactSet call)
+  weeklyImp.forEach(imp=>{running+=imp;cumulative.push(+running.toFixed(4));});
+
+  // CSV cumulative for comparison
+  let csvCum=hist.map(h=>h.cimp);
+
+  let current=item.full_period_imp;
+  let exp=item.exp;
+  let dev=item.dev;
+
+  $('metricContent').innerHTML=`
+    <h2>${name} <span style="font-size:13px;color:var(--txt);font-weight:400">${typeLabel} Attribution</span>
+    <button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+    <div class="grid g4" style="margin-bottom:12px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Cumulative Impact</div><div style="font-size:18px;font-weight:700;color:${current>0?'var(--pos)':'var(--neg)'}">${fp(current,2)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current Exposure</div><div style="font-size:18px;font-weight:700;color:var(--txth)">${f2(exp,2)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Factor Std Dev</div><div style="font-size:18px;font-weight:700;color:var(--txt)">${f2(dev,1)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Weeks</div><div style="font-size:18px;font-weight:700;color:var(--txt)">${hist.length}</div></div>
+    </div>
+    <div id="attribDrillChart" style="height:300px"></div>
+    <div id="attribDrillBars" style="height:160px;margin-top:8px"></div>`;
+  m.classList.add('show');
+
+  setTimeout(()=>{
+    // Cumulative impact line
+    Plotly.newPlot('attribDrillChart',[
+      {x:dates,y:csvCum,name:'Cumulative Impact (FactSet)',type:'scatter',mode:'lines',
+        line:{color:'#e2e8f0',width:2.5},connectgaps:true,
+        hovertemplate:'%{x|%b %d %Y}<br>Cumulative: %{y:.2f}%<extra></extra>'},
+      {x:dates,y:cumulative,name:'Running Sum (verify)',type:'scatter',mode:'lines',
+        line:{color:'#6366f1',width:1,dash:'dot'},visible:'legendonly',
+        hovertemplate:'%{x|%b %d %Y}<br>Sum: %{y:.2f}%<extra></extra>'}
+    ],{...plotBg,
+      xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:'#0f172a',thickness:0.06},tickformat:'%b %Y',nticks:8},
+      yaxis:{...plotBg.yaxis,title:'Cumulative Impact (%)',zeroline:true,zerolinecolor:'#94a3b8',zerolinewidth:1},
+      legend:{orientation:'h',y:1.1,font:{size:10}},
+      hovermode:'x unified',
+      shapes:[{type:'line',y0:0,y1:0,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dot',width:1}}]
+    },modalPlotCfg);
+
+    // Weekly impact bars
+    Plotly.newPlot('attribDrillBars',[{
+      x:dates,y:weeklyImp,type:'bar',name:'Weekly Impact',
+      marker:{color:weeklyImp.map(v=>v>0?'rgba(16,185,129,0.6)':'rgba(239,68,68,0.6)')},
+      hovertemplate:'%{x|%b %d %Y}<br>Impact: %{y:.3f}%<extra></extra>'
+    }],{...plotBg,
+      xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},
+      yaxis:{...plotBg.yaxis,title:'Weekly Impact (%)'},
+      margin:{...plotBg.margin,t:5}
+    },plotCfg);
+  },50);
+}
 
 function rUpdateCorr(){
   let s=cs;

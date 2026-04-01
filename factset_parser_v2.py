@@ -70,6 +70,14 @@ FACTOR_DISPLAY_NAME = {
     "Exchange Rate Sensitivity": "FX Sensitivity (Exchange Rate)",
 }
 
+# GICS industry name reclassification mapping (legacy → current)
+GICS_NAME_MAP = {
+    "Retailing": "Consumer Discretionary Distribution & Retail",
+    "Media": "Media & Entertainment",
+    "Commercial Services & Supplies": "Commercial & Professional Services",
+    "Pharmaceuticals, Biotechnology & Life Sciences": "Pharmaceuticals Biotechnology & Life Sciences",
+}
+
 # ── Column layout constants ───────────────────────────────────────────────────
 # Standard sections (Sector Weights, Industry, Region, Country, Group, Overall, REV, VAL, QUAL)
 # Dynamic groups; each group = 19 cols starting at date column
@@ -90,8 +98,7 @@ def build_date_cols(row_len, start=7, group_size=19):
 SEC_GROUP_SIZE  = 24
 
 # 18 Style Snapshot
-# 5 periods; each period = 7 cols
-SNAP_DATE_COLS  = [7, 14, 21, 28, 35]
+# Dynamic periods; each period = 7 cols (use build_date_cols at runtime)
 SNAP_GROUP_SIZE = 7
 
 # RiskM column positions
@@ -378,7 +385,7 @@ class FactSetParserV2:
         level2 = row[5]
         if level2 in ("Data", "@NA", "[Unassigned]", "[Cash]"):
             return
-        name = level2.strip()
+        name = GICS_NAME_MAP.get(level2.strip(), level2.strip())
         dc = build_date_cols(len(row), 7, STD_GROUP_SIZE)[-1] if len(row) > 7 else 7  # current group
         if len(row) <= dc + 2:
             return
@@ -482,20 +489,24 @@ class FactSetParserV2:
         })
 
     def _handle_style_snapshot(self, bucket, row):
-        """18 Style Snapshot: factor attribution across 5 periods."""
+        """18 Style Snapshot: factor attribution across all periods.
+        Extracts style factors, countries, industries, and currencies."""
         factor_raw = row[5].strip()
         if not factor_raw or factor_raw in ("Data", "@NA", "[Unassigned]"):
             return
 
-        # Only collect style factors (skip country/industry/currency attribution)
-        if factor_raw not in STYLE_FACTORS:
-            return
-
+        # Determine display name for style factors
         factor = FACTOR_DISPLAY_NAME.get(factor_raw, factor_raw)
 
-        # Build per-period data
+        # Classify: style factor vs country/industry/currency
+        is_style = factor_raw in STYLE_FACTORS
+        # Global Market is a special single item
+        is_market = factor_raw == "Global Market"
+
+        # Build per-period data using dynamic group detection
+        date_cols = build_date_cols(len(row), 7, SNAP_GROUP_SIZE)
         periods = []
-        for gi, dc in enumerate(SNAP_DATE_COLS):
+        for dc in date_cols:
             if len(row) <= dc + 6:
                 continue
             d_start = parse_date(row[dc])
@@ -505,12 +516,19 @@ class FactSetParserV2:
             imp  = safe_float(row[dc + 4])
             dev  = safe_float(row[dc + 5])
             cimp = safe_float(row[dc + 6])
+            if d_start is None and d_end is None:
+                continue
             periods.append({
+                "d": d_end or d_start,  # use end date as the period identifier
                 "d_start": d_start, "d_end": d_end,
                 "exp": exp, "ret": ret, "imp": imp, "dev": dev, "cimp": cimp,
             })
 
-        bucket["_snapshot"].setdefault(factor, []).extend(periods)
+        if is_style or is_market:
+            bucket["_snapshot"].setdefault(factor, []).extend(periods)
+        else:
+            # Country, industry, or currency attribution
+            bucket.setdefault("_snap_attrib", {})[factor_raw] = periods
 
     # ── Assembly ──────────────────────────────────────────────────────────────
 
@@ -536,7 +554,7 @@ class FactSetParserV2:
                 "beta":  current_pc.get("beta"),
                 "h":     current_pc.get("h"),
                 "bh":    current_pc.get("bh"),
-                "sr":    None,   # selection rate — not in new format
+                "sr":    round(current_pc.get("h", 0) / current_pc.get("bh", 1) * 100, 1) if current_pc.get("h") and current_pc.get("bh") else None,
                 "cash":  bucket.get("_cash"),
                 "pe":    current_rm.get("pe"),
                 "pb":    current_rm.get("pb"),
@@ -596,11 +614,24 @@ class FactSetParserV2:
             s["sectors"] = bucket["_sectors"]
 
             # ── Geo sections ──────────────────────────────────────────────────
+            # Deduplicate by name (GICS reclassification creates duplicate names)
+            def _dedup_geo(items):
+                seen = {}
+                for item in items:
+                    name = item["n"]
+                    if name in seen:
+                        # Keep the one with non-null weight (latest data wins)
+                        if item.get("p") is not None and seen[name].get("p") is None:
+                            seen[name] = item
+                    else:
+                        seen[name] = item
+                return list(seen.values())
+
             geo = bucket["_geo"]
-            s["countries"]  = geo.get("countries", [])
-            s["regions"]    = geo.get("regions", [])
-            s["industries"] = geo.get("industries", [])
-            s["groups"]     = geo.get("groups", [])
+            s["countries"]  = _dedup_geo(geo.get("countries", []))
+            s["regions"]    = _dedup_geo(geo.get("regions", []))
+            s["industries"] = _dedup_geo(geo.get("industries", []))
+            s["groups"]     = _dedup_geo(geo.get("groups", []))
 
             # ── Quintile distributions ────────────────────────────────────────
             s["ranks"] = bucket["_quintiles"]
@@ -617,9 +648,9 @@ class FactSetParserV2:
                 display = FACTOR_DISPLAY_NAME.get(fname_raw, fname_raw)
                 exp_data = riskm_exp.get(fname_raw, {})
 
-                # Attribution from 18 Style Snapshot period 5 (cumulative)
+                # Attribution from 18 Style Snapshot (last period = most recent)
                 snap_periods = snapshot.get(display, [])
-                snap_current = snap_periods[4] if len(snap_periods) >= 5 else (snap_periods[-1] if snap_periods else {})
+                snap_current = snap_periods[-1] if snap_periods else {}
 
                 factors.append({
                     "n":    display,
@@ -633,6 +664,22 @@ class FactSetParserV2:
                     "cimp": snap_current.get("cimp"),
                 })
             s["factors"] = factors
+
+            # ── 18 Style Snapshot attribution (countries, industries, currencies) ─
+            snap_attrib = bucket.get("_snap_attrib", {})
+            if snap_attrib:
+                s["snap_attrib"] = {}
+                for item_name, periods in snap_attrib.items():
+                    if periods:
+                        latest = periods[-1]
+                        s["snap_attrib"][item_name] = {
+                            "exp": latest.get("exp"),
+                            "ret": latest.get("ret"),
+                            "imp": latest.get("imp"),
+                            "dev": latest.get("dev"),
+                            "cimp": latest.get("cimp"),
+                            "hist": periods,  # full time series
+                        }
 
             # ── Characteristics (chars) ───────────────────────────────────────
             # Now fully populated with benchmark data
@@ -649,8 +696,10 @@ class FactSetParserV2:
                     "m": "Active Share (%)", "p": s["sum"].get("as"), "b": None, "a": None,
                 },
                 {
-                    "m": "Market Cap ($M)", "p": current_pc.get("mcap"), "b": current_pc.get("bmcap"),
-                    "a": _sub(current_pc.get("mcap"), current_pc.get("bmcap")),
+                    "m": "Market Cap ($B)",
+                    "p": round(current_pc["mcap"] / 1000, 1) if current_pc.get("mcap") else None,
+                    "b": round(current_pc["bmcap"] / 1000, 1) if current_pc.get("bmcap") else None,
+                    "a": round((current_pc["mcap"] - current_pc["bmcap"]) / 1000, 1) if current_pc.get("mcap") and current_pc.get("bmcap") else None,
                 },
                 {
                     "m": "Price/Earnings (P/E)", "p": current_rm.get("pe"), "b": current_rm.get("bpe"),
@@ -757,6 +806,7 @@ class FactSetParserV2:
             "_geo":      {},
             "_quintiles": {},
             "_snapshot": {},
+            "_snap_attrib": {},
             "_hist_sec": {},
             "_cash":     None,
         }

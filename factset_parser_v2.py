@@ -113,6 +113,8 @@ PC_BETA    = 11
 PC_H       = 12
 PC_AS      = 13
 PC_MCAP    = 14
+PC_HIST_BETA = 16
+PC_MPT_BETA  = 17
 PC_EPSG    = 18
 PC_EPSG_F  = 19
 PC_EPS3M   = 20
@@ -121,13 +123,18 @@ PC_FCFY    = 22
 PC_DIVY    = 23
 PC_ROE     = 24
 PC_OPMGN   = 25
-PC_BH      = 31
-PC_BMCAP   = 33
-PC_B_EPSG  = 37
-PC_B_FCFY  = 41
-PC_B_DIVY  = 42
-PC_B_ROE   = 43
-PC_B_OPMGN = 44
+PC_BH         = 31
+PC_BMCAP      = 33
+PC_B_HIST_BETA = 35
+PC_B_MPT_BETA  = 36
+PC_B_EPSG     = 37
+PC_B_EPSG_F   = 38
+PC_B_EPS3M    = 39
+PC_B_EPS6M    = 40
+PC_B_FCFY     = 41
+PC_B_DIVY     = 42
+PC_B_ROE      = 43
+PC_B_OPMGN    = 44
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -340,19 +347,29 @@ class FactSetParserV2:
             "h":     g(PC_H),
             "as":    g(PC_AS),
             "mcap":  g(PC_MCAP),
+            "hist_beta": g(PC_HIST_BETA),
+            "mpt_beta":  g(PC_MPT_BETA),
             "epsg":  g(PC_EPSG),
+            "epsg_f": g(PC_EPSG_F),   # EPS Growth Est 3-5Yr (forward)
+            "eps3m":  g(PC_EPS3M),    # 3M EPS Revisions FY1
+            "eps6m":  g(PC_EPS6M),    # 6M EPS Revisions FY1
             "fcfy":  g(PC_FCFY),
             "divy":  g(PC_DIVY),
             "roe":   g(PC_ROE),
             "opmgn": g(PC_OPMGN),
             # Benchmark characteristics
-            "bh":     g(PC_BH),
-            "bmcap":  g(PC_BMCAP),
-            "b_epsg": g(PC_B_EPSG),
-            "b_fcfy": g(PC_B_FCFY),
-            "b_divy": g(PC_B_DIVY),
-            "b_roe":  g(PC_B_ROE),
-            "b_opmgn": g(PC_B_OPMGN),
+            "bh":       g(PC_BH),
+            "bmcap":    g(PC_BMCAP),
+            "b_hist_beta": g(PC_B_HIST_BETA),
+            "b_mpt_beta":  g(PC_B_MPT_BETA),
+            "b_epsg":   g(PC_B_EPSG),
+            "b_epsg_f": g(PC_B_EPSG_F),
+            "b_eps3m":  g(PC_B_EPS3M),
+            "b_eps6m":  g(PC_B_EPS6M),
+            "b_fcfy":   g(PC_B_FCFY),
+            "b_divy":   g(PC_B_DIVY),
+            "b_roe":    g(PC_B_ROE),
+            "b_opmgn":  g(PC_B_OPMGN),
         }
         bucket["_pc"].append(entry)
 
@@ -526,11 +543,27 @@ class FactSetParserV2:
                 "bpe":   current_rm.get("bpe"),   # NEW: benchmark P/E
                 "bpb":   current_rm.get("bpb"),   # NEW: benchmark P/B
                 "mcap":  current_pc.get("mcap"),
+                "hist_beta": current_pc.get("hist_beta"),
+                "mpt_beta":  current_pc.get("mpt_beta"),
+                "betas": {
+                    "predicted": current_pc.get("beta"),
+                    "historical": current_pc.get("hist_beta"),
+                    "mpt": current_pc.get("mpt_beta"),
+                },
                 "roe":   current_pc.get("roe"),
                 "fcfy":  current_pc.get("fcfy"),
                 "divy":  current_pc.get("divy"),
                 "epsg":  current_pc.get("epsg"),
+                "epsg_f": current_pc.get("epsg_f"),
+                "eps3m": current_pc.get("eps3m"),
+                "eps6m": current_pc.get("eps6m"),
                 "opmgn": current_pc.get("opmgn"),
+                "bmcap":  current_pc.get("bmcap"),
+                "b_hist_beta": current_pc.get("b_hist_beta"),
+                "b_mpt_beta":  current_pc.get("b_mpt_beta"),
+                "b_epsg_f": current_pc.get("b_epsg_f"),
+                "b_eps3m":  current_pc.get("b_eps3m"),
+                "b_eps6m":  current_pc.get("b_eps6m"),
                 "total_risk":   current_rm.get("total_risk"),
                 "bm_risk":      current_rm.get("bm_risk"),
                 "pct_specific": current_rm.get("pct_specific"),
@@ -640,8 +673,20 @@ class FactSetParserV2:
                     "a": _sub(current_pc.get("divy"), current_pc.get("b_divy")),
                 },
                 {
-                    "m": "EPS Growth 3Yr", "p": current_pc.get("epsg"), "b": current_pc.get("b_epsg"),
+                    "m": "EPS Growth 3Yr (Hist)", "p": current_pc.get("epsg"), "b": current_pc.get("b_epsg"),
                     "a": _sub(current_pc.get("epsg"), current_pc.get("b_epsg")),
+                },
+                {
+                    "m": "EPS Growth 3-5Yr (Est)", "p": current_pc.get("epsg_f"), "b": current_pc.get("b_epsg_f"),
+                    "a": _sub(current_pc.get("epsg_f"), current_pc.get("b_epsg_f")),
+                },
+                {
+                    "m": "3M EPS Revisions FY1", "p": current_pc.get("eps3m"), "b": current_pc.get("b_eps3m"),
+                    "a": _sub(current_pc.get("eps3m"), current_pc.get("b_eps3m")),
+                },
+                {
+                    "m": "6M EPS Revisions FY1", "p": current_pc.get("eps6m"), "b": current_pc.get("b_eps6m"),
+                    "a": _sub(current_pc.get("eps6m"), current_pc.get("b_eps6m")),
                 },
                 {
                     "m": "Operating Margin - NTM", "p": current_pc.get("opmgn"), "b": current_pc.get("b_opmgn"),

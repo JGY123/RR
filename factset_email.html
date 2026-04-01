@@ -1,0 +1,230 @@
+<html><head><style>
+body{font-family:Calibri,Arial,sans-serif;font-size:14px;line-height:1.5;color:#333;max-width:900px;margin:20px auto}
+h2{color:#1a1a2e;border-bottom:2px solid #e0e0e0;padding-bottom:6px;margin-top:30px}
+h3{color:#1a1a2e;margin-top:20px}
+table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13px}
+th,td{border:1px solid #ddd;padding:6px 10px;text-align:left}
+th{background:#f5f5f5;font-weight:600}
+code{background:#f0f0f0;padding:2px 5px;border-radius:3px;font-size:12px}
+pre{background:#f5f5f5;padding:12px;border-radius:6px;overflow-x:auto;font-size:12px}
+strong{color:#1a1a2e}
+hr{border:none;border-top:1px solid #e0e0e0;margin:20px 0}
+li{margin:3px 0}
+</style></head><body>
+<p style="margin:4px 0">Subject: Redwood Risk — Data Questions + Expansion Request for Portfolio Attribution Export</p>
+<br>
+<hr>
+<br>
+<p style="margin:4px 0">Hi [FactSet contact],</p>
+<br>
+<p style="margin:4px 0">I spent the past several days going through the data, validating every field across all 14 section types, 7 strategies, and 158 weekly periods. This validation was quite challenging, and several data questions and expansion requests emerged.</p>
+<br>
+<p style="margin:4px 0">I've organized them by priority below.</p>
+<br>
+<hr>
+<br>
+<h2>1. ⭐ SECURITY SECTION — MOST IMPORTANT TOPIC</h2>
+<br>
+<p style="margin:4px 0">This is the highest-priority item. The Security section is the foundation of the per-holding analytics — every drill-down, factor attribution, and risk decomposition depends on it being complete and enriched.</p>
+<br>
+<h3>1A. Incomplete Holdings List (Critical)</h3>
+<br>
+<p style="margin:4px 0">The Security section contains significantly fewer holdings than the actual portfolio holdings, and I'm wondering how come it's such a partial list?</p>
+<br>
+<table>
+<tr><th>Strategy</th><th>Actual # Securities</th><th>Security rows with W</th><th>W Sum</th><th>% Missing</th></tr>
+<tr><td>IDM</td><td>43</td><td>19</td><td>47.7%</td><td>56%</td></tr>
+<tr><td>ACWI</td><td>39</td><td>13</td><td>33.3%</td><td>67%</td></tr>
+<tr><td>IOP</td><td>—</td><td>13</td><td>34.1%</td><td>~65%</td></tr>
+<tr><td>EM</td><td>41</td><td>17</td><td>52.5%</td><td>48%</td></tr>
+<tr><td>GSC</td><td>50</td><td>9</td><td>18.7%</td><td>81%</td></tr>
+<tr><td>ISC</td><td>49</td><td>10</td><td>21.0%</td><td>79%</td></tr>
+<tr><td>SCG</td><td>42</td><td>17</td><td>40.1%</td><td>60%</td></tr>
+</table>
+<br>
+<p style="margin:4px 0">GSC for example has in one period only 9 out of 50 holdings — missing 81% of the portfolio at the holding level. I verified this is not a parsing issue — the CSV genuinely has this many rows with weight data in the latest weekly group.</p>
+<br>
+<p style="margin:4px 0"><strong>I need ALL current portfolio holdings in the Security section.</strong> This is the single most important fix for the expanded run. Without the full holdings list, I cannot:</p>
+<li>Build a complete holdings table</li>
+<li>Reconcile per-holding %T with group table %T (e.g., IDM Industrials shows 8.3% from holdings but 25.6% in the Sector table)</li>
+<li>Do per-holding factor analysis on the full portfolio</li>
+<br>
+<h3>1B. Benchmark Securities</h3>
+<br>
+<p style="margin:4px 0">Zero benchmark-only rows exist in the current file — every Security row is or was a portfolio holding. BW is only populated for the few portfolio holdings that overlap with the benchmark (sums to 0.2–21.7% instead of ~100%).</p>
+<br>
+<p style="margin:4px 0"><strong>Request:</strong> Include benchmark securities as well, with the %T_Check flag set to 1 (which I understand is the inclusion flag for contributing to risk), or just include all of the benchmark if the data limit isn't an issue. This would:</p>
+<li>Ensure group tables (Sector, Country, Industry) have rows for all benchmark sectors/countries</li>
+<li>Enable benchmark-side Spotlight rank averages</li>
+<li>Show which benchmark holdings I'm implicitly underweight</li>
+<br>
+<h3>1C. Requested Additional Columns on Security</h3>
+<br>
+<p style="margin:4px 0">For the expanded run, I'd like to enrich the Security section with columns that enable per-holding factor analysis. Currently each weekly group has 24 columns. In priority order:</p>
+<br>
+<p style="margin:4px 0"><strong>A. Factor Contribution to Risk (Highest Priority):</strong></p>
+<br>
+<p style="margin:4px 0">Per-holding marginal contribution to each factor's TE — "how much of this holding's %T flows through each factor?" These should sum to the holding's %T.</p>
+<br>
+<p style="margin:4px 0">If data isn't an issue, then ideally include ALL factors — meaning list every country, currency, and industry and their contribution to tracking error inside the Security section. The full expanded list would be the 12 style factors + Market + every individual industry + every individual country + every individual currency.</p>
+<br>
+<p style="margin:4px 0">If that's too many columns, at minimum the 16 grouped factors:</p>
+<pre>
+Momentum_TE%, Volatility_TE%, Growth_TE%, Value_TE%,
+DivYield_TE%, EarningsYield_TE%, FXSens_TE%,
+Profitability_TE%, Size_TE%, Leverage_TE%,
+Liquidity_TE%, MarketSens_TE%,
+Market_TE%, Industry_TE%, Country_TE%, Currency_TE%
+</pre>
+<br>
+<p style="margin:4px 0"><strong>B. Raw Factor Exposures (High Priority but lower than A):</strong></p>
+<br>
+<p style="margin:4px 0">Per-holding Axioma z-score factor loadings. Same logic — if data allows, include the full expanded list (12 style factors + individual industries + individual countries + individual currencies). The exposure for country/industry/currency is essentially a flag (1 or 0) showing which specific country/industry/currency that security belongs to, which is useful for verification and grouping.</p>
+<br>
+<p style="margin:4px 0">If using the narrow version (12 style factors only):</p>
+<pre>
+Momentum_Exp, Volatility_Exp, Growth_Exp, Value_Exp,
+DivYield_Exp, EarningsYield_Exp, FXSens_Exp,
+Profitability_Exp, Size_Exp, Leverage_Exp,
+Liquidity_Exp, MarketSens_Exp
+</pre>
+<br>
+<p style="margin:4px 0">The idea is to add all of these columns on the Security table so I can skip adding them on all of the other tables and compute group-level factor tilts myself. If data isn't an issue, adding them everywhere too would be even better — I can figure out which way is more data-efficient.</p>
+<br>
+<p style="margin:4px 0"><strong>C. Market Cap — 1 column:</strong></p>
+<br>
+<p style="margin:4px 0">Per-holding market capitalization in dollars. Enables size bucketing, cap-weighted analysis, and size distribution charts.</p>
+<br>
+<hr>
+<br>
+<h2>2. RANK TABLES — Two Separate Issues</h2>
+<br>
+<p style="margin:4px 0">There are two issues with the rank tables, each affecting a different set of sections:</p>
+<br>
+<p style="margin:4px 0"><strong>Issue 1: Overall Table — Expand/Collapse.</strong> The Overall rank table has individual security tickers appearing as separate rows alongside the quintile groups (Q1–Q5). For example, IDM has ticker "2875" as its own row, ACWI has AMZN, ALAB, BWXT, EXEL, NU, and 688910 as separate rows. GSC is worst — only 3 quintile rows with 4 ticker rows, meaning two quintiles are missing entirely. It looks like some quintiles are expanded to show constituents while others are collapsed. Could the Overall section be set to fully collapsed (aggregated only) for the export? The Overall grouping itself works correctly — Q1 has OVER_WAvg = 1.00, Q5 has OVER_WAvg = 5.00, which is exactly right.</p>
+<br>
+<p style="margin:4px 0"><strong>Issue 2: REV/VAL/QUAL Tables — Grouping Logic.</strong> The REV, VAL, and QUAL tables don't have the expand/collapse problem — they have clean rows with no ticker leaks. However, the grouping logic seems off. If I look at the REV table Q1, which should contain only holdings with REV rank = 1, the weighted average REV rank within that group is 3.06 instead of 1.00. Similarly Q2 shows REV_WAvg = 1.97 instead of 2.00. Every holding in REV Q1 should by definition have REV = 1, so the average must be 1.00 — a non-integer average means holdings with different REV ranks are mixed into the group. This doesn't happen in the Overall table where the self-rank averages are exactly round. Can we find out why the sub-rank tables (REV/VAL/QUAL) group differently from Overall?</p>
+<br>
+<p style="margin:4px 0">Also, across all sections, please make sure benchmark-only groups are not hidden — I'm finding missing data everywhere from sectors to industries to ranks.</p>
+<br>
+<hr>
+<br>
+<h2>3. GROUP TABLES — Missing Rows, Naming, and Style Groups</h2>
+<br>
+<h3>3A. Zero-Weight Groups Excluded</h3>
+<br>
+<p style="margin:4px 0">Across Sector Weights, Industry, Country, and Region: <strong>groups where the portfolio has zero weight are excluded entirely</strong>, hiding the benchmark allocation. Benchmark weights don't sum to 100%:</p>
+<br>
+<table>
+<tr><th>Strategy</th><th>Sector BM Sum</th><th>Industry BM Sum</th><th>Country BM Sum</th></tr>
+<tr><td>IDM</td><td>94.7%</td><td>79.6%</td><td>86.2%</td></tr>
+<tr><td>ACWI</td><td>86.7%</td><td>70.9%</td><td>81.4%</td></tr>
+<tr><td>IOP</td><td>95.3%</td><td>75.0%</td><td>64.5%</td></tr>
+<tr><td>EM</td><td>89.2%</td><td>72.4%</td><td>87.0%</td></tr>
+<tr><td>GSC</td><td>95.4%</td><td>80.1%</td><td>91.6%</td></tr>
+<tr><td>ISC</td><td>71.2%</td><td>59.5%</td><td>73.7%</td></tr>
+<tr><td>SCG</td><td>94.1%</td><td>80.2%</td><td>99.0%</td></tr>
+</table>
+<br>
+<p style="margin:4px 0"><strong>Request:</strong> Include ALL groups in every table regardless of portfolio weight. A row with W=0, BM=3.7, AW=-3.7 shows the active underweight — a missing row hides it.</p>
+<br>
+<p style="margin:4px 0">For reference, the full GICS L1 sector universe (all 11 should appear for every strategy):</p>
+<br>
+<table>
+<tr><th>Sector</th><th>IDM</th><th>ACWI</th><th>IOP</th><th>EM</th><th>GSC</th><th>ISC</th><th>SCG</th></tr>
+<tr><td>Communication Services</td><td>✅</td><td>❌</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Consumer Discretionary</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Consumer Staples</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Energy</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>✅</td><td>❌</td></tr>
+<tr><td>Financials</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Health Care</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Industrials</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Information Technology</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+<tr><td>Materials</td><td>✅</td><td>✅</td><td>✅</td><td>❌</td><td>✅</td><td>❌</td><td>✅</td></tr>
+<tr><td>Real Estate</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>❌</td><td>❌</td></tr>
+<tr><td>Utilities</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>✅</td><td>❌</td><td>❌</td></tr>
+</table>
+<br>
+<p style="margin:4px 0">The same issue applies to the <strong>Group (RWOOD style groups)</strong> section — 8 possible groups (GROWTH, DEFENSIVE, GROWTH CYCLICAL, HARD CYCLICAL, SOFT CYCLICAL, BANKS, COMMODITY, BOND PROXIES) but zero-weight groups are excluded. All group tables need the same treatment: include all groups always.</p>
+<br>
+<h3>3B. Industry Naming Inconsistency</h3>
+<br>
+<p style="margin:4px 0">The 3-year history has GICS reclassification splits — the same industry appears under two names as separate rows. This is an issue that predates this project, but if we can address and fix it, it would be helpful. Combine these into a single row per industry using the current GICS classification retroactively applied to the full history. Split rows break time-series tracking.</p>
+<br>
+<table>
+<tr><th>Old Name (pre-reclassification)</th><th>Current Name</th></tr>
+<tr><td>Retailing</td><td>Consumer Discretionary Distribution & Retail</td></tr>
+<tr><td>Media</td><td>Media & Entertainment</td></tr>
+<tr><td>Commercial Services & Supplies</td><td>Commercial & Professional Services</td></tr>
+<tr><td>Pharmaceuticals, Biotechnology & Life Sciences</td><td>Pharmaceuticals Biotechnology & Life Sciences</td></tr>
+</table>
+<br>
+<hr>
+<br>
+<h2>4. 18 STYLE SNAPSHOT — Add % of Variance Column</h2>
+<br>
+<p style="margin:4px 0"><strong>Request:</strong> Add a <strong>% of Variance</strong> column to the 18 Style Snapshot for every item. This would put return attribution and risk contribution in one place:</p>
+<br>
+<pre>
+Current (5 cols):  Exposure | Factor Return | Factor Impact | Factor StdDev | Cumulative Impact
+Requested (6 cols): Exposure | Factor Return | Factor Impact | Factor StdDev | Cumulative Impact | % of Variance
+</pre>
+<br>
+<p style="margin:4px 0">Currently % of Variance is only available in RiskM at the aggregate level (Industry = 11.13%, Country = 3.05%). With this addition, I'd see the individual breakdown — which specific industry, country, or currency is contributing to tracking error — alongside the existing return attribution.</p>
+<br>
+<p style="margin:4px 0">This is a more efficient solution than breaking out RiskM into individual rows. One extra column on existing rows vs. ~132K new rows.</p>
+<br>
+<hr>
+<br>
+<h2>5. PORTFOLIO CHARACTERISTICS — Additional Metrics</h2>
+<br>
+<p style="margin:4px 0">The current PortChars section is excellent — TE, Beta variants (predicted, historical, MPT), Active Share, MCap, P/E, P/B, ROE, FCF Yield, Div Yield, EPS Growth (historic + estimated), EPS Revisions (3M + 6M), Operating Margin. All with portfolio and benchmark. I'm parsing all of them successfully.</p>
+<br>
+<p style="margin:4px 0">For the expanded run, if straightforward to add in the same <code>:P</code> / <code>:B</code> format — the idea is to get all the easy ones added since we're doing the big pull so I have them in the data:</p>
+<br>
+<p style="margin:4px 0"><strong>Valuation:</strong> EV/EBITDA, PEG Ratio, FCF/EV, Price/Sales, Price/Cash Flow</p>
+<p style="margin:4px 0"><strong>Quality / Balance Sheet:</strong> Net Debt/EBITDA, ROIC, Gross Margin, Interest Coverage, Current Ratio, Debt/Equity</p>
+<p style="margin:4px 0"><strong>Growth / Momentum:</strong> Revenue Growth 3Yr, Revenue Growth Est (forward), 12M EPS Revisions FY1, Sales Growth Est, Earnings Surprise %, Price Momentum 12M</p>
+<p style="margin:4px 0"><strong>Yield / Capital Return:</strong> Total Shareholder Yield (Dividend + Buyback), Buyback Yield, Payout Ratio</p>
+<p style="margin:4px 0"><strong>Risk / Liquidity:</strong> Realized Volatility 1Y, Average Daily Volume ($), Beta (raw, not Axioma), Short Interest Ratio</p>
+<p style="margin:4px 0"><strong>Size:</strong> Weighted Median Market Cap, Number of Securities by Cap Bucket</p>
+<br>
+<p style="margin:4px 0">Don't need to spend time coming up with new custom metrics at this point — just the standard ones that are easy to add to the export.</p>
+<br>
+<hr>
+<br>
+<h2>6. ROW CONSISTENCY</h2>
+<br>
+<p style="margin:4px 0">I confirmed that Sector Weights rows are consistent across all 158 weekly groups (no rows appear/disappear mid-file). Can you confirm this applies to all section types?</p>
+<br>
+<p style="margin:4px 0">If there's any doubt, similar to the way the data is populated at the beginning of each period, it might help to also populate the strategy and the group name on each period — so I can verify that all the numbers are really assigned properly. That may be overkill if we're sure that rows don't shift when a group disappears for a week. However, since we're going to unhide all groups, the odds of that happening are even lower. Yet if this isn't too data-inefficient and has even a tiny bit of advantage in your view, let's implement the extra sanity columns.</p>
+<br>
+<hr>
+<br>
+<h2>Summary Table</h2>
+<br>
+<table>
+<tr><th>#</th><th>Item</th><th>Type</th><th>Priority</th></tr>
+<tr><td>1A</td><td>Security: all portfolio holdings</td><td>Fix</td><td>**Critical**</td></tr>
+<tr><td>1B</td><td>Security: include benchmark securities</td><td>Fix</td><td>**Critical**</td></tr>
+<tr><td>1C-A</td><td>Security: per-holding factor TE contribution</td><td>New</td><td>**Highest**</td></tr>
+<tr><td>1C-B</td><td>Security: per-holding raw factor exposures</td><td>New</td><td>**High**</td></tr>
+<tr><td>1C-C</td><td>Security: market cap column</td><td>New</td><td>High</td></tr>
+<tr><td>2A</td><td>Overall rank table: collapse all quintiles</td><td>Fix</td><td>**High**</td></tr>
+<tr><td>3A</td><td>Group tables: include all groups (zero-weight rows)</td><td>Fix</td><td>**High**</td></tr>
+<tr><td>3B</td><td>Industry: combine GICS name changes</td><td>Fix</td><td>High</td></tr>
+<tr><td>4</td><td>18 Style Snapshot: add % of Variance column</td><td>New</td><td>High</td></tr>
+<tr><td>5</td><td>PortChars: additional fundamentals</td><td>New</td><td>Medium</td></tr>
+<tr><td>6</td><td>Row consistency / sanity columns</td><td>Question</td><td>Medium</td></tr>
+</table>
+<br>
+<p style="margin:4px 0">Items 1A and 1B are the most important — everything else builds on having a complete Security section. I'd like to resolve those before the expanded run so the output captures the full picture from day one.</p>
+<br>
+<p style="margin:4px 0">I'm still going through the data and may uncover more issues — a few of them took a while to figure out that they were missing. However, I wanted to bring you into the loop again since it has been a while since we spoke and that's plenty to start with.</p>
+<br>
+<p style="margin:4px 0">If you are open to having a call tomorrow morning as a work session to review and perhaps even solve some of these issues together, it would help — since I'm out Thursday and Friday is Good Friday, so it would be good to get something going.</p>
+<br>
+<p style="margin:4px 0">Thanks,</p>
+<p style="margin:4px 0">Yuda</p>
+<br>
+</body></html>

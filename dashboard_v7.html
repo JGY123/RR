@@ -3626,11 +3626,11 @@ function oDrMetric(metric,range){
   (thresholds[metric]||[]).forEach(t=>{
     hist.forEach(h=>{
       if(metric==='te'){
-        if(t.dir==='ceil'&&h[metric]>=t.v)breaches.push({date:h.d,val:h[metric],label:'above '+t.l});
-        if(t.dir==='floor'&&h[metric]<t.v)breaches.push({date:h.d,val:h[metric],label:'below '+t.l});
+        if(t.dir==='ceil'&&h[metric]>=t.v)breaches.push({date:isoDate(h.d),val:h[metric],label:'above '+t.l});
+        if(t.dir==='floor'&&h[metric]<t.v)breaches.push({date:isoDate(h.d),val:h[metric],label:'below '+t.l});
       }
       if(metric==='beta'&&Math.abs(h[metric]-1)>Math.abs(t.v-1)){
-        breaches.push({date:h.d,val:h[metric],label:h[metric]>1?'above '+t.l:'below '+t.l});
+        breaches.push({date:isoDate(h.d),val:h[metric],label:h[metric]>1?'above '+t.l:'below '+t.l});
       }
     });
   });

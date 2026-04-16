@@ -398,6 +398,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="config-field"><label>Q5 holdings max weight (%)</label><input id="thr_q5WeightMax" type="number" step="1" min="0" onchange="setThreshold('q5WeightMax',this.value)"></div>
 <div class="config-field"><label>Factor exposure (σ)</label><input id="thr_factorSigma" type="number" step="0.1" min="0" onchange="setThreshold('factorSigma',this.value)"></div>
 <div class="config-field"><label>Active share WoW delta (%)</label><input id="thr_asDeltaMin" type="number" step="0.5" onchange="setThreshold('asDeltaMin',this.value)"></div>
+<div class="config-field"><label>Data freshness amber (days)</label><input id="thr_freshAmberDays" type="number" step="1" min="1" onchange="setThreshold('freshAmberDays',this.value)"></div>
+<div class="config-field"><label>Data freshness red (days)</label><input id="thr_freshRedDays" type="number" step="1" min="1" onchange="setThreshold('freshRedDays',this.value)"></div>
 <button class="btn btn-sec btn-sm" onclick="resetThresholds()" style="margin-top:4px">Reset to defaults</button>
 <hr style="border:none;border-top:1px solid var(--grid);margin:18px 0">
 <h3 style="margin-bottom:14px">Actions</h3>
@@ -700,22 +702,42 @@ function init(){
   initWeekSelector();
   $('globalSearchWrap').style.display='block';
   $('dataTimestamp').style.display='inline';
-  // Use report_date from JSON if available (format: YYYYMMDD or ISO string)
-  let rDate=window._reportDate;
-  let rGen=window._reportGenerated;
-  let dateStr='';
+  refreshDataStamp();
+  upd();
+}
+
+function refreshDataStamp(){
+  let ts=$('dataTimestamp');
+  if(!ts)return;
+  let rDate=window._reportDate,rGen=window._reportGenerated;
+  let dateStr='',reportDateObj=null;
   if(rDate&&rDate.length===8){
-    // YYYYMMDD → human readable
     let y=rDate.slice(0,4),m=rDate.slice(4,6),d=rDate.slice(6,8);
-    dateStr=new Date(y+'-'+m+'-'+d).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+    reportDateObj=new Date(y+'-'+m+'-'+d);
+    dateStr=reportDateObj.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
   }else if(rDate){
-    dateStr=new Date(rDate).toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
+    reportDateObj=new Date(rDate);
+    dateStr=reportDateObj.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
   }else{
     dateStr=new Date().toLocaleDateString();
   }
-  let genStr=rGen?(' · generated '+new Date(rGen).toLocaleDateString('en-US',{month:'short',day:'numeric'})):'';
-  $('dataTimestamp').textContent='Report: '+dateStr+genStr;
-  upd();
+  let ageStr='',ageColor='',ageTitle='Data as of '+dateStr;
+  if(reportDateObj&&!isNaN(reportDateObj)){
+    let days=Math.max(0,Math.floor((Date.now()-reportDateObj.getTime())/86400000));
+    ageStr=' · '+days+'d ago';
+    let amb=_thresholds.freshAmberDays||8,red=_thresholds.freshRedDays||21;
+    if(days>=red)ageColor='var(--neg)';
+    else if(days>=amb)ageColor='var(--warn)';
+  }
+  let genStr='';
+  if(rGen){
+    let gd=new Date(rGen).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    genStr=' · generated '+gd;
+    ageTitle+=' · File generated '+gd;
+  }
+  ts.textContent='Report: '+dateStr+ageStr+genStr;
+  ts.style.color=ageColor;
+  ts.title=ageTitle;
 }
 
 function go(id,btn){
@@ -4026,7 +4048,7 @@ function savePrefs(){try{localStorage.setItem(PREFS_KEY,JSON.stringify(_prefs));
 function savePref(key,val){_prefs[key]=val;savePrefs();}
 // ===== ALERT THRESHOLDS =====
 const THRESHOLDS_KEY='rr_thresholds';
-const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,asDeltaMin:-1};
+const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,asDeltaMin:-1,freshAmberDays:8,freshRedDays:21};
 let _thresholds={..._thresholdsDefault};
 function loadThresholds(){
   try{let s=JSON.parse(localStorage.getItem(THRESHOLDS_KEY)||'{}');
@@ -4038,6 +4060,7 @@ function setThreshold(key,val){
   if(!(key in _thresholdsDefault))return;
   let n=parseFloat(val); if(!isFinite(n))return;
   _thresholds[key]=n; saveThresholds();
+  if(key==='freshAmberDays'||key==='freshRedDays'){if(typeof refreshDataStamp==='function')refreshDataStamp();return;}
   if(typeof cs!=='undefined'&&cs&&typeof rExp==='function')rExp();
 }
 function resetThresholds(){

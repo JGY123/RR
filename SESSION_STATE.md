@@ -1,8 +1,8 @@
 # RR Dashboard — Session State
 
-**Last updated:** 2026-04-16 17:30 (post Patch 004)
-**Current git commit:** `13273c6` (main) — Patch 004: rHoldConc category axis fix
-**Working state:** ✅ Dashboard renders correctly via local HTTP server
+**Last updated:** 2026-04-16 18:44 (post Patch 009)
+**Current git commit:** `35b18ad` (main) — Patch 009: Factor Risk Map polish + Top TE chip strip
+**Working state:** ✅ Dashboard renders correctly via local HTTP server (verified in Chromium preview MCP)
 
 ---
 
@@ -25,11 +25,12 @@ http://localhost:8000/dashboard_v7.html
 
 ## Current state of dashboard_v7.html
 
-- **Size:** ~321K bytes / 5,450 lines
-- **Last substantive edit:** 2026-04-16 17:24 (Patch 004)
-- **Committed at:** `13273c6 — fix(hold): force category y-axis on rHoldConc to prevent NaN from numeric tickers`
+- **Size:** 5,610 lines
+- **Last substantive edit:** 2026-04-16 18:44 (Patch 009)
+- **Committed at:** `35b18ad — feat(factor-map): Patch 009 — Factor Risk Map polish (480 min height + Top TE chip strip)`
 - **Prior checkpoint:** `ce975e3` (tag `checkpoint-tab3-2026-04-16`)
-- **Latest tag:** `working.20260416.1724`
+- **Latest tag:** `working.20260416.1844`
+- **Environment:** Claude Desktop with Claude_Preview MCP (Chromium headless on port 3099); standalone Python server on :8000 also supported
 
 ### Features confirmed present (Tab 3's work, committed)
 
@@ -51,6 +52,12 @@ http://localhost:8000/dashboard_v7.html
 | 002 | `4ed2aa4` | `working.20260416.1430` | Country drill FactSet snap_attrib section. Added `renderCountryAttribSection` + `renderCountryAttribChart` after `oDrCountry`, injected into country drill modal. Stats grid + 160px cumulative impact time series. +36 lines. |
 | 003 | `8ca5912` | `working.20260416.1554` | Three bug fixes: (A) strategy selector respects `_prefs.defaultStrat` in `init()`, (B) auto-load calls `init()` not `go()` (fixes hidden tabBar), (C) `isFinite(h.p)` guard on `rHoldConc`. +4/-7 lines. |
 | 004 | `13273c6` | `working.20260416.1724` | Force `type:'category'` on rHoldConc y-axis to prevent Plotly treating numeric tickers (Chinese A-share codes) as numbers. +1/-1 lines. |
+| 005 | `fc89aa9` | `working.20260416.1746` | Risk Decomposition Tree. Interactive collapsible tree: Total TE → Factor Risk (grouped by Value/Growth, Market Behavior, Profitability, Secondary) + Stock-Specific Risk (top 7 holdings by |tr|). `mkNode`, `toggleDtNode`, `riskDecompTree` functions. +71 lines. |
+| — | `3b2a889` | `working.20260416.1755` | Keyboard shortcuts help modal. `toggleShortcutHelp` function, `?` and `g` key bindings. +22 lines. |
+| — | `d72ae51` | — | Fix: add `kbdHelpModal` to `ALL_MODALS` so Escape closes it. Also cleaned up deleted .bak and parser files. |
+| 007 | `cf70c40` | `working.20260416.1805` | Glossary modal with 13 metric definitions (TE, Active Share, MCR, Beta, etc.). `openGlossary` function, ⓘ header button, added to `ALL_MODALS`. +35/-1 lines. |
+| 008 | `efd1462` | `working.20260416.1837` | Top 10 Holdings chart polish. Root-cause fix: `xaxis.type` was auto-detecting as `'category'` (range `[-0.33, 6.33]`), bar lengths non-proportional — force `type:'linear'` + `ticksuffix:'%'` + `rangemode:'tozero'`. Y-axis shows short company names (truncate 22 chars) instead of tickers. Active-weight coloring (green OW / red UW). Inside labels show "weight%  ±active". Hover surfaces ticker/name/weight/active/sector/MCR. Height 250 → 360px, left margin 50 → 150px. Card title: "Sector Concentration (Top 10 Holdings)" → "Top 10 Holdings (Weight & Active)". +21/-5 lines. |
+| 009 | `35b18ad` | `working.20260416.1844` | Factor Risk Map polish. Rename card title "Factor Butterfly" → "Factor Risk Map" (aligns with fullscreen modal label). Bump `rFacButt` min chart height 280 → 480px. Add `#facTopTeStrip` above chart rendered by new `rFacTopTeStrip(s)`: top 4 factors by `|c|` as pills with name, `±σ` active exposure, `% TE` share. Green tint for OW, red for UW. `isFinite` guard per Patch 003 pattern. +20/-3 lines. |
 
 ---
 
@@ -62,16 +69,16 @@ http://localhost:8000/dashboard_v7.html
 - Quick-Nav sidebar (`buildQuickNav`, `#qnav`) — may have been pre-existing
 - `generateExecSummary` — may have been pre-existing
 - Strategy Comparison (`openCompare`)
-- Keyboard shortcuts + `toggleShortcutHelp`
+- ~~Keyboard shortcuts + `toggleShortcutHelp`~~ — ✅ rebuilt as Patch 006 (`3b2a889`)
 - Data freshness indicator
-- Metric tooltips / Glossary modal (`openGlossary`)
-- Risk Decomposition Tree (`riskDecompTree`, `mkNode`)
+- ~~Metric tooltips / Glossary modal (`openGlossary`)~~ — ✅ rebuilt as Patch 007 (`cf70c40`)
+- ~~Risk Decomposition Tree (`riskDecompTree`, `mkNode`)~~ — ✅ rebuilt as Patch 005 (`fc89aa9`)
 - Light/dark theme (`setThemePref`, `#themeBtn`)
 - Color-blind safe mode (`toggleCbSafe`)
 
 ### Tab 2 (attempted, some rebuilt)
 - ~~Country drill FactSet snap_attrib attribution section~~ — ✅ rebuilt as Patch 002 (`4ed2aa4`)
-- Factor Risk Map height 340→480 + "Top TE" chip strip
+- ~~Factor Risk Map height 340→480 + "Top TE" chip strip~~ — ✅ rebuilt as Patch 009 (`35b18ad`)
 - Print/Export report `openReport` (tile-picker modal vs 7-section print report)
 - `generateEmailSnapshot` / `generateEmailBody`
 - Performance Optimization (lazy charts via IntersectionObserver, debounce, Plotly.react wrapper `pPlot`)
@@ -101,8 +108,8 @@ To inspect: `git show backup-all-today-work:<filename>`
 
 | Item | Severity | Notes |
 |---|---|---|
-| Tab 1/2 rebuilds ongoing | Medium | Settings ✅, Country drill ✅, bug fixes ✅; remaining: Risk Decomp Tree, keyboard shortcuts, glossary, Factor Risk Map polish |
-| ~8 local commits ahead of `origin/main` | Low | Not pushed to remote; consider push after stability confirmed |
+| Tab 1/2 rebuilds ongoing | Medium | 9 patches landed (001-009). Remaining: theme toggle, Watchlist, What Changed, Quick-Nav, Exec Summary, Strategy Comparison, Print/Export, Email, Perf optimization, Color-blind mode |
+| ~14 local commits ahead of `origin/main` | Low | Not pushed to remote; consider push after stability confirmed |
 | Dashboard_v7.html.bak deletion unstaged | Low | Tab 1 flagged as suspicious; confirmed unrelated to current issues |
 | CLI session JSONLs (239MB in `~/.claude/projects/-Users-ygoodman-RR/`) | Low | Contains Tab 1/2 `str_replace` tool calls if deep recovery ever desired |
 
@@ -133,14 +140,18 @@ To inspect: `git show backup-all-today-work:<filename>`
 
 ## Priority queue for next session
 
-1. ✅ **DONE** (Patch 001) — Settings panel + Alert Thresholds
-2. ✅ **DONE** (Patch 002) — Country drill snap_attrib
-3. ✅ **DONE** (Patch 003) — tabBar + init + isFinite bug fixes
-4. ✅ **DONE** (Patch 004) — rHoldConc category axis fix
-5. **NEXT** — Rebuild Tab 1's **Risk Decomposition Tree** (crown-jewel, Patch 005)
-6. Rebuild Tab 1's **Keyboard shortcuts + toggleShortcutHelp** (Patch 006)
-7. Rebuild Tab 1's **Glossary modal** (Patch 007)
-8. Deferred to Desktop (Chrome MCP): Factor Risk Map 480px polish, theme toggle, Holdings chart polish
+1. ✅ **DONE** (Patch 001, `e5eaf6c`) — Settings panel + Alert Thresholds
+2. ✅ **DONE** (Patch 002, `4ed2aa4`) — Country drill snap_attrib
+3. ✅ **DONE** (Patch 003, `8ca5912`) — tabBar + init + isFinite bug fixes
+4. ✅ **DONE** (Patch 004, `13273c6`) — rHoldConc category axis fix
+5. ✅ **DONE** (Patch 005, `fc89aa9`) — Risk Decomposition Tree
+6. ✅ **DONE** (Patch 006, `3b2a889`) — Keyboard shortcuts + help modal
+7. ✅ **DONE** (Patch 007, `cf70c40`) — Glossary modal
+8. ✅ **DONE** (Patch 008, `efd1462`) — Top 10 Holdings chart polish (linear axis, names, active-weight colors)
+9. ✅ **DONE** (Patch 009, `35b18ad`) — Factor Risk Map polish + Top TE chip strip
+10. **NEXT (Desktop with Chrome MCP):** Light/dark theme toggle (`setThemePref`, `#themeBtn`, localStorage persistence)
+11. **Remaining Tab 1 (not yet rebuilt):** Watchlist, "What Changed" banner, Quick-Nav sidebar, Exec Summary, Strategy Comparison, Data freshness, Color-blind mode
+12. **Remaining Tab 2 (not yet rebuilt):** Print/Export report, Email snapshot, Performance optimization, Scenario analysis, Multi-period attribution, Industry drilldown, Currency Exposure tile
 
 ---
 

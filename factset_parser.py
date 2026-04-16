@@ -1,958 +1,1016 @@
 #!/usr/bin/env python3
 """
-FactSet Portfolio Attribution CSV → Redwood Risk Dashboard JSON
-===============================================================
+FactSet Portfolio Attribution CSV Parser — Version 3 (header-driven).
+
+Key differences from v2:
+    - NO hard-coded column positions anywhere.
+    - First pass builds a schema from Section header rows; second pass extracts
+      data by canonical field name via the schema.
+    - Wildcard column families (e.g. "% Factor Contr. to Tot. Risk:*") auto-capture
+      into sub-dicts on each holding — any future factor columns become data
+      without parser changes.
+    - Portfolio Characteristics is fully dynamic: every :P / :B column pair in
+      the header becomes a char row automatically.
+    - RiskM factor list is read from the header, not hard-coded.
+    - Handles both the old wide 3-year file (158 periods) and the new April
+      sample (4 periods + new factor columns) from the same code path.
+    - Unknown columns in Security and PortChars are preserved under `_extra`.
+
 Usage:
-    python3 factset_parser.py <input.csv|input.txt> [output.json]
+    python3 factset_parser_v3.py input.csv [output.json]
+    python3 factset_parser_v3.py input.csv  → writes input_v3.json
 
-File structure (confirmed from risk_reports_sample.csv):
-  The CSV is a concatenation of 14 separate tables, each preceded by an
-  embedded header row (ACCT='ACCT').  Key section schemas:
-
-  96-col (standard): 6 prefix + 5 weekly groups × 18 metrics
-    W, BW, AW, %S, %T, %T_Check, OVER_WAvg, REV_WAvg, VAL_WAvg, QUAL_WAvg,
-    MOM_WAvg, STAB_WAvg, OVER_Avg, VAL_Avg, QUAL_Avg, MOM_Avg, REV_Avg, STAB_Avg
-
-  101-col (holdings): same as 96-col but with "Overall Rank" inserted at position 5
-    W, BW, AW, %S, %T, [Overall Rank], %T_Check, OVER_WAvg, ...
-    → group size = 19; Overall Rank skipped to restore standard 18-position layout
-
-  42-col (section @119, portfolio stats): non-repeating, date=main_date
-    col[8]  = Predicted TE          col[9]  = Predicted Beta
-    col[10] = # of Securities       col[11] = Active Share
-    col[12] = Market Cap ($M)       col[16] = EPS Growth 3Yr
-    col[20] = FCF Yield NTM         col[21] = Dividend Yield
-    col[22] = ROE NTM               col[23] = Operating Margin
-
-  9-col  (section @340, factor exposure): date = exposure_date
-    col[6] = Ending Portfolio Exposure
-    col[7] = Ending Benchmark Exposure
-    col[8] = Ending Active Exposure
-
-  31-col (section @15818, factor attribution): date = attribution_date
-    5 periods × 5 cols: AvgActiveExp, CompoundedFactorReturn,
-    CompoundedFactorImpact, FactorStdDev, CumulativeFactorImpact
-    → period 5 (cols 26–30) = most recent; used for c, ret, imp fields
-
-  Group 5 (index 4) = most recent week → used as current snapshot
-  "Data" Level2 rows contain portfolio summary stats
+Output JSON shape matches v2 (FORMAT_VERSION 4.1 — same consumers, new fields).
 """
 
 import csv
 import json
-import math
+import os
 import sys
 import time
-from collections import defaultdict
-from datetime import date, datetime, timedelta
-from pathlib import Path
+from datetime import datetime
 
-PARSER_VERSION = "1.1.0"
-FORMAT_VERSION = "3.0"
+PARSER_VERSION = "3.0.0"
+FORMAT_VERSION = "4.1"
 
-# ── Strategy / account mapping ──────────────────────────────────────────────
-
-ACCT_TO_ID = {
-    "IDM":     "IDM",
-    "ACWIXUS": "IOP",   # IOP uses ACWIXUS in the file
-    "EM":      "EM",
-    "ISC":     "ISC",
-    "SCG":     "SCG",
-    "ACWI":    "ACWI",
-    "GSC":     "GSC",
+# ── Strategy code → dashboard ID mapping ─────────────────────────────────────
+# Only ACWIXUS gets renamed (to IOP). Anything else passes through unchanged —
+# so new US-only accounts with arbitrary codes just show up in the output as-is.
+STRATEGY_RENAME = {
+    "ACWIXUS": "IOP",
 }
 
-ACCT_TO_NAME = {
-    "IDM":     "International Developed Markets",
-    "ACWIXUS": "International Opportunities",
-    "EM":      "Emerging Markets",
-    "ISC":     "International Small Cap",
-    "SCG":     "Small Cap Growth",
-    "ACWI":    "All Country World",
-    "GSC":     "Global Small Cap",
+# ── Canonical field names and alias map ──────────────────────────────────────
+# Any raw column name not in ALIASES passes through unchanged.
+# Alias mapping folds FactSet spelling/punctuation variants into one canonical key.
+ALIASES = {
+    # Weight / risk
+    "W": "W",
+    "Bench. Weight": "BW",
+    "AW": "AW",
+    "%S": "PCT_S",
+    "%T": "PCT_T",
+    "%T_Check": "T_CHECK",
+    "%T-filter": "T_CHECK",
+    # Rank WAvg (weighted average)
+    "OVER_WAvg": "OVER_WAVG",
+    "Over_WAvg": "OVER_WAVG",
+    "REV_WAvg":  "REV_WAVG",
+    "VAL_WAvg":  "VAL_WAVG",
+    "QUAL_WAvg": "QUAL_WAVG",
+    "QUAL_WA":   "QUAL_WAVG",
+    "MOM_WAvg":  "MOM_WAVG",
+    "STAB_WAvg": "STAB_WAVG",
+    # Rank Avg (simple average)
+    "OVER_Avg": "OVER_AVG",
+    "REV_Avg":  "REV_AVG",
+    "VAL_Avg":  "VAL_AVG",
+    "Val_Avg":  "VAL_AVG",
+    "QUAL_Avg": "QUAL_AVG",
+    "Qual_Avg": "QUAL_AVG",
+    "MOM_Avg":  "MOM_AVG",
+    "STAB_Avg": "STAB_AVG",
+    # Period dates (group marker)
+    "Period Start Date": "PERIOD_START",
+    "Period End Date":   "PERIOD_END",
+    # Security-only classification cols
+    "Redwood GICS Sector": "SEC_GICS",
+    "Redwood Region1":     "SEC_REGION",
+    "Redwood Country":     "SEC_COUNTRY",
+    "Industry Rollup":     "SEC_INDUSTRY",
+    "RWOOD_SUBGROUP":      "SEC_SUBGROUP",
+    # 18 Style Snapshot
+    "Average Active Exposure":    "SNAP_EXP",
+    "Compounded Factor Return":   "SNAP_RET",
+    "Compounded Factor Impact":   "SNAP_IMP",
+    "Factor Standard Deviation":  "SNAP_DEV",
+    "Cumulative_Factor_Impact":   "SNAP_CIMP",
+    "% Factor Contr. to Tot. Risk": "SNAP_RISK_CONTR",
+    # Fixed prefix (outside repeating group)
+    "Section": "SECTION",
+    "ACCT":    "ACCT",
+    "DATE":    "DATE",
+    "PortfolioCurCode": "CURRENCY",
+    "Level":   "LEVEL",
+    "Level2":  "LEVEL2",
+    "SecurityName": "SECURITY_NAME",
 }
 
-ACCT_TO_BENCHMARK = {
-    "IDM":     "MSCI EAFE",
-    "ACWIXUS": "MSCI ACWI ex USA",
-    "EM":      "MSCI Emerging Markets",
-    "ISC":     "MSCI World ex USA Small Cap",
-    "SCG":     "Russell 2000 Growth",
-    "ACWI":    "MSCI ACWI",
-    "GSC":     "MSCI ACWI Small Cap",
+# ── Wildcard prefixes for Security section ───────────────────────────────────
+# Any Security column whose name starts with one of these prefixes is auto-captured
+# into the named sub-dict on the holding, keyed by the text after the prefix.
+# Adding a new wildcard is the ONLY change needed when FactSet introduces a new
+# factor column family.
+SECURITY_WILDCARDS = [
+    # (prefix,                                dict name on holding)
+    ("% Factor Contr. to Tot. Risk:",         "factor_contr"),
+    # Raw factor exposure — exact FactSet prefix TBD; update when real file arrives
+    ("Factor Exposure:",                      "factor_exp"),
+    ("Active Factor Exposure:",               "factor_active"),
+    ("Factor Return:",                        "factor_ret"),
+    ("Factor Impact:",                        "factor_imp"),
+    ("Factor MCR:",                           "factor_mcr"),
+]
+
+GROUP_MARKER = "Period Start Date"
+FIXED_PREFIX_NAMES = {"Section", "ACCT", "DATE", "PortfolioCurCode", "Level", "Level2", "SecurityName"}
+
+# GICS industry reclassification (unify old and new names)
+GICS_NAME_MAP = {
+    "Retailing": "Consumer Discretionary Distribution & Retail",
+    "Media": "Media & Entertainment",
+    "Commercial Services & Supplies": "Commercial & Professional Services",
+    "Pharmaceuticals, Biotechnology & Life Sciences": "Pharmaceuticals Biotechnology & Life Sciences",
 }
 
-STRATEGY_ACCTS = set(ACCT_TO_ID.keys())
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-# ── Level2 classification sets ───────────────────────────────────────────────
+def safe_float(s):
+    """Return float or None for empty / non-numeric."""
+    if s is None: return None
+    if isinstance(s, (int, float)): return float(s)
+    s = str(s).strip()
+    if not s: return None
+    try:
+        return float(s.replace(",", ""))
+    except ValueError:
+        return None
 
-GICS_L1 = {
-    "Communication Services", "Consumer Discretionary", "Consumer Staples",
-    "Energy", "Financials", "Health Care", "Industrials",
-    "Information Technology", "Materials", "Real Estate", "Utilities",
-}
+def parse_date(s):
+    """Normalize a date string to YYYYMMDD, handling multiple FactSet formats."""
+    if not s:
+        return None
+    s = str(s).strip()
+    if not s:
+        return None
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y%m%d", "%d-%b-%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(s, fmt).strftime("%Y%m%d")
+        except ValueError:
+            continue
+    return None
 
-REGIONS = {
-    "English", "Far East", "Northern Europe", "Western Europe",
-    "Southern Europe", "Australia - New Zealand", "Emerging Market",
-}
-
-QUINTILE_MAP = {
-    "1.000000": 1, "2.000000": 2, "3.000000": 3,
-    "4.000000": 4, "5.000000": 5,
-}
-
-# Custom style buckets → (parent_group, sub_group)
-CUSTOM_GROUP_MAP = {
-    "HARD CYCLICAL":   ("CYCLICALS",      "HARD CYCLICAL"),
-    "GROWTH CYCLICAL": ("CYCLICALS",      "GROWTH CYCLICAL"),
-    "SOFT CYCLICAL":   ("CYCLICALS",      "SOFT CYCLICAL"),
-    "DEFENSIVE":       ("DEFENSIVE",      "DEFENSIVE"),
-    "GROWTH":          ("GROWTH",         "GROWTH"),
-    "COMMODITY":       ("COMMODITY",      "COMMODITY"),
-    "BANKS":           ("RATE SENSITIVE", "BANKS"),
-    "BOND PROXIES":    ("RATE SENSITIVE", "BOND PROXIES"),
-}
-
-COUNTRIES = {
-    "Australia", "Austria", "Belgium", "Brazil", "Canada", "Chile", "China",
-    "Colombia", "Czech Republic", "Denmark", "Egypt", "Finland", "France",
-    "Germany", "Greece", "Hong Kong", "Hungary", "India", "Indonesia",
-    "Ireland", "Israel", "Italy", "Japan", "Korea", "Kuwait", "Malaysia",
-    "Mexico", "Netherlands", "New Zealand", "Norway", "Peru", "Philippines",
-    "Poland", "Portugal", "Qatar", "Saudi Arabia", "Singapore", "South Africa",
-    "Spain", "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey",
-    "United Arab Emirates", "United Kingdom", "United States", "Usa",
-}
-
-# FactSet factor name → dashboard display name
-FACTOR_NAME_MAP = {
-    "Growth":                    "Growth",
-    "Medium-Term Momentum":      "Momentum",
-    "Volatility":                "Volatility",
-    "Market Sensitivity":        "Market Sensitivity",
-    "Liquidity":                 "Liquidity",
-    "Exchange Rate Sensitivity": "FX Sensitivity",
-    "Profitability":             "Profitability",
-    "Currency":                  "Currency",
-    "Size":                      "Size",
-    "Market":                    "Market",
-    "Industry":                  "Industry",
-    "Country":                   "Country",
-    "Leverage":                  "Leverage",
-    "Earnings Yield":            "Earnings Yield",
-    "Value":                     "Value",
-    "Dividend Yield":            "Dividend Yield",
-}
-
-# ── Column layout ────────────────────────────────────────────────────────────
-
-PREFIX_COLS = 6    # ACCT, DATE, PortfolioCurCode, Level, Level2, SecurityName
-GROUP_SIZE  = 18
-NUM_GROUPS  = 5
-CURRENT_GRP = 4    # 0-indexed; group 5 = most recent week
-
-# Position within each 18-col group
-C_W       = 0   # Portfolio weight (%)
-C_BW      = 1   # Benchmark weight (%)
-C_AW      = 2   # Active weight (%)
-C_PCT_S   = 3   # % within sector
-C_PCT_T   = 4   # % tracking error contribution / count (in Data rows)
-C_CHECK   = 5   # %T_Check / active share (in Data rows)
-C_OVER_WA = 6   # Overall factor score (weighted avg) / market cap (in Data rows)
-C_REV_WA  = 7   # Revision score (weighted avg)
-C_VAL_WA  = 8   # Value score (weighted avg)
-C_QUAL_WA = 9   # Quality score (weighted avg)
-C_MOM_WA  = 10  # Momentum score (weighted avg)
-C_STAB_WA = 11  # Stability score (weighted avg)
-# C_OVER_A, C_VAL_A, C_QUAL_A, C_MOM_A, C_REV_A, C_STAB_A = 12-17 (simple avgs)
-
-# Expected column counts for the two main schemas
-EXPECTED_96  = 96
-EXPECTED_101 = 101
-
-# ── Helpers ──────────────────────────────────────────────────────────────────
-
-def pf(s):
-    """Parse float → None on empty/invalid."""
-    if not s or not str(s).strip():
+def _sub(a, b):
+    if a is None or b is None:
         return None
     try:
-        v = float(str(s).strip())
-        return None if math.isnan(v) else v
-    except (ValueError, TypeError):
+        return round(float(a) - float(b), 4)
+    except (TypeError, ValueError):
         return None
 
+def _alias(raw):
+    """Map a raw column name to its canonical form. Unknown names pass through."""
+    return ALIASES.get(raw, raw)
 
-def r2(v):
-    """Round to 2 dp or None."""
-    return round(v, 2) if v is not None else None
-
-
-def get_group(row, g):
-    """
-    Return list of 18 floats for column group g (0-indexed).
-
-    Handles two schemas automatically:
-      - 96-col rows: 5 groups × 18 cols (standard)
-      - 101-col rows: 5 groups × 19 cols (has 'Overall Rank' at group position 5)
-        → position 5 is dropped to restore the standard 18-position layout
-    """
-    data_len = len(row) - PREFIX_COLS
-    actual_sz = 19 if data_len >= NUM_GROUPS * 19 else GROUP_SIZE
-    start = PREFIX_COLS + g * actual_sz
-    chunk = row[start : start + actual_sz]
-    if actual_sz == 19:
-        # Drop "Overall Rank" at position 5 to keep standard column mapping
-        chunk = chunk[:5] + chunk[6:]
-    return [pf(chunk[i]) if i < len(chunk) else None for i in range(GROUP_SIZE)]
-
-
-def repair_comma_in_name(row, expected_len):
-    """
-    Attempt to repair a row that has more columns than expected due to an
-    unquoted comma in the SecurityName field (col[5]).
-
-    The repair merges extra columns back into SecurityName by finding how many
-    extra columns there are and concatenating col[5] through col[5+extra].
-
-    Returns (repaired_row, repaired_name) or (None, None) if repair fails.
-    """
-    extra = len(row) - expected_len
-    if extra <= 0:
-        return None, None
-    # SecurityName spans col[5] through col[5 + extra]
-    name_parts = row[5:6 + extra]
-    repaired_name = ",".join(name_parts)
-    repaired_row = row[:5] + [repaired_name] + row[6 + extra:]
-    if len(repaired_row) == expected_len:
-        return repaired_row, repaired_name
+def _match_wildcard(raw_name):
+    """If a Security column matches a wildcard prefix, return (dict_name, suffix).
+    Otherwise return (None, None)."""
+    for prefix, dict_name in SECURITY_WILDCARDS:
+        if raw_name.startswith(prefix):
+            return dict_name, raw_name[len(prefix):].strip()
     return None, None
 
 
-def classify_row(lv2, secname):
-    """Return a string tag describing what this row represents."""
-    if not lv2 or lv2 in ("Data", "@NA", "[Unassigned]", ""):
-        return "special"
-    if lv2 == "[Cash]":
-        return "cash"
-    # Currency cash entries (CASH_USD, CASH_CAD, etc.) — aggregate captured by [Cash] rows
-    if lv2.startswith("CASH_"):
-        return "other"
-    # Named grouping dimensions must be checked BEFORE ticker patterns
-    if lv2 in GICS_L1:
-        return "sector"
-    if lv2 in REGIONS:
-        return "region"
-    if lv2 in QUINTILE_MAP:
-        return "quintile"
-    if lv2 in CUSTOM_GROUP_MAP:
-        return "custom_group"
-    if lv2 in COUNTRIES:
-        return "country"
-    if lv2 in FACTOR_NAME_MAP:
-        return "factor"
-    # Security: populated SecurityName, asterisk-prefix, or compact ticker code
-    if secname:
-        return "holding"
-    if lv2.startswith("*"):
-        return "holding"
-    # Compact ticker codes: no spaces, no decimal, min 4 chars, AND all-uppercase
-    # or all-digits (excludes descriptive GICS L2 names like "Banks", "Insurance")
-    if (" " not in lv2 and "." not in lv2 and len(lv2) >= 4
-            and (lv2.isupper() or lv2.isdigit())):
-        return "holding"
-    return "other"   # GICS L2 sub-sectors, regional sub-groups, etc.
+# ── Schema representation ────────────────────────────────────────────────────
 
+class SectionSchema:
+    """Schema for one section, built from its Section header row.
 
-def weekly_dates_for(report_date_str):
+    Detection rule for horizontal vs vertical sections:
+    - HORIZONTAL: "Period Start Date" appears 2+ times (repeating weekly groups)
+    - VERTICAL: 0 or 1 occurrences — the section has one row per period and
+      every named column after the prefix is a distinct field (RiskM, PortChars)
     """
-    Given YYYYMMDD end-of-month date, walk back to find the 5 most recent
-    Fridays (inclusive) that fall within that month.
-    Returns list of 5 date strings YYYY-MM-DD, oldest first.
-    """
-    d = datetime.strptime(report_date_str, "%Y%m%d").date()
-    fridays = []
-    cur = d
-    while len(fridays) < NUM_GROUPS:
-        if cur.weekday() == 4:   # 4 = Friday
-            fridays.append(cur)
-        cur -= timedelta(days=1)
-    fridays.reverse()   # oldest → newest
-    return [dt.strftime("%Y-%m-%d") for dt in fridays]
 
+    def __init__(self, section_name, header_row):
+        self.section_name = section_name
+        self.total_cols = len(header_row)
+        self.raw_cols = [c.strip() for c in header_row]
 
-def open_with_encoding(csv_path):
-    """
-    Try opening the file with a fallback encoding chain.
-    Returns (file_handle, encoding_used).
-    """
-    encodings = ["utf-8-sig", "utf-8", "latin-1", "cp1252"]
-    for enc in encodings:
-        try:
-            fh = open(csv_path, newline="", encoding=enc)
-            # Try reading a small chunk to verify the encoding works
-            fh.read(1024)
-            fh.seek(0)
-            print(f"  Encoding: {enc}")
-            return fh, enc
-        except (UnicodeDecodeError, LookupError):
-            try:
-                fh.close()
-            except Exception:
-                pass
-            continue
-    raise ValueError(f"Could not decode {csv_path} with any of: {encodings}")
+        # Fixed prefix columns (0-6 usually): canonical name → col index
+        self.fixed = {}
+        for i, name in enumerate(self.raw_cols[:7]):
+            if name in FIXED_PREFIX_NAMES:
+                self.fixed[_alias(name)] = i
+
+        # Find every occurrence of the GROUP_MARKER
+        group_starts = [i for i, name in enumerate(self.raw_cols) if name == GROUP_MARKER]
+
+        # Horizontal if and only if there are 2+ repeating groups
+        is_horizontal = len(group_starts) >= 2
+        if is_horizontal:
+            self.group_start = group_starts[0]
+            self.group_size = group_starts[1] - group_starts[0]
+            self.num_groups = len(group_starts)
+        else:
+            # Vertical section: all fields after the fixed prefix are individual cols
+            self.group_start = None
+            self.group_size = 0
+            self.num_groups = 0
+
+        # Between = all non-repeating cols after the fixed prefix.
+        # For vertical sections this is everything from col 7 to end.
+        # For horizontal sections this is anything between col 7 and group_start.
+        self.between = {}      # canonical → col index
+        self.between_raw = {}  # raw name → col index
+        end_of_prefix = 7
+        end_of_between = self.group_start if is_horizontal else self.total_cols
+        for i in range(end_of_prefix, end_of_between):
+            name = self.raw_cols[i]
+            if not name:
+                continue
+            self.between_raw[name] = i
+            self.between[_alias(name)] = i
+
+        # Per-group column map (only populated for horizontal sections)
+        self.group_cols = {}      # canonical → offset
+        self.group_raw_cols = {}  # raw name → offset (for wildcard scanning)
+        if is_horizontal:
+            start = self.group_start
+            end = min(start + self.group_size, self.total_cols)
+            for i in range(start, end):
+                name = self.raw_cols[i]
+                if not name:
+                    continue
+                offset = i - start
+                self.group_raw_cols[name] = offset
+                self.group_cols[_alias(name)] = offset
+
+    def group_col_index(self, canonical, group_index):
+        if self.group_start is None or canonical not in self.group_cols:
+            return None
+        return self.group_start + group_index * self.group_size + self.group_cols[canonical]
+
+    def get_group_value(self, row, canonical, group_index):
+        col = self.group_col_index(canonical, group_index)
+        if col is None or col >= len(row):
+            return None
+        return row[col]
 
 
 # ── Main parser ──────────────────────────────────────────────────────────────
 
-def parse(csv_path):
-    """
-    Parse the FactSet CSV and return (strategies_dict, validation_issues, main_date, stats).
-    strategies_dict keys are dashboard IDs (IDM, IOP, EM, ISC, SCG, ACWI, GSC).
-    stats is a dict with parse metadata (row_count, parse_time_s, etc.)
-    """
-    t_start = time.time()
-    csv_path = Path(csv_path)
-    file_size_mb = csv_path.stat().st_size / (1024 * 1024)
-    show_progress = file_size_mb > 10
+class FactSetParserV3:
 
-    rows_by_acct_date  = defaultdict(list)
-    unknown_accts_seen = set()
-    repair_warnings    = []
-    total_rows         = 0
-
-    fh, enc_used = open_with_encoding(csv_path)
-    try:
-        reader = csv.reader(fh)
-        headers = next(reader)
-        for row in reader:
-            total_rows += 1
-            if show_progress and total_rows % 50_000 == 0:
-                print(f"  Parsing... {total_rows:,} rows processed")
-            if len(row) < PREFIX_COLS:
-                continue
-            acct, dt = row[0], row[1]
-            if acct in ("ACCT", "Level") or dt in ("DATE",):
-                continue
-
-            # Handle unknown account codes gracefully
-            if acct not in STRATEGY_ACCTS and acct not in ("ACCT", "Level", ""):
-                if acct not in unknown_accts_seen:
-                    unknown_accts_seen.add(acct)
-                    print(f"  ⚠ Unknown account [{acct}] — skipping. "
-                          f"Add to ACCT_TO_ID if this is a new strategy.")
-                continue
-
-            if acct not in STRATEGY_ACCTS:
-                continue
-
-            # Comma-in-name repair for holdings rows only
-            # Skip aggregate/special rows: Data, @NA, [Unassigned], [Cash], etc.
-            lv2_raw = row[4] if len(row) > 4 else ""
-            _skip_repair = (not lv2_raw or lv2_raw in
-                            ("Data", "@NA", "[Unassigned]", "[Cash]", "ACCT", "Level"))
-            row_len = len(row)
-            if not _skip_repair and row_len > EXPECTED_101:
-                # Too long even for 101-col: attempt repair
-                repaired, rname = repair_comma_in_name(row, EXPECTED_101)
-                if repaired:
-                    ticker = row[4] if len(row) > 4 else "?"
-                    orig_name = ",".join(row[5:5 + (row_len - EXPECTED_101 + 1)])
-                    repair_warnings.append(
-                        f"  ⚠ Comma-in-name repaired: acct={acct} ticker={ticker} "
-                        f"name={repr(orig_name)} (merged {row_len - EXPECTED_101 + 1} cols)"
-                    )
-                    row = repaired
-                else:
-                    repair_warnings.append(
-                        f"  ⚠ Could not repair row with {row_len} cols "
-                        f"(acct={acct}, ticker={row[4] if len(row)>4 else '?'})"
-                    )
-            elif not _skip_repair and row_len > EXPECTED_96 and row_len < EXPECTED_101:
-                repaired, rname = repair_comma_in_name(row, EXPECTED_96)
-                if repaired:
-                    ticker = row[4] if len(row) > 4 else "?"
-                    orig_name = ",".join(row[5:5 + (row_len - EXPECTED_96 + 1)])
-                    repair_warnings.append(
-                        f"  ⚠ Comma-in-name repaired: acct={acct} ticker={ticker} "
-                        f"name={repr(orig_name)} (merged {row_len - EXPECTED_96 + 1} cols)"
-                    )
-                    row = repaired
-
-            rows_by_acct_date[(acct, dt)].append(row)
-    finally:
-        fh.close()
-
-    # Print any repair warnings
-    if repair_warnings:
-        print(f"\n  Comma-in-name repairs ({len(repair_warnings)}):")
-        for w in repair_warnings:
-            print(w)
-
-    # Identify which DATEs are main (holdings/sectors/countries) vs factor-only
-    date_counts = defaultdict(int)
-    for (acct, dt), rows in rows_by_acct_date.items():
-        date_counts[dt] += len(rows)
-    sorted_dates = sorted(date_counts, key=lambda d: date_counts[d], reverse=True)
-    if not sorted_dates:
-        return {}, ["No data rows found (all accounts unknown or file empty)"], "", {
-            "total_rows": total_rows, "parse_time_s": round(time.time() - t_start, 2),
-            "file_size_mb": round(file_size_mb, 2), "encoding": enc_used,
-            "strat_stats": {}, "repair_warnings": len(repair_warnings),
+    def __init__(self, path):
+        self.path = path
+        self.rows = []
+        self.schemas = {}       # section_name → SectionSchema
+        self.section_rows = {}  # section_name → list of data rows
+        self._encoding_used = None
+        self.stats = {
+            "parser_version": PARSER_VERSION,
+            "format_version": FORMAT_VERSION,
+            "total_rows": 0,
+            "file_size_mb": 0,
+            "parse_time_s": 0,
+            "encoding": None,
+            "schemas_discovered": {},
+            "rows_per_section": {},
         }
 
-    # Multi-month detection: dates with >= 30% of max row count are "main" dates
-    # (holdings + sectors + countries have many rows; factor sections have few)
-    max_date_count = date_counts[sorted_dates[0]]
-    main_dates_set = {d for d, c in date_counts.items() if c >= max_date_count * 0.30}
-    main_dates     = sorted(main_dates_set)             # chronological, all monthly main dates
-    factor_dates   = sorted(d for d in sorted_dates if d not in main_dates_set)
-    current_date   = main_dates[-1]                     # most recent month for full detail
-    is_multi_month = len(main_dates) > 1
+    # ------------------------------------------------------------ loading
 
-    # Backward-compat alias used in validation report
-    main_date  = current_date
+    def _load(self):
+        for enc in ("utf-8-sig", "utf-8", "latin-1", "cp1252"):
+            try:
+                with open(self.path, encoding=enc, newline="") as f:
+                    self.rows = list(csv.reader(f))
+                self._encoding_used = enc
+                self.stats["encoding"] = enc
+                return
+            except UnicodeDecodeError:
+                continue
+        raise RuntimeError(f"Could not read {self.path} with any supported encoding")
 
-    # Date range for report
-    all_dates  = sorted(date_counts.keys())
-    date_range = (all_dates[0], all_dates[-1]) if all_dates else (current_date, current_date)
+    # -------------------------------------------------- schema discovery
 
-    week_dates = weekly_dates_for(current_date)   # 5 Friday dates for current month
-
-    if is_multi_month:
-        print(f"  Multi-month file detected: {len(main_dates)} monthly snapshots, "
-              f"{len(factor_dates)} factor dates")
-
-    strategies        = {}
-    validation_issues = []
-
-    # Track per-strategy stats
-    strat_stats = {}
-
-    for acct in sorted(STRATEGY_ACCTS):
-        strat_id   = ACCT_TO_ID[acct]
-        main_rows  = rows_by_acct_date.get((acct, current_date), [])
-
-        strat_stats[strat_id] = {
-            "data_rows_found": 0,
-            "factor_dates":    [],
-        }
-
-        if not main_rows:
-            validation_issues.append(f"{strat_id}: no rows found for current date {current_date}")
-            continue
-
-        s = {
-            "id":        strat_id,
-            "name":      ACCT_TO_NAME[acct],
-            "benchmark": ACCT_TO_BENCHMARK.get(acct, ""),
-            "sum":       {},
-            "sectors":   [],
-            "regions":   [],
-            "countries": [],
-            "factors":   [],
-            "hold":      [],
-            "ranks":     [],
-            "chars":     [],
-            "groups":    [],
-            "unowned":   [],
-            "hist":      {"summary": [], "fac": {}},
-        }
-
-        cash_weight = None
-        data_rows   = []       # rows for Level2='Data'
-
-        # ── Pass 1: classify and extract main_date rows ──────────────────────
-        seen_sectors   = set()
-        seen_regions   = set()
-        seen_countries = set()
-        seen_groups    = set()
-        seen_holdings  = set()
-
-        for row in main_rows:
-            lv2     = row[4] if len(row) > 4 else ""
-            secname = row[5].strip() if len(row) > 5 else ""
-            # Normalize country aliases before classification
-            if lv2 == "Usa":
-                lv2 = "United States"
-            rtype   = classify_row(lv2, secname)
-            cur     = get_group(row, CURRENT_GRP)   # group 5 = most recent week
-
-            if rtype == "cash":
-                w = cur[C_W]
-                if w is not None:   # don't overwrite a real value with a later empty row
-                    cash_weight = w
-
-            elif rtype == "sector":
-                if lv2 not in seen_sectors:
-                    seen_sectors.add(lv2)
-                    s["sectors"].append({
-                        "n": lv2,
-                        "p": r2(cur[C_W]),
-                        "b": r2(cur[C_BW]),
-                        "a": r2(cur[C_AW]),
-                        "s": r2(cur[C_PCT_S]),
-                        "t": r2(cur[C_PCT_T]),
-                    })
-
-            elif rtype == "region":
-                if lv2 not in seen_regions:
-                    seen_regions.add(lv2)
-                    s["regions"].append({
-                        "n": lv2,
-                        "p": r2(cur[C_W]),
-                        "b": r2(cur[C_BW]),
-                        "a": r2(cur[C_AW]),
-                    })
-
-            elif rtype == "country":
-                if lv2 not in seen_countries:
-                    seen_countries.add(lv2)
-                    s["countries"].append({
-                        "n": lv2,
-                        "p": r2(cur[C_W]),
-                        "b": r2(cur[C_BW]),
-                        "a": r2(cur[C_AW]),
-                    })
-
-            elif rtype == "custom_group":
-                sg_key = CUSTOM_GROUP_MAP[lv2][1]
-                if sg_key not in seen_groups:
-                    seen_groups.add(sg_key)
-                    pg, sg = CUSTOM_GROUP_MAP[lv2]
-                    s["groups"].append({
-                        "g":  pg,
-                        "sg": sg,
-                        "p":  r2(cur[C_W]),
-                        "b":  r2(cur[C_BW]),
-                        "a":  r2(cur[C_AW]),
-                    })
-
-            elif rtype == "holding":
-                if lv2 in seen_holdings:
-                    continue
-                seen_holdings.add(lv2)
-
-                w  = cur[C_W]
-                bw = cur[C_BW]
-                aw = cur[C_AW]
-                if aw is None and (w is not None or bw is not None):
-                    aw = r2((w or 0.0) - (bw or 0.0))
-
-                # OVER_WAvg contains the overall analyst rating (1–5 scale)
-                over_score = cur[C_OVER_WA]
-                rank = max(1, min(5, round(over_score))) if over_score is not None else None
-
-                holding = {
-                    "t":    lv2,
-                    "n":    secname,
-                    "sec":  None,    # sector not embedded per holding in this CSV
-                    "co":   None,    # country not embedded per holding in this CSV
-                    "p":    r2(w),
-                    "b":    r2(bw),
-                    "a":    r2(aw),
-                    "mcr":  r2(cur[C_PCT_S]),   # %S stock-specific TE component
-                    "tr":   r2(cur[C_PCT_T]),   # %T tracking error contribution
-                    "r":    rank,
-                    "over": r2(cur[C_OVER_WA]),
-                    "rev":  r2(cur[C_REV_WA]),
-                    "val":  r2(cur[C_VAL_WA]),
-                    "qual": r2(cur[C_QUAL_WA]),
-                    "mom":  r2(cur[C_MOM_WA]),
-                    "stab": r2(cur[C_STAB_WA]),
+    def _discover_schemas(self):
+        """First pass: walk rows, find Section headers, build a schema for every
+        data section encountered."""
+        last_header = None
+        for row in self.rows:
+            if len(row) < 2:
+                continue
+            first = row[0].strip()
+            if first == "Section":
+                last_header = row
+                continue
+            if first and first not in self.schemas and last_header is not None:
+                self.schemas[first] = SectionSchema(first, last_header)
+                self.stats["schemas_discovered"][first] = {
+                    "total_cols": self.schemas[first].total_cols,
+                    "group_size": self.schemas[first].group_size,
+                    "num_groups": self.schemas[first].num_groups,
+                    "group_cols": len(self.schemas[first].group_cols),
                 }
+            if first and first != "Section":
+                self.section_rows.setdefault(first, []).append(row)
 
-                if w and w > 0:
-                    s["hold"].append(holding)
-                elif bw and bw > 0:
-                    # In benchmark but not portfolio → unowned risk
-                    s["unowned"].append({
-                        "t":   lv2,
-                        "n":   secname,
-                        "reg": None,
-                        "b":   r2(bw),
-                        "tr":  r2(cur[C_PCT_T]),
-                    })
+    # ---------------------------------------------------------- extractors
 
-            elif rtype == "special" and lv2 == "Data":
-                data_rows.append(row)
+    def _iter_strategies(self):
+        """Every strategy code seen in any data row."""
+        seen = set()
+        for rows in self.section_rows.values():
+            for row in rows:
+                if len(row) > 1:
+                    acct = row[1].strip()
+                    if acct and acct != "ACCT":
+                        seen.add(acct)
+        return sorted(seen)
 
-        strat_stats[strat_id]["data_rows_found"] = len(data_rows)
+    def _dash_id(self, acct_code):
+        return STRATEGY_RENAME.get(acct_code, acct_code)
 
-        # ── Summary stats from Data rows ─────────────────────────────────────
-        te = as_ = beta = h = bh = None
-        mktcap_p = mktcap_b = None
-        pe_p = pb_p = None          # P/E and P/B (portfolio only; no benchmark in export)
-        eps_growth_p = eps_growth_b = None
-        fcf_yield_p  = fcf_yield_b  = None
-        div_yield_p  = div_yield_b  = None
-        roe_p        = roe_b        = None
-        op_margin_p  = op_margin_b  = None
+    # -------- Portfolio Characteristics (fully dynamic :P / :B pairing)
 
-        for row in data_rows:
-            g1 = get_group(row, 0)
-            if g1[C_W] is None and g1[C_OVER_WA] is not None and g1[C_OVER_WA] > 1000:
-                te       = g1[C_AW]           # Predicted Tracking Error %
-                beta     = g1[C_PCT_S]         # Predicted Beta to Benchmark
-                h_raw    = g1[C_PCT_T]         # # of Securities
-                as_raw   = g1[C_CHECK]         # Active Share %
-                mktcap_p = g1[C_OVER_WA]       # Portfolio Market Cap ($M)
+    def _extract_port_chars(self, acct_code):
+        """Dynamic extraction — every :P/:B pair in the header becomes a metric."""
+        rows = self.section_rows.get("Portfolio Characteristics", [])
+        schema = self.schemas.get("Portfolio Characteristics")
+        if not schema or not rows:
+            return [], []
 
-                h   = int(h_raw)  if h_raw  is not None else None
-                as_ = as_raw
+        # Build metric → (p_col, b_col) pairing from raw header names
+        pairs = {}  # metric_name → [p_col, b_col]
+        solo  = {}  # non-paired cols
+        for raw_name, col in schema.between_raw.items():
+            if raw_name.endswith(":P"):
+                metric = raw_name[:-2].strip()
+                pairs.setdefault(metric, [None, None])[0] = col
+            elif raw_name.endswith(":B"):
+                metric = raw_name[:-2].strip()
+                pairs.setdefault(metric, [None, None])[1] = col
+            else:
+                solo[raw_name] = col
 
-                # Fundamentals (portfolio)
-                eps_growth_p = g1[10]
-                fcf_yield_p  = g1[14]
-                div_yield_p  = g1[15]
-                roe_p        = g1[16]
-                op_margin_p  = g1[17]
+        # Extract per-period rows for this account
+        out = []
+        for row in rows:
+            if len(row) < 2 or row[1].strip() != acct_code:
+                continue
+            if len(row) > 5 and row[5].strip() != "Data":
+                continue
+            # Date: first prefer the :P Period Start Date, then fall back to fixed DATE col
+            d = None
+            ps_col = pairs.get("Period Start Date", [None, None])[0]
+            if ps_col is not None and ps_col < len(row):
+                d = parse_date(row[ps_col])
+            if not d and "DATE" in schema.fixed:
+                d = parse_date(row[schema.fixed["DATE"]])
+            entry = {"d": d, "_metrics": {}, "_extra": {}}
+            for metric, (pc, bc) in pairs.items():
+                if metric == "Period Start Date":
+                    continue
+                p = safe_float(row[pc]) if pc is not None and pc < len(row) else None
+                b = safe_float(row[bc]) if bc is not None and bc < len(row) else None
+                entry["_metrics"][metric] = {"p": p, "b": b}
+            for raw_name, col in solo.items():
+                if raw_name in ("Period Start Date", "Portfolio",
+                                "Axioma World-Wide Fundamental Equity Risk Model MH 4"):
+                    continue
+                v = row[col] if col < len(row) else ""
+                if v:
+                    entry["_extra"][raw_name] = v
+            out.append(entry)
+        out.sort(key=lambda e: e["d"] or "")
+        metric_names = [m for m in pairs.keys() if m != "Period Start Date"]
+        return out, metric_names
 
-                g2 = get_group(row, 1)
-                if g2[C_PCT_T] is not None:
-                    bh       = int(g2[C_PCT_T])
-                    mktcap_b = g2[C_OVER_WA]
+    # ------------------------------------------- RiskM (dynamic factor list)
 
-                # Fundamentals (benchmark)
-                eps_growth_b = g2[10]
-                fcf_yield_b  = g2[14]
-                div_yield_b  = g2[15]
-                roe_b        = g2[16]
-                op_margin_b  = g2[17]
+    def _extract_riskm(self, acct_code):
+        """Extract RiskM rows. Dynamically discovers the factor list from the
+        header by splitting on the two anchor columns ("% of Variance" and
+        "Active Exposure")."""
+        rows = self.section_rows.get("RiskM", [])
+        schema = self.schemas.get("RiskM")
+        if not schema or not rows:
+            return [], []
 
-            # Section @90: Fundamental characteristics (P/E, P/B)
-            elif g1[C_W] is None and g1[C_BW] is not None:
-                pe_p = g1[C_BW]    # Price/Earnings (portfolio only)
-                pb_p = g1[C_AW]    # Price/Book (portfolio only)
+        between_items = sorted(schema.between_raw.items(), key=lambda kv: kv[1])
 
-        h_actual = len(s["hold"])
-        s["sum"] = {
-            "te":   r2(te),
-            "as":   r2(as_),
-            "beta": r2(beta),
-            "h":    h_actual,
-            "bh":   bh,
-            "sr":   None,
-            "cash": r2(cash_weight),
+        def find_col(name):
+            for rn, c in between_items:
+                if rn == name:
+                    return c
+            return None
+
+        pct_var_anchor = find_col("% of Variance")
+        active_anchor  = find_col("Active Exposure")
+
+        SKIP = {
+            "Fundamental Characteristics", "Price/Earnings", "Price/Book",
+            "BMK Price/Earnings", "BMK Price/Book", "Risk Characteristics",
+            "Axioma World-Wide Fundamental Equity Risk Model MH 4",
+            "Total Risk", "Benchmark Risk", "Predicted Beta", "Risk (%)",
+            "% Asset Specific Risk", "% Factor Risk", "% of Variance",
+            "Exposure", "Active Exposure", "Period Start Date",
         }
 
-        # Portfolio characteristics
-        chars_data = [
-            ("Market Cap ($M)", mktcap_p,    mktcap_b),
-            ("P/E Ratio",       pe_p,        None),
-            ("P/B Ratio",       pb_p,        None),
-            ("ROE NTM (%)",     roe_p,        roe_b),
-            ("FCF Yield (%)",   fcf_yield_p,  fcf_yield_b),
-            ("Div Yield (%)",   div_yield_p,  div_yield_b),
-            ("EPS Growth 3Y (%)", eps_growth_p, eps_growth_b),
-            ("Op Margin (%)",   op_margin_p,  op_margin_b),
-        ]
-        for label, p_val, b_val in chars_data:
-            if p_val is not None:
-                s["chars"].append({"m": label, "p": r2(p_val), "b": r2(b_val)})
-
-        # ── Ranks from holdings' r field ─────────────────────────────────────
-        for r_val in range(1, 6):
-            grp_holds  = [h for h in s["hold"] if h.get("r") == r_val]
-            ct = len(grp_holds)
-            p  = sum(hh["p"] or 0 for hh in grp_holds)
-            label = "R1 (Best)" if r_val == 1 else ("R5 (Worst)" if r_val == 5 else f"R{r_val}")
-            s["ranks"].append({"r": r_val, "l": label, "ct": ct, "p": r2(p), "a": None})
-
-        # ── Factors from other dates ─────────────────────────────────────────
-        factor_map = {}
-
-        for fdate in sorted(factor_dates):
-            factor_rows = rows_by_acct_date.get((acct, fdate), [])
-            if not factor_rows:
+        port_factor_cols = {}    # factor name → col index (% of Variance block)
+        active_factor_cols = {}  # factor name → col index (Active Exposure block)
+        for rn, c in between_items:
+            if rn in SKIP:
                 continue
-            has_bw = any(
-                get_group(r, 0)[C_BW] is not None
-                for r in factor_rows if r[4] in FACTOR_NAME_MAP
-            )
-            fdate_str = f"{fdate[:4]}-{fdate[4:6]}-{fdate[6:]}"
-            strat_stats[strat_id]["factor_dates"].append(fdate_str)
-
-            for row in factor_rows:
-                lv2   = row[4] if len(row) > 4 else ""
-                fname = FACTOR_NAME_MAP.get(lv2)
-                if not fname:
-                    continue
-                g1 = get_group(row, 0)
-                w  = g1[C_W]
-                bw = g1[C_BW]
-                aw = g1[C_AW]
-
-                if fname not in factor_map:
-                    factor_map[fname] = {
-                        "n": fname, "a": None, "bm": None, "e": None,
-                        "c": None, "ret": None, "imp": None,
-                    }
-
-                entry = factor_map[fname]
-
-                if has_bw:
-                    entry["e"]  = r2(w)
-                    entry["bm"] = r2(bw)
-                    entry["a"]  = r2(aw if aw is not None else
-                                     ((w or 0) - (bw or 0)))
+            if pct_var_anchor is not None and active_anchor is not None:
+                if c < active_anchor:
+                    port_factor_cols[rn] = c
                 else:
-                    ATTR_PERIOD = 5
-                    last_start  = PREFIX_COLS + (NUM_GROUPS - 1) * ATTR_PERIOD
-                    if len(row) > last_start + 4:
-                        entry["c"]   = r2(pf(row[last_start + 2]))
-                        entry["ret"] = r2(pf(row[last_start + 1]))
-                        entry["imp"] = r2(pf(row[last_start + 4]))
+                    active_factor_cols[rn] = c
+            elif pct_var_anchor is not None:
+                port_factor_cols[rn] = c
 
-                if fname not in s["hist"]["fac"]:
-                    s["hist"]["fac"][fname] = []
-                s["hist"]["fac"][fname].append({
-                    "d":  fdate_str,
-                    "e":  r2(w),
-                    "bm": r2(bw),
-                })
+        pe  = find_col("Price/Earnings")
+        pb  = find_col("Price/Book")
+        bpe = find_col("BMK Price/Earnings")
+        bpb = find_col("BMK Price/Book")
+        tot = find_col("Total Risk")
+        bmr = find_col("Benchmark Risk")
+        pbeta = find_col("Predicted Beta")
+        pct_spec = find_col("% Asset Specific Risk")
+        pct_fac  = find_col("% Factor Risk")
+        pstart   = schema.between_raw.get("Period Start Date")
 
-        s["factors"] = list(factor_map.values())
+        def g(row, col):
+            return safe_float(row[col]) if col is not None and col < len(row) else None
 
-        # ── Multi-month history: summary + sector weights ─────────────────────
-        # Loop through ALL main_dates (one per monthly snapshot) to build full
-        # historical time series.  Single-month files have len(main_dates)==1
-        # and this naturally replicates the old 5-weekly-entry behaviour.
-        all_hist_entries = []
-        hist_sec_data    = {}   # sectorName → [{d, p, b, a}]
+        out = []
+        for row in rows:
+            if len(row) < 2 or row[1].strip() != acct_code:
+                continue
+            if len(row) > 5 and row[5].strip() != "Data":
+                continue
+            d = parse_date(row[pstart]) if pstart is not None and pstart < len(row) else None
+            if not d and "DATE" in schema.fixed:
+                d = parse_date(row[schema.fixed["DATE"]])
 
-        for mdate in main_dates:
-            mdate_rows       = rows_by_acct_date.get((acct, mdate), [])
-            month_week_dates = weekly_dates_for(mdate)
-            last_friday      = month_week_dates[-1]
+            entry = {
+                "d": d,
+                "pe":  g(row, pe),
+                "pb":  g(row, pb),
+                "bpe": g(row, bpe),
+                "bpb": g(row, bpb),
+                "total_risk":   g(row, tot),
+                "bm_risk":      g(row, bmr),
+                "pbeta":        g(row, pbeta),
+                "pct_specific": g(row, pct_spec),
+                "pct_factor":   g(row, pct_fac),
+                "exposures": {},
+            }
+            factor_names = set(list(port_factor_cols.keys()) + list(active_factor_cols.keys()))
+            for fname in factor_names:
+                pc = port_factor_cols.get(fname)
+                ac = active_factor_cols.get(fname)
+                c_val = g(row, pc) if pc is not None else None
+                a_val = g(row, ac) if ac is not None else None
+                entry["exposures"][fname] = {"c": c_val, "a": a_val, "e": c_val, "bm": None}
+            out.append(entry)
 
-            # --- Weekly summary stats (from Data rows in 42-col stats section) ---
-            month_stat_g1s = []
-            for row in mdate_rows:
-                lv2 = row[4] if len(row) > 4 else ""
-                if lv2 != "Data":
+        out.sort(key=lambda e: e["d"] or "")
+        all_factors = sorted(set(list(port_factor_cols.keys()) + list(active_factor_cols.keys())))
+        return out, all_factors
+
+    # ---- Generic horizontal group-table extractor (19-col/group sections)
+
+    def _extract_group_table(self, section_name, acct_code):
+        schema = self.schemas.get(section_name)
+        rows = self.section_rows.get(section_name, [])
+        if not schema or not rows or schema.num_groups == 0:
+            return []
+
+        last_g = schema.num_groups - 1
+        results = []
+        for row in rows:
+            if len(row) < 7 or row[1].strip() != acct_code:
+                continue
+            level2 = row[5].strip() if len(row) > 5 else ""
+            if level2 in ("Data", "@NA", "[Unassigned]", "[Cash]", ""):
+                continue
+
+            def g(canonical):
+                return safe_float(schema.get_group_value(row, canonical, last_g))
+
+            name = GICS_NAME_MAP.get(level2, level2)
+            entry = {
+                "n": name,
+                "p": g("W"),
+                "b": g("BW"),
+                "a": g("AW"),
+                "mcr": g("PCT_S"),
+                "tr":  g("PCT_T"),
+                "over": g("OVER_WAVG"),
+                "rev":  g("REV_WAVG"),
+                "val":  g("VAL_WAVG"),
+                "qual": g("QUAL_WAVG"),
+                "mom":  g("MOM_WAVG"),
+                "stab": g("STAB_WAVG"),
+            }
+            if entry["a"] is None and entry["p"] is not None and entry["b"] is not None:
+                entry["a"] = round(entry["p"] - entry["b"], 2)
+            results.append(entry)
+
+        return self._dedup_by_name(results)
+
+    def _dedup_by_name(self, items):
+        """When GICS renaming merges two items, keep the one with non-null weight."""
+        seen = {}
+        for item in items:
+            name = item["n"]
+            if name in seen:
+                if item.get("p") is not None and seen[name].get("p") is None:
+                    seen[name] = item
+            else:
+                seen[name] = item
+        return list(seen.values())
+
+    # ------------- Security (wildcard-driven factor column extraction)
+
+    def _extract_security(self, acct_code):
+        """Extract holdings. Uses wildcard prefixes to capture all factor-family
+        columns into sub-dicts. Unknown columns go to _extra."""
+        schema = self.schemas.get("Security")
+        rows = self.section_rows.get("Security", [])
+        if not schema or not rows or schema.num_groups == 0:
+            return []
+
+        FIXED_FIELD_MAP = {
+            "PERIOD_START": "d",
+            "SEC_GICS":     "sec",
+            "SEC_REGION":   "reg",
+            "SEC_COUNTRY":  "co",
+            "SEC_INDUSTRY": "ind",
+            "SEC_SUBGROUP": "subg",
+            "W": "w",
+            "BW": "bw",
+            "AW": "aw",
+            "PCT_S": "pct_s",
+            "PCT_T": "pct_t",
+            "T_CHECK": "t_check",
+            "OVER_WAVG": "over",
+            "REV_WAVG":  "rev",
+            "VAL_WAVG":  "val",
+            "QUAL_WAVG": "qual",
+            "MOM_WAVG":  "mom",
+            "STAB_WAVG": "stab",
+        }
+
+        # Build per-offset dispatch once (group layout is the same for every group)
+        dispatch = {}
+        for raw_name, offset in schema.group_raw_cols.items():
+            canonical = _alias(raw_name)
+            if canonical in FIXED_FIELD_MAP:
+                dispatch[offset] = ("fixed", FIXED_FIELD_MAP[canonical])
+                continue
+            dict_name, suffix = _match_wildcard(raw_name)
+            if dict_name:
+                dispatch[offset] = ("wildcard", (dict_name, suffix))
+                continue
+            if raw_name == "Period Start Date":
+                continue
+            dispatch[offset] = ("extra", raw_name)
+
+        last_g = schema.num_groups - 1
+        group_start = schema.group_start + last_g * schema.group_size
+
+        holdings = []
+        unowned = []
+        for row in rows:
+            if len(row) < 7 or row[1].strip() != acct_code:
+                continue
+            ticker = row[5].strip() if len(row) > 5 else ""
+            name   = row[6].strip() if len(row) > 6 else ""
+            if not ticker or ticker.startswith("CASH_"):
+                continue
+            if ticker in ("Data", "@NA", "[Unassigned]"):
+                continue
+
+            h = {
+                "t": ticker,
+                "n": name,
+                "factor_contr": {},
+                "factor_exp": {},
+                "factor_active": {},
+                "factor_ret": {},
+                "factor_imp": {},
+                "factor_mcr": {},
+                "_extra": {},
+            }
+
+            for offset in range(schema.group_size):
+                col = group_start + offset
+                if col >= len(row):
                     continue
-                g1 = get_group(row, 0)
-                if g1[C_W] is None and g1[C_OVER_WA] is not None and g1[C_OVER_WA] > 1000:
-                    month_stat_g1s.append(g1)
-
-            offset = NUM_GROUPS - len(month_stat_g1s)
-            for i, g1 in enumerate(month_stat_g1s):
-                wdate_idx = offset + i
-                wdate     = (month_week_dates[wdate_idx]
-                             if wdate_idx < len(month_week_dates)
-                             else month_week_dates[-1])
-                te_w   = g1[C_AW]
-                beta_w = g1[C_PCT_S]
-                as_w   = g1[C_CHECK]
-                h_w    = int(g1[C_PCT_T]) if g1[C_PCT_T] is not None else None
-                all_hist_entries.append({
-                    "d":    wdate,
-                    "te":   r2(te_w)   if te_w   and 0  < te_w   < 20  else None,
-                    "as":   r2(as_w)   if as_w   and 50 < as_w   < 100 else None,
-                    "beta": r2(beta_w) if beta_w and 0  < beta_w < 3   else None,
-                    "h":    h_w,
-                    "sr":   None,
-                })
-
-            # --- Sector weight snapshot (most recent week for this month) ---
-            seen_sec_this_month = set()
-            for row in mdate_rows:
-                lv2 = row[4] if len(row) > 4 else ""
-                if lv2 == "Usa":
-                    lv2 = "United States"
-                if lv2 not in GICS_L1 or lv2 in seen_sec_this_month:
+                raw_val = row[col]
+                disp = dispatch.get(offset)
+                if not disp:
                     continue
-                seen_sec_this_month.add(lv2)
-                cur = get_group(row, CURRENT_GRP)
-                if lv2 not in hist_sec_data:
-                    hist_sec_data[lv2] = []
-                hist_sec_data[lv2].append({
-                    "d": last_friday,
-                    "p": r2(cur[C_W]),
-                    "b": r2(cur[C_BW]),
-                    "a": r2(cur[C_AW]),
+                kind, target = disp
+                if kind == "fixed":
+                    if target in {"sec", "reg", "co", "ind", "subg"}:
+                        h[target] = raw_val.strip() if raw_val else None
+                    elif target == "d":
+                        h[target] = parse_date(raw_val)
+                    else:
+                        h[target] = safe_float(raw_val)
+                elif kind == "wildcard":
+                    dict_name, factor_key = target
+                    v = safe_float(raw_val)
+                    if v is not None:
+                        h[dict_name][factor_key] = v
+                elif kind == "extra":
+                    v = safe_float(raw_val)
+                    if v is None and raw_val:
+                        v = raw_val.strip()
+                    if v not in (None, ""):
+                        h["_extra"][target] = v
+
+            if h.get("ind") in GICS_NAME_MAP:
+                h["ind"] = GICS_NAME_MAP[h["ind"]]
+            # Drop empty sub-dicts to keep JSON clean
+            for k in list(h.keys()):
+                if k.startswith("factor_") and isinstance(h[k], dict) and not h[k]:
+                    del h[k]
+            if not h["_extra"]:
+                del h["_extra"]
+
+            # Separate active (have weight) from historical-only (no weight in latest)
+            if h.get("w") is None and h.get("bw") is None and h.get("aw") is None:
+                unowned.append(h)
+            else:
+                holdings.append(h)
+
+        return holdings, unowned
+
+    # ---- 18 Style Snapshot
+
+    def _extract_snapshot(self, acct_code):
+        """18 Style Snapshot: one row per factor/country/industry/currency item.
+        Captures full per-period history plus a 'latest' rollup."""
+        schema = self.schemas.get("18 Style Snapshot")
+        rows = self.section_rows.get("18 Style Snapshot", [])
+        if not schema or not rows or schema.num_groups == 0:
+            return {}
+
+        out = {}
+        for row in rows:
+            if len(row) < 7 or row[1].strip() != acct_code:
+                continue
+            item = row[5].strip() if len(row) > 5 else ""
+            if not item or item in ("Data", "@NA"):
+                continue
+
+            periods = []
+            for g in range(schema.num_groups):
+                def gv(cn):
+                    return safe_float(schema.get_group_value(row, cn, g))
+                d_start = parse_date(schema.get_group_value(row, "PERIOD_START", g))
+                d_end   = parse_date(schema.get_group_value(row, "PERIOD_END", g))
+                periods.append({
+                    "d":       d_end or d_start,
+                    "d_start": d_start,
+                    "d_end":   d_end,
+                    "exp":     gv("SNAP_EXP"),
+                    "ret":     gv("SNAP_RET"),
+                    "imp":     gv("SNAP_IMP"),
+                    "dev":     gv("SNAP_DEV"),
+                    "cimp":    gv("SNAP_CIMP"),
+                    "risk_contr": gv("SNAP_RISK_CONTR"),
                 })
 
-        # Sort, deduplicate by date, store
-        seen_hist_dates = set()
-        for entry in sorted(all_hist_entries, key=lambda x: x["d"]):
-            if entry["d"] not in seen_hist_dates:
-                seen_hist_dates.add(entry["d"])
-                s["hist"]["summary"].append(entry)
+            # Detect a full-period summary row (last entry spans inception → current)
+            weekly = periods
+            summary = None
+            if len(periods) > 2:
+                last = periods[-1]
+                first_start = periods[0].get("d_start")
+                if (last.get("d_start") == first_start and
+                    last.get("d_end") != last.get("d_start")):
+                    summary = last
+                    weekly = periods[:-1]
 
-        # Fallback: if we got no entries (shouldn't happen) use current stats
-        if not s["hist"]["summary"]:
-            s["hist"]["summary"].append({
-                "d": week_dates[-1], "te": r2(te), "as": r2(as_),
-                "beta": r2(beta), "h": h, "sr": None,
+            latest = weekly[-1] if weekly else (summary or {})
+            out[item] = {
+                "exp":  latest.get("exp"),
+                "ret":  latest.get("ret"),
+                "imp":  latest.get("imp"),
+                "dev":  latest.get("dev"),
+                "cimp": latest.get("cimp"),
+                "risk_contr":       latest.get("risk_contr"),
+                "full_period_imp":  summary.get("imp")  if summary else latest.get("cimp"),
+                "full_period_cimp": summary.get("cimp") if summary else latest.get("cimp"),
+                "hist": weekly,
+            }
+        return out
+
+    # ---- Rank tables (Overall / REV / VAL / QUAL)
+
+    def _extract_rank_table(self, section_name, acct_code):
+        schema = self.schemas.get(section_name)
+        rows = self.section_rows.get(section_name, [])
+        if not schema or not rows or schema.num_groups == 0:
+            return []
+        last_g = schema.num_groups - 1
+        out = []
+        for row in rows:
+            if len(row) < 7 or row[1].strip() != acct_code:
+                continue
+            label = row[5].strip() if len(row) > 5 else ""
+            if label in ("Data", "@NA", ""):
+                continue
+            def g(cn):
+                return safe_float(schema.get_group_value(row, cn, last_g))
+            out.append({
+                "q":  label,
+                "w":  g("W"),
+                "bw": g("BW"),
+                "aw": g("AW"),
             })
+        return out
 
-        # Store sector history (sorted by date)
-        for sec_name, entries in hist_sec_data.items():
-            hist_sec_data[sec_name] = sorted(entries, key=lambda x: x["d"])
-        if hist_sec_data:
-            s["hist"]["sec"] = hist_sec_data
+    # ------------------------------------------------------------ assembly
 
-        # Available dates (for dashboard week selector)
-        s["available_dates"] = [e["d"] for e in s["hist"]["summary"]]
-        s["current_date"]    = s["available_dates"][-1] if s["available_dates"] else None
+    def _assemble(self):
+        strategies = {}
+        issues = []
 
-        # ── Consistent ordering ───────────────────────────────────────────────
-        reg_order = ["Far East", "English", "Northern Europe", "Western Europe",
-                     "Southern Europe", "Emerging Market", "Australia - New Zealand"]
-        s["regions"].sort(key=lambda r: reg_order.index(r["n"]) if r["n"] in reg_order else 99)
-        s["sectors"].sort(key=lambda x: -(x["p"] or 0))
-        s["countries"].sort(key=lambda x: -(x["p"] or 0))
-        s["hold"].sort(key=lambda x: -(x["p"] or 0))
-        s["unowned"].sort(key=lambda x: -(x["b"] or 0))
+        for acct in self._iter_strategies():
+            dash_id = self._dash_id(acct)
 
-        strategies[strat_id] = s
+            pc_rows, pc_metric_names = self._extract_port_chars(acct)
+            riskm_rows, factor_names = self._extract_riskm(acct)
+            sectors    = self._extract_group_table("Sector Weights", acct)
+            industries = self._extract_group_table("Industry", acct)
+            countries  = self._extract_group_table("Country", acct)
+            regions    = self._extract_group_table("Region", acct)
+            groups     = self._extract_group_table("Group", acct)
+            holdings, unowned_hold = self._extract_security(acct)
+            snap       = self._extract_snapshot(acct)
 
-        # ── Per-strategy validation ───────────────────────────────────────────
-        sector_sum  = sum(x["p"] or 0 for x in s["sectors"])
-        region_sum  = sum(x["p"] or 0 for x in s["regions"])
-        country_sum = sum(x["p"] or 0 for x in s["countries"])
-        equity_exp  = 100 - (cash_weight or 0)
+            ranks = {
+                "overall": self._extract_rank_table("Overall", acct),
+                "rev":     self._extract_rank_table("REV", acct),
+                "val":     self._extract_rank_table("VAL", acct),
+                "qual":    self._extract_rank_table("QUAL", acct),
+            }
 
-        # Flag 0 holdings
-        if len(s["hold"]) == 0:
-            validation_issues.append(
-                f"{strat_id}: ⚠ 0 portfolio holdings found — check CSV for this account"
-            )
+            current_pc = pc_rows[-1] if pc_rows else {}
+            current_rm = riskm_rows[-1] if riskm_rows else {}
 
-        # Flag sector sum off by more than 2% from (100 - cash)
-        if s["sectors"] and abs(sector_sum - equity_exp) > 2:
-            validation_issues.append(
-                f"{strat_id}: sector weights sum to {sector_sum:.1f}% "
-                f"(expected ~{equity_exp:.1f}%, diff {sector_sum - equity_exp:+.1f}%)"
-            )
-        if s["countries"] and abs(country_sum - equity_exp) > 5:
-            validation_issues.append(
-                f"{strat_id}: country weights sum to {country_sum:.1f}% "
-                f"(expected ~{equity_exp:.1f}%, diff {country_sum - equity_exp:+.1f}%)"
-            )
+            pc_metrics = current_pc.get("_metrics", {}) if current_pc else {}
+            def pcv(metric):
+                m = pc_metrics.get(metric)
+                return m["p"] if m else None
+            def pcb(metric):
+                m = pc_metrics.get(metric)
+                return m["b"] if m else None
 
-    t_elapsed = time.time() - t_start
+            te          = pcv("Predicted Tracking Error (Std Dev)")
+            beta        = pcv("Axioma- Predicted Beta to Benchmark")
+            h_cnt       = pcv("# of Securities")
+            bh_cnt      = pcb("# of Securities")
+            act_s       = pcv("Port. Ending Active Share")
+            mcap        = pcv("Market Capitalization")
+            bmcap       = pcb("Market Capitalization")
+            hist_beta   = pcv("Axioma- Historical Beta")
+            mpt_beta    = pcv("Port. MPT Beta")
+            b_hist_beta = pcb("Axioma- Historical Beta")
+            b_mpt_beta  = pcb("Port. MPT Beta")
 
-    parse_stats = {
-        "total_rows":      total_rows,
-        "parse_time_s":    round(t_elapsed, 2),
-        "file_size_mb":    round(file_size_mb, 2),
-        "encoding":        enc_used,
-        "main_date":       current_date,
-        "main_dates":      main_dates,
-        "factor_dates":    factor_dates,
-        "date_range":      date_range,
-        "is_multi_month":  is_multi_month,
-        "monthly_count":   len(main_dates),
-        "repair_warnings": len(repair_warnings),
-        "unknown_accts":   list(unknown_accts_seen),
-        "strat_stats":     strat_stats,
-    }
+            # Cash from Sector Weights [Cash] row, if present
+            cash = None
+            for r in self.section_rows.get("Sector Weights", []):
+                if len(r) > 5 and r[1].strip() == acct and r[5].strip() == "[Cash]":
+                    sch = self.schemas.get("Sector Weights")
+                    if sch and sch.num_groups:
+                        cash = safe_float(sch.get_group_value(r, "W", sch.num_groups - 1))
+                    break
 
-    return strategies, validation_issues, main_date, parse_stats
+            s = {
+                "id": dash_id,
+                "name": dash_id,
+                "benchmark": "",
+                "current_date": current_pc.get("d") if current_pc else None,
+                "available_dates": sorted(set(e["d"] for e in pc_rows if e.get("d"))),
+                "sum": {
+                    "te":    te,
+                    "beta":  beta,
+                    "h":     h_cnt,
+                    "bh":    bh_cnt,
+                    "as":    act_s,
+                    "mcap":  mcap,
+                    "bmcap": bmcap,
+                    "hist_beta":   hist_beta,
+                    "mpt_beta":    mpt_beta,
+                    "b_hist_beta": b_hist_beta,
+                    "b_mpt_beta":  b_mpt_beta,
+                    "betas": {
+                        "predicted":  beta,
+                        "historical": hist_beta,
+                        "mpt":        mpt_beta,
+                    },
+                    "pe":    current_rm.get("pe"),
+                    "pb":    current_rm.get("pb"),
+                    "bpe":   current_rm.get("bpe"),
+                    "bpb":   current_rm.get("bpb"),
+                    "total_risk":   current_rm.get("total_risk"),
+                    "bm_risk":      current_rm.get("bm_risk"),
+                    "pct_specific": current_rm.get("pct_specific"),
+                    "pct_factor":   current_rm.get("pct_factor"),
+                    "cash": cash,
+                    "sr": round(h_cnt / bh_cnt * 100, 2) if h_cnt and bh_cnt else None,
+                },
+                "sectors":    sectors,
+                "industries": industries,
+                "countries":  countries,
+                "regions":    regions,
+                "groups":     groups,
+                "hold":       holdings,
+                "ranks":      ranks,
+                "snap_attrib": snap,
+                "factors": self._build_factor_list(current_rm, snap, factor_names),
+                "chars":   self._build_chars(pc_metrics, current_rm, mcap, bmcap),
+                "hist": {
+                    "summary": [self._hist_entry(pc) for pc in pc_rows],
+                    "fac": self._build_hist_fac(riskm_rows),
+                    "sec": {},
+                    "reg": {},
+                },
+                "unowned": unowned_hold,
+                "_portchars_metrics": pc_metric_names,
+            }
+            strategies[dash_id] = s
+
+        return strategies, issues
+
+    def _build_factor_list(self, current_rm, snap, factor_names):
+        out = []
+        exposures = current_rm.get("exposures", {}) if current_rm else {}
+        for fname in factor_names:
+            exp = exposures.get(fname, {})
+            snap_item = snap.get(fname, {})
+            out.append({
+                "n":    fname,
+                "e":    exp.get("e"),
+                "bm":   exp.get("bm"),
+                "a":    exp.get("a"),
+                "c":    exp.get("c"),
+                "ret":  snap_item.get("ret"),
+                "imp":  snap_item.get("imp"),
+                "dev":  snap_item.get("dev"),
+                "cimp": snap_item.get("cimp"),
+                "risk_contr": snap_item.get("risk_contr"),
+            })
+        return out
+
+    def _build_chars(self, pc_metrics, current_rm, mcap, bmcap):
+        """Characteristics table. Always-present derived rows + every :P/:B pair."""
+        chars = []
+
+        def pc_p(metric):
+            m = pc_metrics.get(metric)
+            return m["p"] if m else None
+        def pc_b(metric):
+            m = pc_metrics.get(metric)
+            return m["b"] if m else None
+
+        chars.append({"m": "Tracking Error (%)",
+                      "p": pc_p("Predicted Tracking Error (Std Dev)"),
+                      "b": None, "a": None})
+        chars.append({"m": "Beta",
+                      "p": pc_p("Axioma- Predicted Beta to Benchmark"),
+                      "b": 1.0,
+                      "a": _sub(pc_p("Axioma- Predicted Beta to Benchmark"), 1.0)})
+        chars.append({"m": "Active Share (%)",
+                      "p": pc_p("Port. Ending Active Share"),
+                      "b": None, "a": None})
+        chars.append({"m": "Market Cap ($B)",
+                      "p": round(mcap / 1000, 1) if mcap else None,
+                      "b": round(bmcap / 1000, 1) if bmcap else None,
+                      "a": round((mcap - bmcap) / 1000, 1) if mcap and bmcap else None})
+        if current_rm:
+            chars.append({"m": "Price/Earnings (P/E)",
+                          "p": current_rm.get("pe"),
+                          "b": current_rm.get("bpe"),
+                          "a": _sub(current_rm.get("pe"), current_rm.get("bpe"))})
+            chars.append({"m": "Price/Book (P/B)",
+                          "p": current_rm.get("pb"),
+                          "b": current_rm.get("bpb"),
+                          "a": _sub(current_rm.get("pb"), current_rm.get("bpb"))})
+
+        # Auto-add every other :P/:B pair (excluding already-emitted / structural cols)
+        already_emitted = {
+            "Predicted Tracking Error (Std Dev)",
+            "Axioma- Predicted Beta to Benchmark",
+            "Port. Ending Active Share",
+            "Market Capitalization",
+            "Period Start Date",
+            "Portfolio",
+            "Axioma World-Wide Fundamental Equity Risk Model MH 4",
+            "# of Securities",
+            "Risk (%)",
+        }
+        for metric, pair in pc_metrics.items():
+            if metric in already_emitted:
+                continue
+            p = pair.get("p")
+            b = pair.get("b")
+            chars.append({"m": metric, "p": p, "b": b, "a": _sub(p, b)})
+
+        return chars
+
+    def _hist_entry(self, pc_row):
+        pcm = pc_row.get("_metrics", {}) if pc_row else {}
+        def v(metric):
+            m = pcm.get(metric)
+            return m["p"] if m else None
+        return {
+            "d":    pc_row.get("d"),
+            "te":   v("Predicted Tracking Error (Std Dev)"),
+            "beta": v("Axioma- Predicted Beta to Benchmark"),
+            "h":    v("# of Securities"),
+            "as":   v("Port. Ending Active Share"),
+            "sr":   None,
+            "cash": None,
+        }
+
+    def _build_hist_fac(self, riskm_rows):
+        out = {}
+        for r in riskm_rows:
+            d = r.get("d")
+            for fname, exp in r.get("exposures", {}).items():
+                out.setdefault(fname, []).append({
+                    "d":  d,
+                    "e":  exp.get("c"),
+                    "bm": exp.get("bm"),
+                    "a":  exp.get("a"),
+                })
+        return out
+
+    # ------------------------------------------------------------ public
+
+    def parse(self):
+        t0 = time.time()
+        self._load()
+        self.stats["file_size_mb"] = round(os.path.getsize(self.path) / 1024 / 1024, 2)
+        self.stats["total_rows"] = len(self.rows)
+        self._discover_schemas()
+        for sec, rows in self.section_rows.items():
+            self.stats["rows_per_section"][sec] = len(rows)
+        strategies, issues = self._assemble()
+        self.stats["parse_time_s"] = round(time.time() - t0, 3)
+
+        report_date = None
+        for s in strategies.values():
+            cd = s.get("current_date")
+            if cd and (not report_date or cd > report_date):
+                report_date = cd
+
+        return [strategies, issues, report_date, self.stats]
 
 
-# ── Validation report ────────────────────────────────────────────────────────
-
-def print_validation(strategies, issues, parse_stats):
-    print("\n" + "=" * 62)
-    print("VALIDATION REPORT")
-    print("=" * 62)
-
-    # Parse metadata header
-    dr = parse_stats["date_range"]
-    d0 = f"{dr[0][:4]}-{dr[0][4:6]}-{dr[0][6:]}"
-    d1 = f"{dr[1][:4]}-{dr[1][4:6]}-{dr[1][6:]}"
-    is_multi = parse_stats.get("is_multi_month", False)
-    n_months = parse_stats.get("monthly_count", 1)
-    print(f"\n  Report covers:  {d0}  →  {d1}")
-    if is_multi:
-        print(f"  Monthly snapshots: {n_months} months ({len(parse_stats.get('factor_dates', []))} factor dates)")
-    print(f"  Total rows:     {parse_stats['total_rows']:,}")
-    print(f"  Parse time:     {parse_stats['parse_time_s']}s")
-    print(f"  File size:      {parse_stats['file_size_mb']} MB")
-    print(f"  Encoding:       {parse_stats['encoding']}")
-    if parse_stats["repair_warnings"]:
-        print(f"  Comma repairs:  {parse_stats['repair_warnings']}")
-    if parse_stats["unknown_accts"]:
-        print(f"  Unknown accts:  {parse_stats['unknown_accts']}")
-
-    for sid, s in strategies.items():
-        sm = s["sum"]
-        ss = parse_stats["strat_stats"].get(sid, {})
-        sector_sum  = sum(x["p"] or 0 for x in s["sectors"])
-        country_sum = sum(x["p"] or 0 for x in s["countries"])
-        region_sum  = sum(x["p"] or 0 for x in s["regions"])
-        print(f"\n{sid:6s}  {s['name']}")
-        print(f"  Holdings:   {len(s['hold'])} portfolio, {len(s['unowned'])} unowned")
-        print(f"  Sectors:    {len(s['sectors'])} items, weight sum = {sector_sum:.1f}%")
-        print(f"  Regions:    {len(s['regions'])} items, weight sum = {region_sum:.1f}%")
-        print(f"  Countries:  {len(s['countries'])} items, weight sum = {country_sum:.1f}%")
-        print(f"  Groups:     {len(s['groups'])} custom buckets")
-        print(f"  Factors:    {len(s['factors'])} factors")
-        hist_pts = len(s.get("hist", {}).get("summary", []))
-        avail_dates = s.get("available_dates", [])
-        date_span = f"{avail_dates[0]} → {avail_dates[-1]}" if len(avail_dates) >= 2 else (avail_dates[0] if avail_dates else "?")
-        print(f"  History:    {hist_pts} weekly pts  ({date_span})")
-        print(f"  Data rows:  {ss.get('data_rows_found', '?')} found  "
-              f"| Factor dates: {len(ss.get('factor_dates', []))}")
-        print(f"  Summary:    TE={sm['te']}  AS={sm['as']}%  "
-              f"H={sm['h']}  BH={sm['bh']}  Cash={sm['cash']}%")
-        if s["chars"]:
-            for c in s["chars"]:
-                print(f"  Chars:      {c['m']} portfolio={c['p']}  bench={c['b']}")
-
-    if issues:
-        print(f"\n{'─'*62}")
-        print(f"ISSUES ({len(issues)}):")
-        for issue in issues:
-            print(f"  ⚠  {issue}")
-    else:
-        print(f"\n  ✓  No validation issues detected")
-    print()
-
-
-# ── Entry point ──────────────────────────────────────────────────────────────
+# ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():
     if len(sys.argv) < 2:
-        print(__doc__)
-        print("Usage: python3 factset_parser.py <input.csv|input.txt> [output.json]")
+        print("Usage: python3 factset_parser_v3.py input.csv [output.json]")
         sys.exit(1)
+    inp = sys.argv[1]
+    out = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(inp)[0] + "_v3.json"
 
-    csv_path = Path(sys.argv[1])
-    if not csv_path.exists():
-        print(f"Error: file not found: {csv_path}")
-        sys.exit(1)
+    parser = FactSetParserV3(inp)
+    result = parser.parse()
 
-    # Accept both .csv and .txt extensions (same format)
-    if csv_path.suffix.lower() not in (".csv", ".txt"):
-        print(f"Warning: unexpected extension {csv_path.suffix!r} — treating as CSV")
+    strategies, issues, report_date, stats = result
+    print(f"Parsed {stats['total_rows']} rows in {stats['parse_time_s']}s  "
+          f"({stats['file_size_mb']} MB input)")
+    print(f"Encoding: {stats['encoding']}  |  Report date: {report_date}")
+    print(f"Strategies: {list(strategies.keys())}")
+    print(f"Schemas discovered:")
+    for sec, info in stats["schemas_discovered"].items():
+        print(f"  {sec:<30} cols={info['total_cols']:>5}  "
+              f"group_size={info['group_size']:>3}  num_groups={info['num_groups']:>4}  "
+              f"group_fields={info['group_cols']}")
+    print()
+    for sid, s in strategies.items():
+        h_count = len(s.get("hold", []))
+        te = s.get("sum", {}).get("te")
+        pe = s.get("sum", {}).get("pe")
+        bpe = s.get("sum", {}).get("bpe")
+        # Sample factor_contr richness
+        fc_msg = "—"
+        if s.get("hold"):
+            fh = s["hold"][0]
+            fc = fh.get("factor_contr", {})
+            if fc:
+                fc_msg = f"{fh.get('t','?')}: {len(fc)} factor contrib"
+        print(f"  {sid}: {h_count} holdings  TE={te}  P/E={pe}  BMK P/E={bpe}  sample={fc_msg}")
 
-    out_path = Path(sys.argv[2]) if len(sys.argv) > 2 else csv_path.with_suffix(".json")
-
-    print(f"Parsing {csv_path} …")
-    strategies, issues, main_date, parse_stats = parse(csv_path)
-
-    output = {
-        "generated":      datetime.now().isoformat(timespec="seconds"),
-        "version":        FORMAT_VERSION,
-        "parser_version": PARSER_VERSION,
-        "freq":           "weekly-in-month",
-        "report_date":    f"{main_date[:4]}-{main_date[4:6]}-{main_date[6:]}",
-        "monthly_count":  parse_stats["monthly_count"],
-        "is_multi_month": parse_stats["is_multi_month"],
-        "strategies":     strategies,
-    }
-
-    out_path.write_text(json.dumps(output, indent=2, ensure_ascii=False))
-    print(f"Output written to {out_path}")
-
-    print_validation(strategies, issues, parse_stats)
+    os.makedirs(os.path.dirname(os.path.abspath(out)) or ".", exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(result, f, ensure_ascii=False, default=str)
+    print(f"\nOutput: {out}")
 
 
 if __name__ == "__main__":

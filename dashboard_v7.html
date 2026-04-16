@@ -3806,7 +3806,7 @@ document.body.addEventListener('drop',e=>{
 });
 
 // ===== MODAL MANAGEMENT =====
-const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','unownedModal','riskBudgetModal'];
+const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','unownedModal','riskBudgetModal','kbdHelpModal'];
 ALL_MODALS.forEach(id=>{
   let el=$(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show')});

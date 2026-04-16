@@ -295,6 +295,23 @@ input[type=checkbox],input[type=radio]{accent-color:#6366f1}
 select{background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:8px;appearance:none;-webkit-appearance:none;padding:5px 28px 5px 10px;font-family:inherit;font-size:12px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer}
 input[type=range]{-webkit-appearance:none;height:4px;background:#334155;border-radius:2px;outline:none;cursor:pointer}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#6366f1;cursor:pointer;box-shadow:0 0 4px rgba(99,102,241,.5)}
+/* Full-screen modal */
+.fs-modal{display:none;position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.90);padding:20px}
+.fs-modal.show{display:flex;gap:16px;align-items:stretch}
+.fs-chart{flex:2;background:var(--card);border-radius:12px;padding:16px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.fs-panel{width:320px;flex-shrink:0;background:var(--card);border-radius:12px;padding:16px;overflow-y:auto;font-size:12px}
+.fs-close{position:absolute;top:16px;right:20px;font-size:24px;color:var(--txt);cursor:pointer;z-index:301;background:none;border:none;line-height:1}
+.fs-close:hover{color:var(--txth)}
+/* Holdings intelligence */
+.flag-btn{background:none;border:none;cursor:pointer;font-size:13px;padding:0 3px;line-height:1;opacity:.5;transition:opacity .12s;vertical-align:middle}
+.flag-btn:hover{opacity:1}
+.flag-btn.flagged{opacity:1}
+/* Card annotations */
+.note-badge{position:absolute;top:6px;right:6px;background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.4);color:var(--warn);border-radius:4px;font-size:9px;padding:1px 5px;cursor:pointer;z-index:2;line-height:1.4;user-select:none}
+.note-popup{position:fixed;z-index:5000;background:var(--card);border:1px solid var(--pri);border-radius:10px;padding:12px 14px;width:280px;box-shadow:0 8px 32px rgba(0,0,0,.6)}
+/* Table overflow scroll */
+.table-scroll{overflow-x:auto;position:relative}
+.table-scroll::after{content:'';position:absolute;right:0;top:0;bottom:0;width:20px;background:linear-gradient(to right,transparent,var(--card));pointer-events:none}
 </style>
 </head>
 <body>
@@ -407,6 +424,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="modal-overlay" id="charModal"><div class="modal" id="charContent"></div></div>
 <div class="modal-overlay" id="unownedModal"><div class="modal" id="unownedContent"></div></div>
 <div class="modal-overlay" id="riskBudgetModal"><div class="modal modal-lg" id="riskBudgetContent"></div></div>
+<div class="fs-modal" id="fsModal">
+  <button class="fs-close" onclick="closeFsModal()" title="Close">&times;</button>
+  <div class="fs-chart">
+    <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+      <div id="fsTitle" style="font-size:15px;font-weight:700;color:var(--txth)"></div>
+    </div>
+    <div id="fsExplain" style="font-size:9px;color:var(--txt);opacity:.6;margin-bottom:10px"></div>
+    <div id="fsChartDiv" style="flex:1;min-height:0"></div>
+  </div>
+  <div class="fs-panel">
+    <div id="fsPanelTitle" style="font-size:12px;font-weight:700;color:var(--txth);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #334155"></div>
+    <div id="fsPanelContent"></div>
+  </div>
+</div>
 <script>
 // ===== CONSTANTS =====
 const STRATS=[
@@ -767,10 +798,60 @@ function updateTabBadges(){
 
 // ===== MAIN UPDATE =====
 function upd(){
+  _holdFlags=loadHoldFlags();
+  _holdFlaggedOnly=false;
   updateTabBadges();
   rExp();
   rRisk();
   rHold();
+  setTimeout(refreshCardNoteBadges,200);
+}
+
+// ===== RISK ALERTS =====
+function detectRiskAlerts(s){
+  let alerts=[];
+  let sum=s.sum||{};
+  // 1. TE threshold
+  if(sum.te>8) alerts.push({sev:'red',text:'TE at '+f2(sum.te,2)+'% — above 8% threshold',action:()=>oDrMetric('te')});
+  else if(sum.te>6) alerts.push({sev:'amber',text:'TE elevated at '+f2(sum.te,2)+'%',action:()=>oDrMetric('te')});
+  // 2. Single-name concentration
+  let topTE=(s.hold||[]).filter(h=>!isCash(h)&&(h.p||0)>0).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0))[0];
+  if(topTE&&Math.abs(topTE.tr||0)>10) alerts.push({sev:'red',text:(topTE.n||topTE.t)+' contributes '+Math.abs(topTE.tr).toFixed(1)+'% TE — high concentration',action:()=>oSt(topTE.t)});
+  // 3. Cash drag
+  if(sum.cash>5) alerts.push({sev:'amber',text:'Cash at '+f2(sum.cash,1)+'% — above normal range',action:()=>oDrMetric('cash')});
+  // 4. Q5 overweight
+  let q5wt=(s.hold||[]).filter(h=>!isCash(h)&&(h.p||0)>0&&h.r===5).reduce((a,h)=>a+(h.p||0),0);
+  if(q5wt>15) alerts.push({sev:'amber',text:'Q5 holdings: '+f2(q5wt,1)+'% of portfolio — worst-ranked concentration',action:null});
+  // 5. Factor exposure outlier
+  let bigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>0.5);
+  if(bigFac.length) alerts.push({sev:'info',text:bigFac.length+' factor(s) with exposure >0.5\u03c3: '+bigFac.map(f=>f.n).join(', '),action:()=>oDrFacRiskBreak()});
+  // 6. Active share decline
+  let hist=s.hist.sum||[];
+  if(hist.length>=2){
+    let asDelta=hist[hist.length-1].as-hist[hist.length-2].as;
+    if(asDelta<-1) alerts.push({sev:'amber',text:'Active share fell '+Math.abs(asDelta).toFixed(1)+'% this week',action:()=>oDrMetric('as')});
+  }
+  return alerts;
+}
+
+function riskAlertsBannerHtml(s){
+  let alerts=detectRiskAlerts(s);
+  if(!alerts.length)return'';
+  return'<div id="riskAlertsBanner" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+
+    alerts.map((a,i)=>{
+      let bg=a.sev==='red'?'rgba(239,68,68,.1)':a.sev==='amber'?'rgba(245,158,11,.1)':'rgba(99,102,241,.08)';
+      let col=a.sev==='red'?'var(--neg)':a.sev==='amber'?'var(--warn)':'var(--pri)';
+      let bdr=a.sev==='red'?'rgba(239,68,68,.3)':a.sev==='amber'?'rgba(245,158,11,.3)':'rgba(99,102,241,.2)';
+      let ico=a.sev==='red'?'\ud83d\udd34':a.sev==='amber'?'\ud83d\udfe1':'\u2139\ufe0f';
+      return'<button onclick="_riskAlertClick('+i+')" style="display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:16px;border:1px solid '+bdr+';font-size:10px;font-family:inherit;cursor:pointer;background:'+bg+';color:'+col+'">'+ico+' '+a.text+'</button>';
+    }).join('')+
+  '</div>';
+}
+
+// Store alerts for click actions
+let _lastAlerts=[];
+function _riskAlertClick(idx){
+  if(_lastAlerts[idx]&&_lastAlerts[idx].action)_lastAlerts[idx].action();
 }
 
 // ===== EXPOSURES TAB =====
@@ -840,6 +921,7 @@ function rExp(){
     <span style="flex:1"></span>
     <span style="font-size:10px;color:var(--txt);cursor:pointer" onclick="oDrMetric('cash')">Cash detail ›</span>
   </div>
+  ${(()=>{_lastAlerts=detectRiskAlerts(s);return riskAlertsBannerHtml(s);})()}
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
   <div class="card" id="cardSectors" style="margin-bottom:16px">
@@ -864,6 +946,7 @@ function rExp(){
       <div class="flex-between" style="margin-bottom:6px">
         <div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail.">Factor Detail</div>
         <div style="display:flex;gap:6px;align-items:center">
+          <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
           ${facColDropHtml()}
           <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardFacDetail');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download PNG</div><div onclick="exportCSV('#cardFacDetail table','factors');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download CSV</div></div></div>
           <div class="toggle-wrap" style="margin:0">
@@ -889,6 +972,7 @@ function rExp(){
     <div class="flex-between">
       <div class="card-title">Country Exposure</div>
       <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="openFullScreen('country')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardCountry');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#countryTableWrap table','countries');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
         <div class="toggle-wrap" style="margin:0">
           <button class="toggle-btn active" onclick="toggleCountryView('map',this)">Map</button>
@@ -931,7 +1015,10 @@ function rExp(){
   <div class="grid g2">
     <div class="card" id="cardScatter">
       <div class="flex-between"><div class="card-title tip" data-tip="Marginal contribution to risk vs total return. Bubble size = port weight.">Risk/Return Scatter</div>
-      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardScatter')">PNG</button></div></div>
+      <div class="export-bar" style="display:flex;gap:4px">
+        <button onclick="openFullScreen('scatter')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
+        <button class="export-btn" onclick="screenshotCard('#cardScatter')">PNG</button>
+      </div></div>
       <div id="scatDiv" style="height:320px"></div>
     </div>
     <div class="card" id="cardTreemap">
@@ -2644,6 +2731,100 @@ function oDrFRisk(name,range){
   }
 }
 
+// ===== NOTES & ANNOTATIONS =====
+const NOTES_KEY='rr_notes';
+function getNotes(){try{return JSON.parse(localStorage.getItem(NOTES_KEY)||'{}');}catch(e){return{};}}
+function setNote(key,text){let n=getNotes();if(text&&text.trim())n[key]=text.trim();else delete n[key];try{localStorage.setItem(NOTES_KEY,JSON.stringify(n));}catch(e){}}
+function getNote(key){return getNotes()[key]||'';}
+
+function showNotePopup(e,cardId){
+  e.preventDefault();e.stopPropagation();
+  document.querySelectorAll('.note-popup').forEach(p=>p.remove());
+  let key=(cs?cs.id:'_')+':card:'+cardId;
+  let existing=getNote(key);
+  let pop=document.createElement('div');
+  pop.className='note-popup';
+  pop.style.cssText='left:'+Math.min(e.clientX,window.innerWidth-300)+'px;top:'+Math.min(e.clientY,window.innerHeight-180)+'px';
+  let btnBase='padding:4px 12px;border-radius:6px;border:none;font-size:11px;cursor:pointer;font-family:inherit';
+  pop.innerHTML='<div style="font-size:10px;font-weight:700;color:var(--pri);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Note \u2014 '+cardId+'</div>'+
+    '<textarea style="width:100%;min-height:60px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:6px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box" placeholder="Add a note for this tile...">'+(existing||'')+'</textarea>'+
+    '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">'+
+    '<button onclick="this.closest(\'.note-popup\').remove()" style="'+btnBase+';background:#1e293b;color:#94a3b8">Cancel</button>'+
+    '<button onclick="(function(p,k){var t=p.querySelector(\'textarea\').value;setNote(k,t);p.remove();refreshCardNoteBadges();})(this.closest(\'.note-popup\'),\''+key+'\')" style="'+btnBase+';background:var(--pri);color:#fff">Save</button>'+
+    '</div>';
+  document.body.appendChild(pop);
+  pop.querySelector('textarea').focus();
+  setTimeout(()=>document.addEventListener('click',function _cn(ev){if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',_cn);}},true),100);
+}
+
+function refreshCardNoteBadges(){
+  document.querySelectorAll('[id^="card"]').forEach(card=>{
+    let old=card.querySelector('.note-badge');if(old)old.remove();
+    let key=(cs?cs.id:'_')+':card:'+card.id;
+    let note=getNote(key);
+    if(note){
+      let badge=document.createElement('div');
+      badge.className='note-badge';badge.title=note;badge.textContent='\ud83d\udcdd';
+      badge.onclick=function(ev){ev.stopPropagation();showNotePopup(ev,card.id);};
+      card.style.position='relative';
+      card.appendChild(badge);
+    }
+  });
+}
+
+// ===== HOLDINGS FLAGS =====
+let _holdFlags={};
+function loadHoldFlags(){if(!cs)return{};try{return JSON.parse(localStorage.getItem('rr_flags_'+cs.id)||'{}');}catch(e){return{};}}
+function saveHoldFlags(){if(!cs)return;try{localStorage.setItem('rr_flags_'+cs.id,JSON.stringify(_holdFlags));}catch(e){}}
+const FLAG_CYCLE=[null,'watch','reduce','add'];
+const FLAG_ICONS={watch:'\u2605',reduce:'\u25bc',add:'\u25b2'};
+const FLAG_COLORS={watch:'#f59e0b',reduce:'#ef4444',add:'#10b981'};
+function cycleFlag(ticker,e){
+  e.stopPropagation();
+  let cur=_holdFlags[ticker]||null;
+  let next=FLAG_CYCLE[(FLAG_CYCLE.indexOf(cur)+1)%FLAG_CYCLE.length];
+  if(next===null)delete _holdFlags[ticker];else _holdFlags[ticker]=next;
+  saveHoldFlags();
+  let btn=document.querySelector('.flag-btn[data-ticker="'+ticker+'"]');
+  if(btn){
+    let f=_holdFlags[ticker]||null;
+    btn.textContent=f?FLAG_ICONS[f]:'\u2691';
+    btn.style.color=f?FLAG_COLORS[f]:'';
+    btn.classList.toggle('flagged',!!f);
+    btn.title=f?'Flag: '+f+' (click to cycle)':'Flag (watch/reduce/add)';
+  }
+}
+
+// ===== HOLDINGS INTELLIGENCE =====
+function getHoldArchetype(h){
+  if(!h.factor_contr)return null;
+  let entries=Object.entries(h.factor_contr).filter(([,v])=>Math.abs(v)>0.01);
+  if(!entries.length)return null;
+  let top=entries.sort(([,a],[,b])=>Math.abs(b)-Math.abs(a))[0];
+  if(!top)return null;
+  let k=top[0].toLowerCase();
+  if(k.includes('growth')||k.includes('momentum'))return{label:'Growth Engine',color:'#34d399',bg:'rgba(16,185,129,0.15)'};
+  if(k.includes('value')||k.includes('dividend'))return{label:'Value Play',color:'#fbbf24',bg:'rgba(245,158,11,0.15)'};
+  if(k.includes('volatil')||k.includes('sensitivity'))return{label:'Volatility Driver',color:'#f87171',bg:'rgba(239,68,68,0.15)'};
+  if(k.includes('profit')||k.includes('quality'))return{label:'Quality Compounder',color:'#a78bfa',bg:'rgba(167,139,250,0.15)'};
+  if(k.includes('market'))return{label:'Market Beta',color:'#94a3b8',bg:'rgba(148,163,184,0.15)'};
+  if(Math.abs(top[1])<0.1)return{label:'Diversifier',color:'#64748b',bg:'rgba(100,116,139,0.1)'};
+  return null;
+}
+
+function genHoldSummary(h){
+  if(!h)return'';
+  let parts=[];
+  let rankStr=h.r!=null?'Q'+h.r+'-ranked':'unranked';
+  parts.push((h.n||h.t)+' ('+h.t+') is a '+rankStr+' '+(h.sec||'unclassified')+' holding');
+  if(h.tr!=null)parts.push('contributing '+Math.abs(h.tr).toFixed(1)+'% of portfolio TE'+(Math.abs(h.tr)>3?' \u2014 a top risk driver':''));
+  let topFac=h.factor_contr?Object.entries(h.factor_contr).sort(([,a],[,b])=>Math.abs(b)-Math.abs(a)).slice(0,2):[];
+  if(topFac.length)parts.push('Factor profile driven by '+topFac.map(([k,v])=>k.replace('Medium-Term ','').replace(' Sensitivity','')+(v>=0?' +':' ')+v.toFixed(2)).join(' and '));
+  let rbe=(Math.abs(h.a||0)>0.01&&Math.abs(h.tr||0)>0.01)?+(Math.abs(h.a)/Math.abs(h.tr)).toFixed(2):null;
+  if(rbe!=null)parts.push('Risk Budget Efficiency '+(rbe>1.5?'is strong ('+rbe.toFixed(2)+')':rbe>0.8?'is proportional ('+rbe.toFixed(2)+')':'is low ('+rbe.toFixed(2)+') \u2014 carries more risk than active weight justifies'));
+  return parts.join('. ')+'.';
+}
+
 // ===== HOLDINGS TAB =====
 let _showIndustry=false;
 let _holdSortMode='risk';
@@ -2691,8 +2872,10 @@ function renderHoldTab(){
         </div>
       </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
-      <div style="display:inline-flex;gap:4px;margin-bottom:8px">
+      <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
         ${[['risk','By Risk'],['weight','By Weight'],['rank','By Rank'],['name','By Name']].map(([m,lbl])=>`<button onclick="setHoldSort('${m}')" style="padding:4px 12px;border-radius:16px;background:${_holdSortMode===m?'#6366f1':'#1e293b'};color:${_holdSortMode===m?'white':'#94a3b8'};font-size:11px;border:none;cursor:pointer;font-family:inherit">${lbl}</button>`).join('')}
+        <span style="width:1px;height:16px;background:#334155;display:inline-block;margin:0 4px"></span>
+        ${(()=>{let flagged=Object.keys(_holdFlags);return flagged.length?`<button onclick="toggleFlaggedFilter()" data-chip-key="flagged" style="padding:4px 12px;border-radius:16px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:11px;border:1px solid rgba(245,158,11,0.4);cursor:pointer;font-family:inherit">&#9873; Flagged (${flagged.length})</button>`:'';})()}
       </div>
       <div style="overflow-x:auto">
         <table>
@@ -2707,6 +2890,7 @@ function renderHoldTab(){
             <th class="r" style="cursor:pointer" onclick="sortHold('a')">Active</th>
             <th class="r tip" style="cursor:pointer" onclick="sortHold('mcr')" data-tip="Stock-specific tracking error component">%S</th>
             <th class="r tip" style="cursor:pointer;color:${sortCol==='tr'?'var(--pri)':'inherit'}" onclick="sortHold('tr')" data-tip="Total % of portfolio tracking error — sorted by default">Total TE% ▼</th>
+            <th class="r tip" data-tip="Risk Budget Efficiency: |active weight| / |TE contribution|. &gt;1.5 = efficient, &lt;0.8 = overrisk" style="border-left:1px solid rgba(239,68,68,0.2);background:rgba(239,68,68,0.04)">RBE</th>
             ${ORVQ_TH}
           </tr></thead>
           <tbody>${renderHoldRows()}</tbody>
@@ -2751,12 +2935,22 @@ function renderHoldRows(){
         <span style="font-size:11px;${trVal>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(trVal,1)}</span>
         <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
       </div></td>`;
+    // RBE
+    let rbeVal=(h.p>0&&Math.abs(h.tr||0)>0.001)?+(Math.abs(h.a||0)/Math.abs(h.tr)).toFixed(2):null;
+    h._rbe=rbeVal;
+    let rbeCell=`<td class="r" style="border-left:1px solid rgba(239,68,68,0.15);background:rgba(239,68,68,0.04)">${rbeVal===null?'—':`<span style="font-weight:600;color:${rbeVal>1.5?'var(--pos)':rbeVal>=0.8?'var(--warn)':'var(--neg)'}">${rbeVal.toFixed(2)}</span>`}</td>`;
+    // Archetype
+    let arch=getHoldArchetype(h);
+    let archPill=arch?` <span style="font-size:8px;padding:1px 5px;border-radius:8px;font-weight:600;background:${arch.bg};color:${arch.color}">${arch.label}</span>`:'';
+    // Flag
+    let flag=_holdFlags[h.t]||null;
+    let flagBtn=`<button class="flag-btn${flag?' flagged':''}" data-ticker="${h.t}" style="${flag?'color:'+FLAG_COLORS[flag]+';':''}" onclick="cycleFlag('${h.t}',event)" title="${flag?'Flag: '+flag+' (click to cycle)':'Flag (watch/reduce/add)'}">${flag?FLAG_ICONS[flag]:'\u2691'}</button>`;
     let isBmOnly=(!h.p||h.p===0)&&(h.b>0);
     let bmBadge=isBmOnly?`<span style="background:#334155;color:#94a3b8;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
     let newBadge=h.isNew?`<span style="background:#a78bfa;color:#0f172a;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
     return`<tr style="cursor:pointer${isBmOnly?';background:rgba(100,116,139,0.1)':''}" onclick="oSt('${h.t}')">
-      <td style="color:var(--txth);font-weight:600">${h.t}${bmBadge}${newBadge}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
+      <td style="color:var(--txth);font-weight:600;white-space:nowrap">${flagBtn} ${h.t}${bmBadge}${newBadge}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}${archPill}</td>
       <td><span class="chip">${h.sec||'—'}</span></td>
       ${_showIndustry?`<td style="font-size:11px;color:var(--txt)">${h.ind||h.industry||'—'}</td>`:''}
       <td>${h.co||'—'}</td>
@@ -2764,6 +2958,7 @@ function renderHoldRows(){
       <td class="r ${cls}">${fp(h.a,1)}</td>
       <td class="r">${f2(h.mcr,2)}</td>
       ${trCell}
+      ${rbeCell}
       ${rORVQCells(h)}
     </tr>`;
   }).join('');
@@ -2784,10 +2979,17 @@ function filterHold(){
   hp=1;renderHoldTab();
 }
 
+let _holdFlaggedOnly=false;
+function toggleFlaggedFilter(){
+  _holdFlaggedOnly=!_holdFlaggedOnly;
+  fh=[...ah];applyHoldFilters();applyHoldSort();hp=1;renderHoldTab();
+}
+
 function applyHoldFilters(){
   let sf=$('secFilter');let rf=$('rankFilter');
   if(sf&&sf.value)fh=fh.filter(h=>h.sec===sf.value);
   if(rf&&rf.value)fh=fh.filter(h=>h.r==rf.value);
+  if(_holdFlaggedOnly)fh=fh.filter(h=>!!_holdFlags[h.t]);
 }
 
 function sortHold(col){
@@ -3134,7 +3336,11 @@ function oSt(ticker){
       <div><div class="card-title">Weight History</div><div id="stockHistDiv" style="height:230px;display:flex;align-items:center;justify-content:center"><span style="font-size:11px;color:var(--txt)">No historical data available</span></div></div>
     </div>
     ${peers.length&&h.sec?`<div><div class="card-title">Peers in ${h.sec} — sorted by TE contribution</div>
-    <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">%T</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${peerRows}</tbody></table></div>`:''}`;
+    <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">%T</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${peerRows}</tbody></table></div>`:''}
+    <div style="margin-top:14px;padding:10px 12px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.2);border-radius:8px">
+      <div style="font-size:9px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">AI Summary</div>
+      <div style="font-size:11px;color:#cbd5e1;line-height:1.55">${genHoldSummary(h)}</div>
+    </div>`;
   m.classList.add('show');
 
   setTimeout(()=>{
@@ -3521,7 +3727,10 @@ ALL_MODALS.forEach(id=>{
   let el=$(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show')});
 });
-function closeAllModals(){ALL_MODALS.forEach(id=>{let el=$(id);if(el)el.classList.remove('show')})}
+// fsModal: click outside the panels to close
+let _fsModal=$('fsModal');
+if(_fsModal)_fsModal.addEventListener('click',function(e){if(e.target===_fsModal)closeFsModal();});
+function closeAllModals(){ALL_MODALS.forEach(id=>{let el=$(id);if(el)el.classList.remove('show')});closeFsModal();}
 
 // ===== GLOBAL SEARCH =====
 function globalSearch(q){
@@ -4161,6 +4370,338 @@ function oDrRiskBudget(){
   },50);
 }
 
+// ===== FULL-SCREEN CHART MODALS =====
+let _mapColorMode='active';
+let _mapRegion='world';
+const MAP_REGIONS={world:{lon:0,lat:20,scale:1},europe:{lon:15,lat:52,scale:3},asia:{lon:100,lat:35,scale:2.5},americas:{lon:-80,lat:10,scale:2}};
+
+function facGrpColor(name){
+  let n=(name||'').toLowerCase();
+  if(n.includes('market'))return'#6366f1';
+  if(n.includes('value')||n.includes('dividend'))return'#f59e0b';
+  if(n.includes('growth'))return'#10b981';
+  if(n.includes('momentum'))return'#34d399';
+  if(n.includes('volatil')||n.includes('sensitivity'))return'#ef4444';
+  if(n.includes('profit')||n.includes('quality'))return'#a78bfa';
+  if(n.includes('size')||n.includes('small'))return'#38bdf8';
+  if(n.includes('industry'))return'#fb923c';
+  if(n.includes('countr')||n.includes('region'))return'#f472b6';
+  if(n.includes('specific')||n.includes('idio'))return'#94a3b8';
+  return'#8b5cf6';
+}
+
+function openFullScreen(type){
+  let modal=$('fsModal');
+  if(!modal)return;
+  let s=cs;
+  let titles={facmap:'Factor Risk Map \u2014 '+(s?s.name:''),scatter:'Risk/Return Scatter \u2014 '+(s?s.name:''),country:'Country Exposure \u2014 '+(s?s.name:'')};
+  let explains={
+    facmap:'Each bubble = one factor. Position = exposure \u00d7 volatility. Size = tracking error contribution. Click to explore.',
+    scatter:'Each dot = one holding. Ideal: top-left (high risk, high return). Click any dot for detail.',
+    country:'Color intensity = selected metric. Click any country for full analysis.'
+  };
+  $('fsTitle').textContent=titles[type]||'';
+  $('fsExplain').textContent=explains[type]||'';
+  $('fsPanelContent').innerHTML='';
+  $('fsPanelTitle').textContent='';
+  window._fsType=type;
+  modal.classList.add('show');
+  setTimeout(function(){
+    if(type==='facmap')renderFsFactorMap(s);
+    else if(type==='scatter')renderFsScatter(s);
+    else if(type==='country')renderFsCountry(s);
+  },60);
+}
+
+function closeFsModal(){
+  let modal=$('fsModal');
+  if(modal)modal.classList.remove('show');
+  try{Plotly.purge('fsChartDiv');}catch(e){}
+}
+
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){let m=$('fsModal');if(m&&m.classList.contains('show')){closeFsModal();}}});
+
+function renderFsFactorMap(s){
+  let facs=(s.factors||[]).filter(function(f){return f.a!=null&&(f.c||0)>0&&f.dev!=null;});
+  if(!facs.length){$('fsChartDiv').innerHTML='<p style="color:var(--txt);padding:20px;text-align:center">No factor data available</p>';return;}
+  let maxC=Math.max.apply(null,facs.map(function(f){return f.c||0;}));
+  let sizeScale=function(c){return Math.max(14,Math.sqrt((c||0)/maxC)*80);};
+  let shortName=function(n){return n.replace('Medium-Term ','').replace(' Sensitivity','Sens.').replace('Exchange Rate ','FX ').replace('Earnings ','Earn. ');};
+  let sorted=[...facs].sort(function(a,b){return(b.c||0)-(a.c||0);});
+  window._fsFacs=facs;
+  Plotly.newPlot('fsChartDiv',[{
+    type:'scatter',mode:'markers+text',
+    x:facs.map(function(f){return f.a;}),
+    y:facs.map(function(f){return f.dev;}),
+    text:facs.map(function(f){return shortName(f.n);}),
+    textposition:facs.map(function(f){return f.a>=0?'middle right':'middle left';}),
+    textfont:{size:10,color:'#cbd5e1'},
+    marker:{
+      size:facs.map(function(f){return sizeScale(f.c||0);}),
+      color:facs.map(function(f){return facGrpColor(f.n);}),
+      opacity:0.85,
+      line:{color:'rgba(255,255,255,0.2)',width:1}
+    },
+    customdata:facs.map(function(f){return[f.n,(f.c||0).toFixed(1)+'%',f.dev!=null?f.dev.toFixed(3):'—'];}),
+    hovertemplate:'<b>%{customdata[0]}</b><br>Exposure: %{x:.3f}<br>Std Dev: %{y:.3f}<br>TE: %{customdata[1]}<extra></extra>'
+  }],Object.assign({},plotBg,{
+    xaxis:Object.assign({},plotBg.xaxis,{title:'Active Exposure',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2}),
+    yaxis:Object.assign({},plotBg.yaxis,{title:'Factor Std Dev'}),
+    margin:{l:60,r:80,t:30,b:60},
+    hovermode:'closest'
+  }),Object.assign({},plotCfg,{staticPlot:false}));
+  document.getElementById('fsChartDiv').on('plotly_click',function(data){
+    if(data&&data.points&&data.points.length){let nm=data.points[0].customdata[0];if(nm)oDrF(nm);}
+  });
+  // Build panel with hover-to-highlight
+  $('fsPanelTitle').textContent='Factors by TE Contribution';
+  let rows=sorted.map(function(f,i){
+    let idx=facs.indexOf(f);
+    let col=facGrpColor(f.n);
+    return'<tr style="border-bottom:1px solid rgba(51,65,85,0.4);cursor:pointer" '+
+      'onmouseenter="fsFacHover('+idx+',\''+f.n.replace(/'/g,"\\'")+'\')" '+
+      'onmouseleave="fsFacUnhover()" '+
+      'onclick="oDrF(\''+f.n.replace(/'/g,"\\'")+'\')" >'+
+      '<td style="padding:5px 6px;color:'+col+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:5px"></span>'+f.n+'</td>'+
+      '<td style="text-align:right;padding:5px 6px;color:'+(f.a>=0?'#10b981':'#ef4444')+'">'+(f.a>=0?'+':'')+f.a.toFixed(3)+'</td>'+
+      '<td style="text-align:right;padding:5px 6px;color:#e2e8f0;font-weight:600">'+(f.c||0).toFixed(1)+'%</td>'+
+      '<td style="text-align:right;padding:5px 6px;color:#94a3b8">'+(f.dev!=null?f.dev.toFixed(3):'—')+'</td>'+
+      '</tr>';
+  }).join('');
+  $('fsPanelContent').innerHTML='<table style="width:100%;font-size:11px;border-collapse:collapse">'+
+    '<thead><tr style="border-bottom:1px solid #334155"><th style="text-align:left;padding:4px 6px;color:#64748b">Factor</th>'+
+    '<th style="text-align:right;padding:4px 6px;color:#64748b">Exp</th>'+
+    '<th style="text-align:right;padding:4px 6px;color:#64748b">TE%</th>'+
+    '<th style="text-align:right;padding:4px 6px;color:#64748b">\u03c3</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function fsFacHover(idx,name){
+  let chart=document.getElementById('fsChartDiv');
+  if(!chart||!window._fsFacs)return;
+  let n=window._fsFacs.length;
+  let opacities=Array(n).fill(0.15);
+  opacities[idx]=1;
+  try{Plotly.restyle('fsChartDiv',{'marker.opacity':[opacities]});}catch(e){}
+}
+
+function fsFacUnhover(){
+  if(!window._fsFacs)return;
+  let n=window._fsFacs.length;
+  try{Plotly.restyle('fsChartDiv',{'marker.opacity':[Array(n).fill(0.85)]});}catch(e){}
+}
+
+function renderFsScatter(s){
+  let hold=(s.hold||[]).filter(function(h){return!isCash(h)&&(h.p||0)>0;});
+  if(!hold.length){$('fsChartDiv').innerHTML='<p style="color:var(--txt);padding:20px;text-align:center">No holdings data available</p>';return;}
+  window._fsScatHold=hold;
+  let xV=hold.map(function(h){return h.mcr||0;});
+  let yV=hold.map(function(h){return h.tr||0;});
+  let sz=hold.map(function(h){return Math.max(Math.sqrt(h.p||0)*9,5);});
+  let colors=hold.map(function(h){return h.r===1?'#10b981':h.r===2?'#34d399':h.r===3?'#f59e0b':h.r===4?'#fb923c':'#ef4444';});
+  Plotly.newPlot('fsChartDiv',[{
+    type:'scatter',mode:'markers',
+    x:xV,y:yV,
+    marker:{size:sz,color:colors,opacity:0.8,line:{color:'rgba(255,255,255,0.15)',width:1}},
+    text:hold.map(function(h){return h.n||h.t;}),
+    customdata:hold.map(function(h){return[h.t,h.sec||'',h.r,h.tr,h.p];}),
+    hovertemplate:'<b>%{text}</b> (%{customdata[0]})<br>MCR: %{x:.3f}%<br>TE Contrib: %{y:.1f}%<br>Port: %{customdata[4]:.2f}%<extra></extra>'
+  }],Object.assign({},plotBg,{
+    xaxis:Object.assign({},plotBg.xaxis,{title:'MCR (Stock-Specific TE)'}),
+    yaxis:Object.assign({},plotBg.yaxis,{title:'Total TE Contribution %'}),
+    margin:{l:60,r:40,t:30,b:60},
+    hovermode:'closest'
+  }),Object.assign({},plotCfg,{staticPlot:false}));
+  document.getElementById('fsChartDiv').on('plotly_click',function(data){
+    if(data&&data.points&&data.points.length){
+      let t=data.points[0].customdata[0];
+      if(t)_fsScat_selectHold(t);
+    }
+  });
+  // Build panel
+  _renderFsScatPanel(hold,null);
+}
+
+function _renderFsScatPanel(hold,selTicker){
+  $('fsPanelTitle').textContent='Holdings (click dot for detail)';
+  let sorted=[...hold].sort(function(a,b){return Math.abs(b.tr||0)-Math.abs(a.tr||0);});
+  let searchId='fsScat_search_'+Date.now();
+  let rows=sorted.map(function(h){
+    let isSel=h.t===selTicker;
+    let rbe=(Math.abs(h.a||0)>0.01&&Math.abs(h.tr||0)>0.01)?+(Math.abs(h.a)/Math.abs(h.tr)).toFixed(2):null;
+    return'<tr style="border-bottom:1px solid rgba(51,65,85,0.4);cursor:pointer;'+(isSel?'background:rgba(99,102,241,0.15)':'')+'" onclick="_fsScat_selectHold(\''+h.t.replace(/'/g,"\\'")+'\')" >'+
+      '<td style="padding:4px 6px;color:'+(isSel?'var(--pri)':'var(--txth)')+';font-weight:'+(isSel?'700':'400')+'">'+h.t+'</td>'+
+      '<td style="padding:4px 4px;color:#94a3b8;font-size:10px">'+(h.sec||'').replace(/\s+/g,' ').substring(0,10)+'</td>'+
+      '<td style="text-align:right;padding:4px 6px;color:#e2e8f0">'+(h.p||0).toFixed(1)+'%</td>'+
+      '<td style="text-align:right;padding:4px 6px;font-weight:600;color:#e2e8f0">'+(h.tr!=null?h.tr.toFixed(1)+'%':'—')+'</td>'+
+      '<td style="text-align:right;padding:4px 6px;color:'+(h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+
+        (h.r!=null?'Q'+h.r:'—')+'</td>'+
+      '</tr>';
+  }).join('');
+  $('fsPanelContent').innerHTML=
+    '<div style="margin-bottom:8px"><input id="'+searchId+'" placeholder="Search ticker..." oninput="_fsScatSearch(this.value,\''+searchId+'\')" '+
+    'style="width:100%;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:5px 8px;font-size:11px;font-family:inherit;box-sizing:border-box"></div>'+
+    '<table style="width:100%;font-size:11px;border-collapse:collapse" id="fsScatTable">'+
+    '<thead><tr style="border-bottom:1px solid #334155">'+
+    '<th style="text-align:left;padding:4px 6px;color:#64748b">Ticker</th>'+
+    '<th style="text-align:left;padding:4px 4px;color:#64748b">Sector</th>'+
+    '<th style="text-align:right;padding:4px 6px;color:#64748b">Port%</th>'+
+    '<th style="text-align:right;padding:4px 6px;color:#64748b">TE%</th>'+
+    '<th style="text-align:right;padding:4px 6px;color:#64748b">Rank</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table>'+
+    (selTicker?'<div id="fsScatDetail" style="margin-top:12px;padding-top:10px;border-top:1px solid #334155"></div>':'');
+  if(selTicker)_renderFsHoldDetail(selTicker);
+}
+
+function _fsScatSearch(q,id){
+  let tbl=document.getElementById('fsScatTable');
+  if(!tbl||!window._fsScatHold)return;
+  q=q.toLowerCase();
+  let rows=tbl.querySelectorAll('tbody tr');
+  rows.forEach(function(tr){
+    let ticker=tr.querySelector('td');
+    if(!ticker)return;
+    tr.style.display=(!q||ticker.textContent.toLowerCase().includes(q))?'':'none';
+  });
+}
+
+function _fsScat_selectHold(ticker){
+  if(!window._fsScatHold)return;
+  let hold=window._fsScatHold;
+  let idx=hold.findIndex(function(h){return h.t===ticker;});
+  if(idx<0)return;
+  // Highlight point on chart
+  let n=hold.length;
+  let sz=hold.map(function(h){return Math.max(Math.sqrt(h.p||0)*9,5);});
+  let op=hold.map(function(_,i){return i===idx?1:0.2;});
+  sz[idx]=sz[idx]*1.4;
+  try{Plotly.restyle('fsChartDiv',{'marker.opacity':[op],'marker.size':[sz]});}catch(e){}
+  _renderFsScatPanel(hold,ticker);
+}
+
+function _renderFsHoldDetail(ticker){
+  let div=document.getElementById('fsScatDetail');
+  if(!div||!window._fsScatHold)return;
+  let h=window._fsScatHold.find(function(x){return x.t===ticker;});
+  if(!h){div.innerHTML='';return;}
+  let facEntries=h.factor_contr?Object.entries(h.factor_contr).filter(function([,v]){return Math.abs(v)>0.01;}).sort(function([,a],[,b]){return Math.abs(b)-Math.abs(a);}).slice(0,6):[];
+  let facHtml=facEntries.length?
+    '<div style="margin-top:8px"><div style="font-size:10px;font-weight:700;color:#64748b;margin-bottom:4px">FACTOR CONTRIBUTIONS</div>'+
+    facEntries.map(function([k,v]){
+      let pct=Math.abs(v)*100;
+      return'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'+
+        '<div style="font-size:10px;color:#94a3b8;width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k.replace('Medium-Term ','')+'</div>'+
+        '<div style="flex:1;height:5px;background:#1e293b;border-radius:2px"><div style="width:'+Math.min(pct*4,100)+'%;height:100%;background:'+(v>=0?'#10b981':'#ef4444')+';border-radius:2px"></div></div>'+
+        '<div style="font-size:10px;font-weight:600;color:'+(v>=0?'#10b981':'#ef4444')+';width:36px;text-align:right">'+(v>=0?'+':'')+v.toFixed(2)+'</div>'+
+        '</div>';
+    }).join('')+'</div>':'';
+  div.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--pri);margin-bottom:6px">'+(h.n||h.t)+' ('+h.t+')</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px">'+
+    '<div style="color:#64748b">Port %</div><div style="color:#e2e8f0">'+(h.p||0).toFixed(2)+'%</div>'+
+    '<div style="color:#64748b">Active %</div><div style="color:'+(h.a>=0?'#10b981':'#ef4444')+'">'+(h.a>=0?'+':'')+((h.a||0).toFixed(2))+'%</div>'+
+    '<div style="color:#64748b">Rank</div><div style="color:'+(h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+(h.r!=null?'Q'+h.r:'—')+'</div>'+
+    '<div style="color:#64748b">Sector</div><div style="color:#94a3b8;font-size:10px">'+(h.sec||'—')+'</div>'+
+    '<div style="color:#64748b">TE Contrib</div><div style="font-weight:600;color:#e2e8f0">'+(h.tr!=null?h.tr.toFixed(1)+'%':'—')+'</div>'+
+    '</div>'+facHtml;
+}
+
+function renderFsCountry(s){
+  let countries=s.countries||[];
+  if(!countries.length){$('fsChartDiv').innerHTML='<p style="color:var(--txt);padding:20px;text-align:center">No country data available</p>';return;}
+  _renderFsCtryMap(s);
+  _renderFsCtryPanel(s);
+}
+
+function _renderFsCtryMap(s){
+  let allCountries=s.countries||[];
+  let countries=allCountries.filter(function(c){return COUNTRY_ISO3[c.n];});
+  if(!countries.length)countries=allCountries; // fallback: use all if none map
+  let mode=_mapColorMode||'active';
+  let vals=countries.map(function(c){return mode==='port'?(c.p||0):mode==='bench'?(c.b||0):(c.a||0);});
+  let absMax=Math.max.apply(null,vals.map(Math.abs).concat([0.01]));
+  let clr=mode==='port'?[[0,'#1e293b'],[1,'#6366f1']]:mode==='bench'?[[0,'#1e293b'],[1,'#8b5cf6']]:
+    [[0,'#ef4444'],[0.5,'#1e293b'],[1,'#10b981']];
+  let iso3=countries.map(function(c){return COUNTRY_ISO3[c.n]||c.iso3||c.co||c.n||'';});
+  let reg=MAP_REGIONS[_mapRegion]||MAP_REGIONS.world;
+  Plotly.newPlot('fsChartDiv',[{
+    type:'choropleth',
+    locations:iso3,locationmode:'ISO-3',
+    z:vals,
+    colorscale:clr,
+    zmid:mode==='active'?0:undefined,
+    zmin:mode==='active'?-absMax:0,
+    zmax:mode==='active'?absMax:undefined,
+    text:countries.map(function(c){return c.n||c.co;}),
+    customdata:countries.map(function(c){return[c.n||c.co,c.p,c.b,c.a];}),
+    hovertemplate:'<b>%{customdata[0]}</b><br>Port: %{customdata[1]:.1f}%<br>BM: %{customdata[2]:.1f}%<br>Active: %{customdata[3]:+.1f}%<extra></extra>',
+    colorbar:{x:1,len:0.7,thickness:10,bgcolor:'rgba(0,0,0,0)',tickfont:{color:'#94a3b8',size:9},title:{text:'',side:'right'}}
+  }],Object.assign({},plotBg,{
+    geo:{
+      showframe:false,showcoastlines:true,coastlinecolor:'#334155',
+      showland:true,landcolor:'#1e293b',
+      showocean:true,oceancolor:'#0f172a',
+      projection:{type:'natural earth'},
+      center:{lon:reg.lon,lat:reg.lat},
+      lonaxis:{range:[reg.lon-180/reg.scale,reg.lon+180/reg.scale]},
+      lataxis:{range:[reg.lat-90/reg.scale,reg.lat+90/reg.scale]},
+      bgcolor:'#0f172a'
+    },
+    margin:{l:0,r:0,t:8,b:0}
+  }),Object.assign({},plotCfg,{staticPlot:false}));
+  document.getElementById('fsChartDiv').on('plotly_click',function(data){
+    if(data&&data.points&&data.points.length){let cn=data.points[0].customdata[0];if(cn)oDrCountry(cn);}
+  });
+}
+
+function _renderFsCtryPanel(s){
+  let countries=s.countries||[];
+  let mode=_mapColorMode||'active';
+  let sorted=[...countries].sort(function(a,b){
+    return mode==='port'?(b.p||0)-(a.p||0):mode==='bench'?(b.b||0)-(a.b||0):Math.abs(b.a||0)-Math.abs(a.a||0);
+  }).slice(0,15);
+  $('fsPanelTitle').textContent='';
+  let ctrlHtml='<div style="margin-bottom:10px">'+
+    '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">COLOR MODE</div>'+
+    '<div style="display:flex;gap:4px;margin-bottom:10px">'+
+    ['active','port','bench'].map(function(m){
+      return'<button onclick="setFsMapColor(\''+m+'\')" style="flex:1;font-size:10px;padding:3px 0;border-radius:4px;border:1px solid;cursor:pointer;font-family:inherit;'+
+        (mode===m?'background:var(--pri);color:#fff;border-color:var(--pri)':'background:transparent;color:var(--txt);border-color:#334155')+
+        '">'+{active:'Active',port:'Port',bench:'BM'}[m]+'</button>';
+    }).join('')+
+    '</div>'+
+    '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">REGION ZOOM</div>'+
+    '<div style="display:flex;gap:4px;margin-bottom:10px">'+
+    ['world','europe','asia','americas'].map(function(r){
+      return'<button onclick="setFsMapRegion(\''+r+'\')" style="flex:1;font-size:10px;padding:3px 0;border-radius:4px;border:1px solid;cursor:pointer;font-family:inherit;'+
+        (_mapRegion===r?'background:var(--pri);color:#fff;border-color:var(--pri)':'background:transparent;color:var(--txt);border-color:#334155')+
+        '">'+(r==='world'?'World':r==='americas'?'Amer':r.charAt(0).toUpperCase()+r.slice(1,3))+'</button>';
+    }).join('')+
+    '</div>'+
+    '</div>';
+  let rows=sorted.map(function(c){
+    let val=mode==='port'?(c.p||0):mode==='bench'?(c.b||0):(c.a||0);
+    let col=mode==='active'?(val>=0?'#10b981':'#ef4444'):'var(--txth)';
+    return'<tr style="border-bottom:1px solid rgba(51,65,85,0.4);cursor:pointer" onclick="oDrCountry(\''+((c.n||c.co||'').replace(/'/g,"\\'"))+'\')" >'+
+      '<td style="padding:4px 6px;color:var(--txth)">'+(c.n||c.co||'—')+'</td>'+
+      '<td style="text-align:right;padding:4px 6px;font-weight:600;color:'+col+'">'+(val>=0&&mode==='active'?'+':'')+val.toFixed(1)+'%</td>'+
+      '</tr>';
+  }).join('');
+  let colLabel={active:'Top Active Wt',port:'Top Port Wt',bench:'Top BM Wt'}[mode];
+  $('fsPanelContent').innerHTML=ctrlHtml+
+    '<div style="font-size:11px;font-weight:700;color:var(--txth);margin-bottom:6px">'+colLabel+'</div>'+
+    '<table style="width:100%;font-size:11px;border-collapse:collapse"><tbody>'+rows+'</tbody></table>';
+}
+
+function setFsMapRegion(region){
+  _mapRegion=region;
+  if(window._fsType==='country'&&cs)_renderFsCtryMap(cs);
+  _renderFsCtryPanel(cs);
+}
+
+function setFsMapColor(mode){
+  _mapColorMode=mode;
+  if(window._fsType==='country'&&cs)renderFsCountry(cs);
+}
+
 // ===== EMAIL SNAPSHOT =====
 // ===== COPY SUMMARY =====
 function copySummary(){
@@ -4379,8 +4920,18 @@ function showToast(msg,color){
   setTimeout(()=>{toast.style.opacity='0';toast.style.transition='opacity .3s';setTimeout(()=>toast.remove(),300)},2500);
 }
 
-// ===== CONTEXT MENU (right-click copy) =====
+// ===== CONTEXT MENU (right-click copy + card notes) =====
 document.addEventListener('contextmenu',e=>{
+  // Card title right-click → note popup
+  let cardTitle=e.target.closest('.card-title');
+  if(cardTitle){
+    let card=e.target.closest('[id^="card"]');
+    if(card&&cs){
+      showNotePopup(e,card.id);
+      return;
+    }
+  }
+  // Table cell right-click → copy
   let td=e.target.closest('td');
   let val=e.target.closest('.value');
   if(td||val){

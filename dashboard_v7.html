@@ -3759,6 +3759,8 @@ document.addEventListener('keydown',e=>{
     return;
   }
   if(inInput)return;
+  if(e.key==='?'){toggleShortcutHelp();return;}
+  if(e.key==='g'&&!e.ctrlKey&&!e.metaKey){toggleConfig();return;}
   // C = compare
   if(e.key==='c'&&!e.ctrlKey&&!e.metaKey)openComp();
   // S = share
@@ -3879,6 +3881,26 @@ function toggleConfig(){
     populatePrefPanel();
     Object.keys(_thresholdsDefault).forEach(k=>{let el=document.getElementById('thr_'+k);if(el)el.value=_thresholds[k];});
   }
+}
+function toggleShortcutHelp(){
+  let m=$('kbdHelpModal');
+  if(m){m.classList.toggle('show');return;}
+  m=document.createElement('div');
+  m.id='kbdHelpModal';
+  m.className='modal-overlay';
+  let sc=[['Esc','Close all modals'],['Tab / Shift+Tab','Cycle tabs'],
+    ['1\u20137','Switch strategy'],['\u2190 \u2192','Prev / next strategy'],
+    ['?','This help panel'],['g','Open settings'],['c','Compare strategies'],
+    ['s','Share URL'],['/','Focus search']];
+  let rows=sc.map(([k,d])=>'<tr><td><kbd class="kbd" style="font-size:12px;padding:2px 8px">'+k+'</kbd></td><td style="padding:4px 8px;font-size:12px;color:var(--txth)">'+d+'</td></tr>').join('');
+  m.innerHTML='<div class="modal" style="max-width:340px;padding:24px">'+
+    '<div class="flex-between" style="margin-bottom:16px"><h3 style="margin:0;font-size:15px;color:var(--txth)">Keyboard Shortcuts</h3><button class="close" onclick="toggleShortcutHelp()">&times;</button></div>'+
+    '<table style="width:100%">'+rows+'</table>'+
+    '<p style="margin:12px 0 0;font-size:10px;color:var(--txt)">Press <kbd class="kbd">?</kbd> to toggle</p>'+
+  '</div>';
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});
+  document.body.appendChild(m);
+  m.classList.add('show');
 }
 function setDataSrc(src){
   $('srcFile').classList.toggle('active',src==='file');

@@ -333,7 +333,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <button onclick="stepWeek(1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Next week">&#8250;</button>
     <button onclick="jumpToLatest()" id="latestBtn" style="display:none;background:var(--pri);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:600;padding:2px 7px;cursor:pointer;font-family:inherit;margin-left:2px">Latest</button>
   </div>
-  <button class="btn btn-sec btn-sm" id="configBtn" style="display:none;font-size:13px" onclick="toggleConfig()" title="Settings">&#9881;</button>
+  <button class="btn btn-sec btn-sm" id="configBtn" style="font-size:13px" onclick="toggleConfig()" title="Settings">&#9881;</button>
 </div>
 </div>
 <!-- Utility elements: IDs preserved for JS compat, not shown in header -->
@@ -387,6 +387,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
   <button class="toggle-btn" id="presMode" onclick="togglePresMode()" style="width:100%">Toggle Presentation Mode</button>
 </div>
 <p style="font-size:10px;color:var(--txt);margin-top:4px">Hides header and nav for screen sharing</p></div>
+<hr style="border:none;border-top:1px solid var(--grid);margin:18px 0">
+<h3 style="margin-bottom:14px">Alert Thresholds</h3>
+<p style="font-size:10px;color:var(--txt);margin:-8px 0 10px">Trigger levels for the Risk Alerts banner. Values persist locally.</p>
+<div class="config-field"><label>TE red severity (%)</label><input id="thr_teRed" type="number" step="0.5" min="0" onchange="setThreshold('teRed',this.value)"></div>
+<div class="config-field"><label>TE amber severity (%)</label><input id="thr_teAmber" type="number" step="0.5" min="0" onchange="setThreshold('teAmber',this.value)"></div>
+<div class="config-field"><label>Single-name TE contribution (%)</label><input id="thr_singleNameTE" type="number" step="0.5" min="0" onchange="setThreshold('singleNameTE',this.value)"></div>
+<div class="config-field"><label>Cash maximum (%)</label><input id="thr_cashMax" type="number" step="0.5" min="0" onchange="setThreshold('cashMax',this.value)"></div>
+<div class="config-field"><label>Q5 holdings max weight (%)</label><input id="thr_q5WeightMax" type="number" step="1" min="0" onchange="setThreshold('q5WeightMax',this.value)"></div>
+<div class="config-field"><label>Factor exposure (σ)</label><input id="thr_factorSigma" type="number" step="0.1" min="0" onchange="setThreshold('factorSigma',this.value)"></div>
+<div class="config-field"><label>Active share WoW delta (%)</label><input id="thr_asDeltaMin" type="number" step="0.5" onchange="setThreshold('asDeltaMin',this.value)"></div>
+<button class="btn btn-sec btn-sm" onclick="resetThresholds()" style="margin-top:4px">Reset to defaults</button>
 <hr style="border:none;border-top:1px solid var(--grid);margin:18px 0">
 <h3 style="margin-bottom:14px">Actions</h3>
 <div style="display:flex;flex-wrap:wrap;gap:6px">
@@ -812,24 +823,24 @@ function detectRiskAlerts(s){
   let alerts=[];
   let sum=s.sum||{};
   // 1. TE threshold
-  if(sum.te>8) alerts.push({sev:'red',text:'TE at '+f2(sum.te,2)+'% — above 8% threshold',action:()=>oDrMetric('te')});
-  else if(sum.te>6) alerts.push({sev:'amber',text:'TE elevated at '+f2(sum.te,2)+'%',action:()=>oDrMetric('te')});
+  if(sum.te>_thresholds.teRed) alerts.push({sev:'red',text:'TE at '+f2(sum.te,2)+'% — above '+_thresholds.teRed+'% threshold',action:()=>oDrMetric('te')});
+  else if(sum.te>_thresholds.teAmber) alerts.push({sev:'amber',text:'TE elevated at '+f2(sum.te,2)+'%',action:()=>oDrMetric('te')});
   // 2. Single-name concentration
   let topTE=(s.hold||[]).filter(h=>!isCash(h)&&(h.p||0)>0).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0))[0];
-  if(topTE&&Math.abs(topTE.tr||0)>10) alerts.push({sev:'red',text:(topTE.n||topTE.t)+' contributes '+Math.abs(topTE.tr).toFixed(1)+'% TE — high concentration',action:()=>oSt(topTE.t)});
+  if(topTE&&Math.abs(topTE.tr||0)>_thresholds.singleNameTE) alerts.push({sev:'red',text:(topTE.n||topTE.t)+' contributes '+Math.abs(topTE.tr).toFixed(1)+'% TE — high concentration',action:()=>oSt(topTE.t)});
   // 3. Cash drag
-  if(sum.cash>5) alerts.push({sev:'amber',text:'Cash at '+f2(sum.cash,1)+'% — above normal range',action:()=>oDrMetric('cash')});
+  if(sum.cash>_thresholds.cashMax) alerts.push({sev:'amber',text:'Cash at '+f2(sum.cash,1)+'% — above normal range',action:()=>oDrMetric('cash')});
   // 4. Q5 overweight
   let q5wt=(s.hold||[]).filter(h=>!isCash(h)&&(h.p||0)>0&&h.r===5).reduce((a,h)=>a+(h.p||0),0);
-  if(q5wt>15) alerts.push({sev:'amber',text:'Q5 holdings: '+f2(q5wt,1)+'% of portfolio — worst-ranked concentration',action:null});
+  if(q5wt>_thresholds.q5WeightMax) alerts.push({sev:'amber',text:'Q5 holdings: '+f2(q5wt,1)+'% of portfolio — worst-ranked concentration',action:null});
   // 5. Factor exposure outlier
-  let bigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>0.5);
-  if(bigFac.length) alerts.push({sev:'info',text:bigFac.length+' factor(s) with exposure >0.5\u03c3: '+bigFac.map(f=>f.n).join(', '),action:()=>oDrFacRiskBreak()});
+  let bigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>_thresholds.factorSigma);
+  if(bigFac.length) alerts.push({sev:'info',text:bigFac.length+' factor(s) with exposure >'+_thresholds.factorSigma+'\u03c3: '+bigFac.map(f=>f.n).join(', '),action:()=>oDrFacRiskBreak()});
   // 6. Active share decline
   let hist=s.hist.sum||[];
   if(hist.length>=2){
     let asDelta=hist[hist.length-1].as-hist[hist.length-2].as;
-    if(asDelta<-1) alerts.push({sev:'amber',text:'Active share fell '+Math.abs(asDelta).toFixed(1)+'% this week',action:()=>oDrMetric('as')});
+    if(asDelta<_thresholds.asDeltaMin) alerts.push({sev:'amber',text:'Active share fell '+Math.abs(asDelta).toFixed(1)+'% this week',action:()=>oDrMetric('as')});
   }
   return alerts;
 }
@@ -3793,7 +3804,10 @@ function copyValue(v){
 // ===== CONFIG PANEL =====
 function toggleConfig(){
   $('configPanel').classList.toggle('open');
-  if($('configPanel').classList.contains('open'))populatePrefPanel();
+  if($('configPanel').classList.contains('open')){
+    populatePrefPanel();
+    Object.keys(_thresholdsDefault).forEach(k=>{let el=document.getElementById('thr_'+k);if(el)el.value=_thresholds[k];});
+  }
 }
 function setDataSrc(src){
   $('srcFile').classList.toggle('active',src==='file');
@@ -3828,6 +3842,27 @@ function loadPrefs(){
 }
 function savePrefs(){try{localStorage.setItem(PREFS_KEY,JSON.stringify(_prefs));}catch(e){}}
 function savePref(key,val){_prefs[key]=val;savePrefs();}
+// ===== ALERT THRESHOLDS =====
+const THRESHOLDS_KEY='rr_thresholds';
+const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,asDeltaMin:-1};
+let _thresholds={..._thresholdsDefault};
+function loadThresholds(){
+  try{let s=JSON.parse(localStorage.getItem(THRESHOLDS_KEY)||'{}');
+      Object.keys(_thresholdsDefault).forEach(k=>{if(k in s&&isFinite(+s[k]))_thresholds[k]=+s[k];});
+  }catch(e){}
+}
+function saveThresholds(){try{localStorage.setItem(THRESHOLDS_KEY,JSON.stringify(_thresholds));}catch(e){}}
+function setThreshold(key,val){
+  if(!(key in _thresholdsDefault))return;
+  let n=parseFloat(val); if(!isFinite(n))return;
+  _thresholds[key]=n; saveThresholds();
+  if(typeof cs!=='undefined'&&cs&&typeof rExp==='function')rExp();
+}
+function resetThresholds(){
+  _thresholds={..._thresholdsDefault}; saveThresholds();
+  Object.keys(_thresholdsDefault).forEach(k=>{let el=document.getElementById('thr_'+k);if(el)el.value=_thresholdsDefault[k];});
+  if(typeof cs!=='undefined'&&cs&&typeof rExp==='function')rExp();
+}
 function applyPrefs(){
   document.body.classList.toggle('light-theme',_prefs.theme==='light');
   document.body.classList.toggle('presentation-mode',!!_prefs.presentationMode);
@@ -5342,6 +5377,7 @@ function startLiveRefresh(){
 // ===== AUTO-LOAD WITH DEMO DATA =====
 window.addEventListener('DOMContentLoaded',()=>{
   loadPrefs();
+  loadThresholds();
   loadConfig();
   // Check for shared state in URL hash
   if(location.hash){

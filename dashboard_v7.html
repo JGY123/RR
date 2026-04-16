@@ -951,9 +951,10 @@ function rExp(){
   <!-- Row 3: Factor Exposures -->
   <div class="grid g2">
     <div class="card" id="cardFacButt">
-      <div class="flex-between"><div class="card-title">Factor Butterfly</div>
+      <div class="flex-between"><div class="card-title">Factor Risk Map</div>
       <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardFacButt')">PNG</button></div></div>
-      <div id="facButtDiv" style="height:300px"></div>
+      <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
+      <div id="facButtDiv" style="height:480px"></div>
     </div>
     <div class="card" id="cardFacDetail">
       <div class="flex-between" style="margin-bottom:6px">
@@ -1930,7 +1931,23 @@ function rRegChart(s){
   },plotCfg);
 }
 
+function rFacTopTeStrip(s){
+  let el=document.getElementById('facTopTeStrip');
+  if(!el)return;
+  let top=(s.factors||[]).filter(f=>isFinite(f.c)).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).slice(0,4);
+  if(!top.length||Math.abs(top[0].c||0)<0.01){el.innerHTML='';return;}
+  el.innerHTML='<span style="font-size:10px;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-right:4px">Top TE Contributors</span>'+top.map(f=>{
+    let a=+(f.a||0),c=+(f.c||0);
+    let ow=a>=0;
+    let bg=ow?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)';
+    let bd=ow?'rgba(34,197,94,0.45)':'rgba(239,68,68,0.45)';
+    let accent=ow?'#22c55e':'#ef4444';
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:${bg};border:1px solid ${bd};font-size:11px"><span style="color:var(--txth);font-weight:600">${f.n}</span><span style="color:${accent};font-weight:600">${fp(a,2)}\u03c3</span><span style="color:var(--txt)">${f2(c,1)}% TE</span></span>`;
+  }).join('');
+}
+
 function rFacButt(s){
+  rFacTopTeStrip(s);
   // Single-trace diverging bar: f.a (active exposure) only
   // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
   let facs=s.factors;
@@ -1944,7 +1961,7 @@ function rFacButt(s){
   for(let v=tvStep;v<=xmax+0.001;v=Math.round((v+tvStep)*100)/100){
     tickVals.push(v,-v);tickText.push(v.toFixed(1),v.toFixed(1));
   }
-  let h=Math.max(280,facs.length*30+60);
+  let h=Math.max(480,facs.length*30+60);
   let el=document.getElementById('facButtDiv');
   if(el)el.style.height=h+'px';
   Plotly.newPlot('facButtDiv',[{

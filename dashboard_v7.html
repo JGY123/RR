@@ -3027,7 +3027,7 @@ function rHoldConc(){
   Plotly.newPlot('holdConcDiv',[{
     y:top10.map(h=>h.t),x:top10.map(h=>h.p),type:'bar',orientation:'h',
     marker:{color:'#6366f1'},text:top10.map(h=>f2(h.p)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Weight %'}},plotCfg);
+  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category'},xaxis:{...plotBg.xaxis,title:'Weight %'}},plotCfg);
 }
 
 

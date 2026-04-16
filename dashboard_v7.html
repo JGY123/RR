@@ -333,6 +333,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <button onclick="stepWeek(1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Next week">&#8250;</button>
     <button onclick="jumpToLatest()" id="latestBtn" style="display:none;background:var(--pri);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:600;padding:2px 7px;cursor:pointer;font-family:inherit;margin-left:2px">Latest</button>
   </div>
+  <button class="btn btn-sec btn-sm" id="glossaryBtn" style="font-size:13px;display:none" onclick="openGlossary()" title="Metric Glossary">&#9432;</button>
   <button class="btn btn-sec btn-sm" id="configBtn" style="font-size:13px" onclick="toggleConfig()" title="Settings">&#9881;</button>
 </div>
 </div>
@@ -692,6 +693,7 @@ function init(){
   $('emailBtn').style.display='inline-block';
   $('compareBtn').style.display='inline-block';
   $('configBtn').style.display='inline-block';
+  $('glossaryBtn').style.display='inline-block';
   $('connStatus').style.display='flex';
   updateHistUI();
   _selectedWeek=null;
@@ -3806,7 +3808,7 @@ document.body.addEventListener('drop',e=>{
 });
 
 // ===== MODAL MANAGEMENT =====
-const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','unownedModal','riskBudgetModal','kbdHelpModal'];
+const ALL_MODALS=['drillModal','stockModal','reportModal','compModal','metricModal','countryModal','groupModal','charModal','unownedModal','riskBudgetModal','kbdHelpModal','glossaryModal'];
 ALL_MODALS.forEach(id=>{
   let el=$(id);
   if(el)el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('show')});
@@ -3897,6 +3899,38 @@ function toggleShortcutHelp(){
     '<div class="flex-between" style="margin-bottom:16px"><h3 style="margin:0;font-size:15px;color:var(--txth)">Keyboard Shortcuts</h3><button class="close" onclick="toggleShortcutHelp()">&times;</button></div>'+
     '<table style="width:100%">'+rows+'</table>'+
     '<p style="margin:12px 0 0;font-size:10px;color:var(--txt)">Press <kbd class="kbd">?</kbd> to toggle</p>'+
+  '</div>';
+  m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});
+  document.body.appendChild(m);
+  m.classList.add('show');
+}
+function openGlossary(){
+  let m=$('glossaryModal');
+  if(m){m.classList.toggle('show');return;}
+  m=document.createElement('div');
+  m.id='glossaryModal';
+  m.className='modal-overlay';
+  let terms=[
+    ['Tracking Error (TE)','Annualized standard deviation of active returns (portfolio minus benchmark). Higher TE = more deviation from the index.'],
+    ['Active Share','Percentage of portfolio holdings that differ from the benchmark. 0% = index clone, 100% = zero overlap.'],
+    ['Beta','Portfolio sensitivity to benchmark moves. Beta 1.0 = moves in lockstep; >1 = amplifies; <1 = dampens.'],
+    ['Active Weight','Portfolio weight minus benchmark weight for a holding, sector, or country. Positive = overweight.'],
+    ['MCR (Marginal Contribution to Risk)','How much a single holding contributes to total portfolio tracking error. Sum of all MCRs \u2248 total TE.'],
+    ['Factor Exposure','Portfolio\u2019s z-score tilt on a systematic risk factor (Value, Momentum, etc.) relative to benchmark. Measured in standard deviations.'],
+    ['Factor Contribution %','Share of total tracking error attributable to a given factor. All factor contributions + idiosyncratic = 100%.'],
+    ['Idiosyncratic Risk','Stock-specific risk not explained by common factors. Driven by individual position sizing and stock-level events.'],
+    ['Quant Ranks (Q1\u2013Q5)','Quintile rankings from multi-factor models. Q1 = most attractive, Q5 = least attractive. Q5 overweights are risk flags.'],
+    ['RBE (Return/Beta Efficiency)','Ratio of active return to risk contribution. Higher = more efficient use of risk budget.'],
+    ['Impact (Attribution)','Return contribution of a factor or holding to overall active return over the period. Positive = helped performance.'],
+    ['Cumulative Impact','Running sum of periodic attribution impacts. Shows whether a factor or country has been a persistent tailwind or headwind.'],
+    ['Cash Drag','Implicit tracking error from holding cash in a fully-invested benchmark. Cash > 5% is flagged as a risk alert.']
+  ];
+  let rows=terms.map(([t,d])=>'<div style="padding:10px 0;border-bottom:1px solid var(--grid)">'+
+    '<div style="font-size:12px;font-weight:600;color:var(--pri);margin-bottom:3px">'+t+'</div>'+
+    '<div style="font-size:11px;color:var(--txth);line-height:1.5">'+d+'</div></div>').join('');
+  m.innerHTML='<div class="modal" style="max-width:480px;padding:24px;max-height:80vh;overflow-y:auto">'+
+    '<div class="flex-between" style="margin-bottom:16px"><h3 style="margin:0;font-size:15px;color:var(--txth)">Metric Glossary</h3><button class="close" onclick="openGlossary()">&times;</button></div>'+
+    rows+
   '</div>';
   m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('show')});
   document.body.appendChild(m);

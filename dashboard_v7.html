@@ -2136,6 +2136,75 @@ function toggleGrpView(v,btn){
   if(v==='chart')rGroupChart(cs);
 }
 
+// ===== RISK DECOMPOSITION TREE =====
+function toggleDtNode(id){
+  let el=document.getElementById(id);if(!el)return;
+  let open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  let p=el.previousElementSibling;
+  if(p){let a=p.querySelector('.dt-arrow');if(a)a.textContent=open?'▸':'▾';}
+}
+function mkNode(id,label,val,pct,color,kids){
+  let hasK=kids&&kids.length;
+  let arrow=hasK?'<span class="dt-arrow" style="cursor:pointer;user-select:none;font-size:11px;color:var(--txt);width:14px;display:inline-block">▸</span>'
+    :'<span style="width:14px;display:inline-block"></span>';
+  let kidsHtml=hasK?'<div id="'+id+'" style="display:none;margin-left:20px">'+kids.join('')+'</div>':'';
+  return'<div style="margin-bottom:1px">'+
+    '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;'+(hasK?'cursor:pointer':'')+'"'+(hasK?' onclick="toggleDtNode(\''+id+'\')"':'')+'>'+
+      arrow+
+      '<span style="flex:1;font-size:12px;color:var(--txth)">'+label+'</span>'+
+      '<span style="font-size:12px;font-weight:600;color:'+color+';min-width:55px;text-align:right">'+val+'</span>'+
+      '<div style="width:60px;background:var(--grid);border-radius:2px;height:3px;overflow:hidden">'+
+        '<div style="height:100%;background:'+color+';width:'+Math.min(Math.max(pct,1),100)+'%;border-radius:2px"></div>'+
+      '</div>'+
+      '<span style="font-size:10px;color:var(--txt);min-width:35px;text-align:right">'+f2(pct,0)+'%</span>'+
+    '</div>'+
+    kidsHtml+
+  '</div>';
+}
+function riskDecompTree(s,factorRisk,idioRisk){
+  let te=s.sum.te;if(!te)return'';
+  let facPct=+(factorRisk/te*100).toFixed(1);
+  let idioPct=+(idioRisk/te*100).toFixed(1);
+  let grpMap={valGrowth:[],mktBehavior:[],profitability:[],secondary:[]};
+  let other=[];
+  s.factors.forEach(f=>{
+    let placed=false;
+    for(let[k,v]of Object.entries(FAC_GROUPS)){
+      if(k==='all'||!v)continue;
+      if(v.some(g=>f.n.toLowerCase().includes(g.toLowerCase())||g.toLowerCase().includes(f.n.toLowerCase()))){
+        grpMap[k].push(f);placed=true;break;
+      }
+    }
+    if(!placed)other.push(f);
+  });
+  if(other.length)grpMap.other=other;
+  let grpLabels={valGrowth:'Value / Growth',mktBehavior:'Market Behavior',profitability:'Profitability',secondary:'Secondary',other:'Other'};
+  let facKids=Object.entries(grpMap).filter(([,facs])=>facs.length).map(([grp,facs])=>{
+    let grpC=facs.reduce((a,f)=>a+Math.abs(f.c||0),0);
+    let kids=facs.sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).map((f,i)=>
+      mkNode('dt_f_'+grp+'_'+i,f.n,fp(f.a,2)+' exp',Math.abs(f.c||0),'#818cf8',null)
+    );
+    return mkNode('dt_g_'+grp,grpLabels[grp]||grp,f2(grpC,1)+'%',grpC,'#6366f1',kids);
+  });
+  let topH=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0)).slice(0,7);
+  let idioKids=topH.map((h,i)=>
+    mkNode('dt_h_'+i,(h.t||'?')+' \u2014 '+(h.n||'').slice(0,25),f2(h.tr,2)+'%',Math.min(Math.abs(h.tr||0)*10,100),'#f59e0b',null)
+  );
+  let factorNode=mkNode('dt_factor','Factor Risk',f2(factorRisk,2)+'%',facPct,'#06b6d4',facKids);
+  let idioNode=mkNode('dt_idio','Stock-Specific Risk',f2(idioRisk,2)+'%',idioPct,'#f59e0b',idioKids);
+  return'<div class="card" style="margin-bottom:16px">'+
+    '<div class="card-title">Risk Decomposition Tree</div>'+
+    '<div style="padding:4px 0">'+
+      '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid);margin-bottom:8px">'+
+        '<span style="font-size:13px;font-weight:700;color:var(--txth)">Total Risk (TE)</span>'+
+        '<span style="font-size:20px;font-weight:700;color:'+(te>7?'var(--neg)':te>5?'var(--warn)':'var(--txth)')+'">'+f2(te,2)+'%</span>'+
+      '</div>'+
+      factorNode+idioNode+
+    '</div>'+
+  '</div>';
+}
+
 // ===== RISK TAB =====
 function rRisk(){
   let s=cs;
@@ -2218,6 +2287,8 @@ function rRisk(){
       <div class="sub">${gt(s.hist.sum,'as')} trend</div>
     </div>
   </div>
+
+  ${riskDecompTree(s,factorRisk,idioRisk)}
 
   <!-- TE Stacked Area Chart (HERO, full width) -->
   <div class="card" style="margin-bottom:16px">

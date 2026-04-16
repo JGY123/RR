@@ -673,13 +673,13 @@ function clearDashboard(){
 function init(){
   let keys=Object.keys(A);
   if(!keys.length){$('uploadZone').style.display='flex';$('content').style.display='none';return;}
-  cs=A['EM']||A[keys[0]];
+  let defaultKey=(_prefs.defaultStrat&&keys.includes(_prefs.defaultStrat))?_prefs.defaultStrat:(keys.includes('EM')?'EM':keys[0]);
+  cs=A[defaultKey];
   // Build strategy buttons — pinned first
   let sel=$('stratSel');
   let pinned=(_prefs.pinnedStrats||[]).filter(k=>keys.includes(k));
   let unpinned=keys.filter(k=>!pinned.includes(k));
   let orderedKeys=[...pinned,...unpinned];
-  let defaultKey=(_prefs.defaultStrat&&keys.includes(_prefs.defaultStrat))?_prefs.defaultStrat:(keys.includes('EM')?'EM':keys[0]);
   sel.innerHTML=`<select onchange="go(this.value)" style="background:#0f172a;border:1px solid #334155;color:#fff;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">${orderedKeys.map(k=>`<option value="${k}" style="background:#0f172a"${k===defaultKey?' selected':''}>${pinned.includes(k)?'★ ':''}${k} — ${A[k]?A[k].name:k}</option>`).join('')}</select>`;
   $('uploadZone').style.display='none';
   $('content').style.display='block';
@@ -3023,7 +3023,7 @@ function rRankDist(){
 }
 
 function rHoldConc(){
-  let top10=[...cs.hold].filter(h=>!isCash(h)).sort((a,b)=>b.p-a.p).slice(0,10);
+  let top10=[...cs.hold].filter(h=>!isCash(h)&&isFinite(h.p)).sort((a,b)=>b.p-a.p).slice(0,10);
   Plotly.newPlot('holdConcDiv',[{
     y:top10.map(h=>h.t),x:top10.map(h=>h.p),type:'bar',orientation:'h',
     marker:{color:'#6366f1'},text:top10.map(h=>f2(h.p)+'%'),textposition:'outside',textfont:{size:10,color:'#94a3b8'}
@@ -5436,10 +5436,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     A=normalize(data);
     let keys=Object.keys(A);
     if(keys.length){
-      document.getElementById('uploadZone').style.display='none';
-      document.getElementById('content').style.display='block';
-      let defaultStrat=(_prefs.defaultStrat&&keys.includes(_prefs.defaultStrat))?_prefs.defaultStrat:(keys.includes('EM')?'EM':keys[0]);
-      go(defaultStrat);
+      init();
       showToast('Auto-loaded latest data — '+keys.length+' strategies','var(--pos)');
     }else{throw new Error('No strategies');}
   }).catch(()=>{

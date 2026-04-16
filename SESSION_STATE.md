@@ -1,8 +1,8 @@
 # RR Dashboard — Session State
 
-**Last updated:** 2026-04-16 18:44 (post Patch 009)
-**Current git commit:** `35b18ad` (main) — Patch 009: Factor Risk Map polish + Top TE chip strip
-**Working state:** ✅ Dashboard renders correctly via local HTTP server (verified in Chromium preview MCP)
+**Last updated:** 2026-04-16 19:15 (post Patches 010 + 011)
+**Current git commit:** `a5d6ab9` (main) — Patch 011: theme-aware long-tail sweep
+**Working state:** ✅ Dashboard renders correctly via local HTTP server. Light/dark theme toggle functional end-to-end (verified in Chromium preview MCP).
 
 ---
 
@@ -25,11 +25,11 @@ http://localhost:8000/dashboard_v7.html
 
 ## Current state of dashboard_v7.html
 
-- **Size:** 5,610 lines
-- **Last substantive edit:** 2026-04-16 18:44 (Patch 009)
-- **Committed at:** `35b18ad — feat(factor-map): Patch 009 — Factor Risk Map polish (480 min height + Top TE chip strip)`
+- **Size:** 5,634 lines
+- **Last substantive edit:** 2026-04-16 19:10 (Patch 011)
+- **Committed at:** `a5d6ab9 — feat(theme): Patch 011 — theme-aware long-tail sweep`
 - **Prior checkpoint:** `ce975e3` (tag `checkpoint-tab3-2026-04-16`)
-- **Latest tag:** `working.20260416.1844`
+- **Latest tag:** `working.20260416.1910`
 - **Environment:** Claude Desktop with Claude_Preview MCP (Chromium headless on port 3099); standalone Python server on :8000 also supported
 
 ### Features confirmed present (Tab 3's work, committed)
@@ -58,6 +58,8 @@ http://localhost:8000/dashboard_v7.html
 | 007 | `cf70c40` | `working.20260416.1805` | Glossary modal with 13 metric definitions (TE, Active Share, MCR, Beta, etc.). `openGlossary` function, ⓘ header button, added to `ALL_MODALS`. +35/-1 lines. |
 | 008 | `efd1462` | `working.20260416.1837` | Top 10 Holdings chart polish. Root-cause fix: `xaxis.type` was auto-detecting as `'category'` (range `[-0.33, 6.33]`), bar lengths non-proportional — force `type:'linear'` + `ticksuffix:'%'` + `rangemode:'tozero'`. Y-axis shows short company names (truncate 22 chars) instead of tickers. Active-weight coloring (green OW / red UW). Inside labels show "weight%  ±active". Hover surfaces ticker/name/weight/active/sector/MCR. Height 250 → 360px, left margin 50 → 150px. Card title: "Sector Concentration (Top 10 Holdings)" → "Top 10 Holdings (Weight & Active)". +21/-5 lines. |
 | 009 | `35b18ad` | `working.20260416.1844` | Factor Risk Map polish. Rename card title "Factor Butterfly" → "Factor Risk Map" (aligns with fullscreen modal label). Bump `rFacButt` min chart height 280 → 480px. Add `#facTopTeStrip` above chart rendered by new `rFacTopTeStrip(s)`: top 4 factors by `|c|` as pills with name, `±σ` active exposure, `% TE` share. Green tint for OW, red for UW. `isFinite` guard per Patch 003 pattern. +20/-3 lines. |
+| 010 | `cd2ea0f` | `working.20260416.1901` | Light/dark theme toggle foundation. Add `THEME()` helper returning live theme-aware colors (reads CSS vars at call time) + `buildPlotBg()` that constructs a fresh `plotBg` from THEME(). Convert `const plotBg` → `let plotBg = buildPlotBg()` so all 30+ `{...plotBg, ...}` spreads auto-adapt. `applyPrefs()` rebuilds plotBg + calls `upd()` after theme flip. Refactor 4 inline chart layouts to use THEME() directly: `rSecChart`, `rFacButt`, `rCountryMap`, `rFacWaterfall`. Patch 008/009 chart polish had already set up the visual-verification workflow that made this possible. +45/-23 lines. |
+| 011 | `a5d6ab9` | `working.20260416.1910` | Theme-aware long-tail sweep. Expand THEME() with `card` + `bg` keys. Global `replace_all` on 6 property patterns — `gridcolor`, two `zerolinecolor` variants, `bgcolor` (rangeslider), `color:'#94a3b8'` (tick/text/font/line), `color:'#e2e8f0'` (emphasized text) — resolves ~50 chart-color leaks across ~15 renderers. Hand-edits for fullscreen choropleth (coastline/land/ocean) and colorscale midpoints. Total THEME() call sites 10 → 75. Round-trip dark→light→dark verified across Exposures/Risk/Holdings tabs + drill chart renders. +68/-66 lines. |
 
 ---
 
@@ -73,7 +75,7 @@ http://localhost:8000/dashboard_v7.html
 - Data freshness indicator
 - ~~Metric tooltips / Glossary modal (`openGlossary`)~~ — ✅ rebuilt as Patch 007 (`cf70c40`)
 - ~~Risk Decomposition Tree (`riskDecompTree`, `mkNode`)~~ — ✅ rebuilt as Patch 005 (`fc89aa9`)
-- Light/dark theme (`setThemePref`, `#themeBtn`)
+- ~~Light/dark theme (`setThemePref`, `#themeBtn`)~~ — ✅ rebuilt as Patches 010-011 (`cd2ea0f`, `a5d6ab9`)
 - Color-blind safe mode (`toggleCbSafe`)
 
 ### Tab 2 (attempted, some rebuilt)
@@ -108,8 +110,9 @@ To inspect: `git show backup-all-today-work:<filename>`
 
 | Item | Severity | Notes |
 |---|---|---|
-| Tab 1/2 rebuilds ongoing | Medium | 9 patches landed (001-009). Remaining: theme toggle, Watchlist, What Changed, Quick-Nav, Exec Summary, Strategy Comparison, Print/Export, Email, Perf optimization, Color-blind mode |
-| ~14 local commits ahead of `origin/main` | Low | Not pushed to remote; consider push after stability confirmed |
+| Tab 1/2 rebuilds ongoing | Medium | 11 patches landed (001-011). Remaining: Watchlist, What Changed, Quick-Nav, Exec Summary, Strategy Comparison, Print/Export, Email, Perf optimization, Color-blind mode |
+| ~17 local commits ahead of `origin/main` | Low | Not pushed to remote; consider push after stability confirmed |
+| Theme-toggle cosmetic tail | Low | Correlation heatmap midpoint, sunburst/pie slice borders, holdings sort-toggle inline HTML, html2canvas export bg, riskFacHist annotation bg still use dark-only hexes. Functional on both themes but not polished. |
 | Dashboard_v7.html.bak deletion unstaged | Low | Tab 1 flagged as suspicious; confirmed unrelated to current issues |
 | CLI session JSONLs (239MB in `~/.claude/projects/-Users-ygoodman-RR/`) | Low | Contains Tab 1/2 `str_replace` tool calls if deep recovery ever desired |
 
@@ -149,9 +152,12 @@ To inspect: `git show backup-all-today-work:<filename>`
 7. ✅ **DONE** (Patch 007, `cf70c40`) — Glossary modal
 8. ✅ **DONE** (Patch 008, `efd1462`) — Top 10 Holdings chart polish (linear axis, names, active-weight colors)
 9. ✅ **DONE** (Patch 009, `35b18ad`) — Factor Risk Map polish + Top TE chip strip
-10. **NEXT (Desktop with Chrome MCP):** Light/dark theme toggle (`setThemePref`, `#themeBtn`, localStorage persistence)
-11. **Remaining Tab 1 (not yet rebuilt):** Watchlist, "What Changed" banner, Quick-Nav sidebar, Exec Summary, Strategy Comparison, Data freshness, Color-blind mode
-12. **Remaining Tab 2 (not yet rebuilt):** Print/Export report, Email snapshot, Performance optimization, Scenario analysis, Multi-period attribution, Industry drilldown, Currency Exposure tile
+10. ✅ **DONE** (Patch 010, `cd2ea0f`) — Theme toggle foundation (THEME() helper, buildPlotBg, 4 charts rewired)
+11. ✅ **DONE** (Patch 011, `a5d6ab9`) — Theme-aware long-tail sweep (~50 chart-color leaks resolved)
+12. **NEXT:** Watchlist section in Holdings tab OR Strategy Comparison modal OR Data freshness indicator (user pick)
+13. **Remaining Tab 1 (not yet rebuilt):** Watchlist, "What Changed" banner, Quick-Nav sidebar, Exec Summary, Strategy Comparison, Data freshness, Color-blind mode
+14. **Remaining Tab 2 (not yet rebuilt):** Print/Export report, Email snapshot, Performance optimization, Scenario analysis, Multi-period attribution, Industry drilldown, Currency Exposure tile
+15. **Optional cosmetic (Patch 012):** Finish theme sweep on low-priority cosmetic leaks listed in Known Issues
 
 ---
 

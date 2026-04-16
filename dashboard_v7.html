@@ -665,7 +665,7 @@ function upload(e){
 }
 
 function clearDashboard(){
-  try{localStorage.clear();}catch(e){}
+  try{['rr_history','rr_config'].forEach(k=>localStorage.removeItem(k));Object.keys(localStorage).filter(k=>k.startsWith('rr_data_')).forEach(k=>localStorage.removeItem(k));}catch(e){}
   A={};cs=null;
   $('content').style.display='none';
   $('uploadZone').style.display='flex';
@@ -883,6 +883,65 @@ function riskAlertsBannerHtml(s){
   '</div>';
 }
 
+// ===== "WHAT CHANGED" — week-over-week holdings snapshot =====
+const HOLDSNAP_KEY='rr_holdsnap_v1';
+const HOLDSNAP_DISMISS_KEY='rr_holdsnap_dismissed_v1';
+function loadHoldSnap(){try{return JSON.parse(localStorage.getItem(HOLDSNAP_KEY)||'{}')}catch(e){return {}}}
+function saveHoldSnap(s){try{localStorage.setItem(HOLDSNAP_KEY,JSON.stringify(s))}catch(e){}}
+function loadHoldSnapDismissed(){try{return JSON.parse(localStorage.getItem(HOLDSNAP_DISMISS_KEY)||'{}')}catch(e){return {}}}
+function saveHoldSnapDismissed(d){try{localStorage.setItem(HOLDSNAP_DISMISS_KEY,JSON.stringify(d))}catch(e){}}
+function buildCurrentSnap(s){
+  let h={};(s.hold||[]).forEach(x=>{if(x.t&&isFinite(x.p))h[x.t]=+x.p;});
+  return {reportDate:window._reportDate||'',holdings:h};
+}
+function whatChangedBannerHtml(s){
+  if(!s||!s.id||!s.hold||!s.hold.length)return '';
+  let curSnap=buildCurrentSnap(s);
+  if(!curSnap.reportDate)return '';
+  let snap=loadHoldSnap(),entry=snap[s.id]||{};
+  let prior=null;
+  if(!entry.current){
+    snap[s.id]={current:curSnap};saveHoldSnap(snap);return '';
+  }
+  if(entry.current.reportDate===curSnap.reportDate){
+    prior=entry.prior;
+  } else {
+    prior=entry.current;
+    snap[s.id]={current:curSnap,prior:prior};saveHoldSnap(snap);
+  }
+  if(!prior)return '';
+  let dismissed=loadHoldSnapDismissed(),dkey=s.id+'_'+curSnap.reportDate;
+  if(dismissed[dkey])return '';
+  let priorH=prior.holdings||{},curMap={};
+  (s.hold||[]).forEach(h=>{if(h.t&&isFinite(h.p))curMap[h.t]=+h.p;});
+  let tickers=new Set([...Object.keys(priorH),...Object.keys(curMap)]);
+  let diffs=[];
+  tickers.forEach(t=>{
+    let p0=priorH[t]||0,p1=curMap[t]||0,d=p1-p0;
+    if(Math.abs(d)>=0.5){
+      let h=(s.hold||[]).find(x=>x.t===t);
+      diffs.push({t,n:h?.n||t,d});
+    }
+  });
+  if(!diffs.length)return '';
+  diffs.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+  let top=diffs.slice(0,3);
+  let pd=prior.reportDate||'';
+  let pdStr=pd.length===8?new Date(pd.slice(0,4)+'-'+pd.slice(4,6)+'-'+pd.slice(6,8)).toLocaleDateString('en-US',{month:'short',day:'numeric'}):pd;
+  let shortN=n=>{if(!n)return '';n=n.replace(/\s+(Ltd\.?|Limited|Inc\.?|Co\.?,?\s*Ltd\.?|Corp\.?|Corporation|Company|plc|PLC|AG|SA|S\.A\.?|N\.V\.?|Holdings?|Group|Class [A-Z])$/gi,'').trim();return n.length>20?n.slice(0,19)+'\u2026':n;};
+  let chips=top.map(d=>{
+    let pos=d.d>=0,col=pos?'var(--pos)':'var(--neg)',bg=pos?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',arrow=pos?'\u25b2':'\u25bc';
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:${bg};border:1px solid ${col};font-size:11px"><span style="color:var(--txth);font-weight:600">${shortN(d.n)}</span><span style="color:${col};font-weight:600">${arrow} ${fp(d.d,2)}%</span></span>`;
+  }).join('');
+  let moreN=diffs.length-top.length;
+  let moreStr=moreN>0?`<span style="font-size:10px;color:var(--txt);margin-left:4px">+${moreN} more</span>`:'';
+  return `<div id="whatChangedBanner" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 12px;margin-bottom:10px;background:var(--surf);border:1px solid var(--grid);border-radius:8px"><span style="font-size:10px;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px">What changed since ${pdStr}</span>${chips}${moreStr}<span style="flex:1"></span><button onclick="dismissWhatChanged('${s.id}','${curSnap.reportDate}')" title="Dismiss" style="background:none;border:none;color:var(--txt);font-size:16px;cursor:pointer;padding:0 4px;line-height:1">\u00d7</button></div>`;
+}
+function dismissWhatChanged(stratId,reportDate){
+  let d=loadHoldSnapDismissed();d[stratId+'_'+reportDate]=true;saveHoldSnapDismissed(d);
+  let el=document.getElementById('whatChangedBanner');if(el)el.remove();
+}
+
 // Store alerts for click actions
 let _lastAlerts=[];
 function _riskAlertClick(idx){
@@ -957,6 +1016,7 @@ function rExp(){
     <span style="font-size:10px;color:var(--txt);cursor:pointer" onclick="oDrMetric('cash')">Cash detail ›</span>
   </div>
   ${(()=>{_lastAlerts=detectRiskAlerts(s);return riskAlertsBannerHtml(s);})()}
+  ${whatChangedBannerHtml(s)}
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
   <div class="card" id="cardSectors" style="margin-bottom:16px">
@@ -1532,7 +1592,7 @@ function rRnk(ranks){
 function filterByRank(rank){
   activeTab='holdings';
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelectorAll('.tab')[1].classList.add('active');
+  document.querySelectorAll('.tab')[2].classList.add('active');
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   $('tab-holdings').classList.add('active');
   ah=[...cs.hold];fh=ah.filter(h=>h.r===rank);hp=1;renderHoldTab();
@@ -4224,7 +4284,6 @@ function oDrMetric(metric,range){
 
   let vals=hist.map(h=>{let v=h[metric];return typeof v==='number'?v:parseFloat(v)||0;});
   let dates=hist.map(h=>isoDate(h.d));
-  console.log('METRIC DEBUG:',metric,'dates[0..2]:',dates.slice(0,3),'vals[0..2]:',vals.slice(0,3),'nullCount:',vals.filter(v=>v==null||isNaN(v)).length,'typeof vals[0]:',typeof vals[0]);
   let current=vals[vals.length-1];
   let numVals=vals.filter(v=>v!=null);
   let min=numVals.length?Math.min(...numVals):null;
@@ -4447,7 +4506,6 @@ function oDrMetric(metric,range){
       });
     }
     let xaxisFinal={...xaxis,type:'date',rangeslider:{visible:true,bgcolor:THEME().card,thickness:0.08}};
-    console.log('PLOTLY TRACES:',allTraces.length,'dates[0..2]:',dates.slice(0,3),'vals[0..2]:',vals.slice(0,3),'yaxis:',JSON.stringify(yaxis));
     Plotly.newPlot('metricChartDiv',allTraces,{...plotBg,xaxis:xaxisFinal,yaxis,shapes,annotations,hovermode:'x unified',margin:{...plotBg.margin,r:metric==='beta'?80:20}},modalPlotCfg);
   },50);
 }
@@ -4457,7 +4515,7 @@ function toggleBetaOverlay(key){
   if(window._betaSelected.has(key))window._betaSelected.delete(key);
   else window._betaSelected.add(key);
   // Re-render the whole modal to update both table highlights and chart
-  oDrMetric('beta',_metricSkipMonths);
+  oDrMetric('beta',0);
 }
 
 // ===== COUNTRY DRILL =====
@@ -5632,7 +5690,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   // Clear session data but preserve user preferences
   let _sp='';
   try{_sp=localStorage.getItem(PREFS_KEY)||'';}catch(e){}
-  try{localStorage.removeItem('rr_config');localStorage.removeItem('rr_history');}catch(e){}
+  try{localStorage.removeItem('rr_history');}catch(e){}
   try{if(_sp)localStorage.setItem(PREFS_KEY,_sp);}catch(e){}
   // Auto-load latest_data.json if available (for server deployment)
   // Falls back to upload zone if file not found

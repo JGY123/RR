@@ -1,7 +1,7 @@
 # RR Dashboard — Session State
 
-**Last updated:** 2026-04-16 AM (post-crisis recovery)
-**Current git commit:** `ce975e3` (main)
+**Last updated:** 2026-04-16 09:40 (post Patch 001)
+**Current git commit:** `e5eaf6c` (main) — Patch 001: Settings + Alert Thresholds
 **Working state:** ✅ Dashboard renders correctly via local HTTP server
 
 ---
@@ -25,10 +25,11 @@ http://localhost:8000/dashboard_v7.html
 
 ## Current state of dashboard_v7.html
 
-- **Size:** 318,066 bytes / 5,381 lines
-- **Last substantive edit:** 2026-04-15 23:16
-- **Committed at:** `ce975e3 — checkpoint: Tab 3 work (FS modals, Holdings intel, Annotations, Risk Alerts) - 558 lines`
-- **Tag:** `checkpoint-tab3-2026-04-16`
+- **Size:** 321,053 bytes / 5,417 lines
+- **Last substantive edit:** 2026-04-16 09:40 (Patch 001)
+- **Committed at:** `e5eaf6c — feat(settings): add configurable alert thresholds panel`
+- **Prior checkpoint:** `ce975e3` (tag `checkpoint-tab3-2026-04-16`)
+- **Latest tag:** `working.20260416.0940`
 
 ### Features confirmed present (Tab 3's work, committed)
 
@@ -42,10 +43,17 @@ http://localhost:8000/dashboard_v7.html
 
 ---
 
+## Completed Patches (post-crisis rebuild)
+
+| # | Commit | Tag | Description |
+|---|---|---|---|
+| 001 | `e5eaf6c` | `working.20260416.0940` | Settings panel + Alert Thresholds. Extended existing `#configPanel` with 7 configurable threshold inputs, migrated `detectRiskAlerts` from hardcoded values to `_thresholds` object, persisted under `rr_thresholds` localStorage key, un-hid `#configBtn` gear icon. +46/-10 lines. All 8 substantive verification checks + browser smoke test passed. |
+
+---
+
 ## Features NOT on disk (CLI hallucinated writes, never persisted)
 
-### Tab 1 (attempted, none committed)
-- Settings panel with Alert Thresholds (`_thresholds`, `saveThresholds`, `setThreshold`, `resetThresholds`)
+### Tab 1 (attempted, not yet rebuilt)
 - Watchlist section in Holdings tab
 - "What Changed" weight snapshot banner
 - Quick-Nav sidebar (`buildQuickNav`, `#qnav`) — may have been pre-existing
@@ -71,7 +79,7 @@ http://localhost:8000/dashboard_v7.html
 
 ### Tab 3 (uncommitted items)
 - `classifyHoldingArchetype` — does NOT exist; actual function is `getHoldArchetype` ✅ (naming discrepancy only)
-- Risk Alerts using `_thresholds` object — currently hardcoded; will need migration when Tab 1's Settings patch rebuilt
+- ~~Risk Alerts using `_thresholds` object~~ — ✅ resolved by Patch 001 (`e5eaf6c`)
 
 ---
 
@@ -124,8 +132,8 @@ To inspect: `git show backup-all-today-work:<filename>`
 
 1. Open new Chief of Staff in Claude Desktop (Filesystem + Notion MCP)
 2. CoS reads this file first
-3. Rebuild Tab 1's **Settings panel + Alert Thresholds** (highest impact: enables configurability)
-4. Rebuild Tab 2's **Country drill snap_attrib** (analytical depth)
+3. ✅ **DONE** (Patch 001, `e5eaf6c`) — Tab 1 Settings panel + Alert Thresholds
+4. **NEXT** — Rebuild Tab 2's **Country drill snap_attrib** (analytical depth)
 5. Rebuild Tab 2's **Factor Risk Map 480px + Top TE chips** (visual polish)
 6. Rebuild Tab 1's **Risk Decomposition Tree** (crown-jewel feature)
 7. Lower priority: theme toggle, glossary, keyboard shortcuts, performance optimization (redo WITHOUT IntersectionObserver until properly tested)

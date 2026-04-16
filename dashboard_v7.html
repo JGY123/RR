@@ -4279,9 +4279,45 @@ function oDrCountry(name){
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:18px;font-weight:700;color:${country&&country.a>=0?'var(--pos)':'var(--neg)'}">${country?fp(country.a):'—'}%</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${region}</div><div style="font-size:10px;color:var(--txt)">Active: ${regData?fp(regData.a):'—'}%</div></div>
     </div>
+    ${renderCountryAttribSection(name)}
     <div class="card-title">Holdings in ${name} (${holdings.length})</div>
     ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th><th class="r tip" data-tip="Stock-specific TE component">%S</th><th class="r tip" data-tip="% of total portfolio tracking error">Total TE%</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
   m.classList.add('show');
+  setTimeout(()=>renderCountryAttribChart(name),0);
+}
+
+function renderCountryAttribSection(name){
+  let sa=cs&&cs.snap_attrib; if(!sa||!sa[name])return'';
+  if(classifyAttrib(name)!=='country')return'';
+  let item=sa[name], hist=item.hist||[];
+  let nm=name.replace(/'/g,"\\'");
+  return `
+    <div class="card-title" style="margin-top:16px">FactSet Attribution — ${name}</div>
+    <div class="grid g4" style="margin-bottom:8px">
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Cumulative Impact</div><div style="font-size:16px;font-weight:700;color:${(item.full_period_imp||0)>=0?'var(--pos)':'var(--neg)'}">${fp(item.full_period_imp,2)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Exposure</div><div style="font-size:16px;font-weight:700;color:var(--txth)">${f2(item.exp,2)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Std Dev</div><div style="font-size:16px;font-weight:700;color:var(--txt)">${f2(item.dev,1)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Weeks</div><div style="font-size:16px;font-weight:700;color:var(--txt)">${hist.length}</div></div>
+    </div>
+    <div id="countryAttribChart" style="height:160px"></div>
+    <p style="font-size:9px;color:var(--txt);margin-top:4px">Cumulative factor attribution impact (FactSet) · <span style="cursor:pointer;color:var(--pri)" onclick="$('countryModal').classList.remove('show');oDrAttrib('${nm}')">Open full attribution drill →</span></p>`;
+}
+function renderCountryAttribChart(name){
+  let sa=cs&&cs.snap_attrib; if(!sa||!sa[name])return;
+  if(classifyAttrib(name)!=='country')return;
+  let hist=sa[name].hist||[]; if(!hist.length)return;
+  if(!document.getElementById('countryAttribChart'))return;
+  let dates=hist.map(h=>isoDate(h.d));
+  let cimp=hist.map(h=>h.cimp);
+  Plotly.newPlot('countryAttribChart',[{
+    x:dates,y:cimp,type:'scatter',mode:'lines',
+    line:{color:'#6366f1',width:2},fill:'tozeroy',fillcolor:'rgba(99,102,241,0.1)',
+    hovertemplate:'%{x|%b %d %Y}<br>Cum: %{y:.2f}%<extra></extra>'
+  }],{...plotBg,margin:{l:40,r:10,t:6,b:24},
+    xaxis:{...plotBg.xaxis,tickformat:'%b %y',nticks:6},
+    yaxis:{...plotBg.yaxis},
+    shapes:[{type:'line',y0:0,y1:0,xref:'paper',x0:0,x1:1,line:{color:'#94a3b8',dash:'dot',width:1}}]
+  },modalPlotCfg);
 }
 
 

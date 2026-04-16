@@ -1446,7 +1446,7 @@ const FAC_GROUP_DEFS=[
   {id:'vg',label:'Value·Growth',color:'#6366f1',factors:['Value','Growth','Dividend Yield','Earnings Yield']},
   {id:'mb',label:'Market Behavior',color:'#a855f7',factors:['Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility']},
   {id:'pf',label:'Profitability',color:'#fb923c',factors:['Profitability']},
-  {id:'sec',label:'Secondary',color:THEME().tick,factors:null}  // null = all non-primary
+  {id:'sec',label:'Secondary',get color(){return THEME().tick},factors:null}  // null = all non-primary
 ];
 const FAC_COLS=[
   {id:'name',label:'Factor'},{id:'exp',label:'Exposure'},{id:'te',label:'TE%'},
@@ -2952,9 +2952,9 @@ function showNotePopup(e,cardId){
   pop.style.cssText='left:'+Math.min(e.clientX,window.innerWidth-300)+'px;top:'+Math.min(e.clientY,window.innerHeight-180)+'px';
   let btnBase='padding:4px 12px;border-radius:6px;border:none;font-size:11px;cursor:pointer;font-family:inherit';
   pop.innerHTML='<div style="font-size:10px;font-weight:700;color:var(--pri);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Note \u2014 '+cardId+'</div>'+
-    '<textarea style="width:100%;min-height:60px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:6px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box" placeholder="Add a note for this tile...">'+(existing||'')+'</textarea>'+
+    '<textarea style="width:100%;min-height:60px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;padding:6px;font-size:11px;font-family:inherit;resize:vertical;box-sizing:border-box" placeholder="Add a note for this tile...">'+(existing||'')+'</textarea>'+
     '<div style="display:flex;gap:6px;justify-content:flex-end;margin-top:6px">'+
-    '<button onclick="this.closest(\'.note-popup\').remove()" style="'+btnBase+';background:#1e293b;color:#94a3b8">Cancel</button>'+
+    '<button onclick="this.closest(\'.note-popup\').remove()" style="'+btnBase+';background:var(--surf);color:var(--txt)">Cancel</button>'+
     '<button onclick="(function(p,k){var t=p.querySelector(\'textarea\').value;setNote(k,t);p.remove();refreshCardNoteBadges();})(this.closest(\'.note-popup\'),\''+key+'\')" style="'+btnBase+';background:var(--pri);color:#fff">Save</button>'+
     '</div>';
   document.body.appendChild(pop);
@@ -3211,7 +3211,7 @@ function rRankDist(){
   let ranks=cs.ranks;
   Plotly.newPlot('rankDistDiv',[{
     x:ranks.map(r=>r.l),y:ranks.map(r=>r.p),type:'bar',
-    marker:{color:ranks.map(r=>rc(r.r).replace('var(','').replace(')',''))},
+    marker:{color:ranks.map(r=>getComputedStyle(document.documentElement).getPropertyValue(rc(r.r).slice(4,-1)).trim()||'#94a3b8')},
     text:ranks.map(r=>f2(r.p)+'%'),textposition:'outside',textfont:{size:10,color:THEME().tick}
   }],{...plotBg,yaxis:{...plotBg.yaxis,title:'Portfolio Weight %'}},plotCfg);
 }
@@ -3559,7 +3559,7 @@ function oSt(ticker){
     ${peers.length&&h.sec?`<div><div class="card-title">Peers in ${h.sec} — sorted by TE contribution</div>
     <table><thead><tr><th>Ticker</th><th class="r">Port%</th><th class="r">Active</th><th class="r">%T</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${peerRows}</tbody></table></div>`:''}
     <div style="margin-top:14px;padding:10px 12px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.2);border-radius:8px">
-      <div style="font-size:9px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">AI Summary</div>
+      <div style="font-size:9px;font-weight:700;color:var(--pri);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Quick Summary</div>
       <div style="font-size:11px;color:#cbd5e1;line-height:1.55">${genHoldSummary(h)}</div>
     </div>`;
   m.classList.add('show');
@@ -3855,7 +3855,7 @@ async function buildPPTX(selected,narratives){
   let pptx=new PptxGenJS();
   pptx.layout='LAYOUT_WIDE';
   let s=cs;
-  let bgColor='080e1e';let txtColor='94a3b8';let headColor='e2e8f0';let accentColor='3b82f6';
+  let t=THEME();let bgColor=t.bg.replace('#','');let txtColor=t.tick.replace('#','');let headColor=t.emph.replace('#','');let accentColor='3b82f6';
 
   // Title slide
   let slide=pptx.addSlide();
@@ -3994,7 +3994,7 @@ function exportCSV(tableEl,filename){
 function screenshotCard(el){
   if(typeof el==='string')el=document.querySelector(el);
   if(!el||!window.html2canvas)return;
-  html2canvas(el,{backgroundColor:'#080e1e',scale:2}).then(canvas=>{
+  html2canvas(el,{backgroundColor:THEME().bg,scale:2}).then(canvas=>{
     let a=document.createElement('a');
     a.download='redwood_capture_'+Date.now()+'.png';
     a.href=canvas.toDataURL();
@@ -4057,7 +4057,7 @@ function openGlossary(){
     ['Factor Contribution %','Share of total tracking error attributable to a given factor. All factor contributions + idiosyncratic = 100%.'],
     ['Idiosyncratic Risk','Stock-specific risk not explained by common factors. Driven by individual position sizing and stock-level events.'],
     ['Quant Ranks (Q1\u2013Q5)','Quintile rankings from multi-factor models. Q1 = most attractive, Q5 = least attractive. Q5 overweights are risk flags.'],
-    ['RBE (Return/Beta Efficiency)','Ratio of active return to risk contribution. Higher = more efficient use of risk budget.'],
+    ['RBE (Risk Budget Efficiency)','Ratio of |active weight| to |TE contribution|. Values >1.5 indicate efficient risk use; <0.8 suggests the position takes more risk than its active weight justifies.'],
     ['Impact (Attribution)','Return contribution of a factor or holding to overall active return over the period. Positive = helped performance.'],
     ['Cumulative Impact','Running sum of periodic attribution impacts. Shows whether a factor or country has been a persistent tailwind or headwind.'],
     ['Cash Drag','Implicit tracking error from holding cash in a fully-invested benchmark. Cash > 5% is flagged as a risk alert.']
@@ -5663,7 +5663,7 @@ function startLiveRefresh(){
       let data=await fetchFromAPI('portfolio/analytics');
       A=normalize(data);
       let keys=Object.keys(A);
-      if(keys.includes(cs.id))cs=A[cs.id];
+      if(cs&&keys.includes(cs.id))cs=A[cs.id];
       else if(keys.length)cs=A[keys[0]];
       upd();
       $('dataTimestamp').textContent='Live · '+new Date().toLocaleTimeString();

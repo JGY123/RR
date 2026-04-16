@@ -1125,21 +1125,22 @@ function rFacWaterfall(s){
   let periodStr='';
   let cd=s.current_date||(s.available_dates&&s.available_dates[s.available_dates.length-1]);
   if(cd){let d=parseDate(cd);if(d)periodStr='Period ending '+d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
+  let T=THEME();
   Plotly.newPlot('facWaterfallDiv',[{
     y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
     marker:{color:vals.map(v=>v>=0?'#10b981':'#ef4444')},
     hovertemplate:'<b>%{y}</b><br>Impact: %{x:+.3f}%<extra></extra>'
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},
+    font:{family:'Inter',color:T.tick,size:11},
     margin:{l:10,r:20,t:periodStr?28:10,b:36},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
-           range:[-xmax,xmax],title:'Impact (%)',tickfont:{color:'#94a3b8',size:9}},
+    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',
+           tickfont:{size:10,color:T.tickH},automargin:true},
+    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,
+           range:[-xmax,xmax],title:'Impact (%)',tickfont:{color:T.tick,size:9}},
     annotations:periodStr?[{
       text:periodStr,x:0.5,y:1.0,xref:'paper',yref:'paper',
-      showarrow:false,font:{size:10,color:'#94a3b8'},xanchor:'center',yanchor:'bottom'
+      showarrow:false,font:{size:10,color:T.tick},xanchor:'center',yanchor:'bottom'
     }]:[]
   },plotCfg);
 }
@@ -1848,7 +1849,24 @@ function rUpdateCorr(){
 }
 
 // ===== CHART RENDERERS =====
-const plotBg={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:'#94a3b8',size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:'#334155',zerolinecolor:'#334155'},yaxis:{gridcolor:'#334155',zerolinecolor:'#334155'}};
+function THEME(){
+  let c=getComputedStyle(document.body),g=k=>(c.getPropertyValue(k)||'').trim();
+  let light=document.body.classList.contains('light-theme');
+  return {
+    grid:g('--grid')||'#334155',
+    tick:g('--txt')||'#94a3b8',
+    tickH:g('--txth')||'#e2e8f0',
+    zero:light?'#94a3b8':'#475569',
+    land:light?'#e2e8f0':'#1e293b',
+    ocean:light?'#f1f5f9':'#080e1e',
+    heatMid:light?'#f1f5f9':'#12151e'
+  };
+}
+function buildPlotBg(){
+  let t=THEME();
+  return {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:t.tick,size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:t.grid,zerolinecolor:t.grid},yaxis:{gridcolor:t.grid,zerolinecolor:t.grid}};
+}
+let plotBg=buildPlotBg();
 const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
 
@@ -1886,15 +1904,15 @@ function rSecChart(s){
     }
   ],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},
+    font:{family:'Inter',color:THEME().tick,size:11},
     height:h,
     barmode:'overlay',
     margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
+    yaxis:{gridcolor:THEME().grid,zeroline:false,autorange:'reversed',
+           tickfont:{size:10,color:THEME().tickH},automargin:true},
+    xaxis:{gridcolor:THEME().grid,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2,
            range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:10}},
+           tickfont:{color:THEME().tick,size:10}},
     legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
   },plotCfg);
 }
@@ -1964,6 +1982,7 @@ function rFacButt(s){
   let h=Math.max(480,facs.length*30+60);
   let el=document.getElementById('facButtDiv');
   if(el)el.style.height=h+'px';
+  let T=THEME();
   Plotly.newPlot('facButtDiv',[{
     name:'Active Exposure',type:'bar',orientation:'h',
     y:names,x:vals,
@@ -1971,14 +1990,14 @@ function rFacButt(s){
     hovertemplate:'<b>%{y}</b><br>Active Exposure: %{x:.3f}<extra></extra>'
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:'#94a3b8',size:11},
+    font:{family:'Inter',color:T.tick,size:11},
     height:h,
     margin:{l:10,r:20,t:10,b:30},
-    yaxis:{gridcolor:'#334155',zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:'#e2e8f0'},automargin:true},
-    xaxis:{gridcolor:'#334155',zeroline:true,zerolinecolor:'#475569',zerolinewidth:2,
+    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',
+           tickfont:{size:10,color:T.tickH},automargin:true},
+    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,
            range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:'#94a3b8',size:9},title:'Active Exposure'},
+           tickfont:{color:T.tick,size:9},title:'Active Exposure'},
     showlegend:false
   },plotCfg);
 }
@@ -2002,24 +2021,25 @@ function rCountryMap(s){
   if(!s.countries||!s.countries.length)return;
   let mapped=s.countries.filter(c=>COUNTRY_ISO3[c.n]);
   if(!mapped.length)return;
+  let T=THEME();
   Plotly.newPlot('countryMapDiv',[{
     type:'choropleth',
     locations:mapped.map(c=>COUNTRY_ISO3[c.n]),
     z:mapped.map(c=>c.a),
     text:mapped.map(c=>c.n),
-    colorscale:[[0,'#d67272'],[0.5,'#12151e'],[1,'#10b981']],
+    colorscale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']],
     zmid:0,
     colorbar:{title:'Active %',ticksuffix:'%',len:0.6,thickness:12,
-      tickfont:{color:'#94a3b8',size:10},titlefont:{color:'#94a3b8',size:10}},
-    marker:{line:{color:'#334155',width:0.5}},
+      tickfont:{color:T.tick,size:10},titlefont:{color:T.tick,size:10}},
+    marker:{line:{color:T.grid,width:0.5}},
     hovertemplate:'%{text}<br>Active: %{z:.1f}%<extra></extra>'
   }],{
     geo:{
       bgcolor:'transparent',
       showframe:false,
-      showcoastlines:true,coastlinecolor:'#334155',
-      showland:true,landcolor:'#1e293b',
-      showocean:true,oceancolor:'#080e1e',
+      showcoastlines:true,coastlinecolor:T.grid,
+      showland:true,landcolor:T.land,
+      showocean:true,oceancolor:T.ocean,
       showlakes:false,
       projection:{type:'natural earth'},
       lonaxis:{range:[-180,180]},
@@ -4026,11 +4046,13 @@ function resetThresholds(){
 function applyPrefs(){
   document.body.classList.toggle('light-theme',_prefs.theme==='light');
   document.body.classList.toggle('presentation-mode',!!_prefs.presentationMode);
+  plotBg=buildPlotBg();
   let td=$('themeDark'),tl=$('themeLight');
   if(td&&tl){td.classList.toggle('active',_prefs.theme!=='light');tl.classList.toggle('active',_prefs.theme==='light')}
   let ps=$('precStd'),pf=$('precFull');
   if(ps&&pf){ps.classList.toggle('active',_prefs.precision!=='full');pf.classList.toggle('active',_prefs.precision==='full')}
   let pm=$('presModeStatus');if(pm)pm.textContent=_prefs.presentationMode?'ON':'';
+  if(typeof cs!=='undefined'&&cs&&typeof upd==='function')upd();
 }
 function setThemePref(t){_prefs.theme=t;savePrefs();applyPrefs();}
 function setPrecisionPref(p){

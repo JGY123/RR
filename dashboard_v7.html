@@ -5224,29 +5224,51 @@ function renderFsCountry(s){
   _renderFsCtryPanel(s);
 }
 
+function _fsCtryGetVal(mode,param,s){
+  let agg=aggregateCountryRisk(s);
+  let T=THEME();
+  if(mode==='port')return{get:c=>c.p||0,title:'Port %',diverge:false,scale:[[0,T.heatMid],[1,'#6366f1']]};
+  if(mode==='bench')return{get:c=>c.b||0,title:'BM %',diverge:false,scale:[[0,T.heatMid],[1,'#8b5cf6']]};
+  if(mode==='te')return{get:c=>(agg[c.n]?.tr||0),title:'TE Contrib %',diverge:false,scale:[[0,T.heatMid],[0.5,'#f59e0b'],[1,'#ef4444']]};
+  if(mode==='specific')return{get:c=>(agg[c.n]?.mcr||0),title:'Specific Risk %',diverge:false,scale:[[0,T.heatMid],[0.5,'#f59e0b'],[1,'#ef4444']]};
+  if(mode==='factor_te')return{get:c=>{let r=agg[c.n];return r?(r.tr-r.mcr):0;},title:'Factor Risk %',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
+  if(mode.startsWith('fc:')){
+    let facName=mode.slice(3);
+    if(param==='contr'){
+      let fac=s.factors?.find(f=>f.n===facName);
+      let totalC=fac?Math.abs(fac.c||0):1;
+      let totalExpAbs=Object.values(agg).reduce((t,a)=>{let fe=a.facExp[facName];return t+(fe&&fe.wtotal>0?Math.abs(fe.wsum/fe.wtotal)*a.p:0);},0)||1;
+      return{get:c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];let wAvg=fe.wtotal>0?fe.wsum/fe.wtotal:0;return(Math.abs(wAvg)*r.p/totalExpAbs)*totalC*(wAvg>=0?1:-1);},
+        title:facName+' Contr %',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
+    }
+    return{get:c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];return fe.wtotal>0?fe.wsum/fe.wtotal:0;},
+      title:facName+' Exp',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
+  }
+  return{get:c=>c.a||0,title:'Active %',diverge:true,scale:[[0,'#ef4444'],[0.5,T.heatMid],[1,'#10b981']]};
+}
+
 function _renderFsCtryMap(s){
   let allCountries=s.countries||[];
   let countries=allCountries.filter(function(c){return COUNTRY_ISO3[c.n];});
-  if(!countries.length)countries=allCountries; // fallback: use all if none map
+  if(!countries.length)countries=allCountries;
   let mode=_mapColorMode||'active';
-  let vals=countries.map(function(c){return mode==='port'?(c.p||0):mode==='bench'?(c.b||0):(c.a||0);});
+  let cfg=_fsCtryGetVal(mode,_mapFacParam,s);
+  let vals=countries.map(cfg.get);
   let absMax=Math.max.apply(null,vals.map(Math.abs).concat([0.01]));
-  let clr=mode==='port'?[[0,THEME().heatMid],[1,'#6366f1']]:mode==='bench'?[[0,THEME().heatMid],[1,'#8b5cf6']]:
-    [[0,'#ef4444'],[0.5,THEME().heatMid],[1,'#10b981']];
   let iso3=countries.map(function(c){return COUNTRY_ISO3[c.n]||c.iso3||c.co||c.n||'';});
   let reg=MAP_REGIONS[_mapRegion]||MAP_REGIONS.world;
   Plotly.newPlot('fsChartDiv',[{
     type:'choropleth',
     locations:iso3,locationmode:'ISO-3',
     z:vals,
-    colorscale:clr,
-    zmid:mode==='active'?0:undefined,
-    zmin:mode==='active'?-absMax:0,
-    zmax:mode==='active'?absMax:undefined,
+    colorscale:cfg.scale,
+    zmid:cfg.diverge?0:undefined,
+    zmin:cfg.diverge?-absMax:0,
+    zmax:cfg.diverge?absMax:undefined,
     text:countries.map(function(c){return c.n||c.co;}),
     customdata:countries.map(function(c){return[c.n||c.co,c.p,c.b,c.a];}),
-    hovertemplate:'<b>%{customdata[0]}</b><br>Port: %{customdata[1]:.1f}%<br>BM: %{customdata[2]:.1f}%<br>Active: %{customdata[3]:+.1f}%<extra></extra>',
-    colorbar:{x:1,len:0.7,thickness:10,bgcolor:'rgba(0,0,0,0)',tickfont:{color:THEME().tick,size:9},title:{text:'',side:'right'}}
+    hovertemplate:'<b>%{customdata[0]}</b><br>'+cfg.title+': %{z:.2f}%<br>Port: %{customdata[1]:.1f}%<br>Active: %{customdata[3]:+.1f}%<extra></extra>',
+    colorbar:{x:1,len:0.7,thickness:10,bgcolor:'rgba(0,0,0,0)',tickfont:{color:THEME().tick,size:9},title:{text:cfg.title,side:'right',font:{color:THEME().tick,size:9}}}
   }],Object.assign({},plotBg,{
     geo:{
       showframe:false,showcoastlines:true,coastlinecolor:THEME().grid,
@@ -5268,39 +5290,48 @@ function _renderFsCtryMap(s){
 function _renderFsCtryPanel(s){
   let countries=s.countries||[];
   let mode=_mapColorMode||'active';
-  let sorted=[...countries].sort(function(a,b){
-    return mode==='port'?(b.p||0)-(a.p||0):mode==='bench'?(b.b||0)-(a.b||0):Math.abs(b.a||0)-Math.abs(a.a||0);
-  }).slice(0,15);
+  let cfg=_fsCtryGetVal(mode,_mapFacParam,s);
+  let sorted=[...countries].sort(function(a,b){return Math.abs(cfg.get(b))-Math.abs(cfg.get(a));}).slice(0,15);
   $('fsPanelTitle').textContent='';
+  let groups=getMapColorGroups(s);
   let ctrlHtml='<div style="margin-bottom:10px">'+
     '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">COLOR MODE</div>'+
-    '<div style="display:flex;gap:4px;margin-bottom:10px">'+
-    ['active','port','bench'].map(function(m){
-      return'<button onclick="setFsMapColor(\''+m+'\')" style="flex:1;font-size:10px;padding:3px 0;border-radius:4px;border:1px solid;cursor:pointer;font-family:inherit;'+
-        (mode===m?'background:var(--pri);color:#fff;border-color:var(--pri)':'background:transparent;color:var(--txt);border-color:#334155')+
-        '">'+{active:'Active',port:'Port',bench:'BM'}[m]+'</button>';
+    groups.map(function(g){
+      return'<div style="font-size:9px;color:#64748b;margin:6px 0 3px;text-transform:uppercase;letter-spacing:.3px">'+g.label+'</div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px">'+
+        g.items.map(function(i){
+          return'<button onclick="setFsMapColor(\''+i.id.replace(/'/g,"\\'")+'\')" style="font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid;cursor:pointer;font-family:inherit;'+
+            (mode===i.id?'background:var(--pri);color:#fff;border-color:var(--pri)':'background:transparent;color:var(--txt);border-color:#334155')+
+            '">'+i.label+'</button>';
+        }).join('')+
+        '</div>';
     }).join('')+
-    '</div>'+
-    '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">REGION ZOOM</div>'+
+    (mode.startsWith('fc:')?
+      '<div style="margin:6px 0 3px;font-size:9px;color:#64748b;text-transform:uppercase">PARAMETER</div>'+
+      '<div style="display:flex;gap:3px;margin-bottom:4px">'+
+      ['exp','contr'].map(function(p){
+        return'<button onclick="_mapFacParam=\''+p+'\';renderFsCountry(cs)" style="font-size:9px;padding:2px 6px;border-radius:4px;border:1px solid;cursor:pointer;font-family:inherit;'+
+          (_mapFacParam===p?'background:var(--pri);color:#fff;border-color:var(--pri)':'background:transparent;color:var(--txt);border-color:#334155')+
+          '">'+(p==='exp'?'Exposure':'Contribution')+'</button>';
+      }).join('')+'</div>':'')+
+    '<div style="font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin:8px 0 5px">REGION ZOOM</div>'+
     '<div style="display:flex;gap:4px;margin-bottom:10px">'+
     ['world','europe','asia','americas'].map(function(r){
       return'<button onclick="setFsMapRegion(\''+r+'\')" style="flex:1;font-size:10px;padding:3px 0;border-radius:4px;border:1px solid;cursor:pointer;font-family:inherit;'+
         (_mapRegion===r?'background:var(--pri);color:#fff;border-color:var(--pri)':'background:transparent;color:var(--txt);border-color:#334155')+
         '">'+(r==='world'?'World':r==='americas'?'Amer':r.charAt(0).toUpperCase()+r.slice(1,3))+'</button>';
     }).join('')+
-    '</div>'+
-    '</div>';
+    '</div></div>';
   let rows=sorted.map(function(c){
-    let val=mode==='port'?(c.p||0):mode==='bench'?(c.b||0):(c.a||0);
-    let col=mode==='active'?(val>=0?'#10b981':'#ef4444'):'var(--txth)';
+    let val=cfg.get(c);
+    let col=cfg.diverge?(val>=0?'#10b981':'#ef4444'):'var(--txth)';
     return'<tr style="border-bottom:1px solid rgba(51,65,85,0.4);cursor:pointer" onclick="oDrCountry(\''+((c.n||c.co||'').replace(/'/g,"\\'"))+'\')" >'+
       '<td style="padding:4px 6px;color:var(--txth)">'+(c.n||c.co||'—')+'</td>'+
-      '<td style="text-align:right;padding:4px 6px;font-weight:600;color:'+col+'">'+(val>=0&&mode==='active'?'+':'')+val.toFixed(1)+'%</td>'+
+      '<td style="text-align:right;padding:4px 6px;font-weight:600;color:'+col+'">'+(cfg.diverge&&val>=0?'+':'')+val.toFixed(2)+'%</td>'+
       '</tr>';
   }).join('');
-  let colLabel={active:'Top Active Wt',port:'Top Port Wt',bench:'Top BM Wt'}[mode];
   $('fsPanelContent').innerHTML=ctrlHtml+
-    '<div style="font-size:11px;font-weight:700;color:var(--txth);margin-bottom:6px">'+colLabel+'</div>'+
+    '<div style="font-size:11px;font-weight:700;color:var(--txth);margin-bottom:6px">'+cfg.title+'</div>'+
     '<table style="width:100%;font-size:11px;border-collapse:collapse"><tbody>'+rows+'</tbody></table>';
 }
 

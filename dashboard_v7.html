@@ -942,6 +942,112 @@ function dismissWhatChanged(stratId,reportDate){
   let el=document.getElementById('whatChangedBanner');if(el)el.remove();
 }
 
+// ===== "THIS WEEK" — Exec Summary + Weekly Insights (Patch 015) =====
+function thisWeekCardHtml(s){
+  if(!s||!s.sum)return '';
+  let stateBullets=[];
+  // TE status
+  let te=s.sum.te;
+  if(te!=null){
+    let teRed=_thresholds.teRed||8,teAmb=_thresholds.teAmber||6;
+    if(te>=teRed) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is above the ${teRed}% red threshold — elevated risk budget.`);
+    else if(te>=teAmb) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is in amber territory (${teAmb}\u2013${teRed}% band).`);
+    else if(te>0) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is within the ${teAmb}% amber threshold.`);
+  }
+  // Top OW + UW sectors
+  let sortedSecs=(s.sectors||[]).filter(x=>x.n&&!/cash/i.test(x.n)&&isFinite(x.a)).sort((a,b)=>(b.a||0)-(a.a||0));
+  if(sortedSecs.length){
+    let topOW=sortedSecs[0];
+    if((topOW.a||0)>=1) stateBullets.push(`Largest overweight is <strong>${topOW.n}</strong> at ${fp(topOW.a,1)}% vs benchmark.`);
+    let topUW=sortedSecs[sortedSecs.length-1];
+    if((topUW.a||0)<=-1) stateBullets.push(`Largest underweight is <strong>${topUW.n}</strong> at ${fp(topUW.a,1)}%.`);
+  }
+  // Biggest TE contributor
+  let topRisk=[...(s.hold||[])].filter(h=>!isCash(h)&&isFinite(h.tr)).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0))[0];
+  if(topRisk&&Math.abs(topRisk.tr||0)>=3){
+    let shortN=(topRisk.n||topRisk.t).length>24?(topRisk.n||topRisk.t).slice(0,23)+'\u2026':(topRisk.n||topRisk.t);
+    stateBullets.push(`<strong>${shortN}</strong> dominates risk: ${f2(topRisk.p,1)}% weight, ${f2(Math.abs(topRisk.tr||0),1)}% of TE.`);
+  }
+  // Factor tilts > 0.5σ
+  let sigma=_thresholds.factorSigma||0.5;
+  let bigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>=sigma).sort((a,b)=>Math.abs(b.a||0)-Math.abs(a.a||0)).slice(0,3);
+  if(bigFac.length){
+    let names=bigFac.map(f=>`${f.n} ${fp(f.a,2)}\u03c3`).join(', ');
+    stateBullets.push(`Significant factor tilts (\u2265${sigma}\u03c3): ${names}.`);
+  }
+  // Cash position
+  let cashMax=_thresholds.cashMax||5;
+  if(s.sum.cash!=null&&s.sum.cash>cashMax){
+    stateBullets.push(`Cash position <strong>${f2(s.sum.cash,1)}%</strong> exceeds the ${cashMax}% alert threshold.`);
+  }
+
+  // CHANGES bullets (data-first, WoW)
+  let changeBullets=[];
+  let hist=s.hist&&s.hist.sum||[];
+  let prev=hist.length>=2?hist[hist.length-2]:null;
+  if(prev){
+    let teD=s.sum.te!=null&&prev.te!=null?+(s.sum.te-prev.te).toFixed(2):null;
+    if(teD!=null&&Math.abs(teD)>=0.05){
+      let arrow=teD>0?'\u2191':'\u2193',col=teD>0?'var(--neg)':'var(--pos)';
+      changeBullets.push(`<strong>TE:</strong> ${f2(s.sum.te,1)}% <span style="color:${col}">${arrow}${Math.abs(teD).toFixed(2)}pp</span> vs prior week`);
+    }
+    let asD=s.sum.as!=null&&prev.as!=null?+(s.sum.as-prev.as).toFixed(1):null;
+    if(asD!=null&&Math.abs(asD)>=0.1){
+      let arrow=asD>0?'\u2191':'\u2193';
+      changeBullets.push(`<strong>Active Share:</strong> ${f2(s.sum.as,1)}% <span style="color:var(--txt)">${arrow}${Math.abs(asD).toFixed(1)}pp</span>`);
+    }
+    let betaD=s.sum.beta!=null&&prev.beta!=null?+(s.sum.beta-prev.beta).toFixed(3):null;
+    if(betaD!=null&&Math.abs(betaD)>=0.005){
+      let arrow=betaD>0?'\u2191':'\u2193';
+      let col=Math.abs((s.sum.beta||1)-1)>Math.abs((prev.beta||1)-1)?'var(--warn)':'var(--txt)';
+      changeBullets.push(`<strong>Beta:</strong> ${f2(s.sum.beta,3)} <span style="color:${col}">${arrow}${Math.abs(betaD).toFixed(3)}</span>`);
+    }
+    let hD=prev.h&&s.sum.h?(s.sum.h-prev.h):null;
+    // Suppress implausible WoW holdings deltas (data bug signal): weekly turnover > 100 positions is not realistic
+    if(hD!=null&&hD!==0&&Math.abs(hD)<=100){
+      changeBullets.push(`<strong>Holdings:</strong> ${s.sum.h} <span style="color:var(--txt)">(${hD>0?'+':''}${hD})</span> vs prior`);
+    }
+  }
+  // Holdings deltas from snap (Patch 013 data)
+  try{
+    let snap=JSON.parse(localStorage.getItem('rr_holdsnap_v1')||'{}');
+    let entry=snap[s.id];
+    let prior=entry&&entry.prior;
+    if(prior&&prior.holdings){
+      let priorH=prior.holdings;
+      let curMap={};
+      (s.hold||[]).forEach(h=>{if(h.t&&isFinite(h.p))curMap[h.t]=+h.p;});
+      let diffs=[];
+      new Set([...Object.keys(priorH),...Object.keys(curMap)]).forEach(t=>{
+        let d=(curMap[t]||0)-(priorH[t]||0);
+        if(Math.abs(d)>=0.5){let h=(s.hold||[]).find(x=>x.t===t);diffs.push({t,n:h?.n||t,d});}
+      });
+      if(diffs.length){
+        diffs.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+        diffs.slice(0,2).forEach(dd=>{
+          let col=dd.d>0?'var(--pos)':'var(--neg)',arrow=dd.d>0?'\u2191':'\u2193';
+          let shortN=(dd.n||dd.t).length>20?(dd.n||dd.t).slice(0,19)+'\u2026':(dd.n||dd.t);
+          changeBullets.push(`<strong>${shortN}:</strong> <span style="color:${col}">${arrow}${fp(dd.d,2)}%</span> weight`);
+        });
+      }
+    }
+  }catch(e){}
+
+  if(!stateBullets.length&&!changeBullets.length)return '';
+  let stateHtml=stateBullets.length?`<div style="flex:1;min-width:300px">
+    <div style="font-size:10px;color:var(--pri);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px">State</div>
+    <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--txth)">${stateBullets.map(b=>`<li>${b}</li>`).join('')}</ul>
+  </div>`:'';
+  let changeHtml=changeBullets.length?`<div style="flex:1;min-width:300px">
+    <div style="font-size:10px;color:var(--pri);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px">Changes vs Prior Week</div>
+    <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--txth)">${changeBullets.map(b=>`<li>${b}</li>`).join('')}</ul>
+  </div>`:'';
+  return `<div class="card" id="cardThisWeek" style="margin-bottom:16px">
+    <div class="card-title">This Week \u2014 ${s.name||s.id}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:8px">${stateHtml}${changeHtml}</div>
+  </div>`;
+}
+
 // Store alerts for click actions
 let _lastAlerts=[];
 function _riskAlertClick(idx){
@@ -988,6 +1094,7 @@ function rExp(){
   let pctFac=+(rawFac/pctTotal*100).toFixed(0);
 
   let html=`${weekBannerHtml()}
+  ${thisWeekCardHtml(s)}
   <!-- Row 1: 3 Summary Cards -->
   <div class="sum-cards" style="grid-template-columns:repeat(3,1fr)">
     <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">

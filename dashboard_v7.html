@@ -1400,7 +1400,19 @@ const ORVQ_TH='<th style="text-align:center;cursor:pointer;border-left:1px solid
 const ORVQ_TH_PLAIN='<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" class="tip" data-tip="Overall MFR rank (1=best)">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" class="tip" data-tip="Revision">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" class="tip" data-tip="Value">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" class="tip" data-tip="Quality">Q</th>';
 
 // ===== SECTOR TABLE STATE =====
-let _secRankMode='wtd'; // 'wtd'=portfolio-weight-weighted, 'avg'=simple average
+let _secRankMode='wtd'; // 'wtd'=portfolio-weight-weighted, 'avg'=simple average, 'bm'=benchmark-weight-weighted
+// Shared rank-avg computation for all aggregation tables (sectors/regions/countries/groups)
+// S=sum of rank values, C=count, W=sum(rank*port_weight), PW=sum(port_weight), BW=sum(rank*bench_weight), BPW=sum(bench_weight)
+function rankAvg3(mode,S,C,W,PW,BW,BPW){
+  if(mode==='avg')return C>0?S/C:null;
+  if(mode==='bm')return BPW>0?BW/BPW:null;
+  return PW>0?W/PW:null; // 'wtd' default
+}
+function rankToggleHtml3(inlineStyle){
+  let m=_secRankMode;
+  let sty=inlineStyle||'';
+  return`<button class="toggle-btn${m==='wtd'?' active':''}" onclick="event.stopPropagation();setSecRankMode('wtd')" style="padding:1px 6px;font-size:9px${sty}">Wtd</button><button class="toggle-btn${m==='avg'?' active':''}" onclick="event.stopPropagation();setSecRankMode('avg')" style="padding:1px 6px;font-size:9px${sty}">Avg</button><button class="toggle-btn${m==='bm'?' active':''}" onclick="event.stopPropagation();setSecRankMode('bm')" style="padding:1px 6px;font-size:9px${sty}" title="Benchmark-weighted average (uses bench holdings and weights)">BM</button>`;
+}
 const SEC_COLS=[
   {id:'port',label:'Port%'},{id:'bench',label:'Bench%'},{id:'active',label:'Active'},
   {id:'te_contrib',label:'TE Contrib'},{id:'stock_te',label:'Stock TE%'},{id:'factor_te',label:'Factor TE%'},
@@ -1423,17 +1435,17 @@ function toggleSecCol(id,checked){
   applySectColVis();
 }
 function setSecRankMode(mode){
+  if(mode!=='wtd'&&mode!=='avg'&&mode!=='bm')return;
   _secRankMode=mode;
-  let wBtn=document.getElementById('secRankWtd'),aBtn=document.getElementById('secRankAvg');
-  if(wBtn)wBtn.classList.toggle('active',mode==='wtd');
-  if(aBtn)aBtn.classList.toggle('active',mode==='avg');
-  if(!cs||!cs.sectors)return;
-  $('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);
-  applySectColVis();
+  if(!cs)return;
+  // Re-render every aggregation table that surfaces rank columns
+  if(cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);applySectColVis&&applySectColVis();}
+  if(cs.countries&&$('countryTableWrap')){$('countryTableWrap').innerHTML=rCountryTable(cs.countries,cs.hold);}
+  if(cs.groups&&$('grpTable')){$('grpTable').innerHTML=rGroupTable(cs.groups,cs.hold);}
+  let regWrap=document.querySelector('[data-col="regions"]');if(regWrap&&cs.regions)regWrap.innerHTML=rWt(cs.regions,'reg',cs.hold);
 }
 function secRankToggleHtml(){
-  let w=_secRankMode==='wtd';
-  return`<div class="toggle-wrap" style="margin:0" title="Rank averaging: Weighted by port weight (Wtd) or simple average (Avg)"><button id="secRankWtd" class="toggle-btn${w?' active':''}" onclick="setSecRankMode('wtd')">Wtd</button><button id="secRankAvg" class="toggle-btn${!w?' active':''}" onclick="setSecRankMode('avg')">Avg</button></div>`;
+  return`<div class="toggle-wrap" style="margin:0" title="Rank averaging: Wtd (port-weighted), Avg (simple), BM (bench-weighted using benchmark holdings)">${rankToggleHtml3()}</div>`;
 }
 function secColDropHtml(){
   let chk=SEC_COLS.map(c=>`<div><label style="display:flex;align-items:center;gap:7px;padding:5px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${_secColVis[c.id]!==false?'checked':''} onchange="toggleSecCol('${c.id}',this.checked)" style="accent-color:var(--pri);cursor:pointer"><span style="font-size:11px;color:var(--txth)">${c.label}</span></label></div>`).join('');
@@ -1446,42 +1458,42 @@ function rWt(data,type,hold){
   // For sectors: compute TE + MCR split + O·R·V·Q weighted/simple rank averages per sector
   let secTEMap={},secMCRMap={};
   // Simple: _S=sum, _C=count. Weighted: _W=rank×weight sum, _PW=weight sum.
-  let secOS={},secOC={},secOW={},secOPW={};
-  let secRS={},secRC={},secRW={},secRPW={};
-  let secVS={},secVC={},secVW={},secVPW={};
-  let secQS={},secQC={},secQW={},secQPW={};
+  let secOS={},secOC={},secOW={},secOPW={},secOBW={},secOBPW={};
+  let secRS={},secRC={},secRW={},secRPW={},secRBW={},secRBPW={};
+  let secVS={},secVC={},secVW={},secVPW={},secVBW={},secVBPW={};
+  let secQS={},secQC={},secQW={},secQPW={},secQBW={},secQBPW={};
   if(type==='sec'&&hold){
     hold.forEach(h=>{
       if(!h.sec)return;
       secTEMap[h.sec]=(secTEMap[h.sec]||0)+(h.tr||0);
       secMCRMap[h.sec]=(secMCRMap[h.sec]||0)+(h.mcr||0);
       let w=h.p>0?h.p:0;
-      let ov=h.over!=null?h.over:null;
-      if(ov!=null){secOS[h.sec]=(secOS[h.sec]||0)+ov;secOC[h.sec]=(secOC[h.sec]||0)+1;secOW[h.sec]=(secOW[h.sec]||0)+ov*w;secOPW[h.sec]=(secOPW[h.sec]||0)+w;}
-      if(h.rev!=null){secRS[h.sec]=(secRS[h.sec]||0)+h.rev;secRC[h.sec]=(secRC[h.sec]||0)+1;secRW[h.sec]=(secRW[h.sec]||0)+h.rev*w;secRPW[h.sec]=(secRPW[h.sec]||0)+w;}
-      if(h.val!=null){secVS[h.sec]=(secVS[h.sec]||0)+h.val;secVC[h.sec]=(secVC[h.sec]||0)+1;secVW[h.sec]=(secVW[h.sec]||0)+h.val*w;secVPW[h.sec]=(secVPW[h.sec]||0)+w;}
-      if(h.qual!=null){secQS[h.sec]=(secQS[h.sec]||0)+h.qual;secQC[h.sec]=(secQC[h.sec]||0)+1;secQW[h.sec]=(secQW[h.sec]||0)+h.qual*w;secQPW[h.sec]=(secQPW[h.sec]||0)+w;}
+      let bw=h.b>0?h.b:0;
+      if(h.over!=null){secOS[h.sec]=(secOS[h.sec]||0)+h.over;secOC[h.sec]=(secOC[h.sec]||0)+1;secOW[h.sec]=(secOW[h.sec]||0)+h.over*w;secOPW[h.sec]=(secOPW[h.sec]||0)+w;secOBW[h.sec]=(secOBW[h.sec]||0)+h.over*bw;secOBPW[h.sec]=(secOBPW[h.sec]||0)+bw;}
+      if(h.rev!=null){secRS[h.sec]=(secRS[h.sec]||0)+h.rev;secRC[h.sec]=(secRC[h.sec]||0)+1;secRW[h.sec]=(secRW[h.sec]||0)+h.rev*w;secRPW[h.sec]=(secRPW[h.sec]||0)+w;secRBW[h.sec]=(secRBW[h.sec]||0)+h.rev*bw;secRBPW[h.sec]=(secRBPW[h.sec]||0)+bw;}
+      if(h.val!=null){secVS[h.sec]=(secVS[h.sec]||0)+h.val;secVC[h.sec]=(secVC[h.sec]||0)+1;secVW[h.sec]=(secVW[h.sec]||0)+h.val*w;secVPW[h.sec]=(secVPW[h.sec]||0)+w;secVBW[h.sec]=(secVBW[h.sec]||0)+h.val*bw;secVBPW[h.sec]=(secVBPW[h.sec]||0)+bw;}
+      if(h.qual!=null){secQS[h.sec]=(secQS[h.sec]||0)+h.qual;secQC[h.sec]=(secQC[h.sec]||0)+1;secQW[h.sec]=(secQW[h.sec]||0)+h.qual*w;secQPW[h.sec]=(secQPW[h.sec]||0)+w;secQBW[h.sec]=(secQBW[h.sec]||0)+h.qual*bw;secQBPW[h.sec]=(secQBPW[h.sec]||0)+bw;}
     });
   }
   // Region ORVQ: group by CMAP[h.co]
-  let regOS={},regOC={},regOW={},regOPW={};
-  let regRS={},regRC={},regRW={},regRPW={};
-  let regVS={},regVC={},regVW={},regVPW={};
-  let regQS={},regQC={},regQW={},regQPW={};
+  let regOS={},regOC={},regOW={},regOPW={},regOBW={},regOBPW={};
+  let regRS={},regRC={},regRW={},regRPW={},regRBW={},regRBPW={};
+  let regVS={},regVC={},regVW={},regVPW={},regVBW={},regVBPW={};
+  let regQS={},regQC={},regQW={},regQPW={},regQBW={},regQBPW={};
   if(type==='reg'&&hold){
     hold.forEach(h=>{
       if(isCash(h)||!h.co)return;
       let reg=CMAP[h.co]||'Other';
       let w=h.p>0?h.p:0;
-      if(h.over!=null){regOS[reg]=(regOS[reg]||0)+h.over;regOC[reg]=(regOC[reg]||0)+1;regOW[reg]=(regOW[reg]||0)+h.over*w;regOPW[reg]=(regOPW[reg]||0)+w;}
-      if(h.rev!=null){regRS[reg]=(regRS[reg]||0)+h.rev;regRC[reg]=(regRC[reg]||0)+1;regRW[reg]=(regRW[reg]||0)+h.rev*w;regRPW[reg]=(regRPW[reg]||0)+w;}
-      if(h.val!=null){regVS[reg]=(regVS[reg]||0)+h.val;regVC[reg]=(regVC[reg]||0)+1;regVW[reg]=(regVW[reg]||0)+h.val*w;regVPW[reg]=(regVPW[reg]||0)+w;}
-      if(h.qual!=null){regQS[reg]=(regQS[reg]||0)+h.qual;regQC[reg]=(regQC[reg]||0)+1;regQW[reg]=(regQW[reg]||0)+h.qual*w;regQPW[reg]=(regQPW[reg]||0)+w;}
+      let bw=h.b>0?h.b:0;
+      if(h.over!=null){regOS[reg]=(regOS[reg]||0)+h.over;regOC[reg]=(regOC[reg]||0)+1;regOW[reg]=(regOW[reg]||0)+h.over*w;regOPW[reg]=(regOPW[reg]||0)+w;regOBW[reg]=(regOBW[reg]||0)+h.over*bw;regOBPW[reg]=(regOBPW[reg]||0)+bw;}
+      if(h.rev!=null){regRS[reg]=(regRS[reg]||0)+h.rev;regRC[reg]=(regRC[reg]||0)+1;regRW[reg]=(regRW[reg]||0)+h.rev*w;regRPW[reg]=(regRPW[reg]||0)+w;regRBW[reg]=(regRBW[reg]||0)+h.rev*bw;regRBPW[reg]=(regRBPW[reg]||0)+bw;}
+      if(h.val!=null){regVS[reg]=(regVS[reg]||0)+h.val;regVC[reg]=(regVC[reg]||0)+1;regVW[reg]=(regVW[reg]||0)+h.val*w;regVPW[reg]=(regVPW[reg]||0)+w;regVBW[reg]=(regVBW[reg]||0)+h.val*bw;regVBPW[reg]=(regVBPW[reg]||0)+bw;}
+      if(h.qual!=null){regQS[reg]=(regQS[reg]||0)+h.qual;regQC[reg]=(regQC[reg]||0)+1;regQW[reg]=(regQW[reg]||0)+h.qual*w;regQPW[reg]=(regQPW[reg]||0)+w;regQBW[reg]=(regQBW[reg]||0)+h.qual*bw;regQBPW[reg]=(regQBPW[reg]||0)+bw;}
     });
   }
   let hasRegRanks=type==='reg'&&hold&&Object.keys(regOC).length>0;
-  let wtd=_secRankMode==='wtd';
-  function sAvg(sS,cS,sW,pW){return wtd?(pW>0?sW/pW:null):(cS>0?sS/cS:null);}
+  function sAvg(sS,cS,sW,pW,bW,bPW){return rankAvg3(_secRankMode,sS,cS,sW,pW,bW||0,bPW||0);}
   // Sort sectors by TE contribution descending; regions stay as-is
   let sorted=type==='sec'?[...data].sort((a,b)=>(secTEMap[b.n]||0)-(secTEMap[a.n]||0)):data;
   let maxTE=type==='sec'?Math.max(...sorted.map(d=>secTEMap[d.n]||0),0.01):1;
@@ -1504,20 +1516,20 @@ function rWt(data,type,hold){
         let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td class="r" data-col="${col}" data-sv="${avg!=null?+avg.toFixed(2):''}" style="font-size:11px;font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
-      rvqCells=rankCell(sAvg(secOS[d.n]||0,secOC[d.n]||0,secOW[d.n]||0,secOPW[d.n]||0),'o')
-              +rankCell(sAvg(secRS[d.n]||0,secRC[d.n]||0,secRW[d.n]||0,secRPW[d.n]||0),'r')
-              +rankCell(sAvg(secVS[d.n]||0,secVC[d.n]||0,secVW[d.n]||0,secVPW[d.n]||0),'v')
-              +rankCell(sAvg(secQS[d.n]||0,secQC[d.n]||0,secQW[d.n]||0,secQPW[d.n]||0),'q');
+      rvqCells=rankCell(sAvg(secOS[d.n]||0,secOC[d.n]||0,secOW[d.n]||0,secOPW[d.n]||0,secOBW[d.n]||0,secOBPW[d.n]||0),'o')
+              +rankCell(sAvg(secRS[d.n]||0,secRC[d.n]||0,secRW[d.n]||0,secRPW[d.n]||0,secRBW[d.n]||0,secRBPW[d.n]||0),'r')
+              +rankCell(sAvg(secVS[d.n]||0,secVC[d.n]||0,secVW[d.n]||0,secVPW[d.n]||0,secVBW[d.n]||0,secVBPW[d.n]||0),'v')
+              +rankCell(sAvg(secQS[d.n]||0,secQC[d.n]||0,secQW[d.n]||0,secQPW[d.n]||0,secQBW[d.n]||0,secQBPW[d.n]||0),'q');
     }
     if(type==='reg'&&hasRegRanks){
       const rankCellR=(avg)=>{
         let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
-      rvqCells=rankCellR(sAvg(regOS[d.n]||0,regOC[d.n]||0,regOW[d.n]||0,regOPW[d.n]||0))
-              +rankCellR(sAvg(regRS[d.n]||0,regRC[d.n]||0,regRW[d.n]||0,regRPW[d.n]||0))
-              +rankCellR(sAvg(regVS[d.n]||0,regVC[d.n]||0,regVW[d.n]||0,regVPW[d.n]||0))
-              +rankCellR(sAvg(regQS[d.n]||0,regQC[d.n]||0,regQW[d.n]||0,regQPW[d.n]||0));
+      rvqCells=rankCellR(sAvg(regOS[d.n]||0,regOC[d.n]||0,regOW[d.n]||0,regOPW[d.n]||0,regOBW[d.n]||0,regOBPW[d.n]||0))
+              +rankCellR(sAvg(regRS[d.n]||0,regRC[d.n]||0,regRW[d.n]||0,regRPW[d.n]||0,regRBW[d.n]||0,regRBPW[d.n]||0))
+              +rankCellR(sAvg(regVS[d.n]||0,regVC[d.n]||0,regVW[d.n]||0,regVPW[d.n]||0,regVBW[d.n]||0,regVBPW[d.n]||0))
+              +rankCellR(sAvg(regQS[d.n]||0,regQC[d.n]||0,regQW[d.n]||0,regQPW[d.n]||0,regQBW[d.n]||0,regQBPW[d.n]||0));
     }
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
       <td>${d.n}</td>
@@ -1534,8 +1546,7 @@ function rWt(data,type,hold){
       <th colspan="7" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>
       <th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px">
         <span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>
-        <button id="secRankWtd" class="toggle-btn${wtd?' active':''}" onclick="event.stopPropagation();setSecRankMode('wtd')" style="padding:1px 6px;font-size:9px">Wtd</button>
-        <button id="secRankAvg" class="toggle-btn${!wtd?' active':''}" onclick="event.stopPropagation();setSecRankMode('avg')" style="padding:1px 6px;font-size:9px">Avg</button>
+        ${rankToggleHtml3()}
       </th>
     </tr>
     <tr>
@@ -1739,22 +1750,23 @@ function rChr(chars){
 
 function rCountryTable(countries,hold){
   if(!countries||!countries.length)return'<p style="color:var(--txt);font-size:12px">No country data</p>';
-  // Compute weighted-avg ORVQ per country from holdings
-  let coOS={},coOC={},coOW={},coOPW={};
-  let coRS={},coRC={},coRW={},coRPW={};
-  let coVS={},coVC={},coVW={},coVPW={};
-  let coQS={},coQC={},coQW={},coQPW={};
+  // Compute ORVQ per country: simple / port-weighted / bench-weighted avgs
+  let coOS={},coOC={},coOW={},coOPW={},coOBW={},coOBPW={};
+  let coRS={},coRC={},coRW={},coRPW={},coRBW={},coRBPW={};
+  let coVS={},coVC={},coVW={},coVPW={},coVBW={},coVBPW={};
+  let coQS={},coQC={},coQW={},coQPW={},coQBW={},coQBPW={};
   if(hold){
     hold.forEach(h=>{
       if(!h.co||isCash(h))return;
       let w=h.p>0?h.p:0;
-      if(h.over!=null){coOS[h.co]=(coOS[h.co]||0)+h.over;coOC[h.co]=(coOC[h.co]||0)+1;coOW[h.co]=(coOW[h.co]||0)+h.over*w;coOPW[h.co]=(coOPW[h.co]||0)+w;}
-      if(h.rev!=null){coRS[h.co]=(coRS[h.co]||0)+h.rev;coRC[h.co]=(coRC[h.co]||0)+1;coRW[h.co]=(coRW[h.co]||0)+h.rev*w;coRPW[h.co]=(coRPW[h.co]||0)+w;}
-      if(h.val!=null){coVS[h.co]=(coVS[h.co]||0)+h.val;coVC[h.co]=(coVC[h.co]||0)+1;coVW[h.co]=(coVW[h.co]||0)+h.val*w;coVPW[h.co]=(coVPW[h.co]||0)+w;}
-      if(h.qual!=null){coQS[h.co]=(coQS[h.co]||0)+h.qual;coQC[h.co]=(coQC[h.co]||0)+1;coQW[h.co]=(coQW[h.co]||0)+h.qual*w;coQPW[h.co]=(coQPW[h.co]||0)+w;}
+      let bw=h.b>0?h.b:0;
+      if(h.over!=null){coOS[h.co]=(coOS[h.co]||0)+h.over;coOC[h.co]=(coOC[h.co]||0)+1;coOW[h.co]=(coOW[h.co]||0)+h.over*w;coOPW[h.co]=(coOPW[h.co]||0)+w;coOBW[h.co]=(coOBW[h.co]||0)+h.over*bw;coOBPW[h.co]=(coOBPW[h.co]||0)+bw;}
+      if(h.rev!=null){coRS[h.co]=(coRS[h.co]||0)+h.rev;coRC[h.co]=(coRC[h.co]||0)+1;coRW[h.co]=(coRW[h.co]||0)+h.rev*w;coRPW[h.co]=(coRPW[h.co]||0)+w;coRBW[h.co]=(coRBW[h.co]||0)+h.rev*bw;coRBPW[h.co]=(coRBPW[h.co]||0)+bw;}
+      if(h.val!=null){coVS[h.co]=(coVS[h.co]||0)+h.val;coVC[h.co]=(coVC[h.co]||0)+1;coVW[h.co]=(coVW[h.co]||0)+h.val*w;coVPW[h.co]=(coVPW[h.co]||0)+w;coVBW[h.co]=(coVBW[h.co]||0)+h.val*bw;coVBPW[h.co]=(coVBPW[h.co]||0)+bw;}
+      if(h.qual!=null){coQS[h.co]=(coQS[h.co]||0)+h.qual;coQC[h.co]=(coQC[h.co]||0)+1;coQW[h.co]=(coQW[h.co]||0)+h.qual*w;coQPW[h.co]=(coQPW[h.co]||0)+w;coQBW[h.co]=(coQBW[h.co]||0)+h.qual*bw;coQBPW[h.co]=(coQBPW[h.co]||0)+bw;}
     });
   }
-  function coWAvg(S,C,W,PW){return PW>0?W/PW:(C>0?S/C:null);}
+  function coWAvg(S,C,W,PW,BW,BPW){return rankAvg3(_secRankMode,S,C,W,PW,BW||0,BPW||0);}
   const rankCell=(avg)=>{
     if(avg==null)return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:#334155">—</td>`;
     return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
@@ -1764,15 +1776,16 @@ function rCountryTable(countries,hold){
   let rows=sorted.map(c=>{
     let cls=activeStyle(c.a);
     let rvq=hasRanks?(
-      rankCell(coWAvg(coOS[c.n]||0,coOC[c.n]||0,coOW[c.n]||0,coOPW[c.n]||0))+
-      rankCell(coWAvg(coRS[c.n]||0,coRC[c.n]||0,coRW[c.n]||0,coRPW[c.n]||0))+
-      rankCell(coWAvg(coVS[c.n]||0,coVC[c.n]||0,coVW[c.n]||0,coVPW[c.n]||0))+
-      rankCell(coWAvg(coQS[c.n]||0,coQC[c.n]||0,coQW[c.n]||0,coQPW[c.n]||0))
+      rankCell(coWAvg(coOS[c.n]||0,coOC[c.n]||0,coOW[c.n]||0,coOPW[c.n]||0,coOBW[c.n]||0,coOBPW[c.n]||0))+
+      rankCell(coWAvg(coRS[c.n]||0,coRC[c.n]||0,coRW[c.n]||0,coRPW[c.n]||0,coRBW[c.n]||0,coRBPW[c.n]||0))+
+      rankCell(coWAvg(coVS[c.n]||0,coVC[c.n]||0,coVW[c.n]||0,coVPW[c.n]||0,coVBW[c.n]||0,coVBPW[c.n]||0))+
+      rankCell(coWAvg(coQS[c.n]||0,coQC[c.n]||0,coQW[c.n]||0,coQPW[c.n]||0,coQBW[c.n]||0,coQBPW[c.n]||0))
     ):'';
     return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${rvq}</tr>`;
   }).join('');
   let rvqTh=hasRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',7)">Q</th>':'';
-  return`<table id="tbl-ctry"><thead><tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-ctry',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="4" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
+  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-ctry',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rGroupTable(groups,hold){
@@ -1780,26 +1793,30 @@ function rGroupTable(groups,hold){
   let displayGroups=groups.filter(g=>g.n&&g.n!=='[Cash]');
   if(!displayGroups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
   // Compute weighted-avg ORVQ per group via GROUPS_DEF sector→subgroup mapping
-  let grpOS={},grpOC={},grpOW={},grpOPW={};
-  let grpRS={},grpRC={},grpRW={},grpRPW={};
-  let grpVS={},grpVC={},grpVW={},grpVPW={};
-  let grpQS={},grpQC={},grpQW={},grpQPW={};
+  let grpOS={},grpOC={},grpOW={},grpOPW={},grpOBW={},grpOBPW={};
+  let grpRS={},grpRC={},grpRW={},grpRPW={},grpRBW={},grpRBPW={};
+  let grpVS={},grpVC={},grpVW={},grpVPW={},grpVBW={},grpVBPW={};
+  let grpQS={},grpQC={},grpQW={},grpQPW={},grpQBW={},grpQBPW={};
   if(hold){
+    // GROUPS_DEF uses abbreviated sector names ("Info Technology"); holdings use full names ("Information Technology").
+    // Normalize to fix pre-existing accumulator mismatch that silently broke all group-level rank modes.
+    const SEC_ALIAS={'Info Technology':'Information Technology','Comm Services':'Communication Services','Consumer Disc.':'Consumer Discretionary'};
     let secToSg={};
-    GROUPS_DEF.forEach(gd=>{gd.secs.forEach(sec=>{if(!secToSg[sec])secToSg[sec]=[];secToSg[sec].push(gd.sg);});});
+    GROUPS_DEF.forEach(gd=>{gd.secs.forEach(sec=>{let full=SEC_ALIAS[sec]||sec;if(!secToSg[full])secToSg[full]=[];secToSg[full].push(gd.sg);});});
     hold.forEach(h=>{
       if(!h.sec||isCash(h))return;
       let sgs=secToSg[h.sec]||[];
       sgs.forEach(sg=>{
         let w=h.p>0?h.p:0;
-        if(h.over!=null){grpOS[sg]=(grpOS[sg]||0)+h.over;grpOC[sg]=(grpOC[sg]||0)+1;grpOW[sg]=(grpOW[sg]||0)+h.over*w;grpOPW[sg]=(grpOPW[sg]||0)+w;}
-        if(h.rev!=null){grpRS[sg]=(grpRS[sg]||0)+h.rev;grpRC[sg]=(grpRC[sg]||0)+1;grpRW[sg]=(grpRW[sg]||0)+h.rev*w;grpRPW[sg]=(grpRPW[sg]||0)+w;}
-        if(h.val!=null){grpVS[sg]=(grpVS[sg]||0)+h.val;grpVC[sg]=(grpVC[sg]||0)+1;grpVW[sg]=(grpVW[sg]||0)+h.val*w;grpVPW[sg]=(grpVPW[sg]||0)+w;}
-        if(h.qual!=null){grpQS[sg]=(grpQS[sg]||0)+h.qual;grpQC[sg]=(grpQC[sg]||0)+1;grpQW[sg]=(grpQW[sg]||0)+h.qual*w;grpQPW[sg]=(grpQPW[sg]||0)+w;}
+        let bw=h.b>0?h.b:0;
+        if(h.over!=null){grpOS[sg]=(grpOS[sg]||0)+h.over;grpOC[sg]=(grpOC[sg]||0)+1;grpOW[sg]=(grpOW[sg]||0)+h.over*w;grpOPW[sg]=(grpOPW[sg]||0)+w;grpOBW[sg]=(grpOBW[sg]||0)+h.over*bw;grpOBPW[sg]=(grpOBPW[sg]||0)+bw;}
+        if(h.rev!=null){grpRS[sg]=(grpRS[sg]||0)+h.rev;grpRC[sg]=(grpRC[sg]||0)+1;grpRW[sg]=(grpRW[sg]||0)+h.rev*w;grpRPW[sg]=(grpRPW[sg]||0)+w;grpRBW[sg]=(grpRBW[sg]||0)+h.rev*bw;grpRBPW[sg]=(grpRBPW[sg]||0)+bw;}
+        if(h.val!=null){grpVS[sg]=(grpVS[sg]||0)+h.val;grpVC[sg]=(grpVC[sg]||0)+1;grpVW[sg]=(grpVW[sg]||0)+h.val*w;grpVPW[sg]=(grpVPW[sg]||0)+w;grpVBW[sg]=(grpVBW[sg]||0)+h.val*bw;grpVBPW[sg]=(grpVBPW[sg]||0)+bw;}
+        if(h.qual!=null){grpQS[sg]=(grpQS[sg]||0)+h.qual;grpQC[sg]=(grpQC[sg]||0)+1;grpQW[sg]=(grpQW[sg]||0)+h.qual*w;grpQPW[sg]=(grpQPW[sg]||0)+w;grpQBW[sg]=(grpQBW[sg]||0)+h.qual*bw;grpQBPW[sg]=(grpQBPW[sg]||0)+bw;}
       });
     });
   }
-  function grpWAvg(S,C,W,PW){return PW>0?W/PW:(C>0?S/C:null);}
+  function grpWAvg(S,C,W,PW,BW,BPW){return rankAvg3(_secRankMode,S,C,W,PW,BW||0,BPW||0);}
   const rankCell=(avg)=>{
     if(avg==null)return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:#334155">—</td>`;
     return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
@@ -1809,15 +1826,16 @@ function rGroupTable(groups,hold){
     let cls=activeStyle(g.a);
     let gn=g.n;
     let rvq=hasRanks?(
-      rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0))+
-      rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0))+
-      rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0))+
-      rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0))
+      rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0,grpOBW[gn]||0,grpOBPW[gn]||0))+
+      rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0,grpRBW[gn]||0,grpRBPW[gn]||0))+
+      rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0,grpVBW[gn]||0,grpVBPW[gn]||0))+
+      rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0,grpQBW[gn]||0,grpQBPW[gn]||0))
     ):'';
     return`<tr class="clickable" onclick="oDrGroup('${g.n}')"><td><span class="chip">${g.n}</span></td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td>${rvq}</tr>`;
   }).join('');
   let rvqTh=hasRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',7)">Q</th>':'';
-  return`<table id="tbl-grp"><thead><tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="4" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
+  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 

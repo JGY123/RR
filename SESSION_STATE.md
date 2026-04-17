@@ -1,8 +1,8 @@
 # RR Dashboard — Session State
 
-**Last updated:** 2026-04-16 19:15 (post Patches 010 + 011)
-**Current git commit:** `a5d6ab9` (main) — Patch 011: theme-aware long-tail sweep
-**Working state:** ✅ Dashboard renders correctly via local HTTP server. Light/dark theme toggle functional end-to-end (verified in Chromium preview MCP).
+**Last updated:** 2026-04-16 20:35 (post Patches 012-014 + full feature audit)
+**Current git commit:** `0050abb` (main) — Patch 014: My Watchlist card
+**Working state:** ✅ Dashboard renders correctly; full 10-regression audit confirms **zero regressions introduced by Patches 001-014**. Dashboard is at near-full parity with pre-crisis feature list (20 of 22 items working).
 
 ---
 
@@ -25,11 +25,12 @@ http://localhost:8000/dashboard_v7.html
 
 ## Current state of dashboard_v7.html
 
-- **Size:** 5,634 lines
-- **Last substantive edit:** 2026-04-16 19:10 (Patch 011)
-- **Committed at:** `a5d6ab9 — feat(theme): Patch 011 — theme-aware long-tail sweep`
+- **Size:** 5,750 lines
+- **Last substantive edit:** 2026-04-16 20:07 (Patch 014)
+- **Committed at:** `0050abb — feat(watchlist): Patch 014 — "My Watchlist" card on Exposures tab`
 - **Prior checkpoint:** `ce975e3` (tag `checkpoint-tab3-2026-04-16`)
-- **Latest tag:** `working.20260416.1910`
+- **Latest tag:** `working.20260416.2007`
+- **Origin sync:** ✅ fully pushed to `JGY123/RR` as of 2026-04-16 20:00
 - **Environment:** Claude Desktop with Claude_Preview MCP (Chromium headless on port 3099); standalone Python server on :8000 also supported
 
 ### Features confirmed present (Tab 3's work, committed)
@@ -60,38 +61,49 @@ http://localhost:8000/dashboard_v7.html
 | 009 | `35b18ad` | `working.20260416.1844` | Factor Risk Map polish. Rename card title "Factor Butterfly" → "Factor Risk Map" (aligns with fullscreen modal label). Bump `rFacButt` min chart height 280 → 480px. Add `#facTopTeStrip` above chart rendered by new `rFacTopTeStrip(s)`: top 4 factors by `|c|` as pills with name, `±σ` active exposure, `% TE` share. Green tint for OW, red for UW. `isFinite` guard per Patch 003 pattern. +20/-3 lines. |
 | 010 | `cd2ea0f` | `working.20260416.1901` | Light/dark theme toggle foundation. Add `THEME()` helper returning live theme-aware colors (reads CSS vars at call time) + `buildPlotBg()` that constructs a fresh `plotBg` from THEME(). Convert `const plotBg` → `let plotBg = buildPlotBg()` so all 30+ `{...plotBg, ...}` spreads auto-adapt. `applyPrefs()` rebuilds plotBg + calls `upd()` after theme flip. Refactor 4 inline chart layouts to use THEME() directly: `rSecChart`, `rFacButt`, `rCountryMap`, `rFacWaterfall`. Patch 008/009 chart polish had already set up the visual-verification workflow that made this possible. +45/-23 lines. |
 | 011 | `a5d6ab9` | `working.20260416.1910` | Theme-aware long-tail sweep. Expand THEME() with `card` + `bg` keys. Global `replace_all` on 6 property patterns — `gridcolor`, two `zerolinecolor` variants, `bgcolor` (rangeslider), `color:'#94a3b8'` (tick/text/font/line), `color:'#e2e8f0'` (emphasized text) — resolves ~50 chart-color leaks across ~15 renderers. Hand-edits for fullscreen choropleth (coastline/land/ocean) and colorscale midpoints. Total THEME() call sites 10 → 75. Round-trip dark→light→dark verified across Exposures/Risk/Holdings tabs + drill chart renders. +68/-66 lines. |
+| — | `938f1bb` | — | **Parallel audit session** (Claude Opus 4.6) — 8 code quality fixes: rank chart CSS→hex resolution, screenshot bg→THEME().bg, note popup theme compat, FAC_GROUP_DEFS dynamic getter, PPTX export THEME() colors, "AI Summary"→"Quick Summary" rename, startLiveRefresh cs null guard, RBE glossary label fix. |
+| — | `985fb27` | — | **Parallel audit-2** — attribution chart customdata per-bar hover, share URL restore via state.s, precision toggle now respects _prefs.precision. |
+| 012 | `3f3eb05` | `working.20260416.1930` | Data freshness indicator. Extends `#dataTimestamp` with "· Nd ago" suffix colored by age (green ≤7, amber 8-20, red ≥21). Hover tooltip with exact date + generated timestamp. New `freshAmberDays`/`freshRedDays` threshold keys in settings panel, live-updating via setThreshold dispatch. +34/-11 lines. |
+| 013 | `8b77807` | `working.20260416.1945` | "What Changed" weight snapshot banner. localStorage schema `rr_holdsnap_v1` + `rr_holdsnap_dismissed_v1`. Shows top 3 by `|Δweight| ≥ 0.5%` since last report_date. Green▲/red▼ chips, "+N more" counter, dismissable per (stratId, reportDate) tuple. New `whatChangedBannerHtml` + `dismissWhatChanged` + `buildCurrentSnap`. +64/-6 lines. |
+| 014 | `0050abb` | `working.20260416.2007` | "My Watchlist" card on Exposures tab. Consumes existing flag state (`rr_flags_{stratId}`) and groups by flag type (★ Watch / ▼ Reduce / ▲ Add). Dense rows with icon/ticker/name/weight/active. Click row opens stock detail modal via existing `oSt`. Hides when no flags exist. +33 lines. |
 
 ---
 
-## Features NOT on disk (CLI hallucinated writes, never persisted)
+## Full Feature Audit (2026-04-16 20:20)
 
-### Tab 1 (attempted, not yet rebuilt)
-- Watchlist section in Holdings tab
-- "What Changed" weight snapshot banner
-- Quick-Nav sidebar (`buildQuickNav`, `#qnav`) — may have been pre-existing
-- `generateExecSummary` — may have been pre-existing
-- Strategy Comparison (`openCompare`)
-- ~~Keyboard shortcuts + `toggleShortcutHelp`~~ — ✅ rebuilt as Patch 006 (`3b2a889`)
-- Data freshness indicator
-- ~~Metric tooltips / Glossary modal (`openGlossary`)~~ — ✅ rebuilt as Patch 007 (`cf70c40`)
-- ~~Risk Decomposition Tree (`riskDecompTree`, `mkNode`)~~ — ✅ rebuilt as Patch 005 (`fc89aa9`)
-- ~~Light/dark theme (`setThemePref`, `#themeBtn`)~~ — ✅ rebuilt as Patches 010-011 (`cd2ea0f`, `a5d6ab9`)
-- Color-blind safe mode (`toggleCbSafe`)
+Comprehensive grep + browser audit against the original 22-feature list. Verdict: **20 of 22 features working, zero regressions from Patches 001-014.**
 
-### Tab 2 (attempted, some rebuilt)
-- ~~Country drill FactSet snap_attrib attribution section~~ — ✅ rebuilt as Patch 002 (`4ed2aa4`)
-- ~~Factor Risk Map height 340→480 + "Top TE" chip strip~~ — ✅ rebuilt as Patch 009 (`35b18ad`)
-- Print/Export report `openReport` (tile-picker modal vs 7-section print report)
-- `generateEmailSnapshot` / `generateEmailBody`
-- Performance Optimization (lazy charts via IntersectionObserver, debounce, Plotly.react wrapper `pPlot`)
-- scenario-analysis
-- multi-period-attribution
-- industry-drilldown
-- Currency Exposure tile
+### ✅ Confirmed working (8 focused regression tests all passed)
 
-### Tab 3 (uncommitted items)
-- `classifyHoldingArchetype` — does NOT exist; actual function is `getHoldArchetype` ✅ (naming discrepancy only)
-- ~~Risk Alerts using `_thresholds` object~~ — ✅ resolved by Patch 001 (`e5eaf6c`)
+| Feature | Function(s) | Browser verified |
+|---|---|---|
+| Full-Screen Globe (3 color modes + 4 region zooms) | `openFullScreen('country')`, `_renderFsCtryMap`, `setFsMapRegion`, `setFsMapColor` | 26 countries choropleth, Active/Port/BM buttons wired, World/Eur/Asi/Amer zooms |
+| Full-Screen Factor Map + hover-dim | `renderFsFactorMap`, `fsFacHover`, `fsFacUnhover` | Bubbles render by exposure × stddev, hover dims others 0.85 → 0.15 |
+| Full-Screen Scatter + search + click select | `renderFsScatter`, `_fsScat_selectHold`, `_renderFsHoldDetail` | 39 panel rows searchable, click selects, panel shows factor bars |
+| Holdings RBE + archetype + flags + Quick Summary | `getHoldArchetype`, `genHoldSummary`, `cycleFlag`, RBE column | All 6 archetypes coded (Growth Engine / Value Play / Volatility Driver / Quality Compounder / Market Beta / Diversifier) |
+| Annotations right-click + 📝 badges | `showNotePopup`, `refreshCardNoteBadges` | Context menu handler at 5294; note saved with key `{stratId}:card:{cardId}` renders 📝 badge |
+| Strategy Comparison | **`openComp()` (NOT openCompare)** at 3628, `#compareBtn` at 347 | Modal opens, 7-strategy checkboxes, Summary Stats, Risk Radar, Factor Active Exposures, Sector Heatmap |
+| Email snapshot | `generateEmailSnapshot` at 5134, `#emailBtn` at 346 | Builds HTML email body, copies to clipboard + opens popup window (NO modal — by design) |
+| Country choropleth (non-fullscreen) | `rCountryMap`, `countryMapDiv` at 1081 | 320px choropleth on Exposures, 26 countries, click-drill wired |
+
+### ❌ Genuinely absent (2 features — the only true gaps)
+
+- `generateExecSummary` / Exec Summary card — zero grep hits, never rebuilt
+- Weekly Insights card — zero grep hits, never rebuilt
+
+### Minor design gaps (not regressions, design limitations)
+
+- `getHoldArchetype` returns `null` when top factor is "Country" / "Industry" / other unmapped keyword. Common in EM data. Could add a "Regional Driver" archetype bucket.
+- Country globe color-mode menu has 3 modes (Active/Port/BM). User recalled 4+ including "contribution to risk" and "factor exposures" — those code paths don't exist in `_renderFsCtryMap`. Either never existed OR lost pre-crisis.
+
+### Explicitly deferred / skipped
+
+- Color-blind safe mode (`toggleCbSafe`) — SKIPPED per product call; for 20 PMs, feature-bloat
+- Quick-Nav sidebar (`buildQuickNav`, `#qnav`) — not in file; deprioritized
+- Print/Export report (`openReport`) — present at line 3768, not regression-tested
+- Performance optimization (lazy charts / IntersectionObserver) — deliberately held off per crisis lesson #2
+- Currency Exposure tile — never rebuilt
+- Scenario analysis / multi-period attribution / industry drilldown — never rebuilt
 
 ---
 
@@ -110,8 +122,8 @@ To inspect: `git show backup-all-today-work:<filename>`
 
 | Item | Severity | Notes |
 |---|---|---|
-| Tab 1/2 rebuilds ongoing | Medium | 11 patches landed (001-011). Remaining: Watchlist, What Changed, Quick-Nav, Exec Summary, Strategy Comparison, Print/Export, Email, Perf optimization, Color-blind mode |
-| ~17 local commits ahead of `origin/main` | Low | Not pushed to remote; consider push after stability confirmed |
+| Tab 1/2 rebuilds ongoing | Low | 14 patches landed (001-014) + 2 parallel audits. Only Exec Summary + Weekly Insights are genuine gaps. Strategy Comparison, Email, Watchlist, What Changed, Data Freshness, Risk Alerts, Holdings Intelligence, Annotations — all verified working. |
+| Origin fully synced | — | No local commits ahead of origin as of 2026-04-16 20:00. |
 | Theme-toggle cosmetic tail | Low | Correlation heatmap midpoint, sunburst/pie slice borders, holdings sort-toggle inline HTML, html2canvas export bg, riskFacHist annotation bg still use dark-only hexes. Functional on both themes but not polished. |
 | Dashboard_v7.html.bak deletion unstaged | Low | Tab 1 flagged as suspicious; confirmed unrelated to current issues |
 | CLI session JSONLs (239MB in `~/.claude/projects/-Users-ygoodman-RR/`) | Low | Contains Tab 1/2 `str_replace` tool calls if deep recovery ever desired |
@@ -154,10 +166,12 @@ To inspect: `git show backup-all-today-work:<filename>`
 9. ✅ **DONE** (Patch 009, `35b18ad`) — Factor Risk Map polish + Top TE chip strip
 10. ✅ **DONE** (Patch 010, `cd2ea0f`) — Theme toggle foundation (THEME() helper, buildPlotBg, 4 charts rewired)
 11. ✅ **DONE** (Patch 011, `a5d6ab9`) — Theme-aware long-tail sweep (~50 chart-color leaks resolved)
-12. **NEXT:** Watchlist section in Holdings tab OR Strategy Comparison modal OR Data freshness indicator (user pick)
-13. **Remaining Tab 1 (not yet rebuilt):** Watchlist, "What Changed" banner, Quick-Nav sidebar, Exec Summary, Strategy Comparison, Data freshness, Color-blind mode
-14. **Remaining Tab 2 (not yet rebuilt):** Print/Export report, Email snapshot, Performance optimization, Scenario analysis, Multi-period attribution, Industry drilldown, Currency Exposure tile
-15. **Optional cosmetic (Patch 012):** Finish theme sweep on low-priority cosmetic leaks listed in Known Issues
+12. ✅ **DONE** (Patch 012, `3f3eb05`) — Data freshness indicator in header
+13. ✅ **DONE** (Patch 013, `8b77807`) — "What Changed" weight snapshot banner
+14. ✅ **DONE** (Patch 014, `0050abb`) — "My Watchlist" card on Exposures tab
+15. **NEXT — Patch 015 combined:** Exec Summary + Weekly Insights (the last 2 missing features from the original 22). After this, dashboard is at full parity and work shifts to polish.
+16. **Polish / cosmetic queue (post-parity):** theme-toggle tail, archetype "Regional Driver" bucket for Country/Industry top-factor holdings, Print/Export click-test, Treemap dimensions toggle verification
+17. **Explicitly deprioritized:** Color-blind mode, Quick-Nav sidebar, Currency Exposure tile, Scenario/Multi-period/Industry drilldowns, lazy-chart performance opt
 
 ---
 

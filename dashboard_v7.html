@@ -1185,6 +1185,12 @@ function rExp(){
         </div>
         <button onclick="openFullScreen('country')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardCountry');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#countryTableWrap table','countries');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
+        <div id="mapRegionBtns" class="toggle-wrap" style="margin:0">
+          <button class="toggle-btn active" data-region-btn="world" onclick="setMapRegion('world')" title="Zoom: World">World</button>
+          <button class="toggle-btn" data-region-btn="europe" onclick="setMapRegion('europe')" title="Zoom: Europe">Eur</button>
+          <button class="toggle-btn" data-region-btn="asia" onclick="setMapRegion('asia')" title="Zoom: Asia">Asi</button>
+          <button class="toggle-btn" data-region-btn="americas" onclick="setMapRegion('americas')" title="Zoom: Americas">Amer</button>
+        </div>
         <div class="toggle-wrap" style="margin:0">
           <button class="toggle-btn active" onclick="toggleCountryView('map',this)">Map</button>
           <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
@@ -2267,6 +2273,7 @@ function rCountryMap(s){
   }
   let vals=mapped.map(getVal);
   let absMax=Math.max(...vals.map(Math.abs),0.01);
+  let reg=MAP_REGIONS[_mapRegion]||MAP_REGIONS.world;
   Plotly.newPlot('countryMapDiv',[{
     type:'choropleth',
     locations:mapped.map(c=>COUNTRY_ISO3[c.n]),
@@ -2287,7 +2294,9 @@ function rCountryMap(s){
       showocean:true,oceancolor:T.ocean,
       showlakes:false,
       projection:{type:'natural earth'},
-      lonaxis:{range:[-180,180]},lataxis:{range:[-60,85]}
+      center:{lon:reg.lon,lat:reg.lat},
+      lonaxis:{range:[reg.lon-180/reg.scale,reg.lon+180/reg.scale]},
+      lataxis:{range:[reg.lat-90/reg.scale,reg.lat+90/reg.scale]}
     },
     paper_bgcolor:'transparent',
     margin:{l:0,r:0,t:0,b:0},height:320
@@ -2295,6 +2304,14 @@ function rCountryMap(s){
   document.getElementById('countryMapDiv').on('plotly_click',function(data){
     if(data.points&&data.points.length)oDrCountry(data.points[0].text);
   });
+}
+
+function setMapRegion(region){
+  if(!MAP_REGIONS[region])return;
+  _mapRegion=region;
+  document.querySelectorAll('[data-region-btn]').forEach(b=>b.classList.toggle('active',b.dataset.regionBtn===region));
+  if(cs)rCountryMap(cs);
+  if(window._fsType==='country'&&cs&&typeof _renderFsCtryMap==='function')_renderFsCtryMap(cs);
 }
 
 function toggleMapColorPicker(){
@@ -2338,6 +2355,8 @@ function toggleCountryView(v,btn){
   $('countryMapDiv').style.display=v==='map'?'block':'none';
   $('countryChartDiv').style.display=v==='chart'?'block':'none';
   $('countryTableWrap').style.display=v==='table'?'block':'none';
+  let regBtns=$('mapRegionBtns');if(regBtns)regBtns.style.display=v==='map'?'inline-flex':'none';
+  let colorBtn=$('mapColorBtn');if(colorBtn)colorBtn.style.display=v==='map'?'flex':'none';
   document.querySelectorAll('#cardCountry .toggle-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(v==='chart'&&cs)rCountryChart(cs);
@@ -5337,8 +5356,10 @@ function _renderFsCtryPanel(s){
 
 function setFsMapRegion(region){
   _mapRegion=region;
+  document.querySelectorAll('[data-region-btn]').forEach(b=>b.classList.toggle('active',b.dataset.regionBtn===region));
   if(window._fsType==='country'&&cs)_renderFsCtryMap(cs);
   _renderFsCtryPanel(cs);
+  if(cs&&typeof rCountryMap==='function')rCountryMap(cs);
 }
 
 function setFsMapColor(mode){

@@ -1173,9 +1173,16 @@ function rExp(){
   ${isUSOnly?`<div style="margin-top:16px;padding:10px 14px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;font-size:11px;color:var(--txt)">ⓘ US-focused strategy — country and region analysis not applicable</div>`:''}
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
-    <div class="flex-between">
+    <div class="flex-between" style="flex-wrap:wrap;gap:8px">
       <div class="card-title">Country Exposure</div>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div style="position:relative">
+          <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
+            <span id="mapColorLabel">Active Weight</span>
+            <span style="opacity:.4;margin-left:auto">&#9662;</span>
+          </button>
+          <div id="mapColorPicker" style="display:none;position:absolute;top:100%;left:0;z-index:99;margin-top:4px;background:var(--card);border:1px solid var(--pri);border-radius:8px;padding:6px 0;min-width:220px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+        </div>
         <button onclick="openFullScreen('country')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardCountry');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#countryTableWrap table','countries');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
         <div class="toggle-wrap" style="margin:0">
@@ -1183,6 +1190,13 @@ function rExp(){
           <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
           <button class="toggle-btn" onclick="toggleCountryView('table',this)">Table</button>
         </div>
+      </div>
+    </div>
+    <div id="mapSecondary" style="display:none;gap:6px;align-items:center;padding:4px 0 6px;flex-wrap:wrap">
+      <span style="font-size:9px;color:var(--txt);opacity:.6">Show:</span>
+      <div class="toggle-wrap" style="margin:0">
+        <button class="toggle-btn active" data-param="exp" onclick="setMapFacParam('exp')" style="font-size:9px;padding:2px 8px">Exposure</button>
+        <button class="toggle-btn" data-param="contr" onclick="setMapFacParam('contr')" style="font-size:9px;padding:2px 8px">Contribution</button>
       </div>
     </div>
     <div id="countryMapDiv" style="height:320px"></div>
@@ -1218,7 +1232,7 @@ function rExp(){
   <!-- Row 7: Scatter + Treemap -->
   <div class="grid g2">
     <div class="card" id="cardScatter">
-      <div class="flex-between"><div class="card-title tip" data-tip="Marginal contribution to risk vs total return. Bubble size = port weight.">Risk/Return Scatter</div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Marginal contribution to risk vs TE contribution. Bubble size = portfolio weight.">MCR vs TE Contribution</div>
       <div class="export-bar" style="display:flex;gap:4px">
         <button onclick="openFullScreen('scatter')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         <button class="export-btn" onclick="screenshotCard('#cardScatter')">PNG</button>
@@ -1235,7 +1249,7 @@ function rExp(){
   <!-- Row 8: MCR + Risk Weight Budget -->
   <div class="grid g2">
     <div class="card" id="cardMCR">
-      <div class="flex-between"><div class="card-title tip" data-tip="Top holdings by marginal contribution to tracking error">Marginal Contribution to Risk (Top 10)</div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions).">Marginal Contribution to Risk (Top & Bottom)</div>
       <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardMCR')">PNG</button></div></div>
       <div id="mcrDiv" style="height:300px"></div>
     </div>
@@ -2215,36 +2229,112 @@ function rCountryMap(s){
   let mapped=s.countries.filter(c=>COUNTRY_ISO3[c.n]);
   if(!mapped.length)return;
   let T=THEME();
+  let mode=_mapColorMode||'active';
+  let agg=aggregateCountryRisk(s);
+  let getVal,title,diverge=true,scale;
+  if(mode==='active'){
+    getVal=c=>c.a||0;title='Active %';
+    scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
+  }else if(mode==='port'){
+    getVal=c=>c.p||0;title='Port %';diverge=false;
+    scale=[[0,T.heatMid],[1,'#6366f1']];
+  }else if(mode==='bench'){
+    getVal=c=>c.b||0;title='BM %';diverge=false;
+    scale=[[0,T.heatMid],[1,'#8b5cf6']];
+  }else if(mode==='te'){
+    getVal=c=>(agg[c.n]?.tr||0);title='TE Contrib %';diverge=false;
+    scale=[[0,T.heatMid],[0.5,'#f59e0b'],[1,'#ef4444']];
+  }else if(mode==='specific'){
+    getVal=c=>(agg[c.n]?.mcr||0);title='Specific Risk %';diverge=false;
+    scale=[[0,T.heatMid],[0.5,'#f59e0b'],[1,'#ef4444']];
+  }else if(mode==='factor_te'){
+    getVal=c=>{let r=agg[c.n];return r?(r.tr-r.mcr):0;};title='Factor Risk %';
+    scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
+  }else if(mode.startsWith('fc:')){
+    let facName=mode.slice(3);
+    let param=_mapFacParam||'exp';
+    if(param==='contr'){
+      let fac=s.factors?.find(f=>f.n===facName);
+      let totalC=fac?Math.abs(fac.c||0):1;
+      let totalExpAbs=Object.values(agg).reduce((t,a)=>{let fe=a.facExp[facName];return t+(fe&&fe.wtotal>0?Math.abs(fe.wsum/fe.wtotal)*a.p:0);},0)||1;
+      getVal=c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];let wAvg=fe.wtotal>0?fe.wsum/fe.wtotal:0;return(Math.abs(wAvg)*r.p/totalExpAbs)*totalC*(wAvg>=0?1:-1);};
+      title=facName+' Contr %';
+    }else{
+      getVal=c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];return fe.wtotal>0?fe.wsum/fe.wtotal:0;};
+      title=facName+' Exp';
+    }
+    scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
+  }else{
+    getVal=c=>c.a||0;title='Active %';
+    scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
+  }
+  let vals=mapped.map(getVal);
+  let absMax=Math.max(...vals.map(Math.abs),0.01);
   Plotly.newPlot('countryMapDiv',[{
     type:'choropleth',
     locations:mapped.map(c=>COUNTRY_ISO3[c.n]),
-    z:mapped.map(c=>c.a),
-    text:mapped.map(c=>c.n),
-    colorscale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']],
-    zmid:0,
-    colorbar:{title:'Active %',ticksuffix:'%',len:0.6,thickness:12,
+    z:vals,text:mapped.map(c=>c.n),
+    colorscale:scale,
+    zmid:diverge?0:undefined,
+    zmin:diverge?-absMax:undefined,
+    zmax:diverge?absMax:undefined,
+    colorbar:{title:title,ticksuffix:'%',len:0.6,thickness:12,
       tickfont:{color:T.tick,size:10},titlefont:{color:T.tick,size:10}},
     marker:{line:{color:T.grid,width:0.5}},
-    hovertemplate:'%{text}<br>Active: %{z:.1f}%<extra></extra>'
+    hovertemplate:'%{text}<br>'+title+': %{z:.2f}%<extra></extra>'
   }],{
     geo:{
-      bgcolor:'transparent',
-      showframe:false,
+      bgcolor:'transparent',showframe:false,
       showcoastlines:true,coastlinecolor:T.grid,
       showland:true,landcolor:T.land,
       showocean:true,oceancolor:T.ocean,
       showlakes:false,
       projection:{type:'natural earth'},
-      lonaxis:{range:[-180,180]},
-      lataxis:{range:[-60,85]}
+      lonaxis:{range:[-180,180]},lataxis:{range:[-60,85]}
     },
     paper_bgcolor:'transparent',
-    margin:{l:0,r:0,t:0,b:0},
-    height:320
+    margin:{l:0,r:0,t:0,b:0},height:320
   },plotCfg);
   document.getElementById('countryMapDiv').on('plotly_click',function(data){
     if(data.points&&data.points.length)oDrCountry(data.points[0].text);
   });
+}
+
+function toggleMapColorPicker(){
+  let el=$('mapColorPicker');
+  if(!el)return;
+  if(el.style.display!=='none'){el.style.display='none';return;}
+  let groups=getMapColorGroups(cs);
+  let mode=_mapColorMode||'active';
+  el.innerHTML=groups.map(g=>'<div style="padding:4px 10px 2px;font-size:9px;font-weight:700;color:var(--txt);text-transform:uppercase;letter-spacing:.5px;opacity:.6">'+g.label+'</div>'+
+    g.items.map(i=>'<div onclick="setMapColor(\''+i.id+'\')" style="padding:5px 14px;font-size:11px;cursor:pointer;color:'+(mode===i.id?'var(--pri)':'var(--txth)')+';font-weight:'+(mode===i.id?'700':'400')+';background:'+(mode===i.id?'rgba(99,102,241,.1)':'transparent')+'">'+i.label+'</div>').join('')
+  ).join('');
+  el.style.display='block';
+}
+
+function setMapColor(mode){
+  _mapColorMode=mode;
+  $('mapColorPicker').style.display='none';
+  let groups=getMapColorGroups(cs);
+  let item=groups.flatMap(g=>g.items).find(i=>i.id===mode);
+  let label=item?item.label:(mode||'Active Weight');
+  if(mode.startsWith('fc:')&&_mapFacParam==='contr')label=mode.slice(3)+' Contr';
+  $('mapColorLabel').textContent=label;
+  let sec=$('mapSecondary');
+  if(sec)sec.style.display=mode.startsWith('fc:')?'flex':'none';
+  if(cs)rCountryMap(cs);
+}
+
+function setMapFacParam(param){
+  _mapFacParam=param;
+  document.querySelectorAll('#mapSecondary .toggle-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('#mapSecondary .toggle-btn').forEach(b=>{if(b.dataset.param===param)b.classList.add('active');});
+  let mode=_mapColorMode;
+  if(mode.startsWith('fc:')){
+    let facName=mode.slice(3);
+    $('mapColorLabel').textContent=facName+(param==='contr'?' Contr':' Exp');
+  }
+  if(cs)rCountryMap(cs);
 }
 
 function toggleCountryView(v,btn){
@@ -2309,32 +2399,37 @@ function rScat(s){
     x:hold.map(h=>h.mcr||0),y:hold.map(h=>h.tr||0),mode:'markers+text',type:'scatter',
     text:hold.map(h=>h.t),textposition:'top center',textfont:{size:8,color:THEME().tick},
     marker:{size:hold.map(h=>Math.max(h.p*3,6)),color:hold.map(h=>h.a),colorscale:[[0,'#ef4444'],[0.5,'#94a3b8'],[1,'#10b981']],showscale:true,colorbar:{title:'Active',titlefont:{size:10},tickfont:{size:9},len:0.8}},
-    hovertemplate:'%{text}<br>MCR: %{x:.2f}<br>Return: %{y:.1f}%<extra></extra>'
-  }],{...plotBg,xaxis:{...plotBg.xaxis,title:'Marginal Contribution to Risk'},yaxis:{...plotBg.yaxis,title:'Total Return %'}},plotCfg);
+    hovertemplate:'%{text}<br>MCR: %{x:.2f}<br>TE Contrib: %{y:.2f}%<extra></extra>'
+  }],{...plotBg,xaxis:{...plotBg.xaxis,title:'Marginal Contribution to Risk'},yaxis:{...plotBg.yaxis,title:'TE Contribution %'}},plotCfg);
 }
 
 function rTree(s){
-  let secData={};
-  s.hold.filter(h=>!isCash(h)&&h.sec).forEach(h=>{if(!secData[h.sec])secData[h.sec]=0;secData[h.sec]+=Math.abs(h.a)});
-  let labels=[],parents=[],values=[],colors=[];
-  labels.push('Portfolio');parents.push('');values.push(0);colors.push('#0f172a');
-  Object.keys(secData).forEach(sec=>{
-    labels.push(sec);parents.push('Portfolio');values.push(+secData[sec].toFixed(2));
-    let secRow=s.sectors.find(x=>x.n===sec);
-    colors.push(secRow&&secRow.a>=0?'#10b981':'#ef4444');
+  let labels=['Portfolio'],parents=[''],values=[0],colors=[THEME().card],actVals=[null];
+  (s.sectors||[]).filter(x=>x.n&&!/cash/i.test(x.n)&&isFinite(x.a)).forEach(sec=>{
+    let a=+(sec.a||0);
+    let size=Math.max(Math.abs(a),0.01);
+    labels.push(sec.n);parents.push('Portfolio');values.push(+size.toFixed(2));
+    colors.push(a>=0?'#10b981':'#ef4444');
+    actVals.push(a);
   });
   Plotly.newPlot('treeDiv',[{type:'treemap',labels,parents,values,
-    marker:{colors,line:{width:1,color:'#1e293b'}},textfont:{size:11,color:THEME().tickH},
-    hovertemplate:'%{label}<br>|Active|: %{value:.2f}%<extra></extra>'
+    marker:{colors,line:{width:1,color:THEME().grid}},textfont:{size:11,color:THEME().tickH},
+    customdata:actVals.map(a=>a==null?'':(a>=0?'+':'')+a.toFixed(2)+'%'),
+    hovertemplate:'%{label}<br>Active: %{customdata}<extra></extra>'
   }],{...plotBg,margin:{l:5,r:5,t:5,b:5}},plotCfg);
 }
 
 function rMCR(s){
-  let top=s.hold.filter(h=>!isCash(h)).sort((a,b)=>(b.mcr||0)-(a.mcr||0)).slice(0,10);
+  // Top 10 by |mcr| so short/hedging positions (negative MCR) show alongside risk-adders
+  let top=[...s.hold].filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,10);
+  top.sort((a,b)=>(b.mcr||0)-(a.mcr||0)); // positives at top, negatives at bottom
   Plotly.newPlot('mcrDiv',[{
     y:top.map(h=>h.t),x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
-    marker:{color:'#8b5cf6'},text:top.map(h=>f2(h.mcr)),textposition:'outside',textfont:{size:10,color:THEME().tick}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'MCR %'}},plotCfg);
+    marker:{color:top.map(h=>(h.mcr||0)>=0?'#8b5cf6':'#10b981')},
+    text:top.map(h=>fp(h.mcr,2)),textposition:'outside',textfont:{size:10,color:THEME().tick},
+    customdata:top.map(h=>h.n||h.t),
+    hovertemplate:'<b>%{customdata}</b> (%{y})<br>MCR: %{x:.2f}%<extra></extra>'
+  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category'},xaxis:{...plotBg.xaxis,title:'MCR %',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1}},plotCfg);
 }
 
 function rFRB(s){
@@ -4849,8 +4944,49 @@ function oDrRiskBudget(){
 
 // ===== FULL-SCREEN CHART MODALS =====
 let _mapColorMode='active';
+let _mapFacParam='exp';
 let _mapRegion='world';
 const MAP_REGIONS={world:{lon:0,lat:20,scale:1},europe:{lon:15,lat:52,scale:3},asia:{lon:100,lat:35,scale:2.5},americas:{lon:-80,lat:10,scale:2}};
+
+function getMapColorGroups(s){
+  let groups=[
+    {label:'Weight',items:[
+      {id:'active',label:'Active Weight'},
+      {id:'port',label:'Portfolio Weight'},
+      {id:'bench',label:'Benchmark Weight'}
+    ]},
+    {label:'Risk',items:[
+      {id:'te',label:'TE Contribution'},
+      {id:'specific',label:'Stock-Specific Risk'},
+      {id:'factor_te',label:'Factor Risk'}
+    ]}
+  ];
+  if(s&&s.factors&&s.factors.length){
+    groups.push({label:'Style Factors',items:s.factors.map(f=>({id:'fc:'+f.n,label:f.n}))});
+  }
+  return groups;
+}
+
+function aggregateCountryRisk(s){
+  let agg={};
+  (s.hold||[]).forEach(h=>{
+    if(!h.co||isCash(h))return;
+    if(!agg[h.co])agg[h.co]={tr:0,mcr:0,p:0,facExp:{}};
+    let a=agg[h.co];
+    a.tr+=(h.tr||0);
+    a.mcr+=(h.mcr||0);
+    a.p+=(h.p||0);
+    if(h.fac&&typeof h.fac==='object'){
+      for(let[k,v]of Object.entries(h.fac)){
+        if(v==null||!isFinite(v))continue;
+        if(!a.facExp[k])a.facExp[k]={wsum:0,wtotal:0};
+        a.facExp[k].wsum+=v*(h.p||0);
+        a.facExp[k].wtotal+=(h.p||0);
+      }
+    }
+  });
+  return agg;
+}
 
 function facGrpColor(name){
   let n=(name||'').toLowerCase();
@@ -4871,7 +5007,7 @@ function openFullScreen(type){
   let modal=$('fsModal');
   if(!modal)return;
   let s=cs;
-  let titles={facmap:'Factor Risk Map \u2014 '+(s?s.name:''),scatter:'Risk/Return Scatter \u2014 '+(s?s.name:''),country:'Country Exposure \u2014 '+(s?s.name:'')};
+  let titles={facmap:'Factor Risk Map \u2014 '+(s?s.name:''),scatter:'MCR vs TE Contribution \u2014 '+(s?s.name:''),country:'Country Exposure \u2014 '+(s?s.name:'')};
   let explains={
     facmap:'Each bubble = one factor. Position = exposure \u00d7 volatility. Size = tracking error contribution. Click to explore.',
     scatter:'Each dot = one holding. Ideal: top-left (high risk, high return). Click any dot for detail.',
@@ -5653,9 +5789,10 @@ document.addEventListener('click',e=>{
   if(wrap&&!wrap.contains(e.target))closeHistPanel();
 });
 
-// Close download dropdowns on outside click
+// Close download dropdowns and map color picker on outside click
 document.addEventListener('click',e=>{
   if(!e.target.closest('.dl-wrap'))document.querySelectorAll('.dl-drop.open').forEach(m=>m.classList.remove('open'));
+  if(!e.target.closest('#mapColorBtn')&&!e.target.closest('#mapColorPicker')){let p=$('mapColorPicker');if(p)p.style.display='none';}
 });
 
 // ===== VALIDATION PANEL =====

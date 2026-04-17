@@ -1017,6 +1017,7 @@ function rExp(){
   </div>
   ${(()=>{_lastAlerts=detectRiskAlerts(s);return riskAlertsBannerHtml(s);})()}
   ${whatChangedBannerHtml(s)}
+  ${watchlistCardHtml(s)}
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
   <div class="card" id="cardSectors" style="margin-bottom:16px">
@@ -2999,6 +3000,38 @@ function cycleFlag(ticker,e){
     btn.classList.toggle('flagged',!!f);
     btn.title=f?'Flag: '+f+' (click to cycle)':'Flag (watch/reduce/add)';
   }
+}
+
+function watchlistCardHtml(s){
+  if(!s||!s.id||!s.hold||!s.hold.length)return '';
+  let flags={};
+  try{flags=JSON.parse(localStorage.getItem('rr_flags_'+s.id)||'{}');}catch(e){}
+  let tickers=Object.keys(flags);
+  if(!tickers.length)return '';
+  let holdMap={};(s.hold||[]).forEach(h=>{if(h.t)holdMap[h.t]=h;});
+  let groups={watch:[],reduce:[],add:[]};
+  tickers.forEach(t=>{
+    let f=flags[t];if(!groups[f])return;
+    let h=holdMap[t]||{};
+    groups[f].push({t,f,n:h.n||t,p:+(h.p||0),a:+(h.a||0)});
+  });
+  Object.values(groups).forEach(arr=>arr.sort((x,y)=>Math.abs(y.a)-Math.abs(x.a)));
+  let total=tickers.length;
+  let mkRow=(item,col)=>{
+    let actCol=item.a>=0?'var(--pos)':'var(--neg)';
+    return `<tr class="clickable" onclick="oSt('${item.t}')" style="cursor:pointer"><td style="color:${col};font-weight:600;width:22px;padding:4px 6px;text-align:center">${FLAG_ICONS[item.f]||''}</td><td style="font-weight:600;color:var(--txth);padding:4px 6px;width:80px">${item.t}</td><td style="color:var(--txt);padding:4px 6px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.n}</td><td class="r" style="padding:4px 6px;width:60px">${f2(item.p)}</td><td class="r" style="color:${actCol};padding:4px 6px;width:60px;font-weight:600">${fp(item.a,2)}</td></tr>`;
+  };
+  let sections=[
+    {key:'watch',label:'Watch'},
+    {key:'reduce',label:'Reduce'},
+    {key:'add',label:'Add'}
+  ].map(g=>{
+    let arr=groups[g.key];if(!arr.length)return '';
+    let col=FLAG_COLORS[g.key],icon=FLAG_ICONS[g.key];
+    let rows=arr.map(item=>mkRow(item,col)).join('');
+    return `<div style="margin-top:8px"><div style="font-size:10px;color:${col};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table style="width:100%;font-size:11px;border-collapse:collapse"><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+  return `<div class="card" id="cardWatchlist" style="margin-bottom:16px"><div class="card-title">My Watchlist (${total})</div>${sections}</div>`;
 }
 
 // ===== HOLDINGS INTELLIGENCE =====

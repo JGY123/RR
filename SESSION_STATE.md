@@ -1,8 +1,29 @@
 # RR Dashboard — Session State
 
-**Last updated:** 2026-04-16 20:35 (post Patches 012-014 + full feature audit)
-**Current git commit:** `0050abb` (main) — Patch 014: My Watchlist card
-**Working state:** ✅ Dashboard renders correctly; full 10-regression audit confirms **zero regressions introduced by Patches 001-014**. Dashboard is at near-full parity with pre-crisis feature list (20 of 22 items working).
+**Last updated:** 2026-04-17 00:25 (post Patch 015 + scatter/treemap/MCR fixes + enhanced map + 10-bucket archetype + inline region zoom + scaffolding for tile-by-tile audit)
+**Current git commit:** `0c606cd` (main) — inline country map region zoom + cross-sync
+**Working state:** ✅ Dashboard at **full 22-feature parity**. All originally-listed features present or intentionally deferred. Next phase: **tile-by-tile audit for data accuracy + functional parity + design**. See `TRANSITION_PROMPT.md` for session handoff.
+
+## Quick start for the next session
+
+Read these files, in order, before touching code:
+
+1. **`TRANSITION_PROMPT.md`** — onboards you to where we are, how we work, and operational rules. Takes ~5 minutes.
+2. **`TILE_SPEC.md`** — master tile inventory (pre-existing, 29 tiles in 5 tiers, `iridescent-weaving-shannon` methodology from 2026-04-13).
+3. **`TILE_AGENT_CONTEXT.md`** — data shapes for `cs.*`, design decisions, patterns for spawning tile CLIs.
+4. **`TILE_AUDIT_TEMPLATE.md`** — NEW audit blueprint complementing the prior design specs. Use for verifying data accuracy + functional parity on built tiles.
+5. **`tile-specs/*-spec.md`** — prior design specs (sectors, holdings, treemap, scatter, portfolio-chars) + `IMPLEMENTATION_GUIDE.md`.
+6. **`SCHEMA_COMPARISON.md`** — FactSet field reference for data-accuracy validation.
+7. **`AGENT_TRAINING_ADDENDUM.md`** — durable knowledge to merge into `risk-reports-specialist` agent file.
+8. **`CURRENCY_MEMO.md`** — deferred design thinking on currency exposure.
+9. **This file** — snapshot of state + patch ledger.
+
+## Phase 2 work model: tile-by-tile (two parallel tracks)
+
+- **Track A (design)** — prior methodology. Spawn tile CLIs via `~/projects/apps/ai-talent-agency/training/tile-agent-prompt-template.md`. Output: `tile-specs/{tile}-spec.md`.
+- **Track B (audit)** — new. Use `TILE_AUDIT_TEMPLATE.md`. Output: `tile-specs/{tile}-audit.md`. Focuses on data accuracy, functional parity with `cardSectors`, and design consistency.
+
+Both tracks run in parallel. One CLI per tile to avoid `dashboard_v7.html` merge conflicts; CoS serializes code merges. Spec-file edits are conflict-free (one file per tile per track).
 
 ---
 

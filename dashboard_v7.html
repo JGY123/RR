@@ -2254,13 +2254,10 @@ function rCountryMap(s){
     let facName=mode.slice(3);
     let param=_mapFacParam||'exp';
     if(param==='contr'){
-      let fac=s.factors?.find(f=>f.n===facName);
-      let totalC=fac?Math.abs(fac.c||0):1;
-      let totalExpAbs=Object.values(agg).reduce((t,a)=>{let fe=a.facExp[facName];return t+(fe&&fe.wtotal>0?Math.abs(fe.wsum/fe.wtotal)*a.p:0);},0)||1;
-      getVal=c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];let wAvg=fe.wtotal>0?fe.wsum/fe.wtotal:0;return(Math.abs(wAvg)*r.p/totalExpAbs)*totalC*(wAvg>=0?1:-1);};
-      title=facName+' Contr %';
+      getVal=c=>{let r=agg[c.n];return r?.facContr[facName]||0;};
+      title=facName+' Contr';
     }else{
-      getVal=c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];return fe.wtotal>0?fe.wsum/fe.wtotal:0;};
+      getVal=c=>{let r=agg[c.n];if(!r)return 0;let fc=r.facContr[facName];if(fc==null)return 0;return r.p>0?fc/r.p:0;};
       title=facName+' Exp';
     }
     scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
@@ -4971,14 +4968,16 @@ function aggregateCountryRisk(s){
   let agg={};
   (s.hold||[]).forEach(h=>{
     if(!h.co||isCash(h))return;
-    if(!agg[h.co])agg[h.co]={tr:0,mcr:0,p:0,facExp:{}};
+    if(!agg[h.co])agg[h.co]={tr:0,mcr:0,p:0,facContr:{},facExp:{}};
     let a=agg[h.co];
     a.tr+=(h.tr||0);
     a.mcr+=(h.mcr||0);
     a.p+=(h.p||0);
-    if(h.fac&&typeof h.fac==='object'){
-      for(let[k,v]of Object.entries(h.fac)){
+    let fc=h.factor_contr||h.fac;
+    if(fc&&typeof fc==='object'){
+      for(let[k,v]of Object.entries(fc)){
         if(v==null||!isFinite(v))continue;
+        a.facContr[k]=(a.facContr[k]||0)+v;
         if(!a.facExp[k])a.facExp[k]={wsum:0,wtotal:0};
         a.facExp[k].wsum+=v*(h.p||0);
         a.facExp[k].wtotal+=(h.p||0);
@@ -5235,13 +5234,10 @@ function _fsCtryGetVal(mode,param,s){
   if(mode.startsWith('fc:')){
     let facName=mode.slice(3);
     if(param==='contr'){
-      let fac=s.factors?.find(f=>f.n===facName);
-      let totalC=fac?Math.abs(fac.c||0):1;
-      let totalExpAbs=Object.values(agg).reduce((t,a)=>{let fe=a.facExp[facName];return t+(fe&&fe.wtotal>0?Math.abs(fe.wsum/fe.wtotal)*a.p:0);},0)||1;
-      return{get:c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];let wAvg=fe.wtotal>0?fe.wsum/fe.wtotal:0;return(Math.abs(wAvg)*r.p/totalExpAbs)*totalC*(wAvg>=0?1:-1);},
-        title:facName+' Contr %',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
+      return{get:c=>{let r=agg[c.n];return r?.facContr[facName]||0;},
+        title:facName+' Contr',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
     }
-    return{get:c=>{let r=agg[c.n];if(!r||!r.facExp[facName])return 0;let fe=r.facExp[facName];return fe.wtotal>0?fe.wsum/fe.wtotal:0;},
+    return{get:c=>{let r=agg[c.n];if(!r)return 0;let fc=r.facContr[facName];if(fc==null)return 0;return r.p>0?fc/r.p:0;},
       title:facName+' Exp',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
   }
   return{get:c=>c.a||0,title:'Active %',diverge:true,scale:[[0,'#ef4444'],[0.5,T.heatMid],[1,'#10b981']]};

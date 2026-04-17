@@ -3247,6 +3247,9 @@ function getHoldArchetype(h){
   if(k.includes('profit')||k.includes('quality'))return{label:'Quality Compounder',color:'#a78bfa',bg:'rgba(167,139,250,0.15)'};
   if(k.includes('market'))return{label:'Market Beta',color:THEME().tick,bg:'rgba(148,163,184,0.15)'};
   if(k.includes('country')||k.includes('region')||k.includes('industry')||k.includes('currency')||k.includes('local'))return{label:'Regional Driver',color:'#38bdf8',bg:'rgba(56,189,248,0.15)'};
+  if(k.includes('size'))return{label:'Size Tilt',color:'#f59e0b',bg:'rgba(245,158,11,0.15)'};
+  if(k.includes('liquid'))return{label:'Liquidity Play',color:'#14b8a6',bg:'rgba(20,184,166,0.15)'};
+  if(k.includes('leverage'))return{label:'Leverage Play',color:'#ec4899',bg:'rgba(236,72,153,0.15)'};
   if(Math.abs(top[1])<0.1)return{label:'Diversifier',color:'#64748b',bg:'rgba(100,116,139,0.1)'};
   return null;
 }

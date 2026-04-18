@@ -3585,14 +3585,141 @@ function rHold(){
   renderHoldTab();
 }
 
+// ===== HOLDINGS CARD VIEW (#10 from GAP_INVENTORY) =====
+let _holdView='table'; // 'table' | 'cards'
+let _holdCardsChunk=30;
+let _holdExpanded=new Set();
+function setHoldView(mode){
+  if(mode!=='table'&&mode!=='cards')return;
+  if(mode===_holdView)return;
+  _holdView=mode;
+  _holdCardsChunk=30;
+  renderHoldTab();
+}
+function loadMoreHoldCards(){
+  _holdCardsChunk+=30;
+  renderHoldTab();
+}
+function toggleHoldExpand(ticker){
+  if(_holdExpanded.has(ticker))_holdExpanded.delete(ticker);
+  else _holdExpanded.add(ticker);
+  let cardEl=document.querySelector('[data-hcard="'+ticker+'"]');
+  if(!cardEl)return;
+  let h=ah.find(x=>x.t===ticker);
+  if(h){let tmp=document.createElement('div');tmp.innerHTML=renderOneHoldCard(h);let fresh=tmp.firstElementChild;if(fresh)cardEl.replaceWith(fresh);}
+}
+function _holdCardFactorBars(h){
+  if(!h.factor_contr)return '';
+  let top=Object.entries(h.factor_contr).filter(([,v])=>Math.abs(v)>0.05).sort(([,a],[,b])=>Math.abs(b)-Math.abs(a)).slice(0,6);
+  if(!top.length)return '';
+  let maxAbs=Math.max(...top.map(([,v])=>Math.abs(v)),0.1);
+  let rows=top.map(([k,v])=>{
+    let pct=Math.abs(v)/maxAbs*100;
+    let col=v>=0?'#10b981':'#ef4444';
+    let nm=k.replace('Medium-Term ','').replace(' Sensitivity','Sens.');
+    return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;font-size:10px">
+      <div style="width:82px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nm}</div>
+      <div style="flex:1;height:5px;background:var(--surf);border-radius:2px;position:relative"><div style="width:${pct.toFixed(0)}%;height:100%;background:${col};border-radius:2px"></div></div>
+      <div style="width:38px;text-align:right;color:${col};font-weight:600">${v>=0?'+':''}${v.toFixed(2)}</div>
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--grid)">
+    <div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;font-weight:600">Factor Contributions</div>
+    ${rows}
+  </div>`;
+}
+function renderOneHoldCard(h){
+  let expanded=_holdExpanded.has(h.t);
+  let isBmOnly=(!h.p||h.p===0)&&h.b>0;
+  let archetype=getHoldArchetype(h);
+  let archPill=archetype?`<span style="font-size:9px;padding:2px 6px;border-radius:10px;font-weight:600;background:${archetype.bg};color:${archetype.color}">${archetype.label}</span>`:'';
+  let flag=_holdFlags[h.t]||null;
+  let flagBtn=`<button class="flag-btn${flag?' flagged':''}" data-ticker="${h.t}" style="background:none;border:none;cursor:pointer;font-size:14px;${flag?'color:'+FLAG_COLORS[flag]:'color:var(--txt)'};padding:2px 4px" onclick="cycleFlag('${h.t}',event)" title="${flag?'Flag: '+flag+' (click to cycle)':'Flag (watch/reduce/add)'}">${flag?FLAG_ICONS[flag]:'\u2691'}</button>`;
+  let portPct=+(h.p||0),benchPct=+(h.b||0),active=+(h.a||0);
+  let maxWt=Math.max(portPct,benchPct,1);
+  let portBar=portPct>0?Math.min(portPct/maxWt*100,100).toFixed(1):0;
+  let benchBar=benchPct>0?Math.min(benchPct/maxWt*100,100).toFixed(1):0;
+  let actCol=active>=0?'var(--pos)':'var(--neg)';
+  let te=+(h.tr||0),pctS=+(h.mcr||0);
+  let rbe=(h.p>0&&Math.abs(h.tr||0)>0.001)?+(Math.abs(h.a||0)/Math.abs(h.tr)).toFixed(2):null;
+  let rbeCol=rbe==null?'var(--txt)':rbe>1.5?'var(--pos)':rbe>=0.8?'var(--warn)':'var(--neg)';
+  let shortName=(h.n||h.t).length>36?(h.n||h.t).slice(0,35)+'\u2026':(h.n||h.t);
+  let rankCellsInline='';
+  ['over','rev','val','qual'].forEach((k,i)=>{
+    let lbl=['O','R','V','Q'][i];
+    let v=h[k];
+    if(v==null){rankCellsInline+=`<span style="color:var(--txt);font-size:10px;margin-right:6px">${lbl}<span style="opacity:0.4;margin-left:2px">\u2014</span></span>`;}
+    else{let c=rc(Math.round(v));rankCellsInline+=`<span style="font-size:10px;margin-right:6px"><span style="color:var(--txt)">${lbl}</span> <span style="color:${c};font-weight:600">Q${Math.round(v)}</span></span>`;}
+  });
+  let expandedHtml='';
+  if(expanded){
+    expandedHtml=`${_holdCardFactorBars(h)}<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--grid)"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;font-weight:600">Quick Summary</div><div style="font-size:11px;color:var(--txth);line-height:1.5">${genHoldSummary(h)}</div></div>`;
+  }
+  return `<div class="hold-card" data-hcard="${h.t}" style="background:var(--card);border:1px solid var(--grid);border-radius:8px;padding:10px 12px;${isBmOnly?'background:rgba(100,116,139,0.08);':''}position:relative;cursor:pointer" onclick="if(!event.target.closest('button,a'))oSt('${h.t}')">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:var(--txth);display:flex;align-items:center;gap:6px">${h.t}${isBmOnly?'<span style="background:var(--surf);color:var(--txt);font-size:9px;padding:1px 4px;border-radius:3px">BM</span>':''}</div>
+        <div style="font-size:11px;color:var(--txth);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h.n||''}">${shortName}</div>
+      </div>
+      ${flagBtn}
+    </div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin:4px 0 8px">
+      ${h.sec?`<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surf);color:var(--txt)">${h.sec}</span>`:''}
+      ${h.co?`<span style="font-size:9px;padding:1px 6px;border-radius:8px;background:var(--surf);color:var(--txt)">${h.co}</span>`:''}
+      ${archPill}
+    </div>
+    <div style="font-size:10px;margin-bottom:3px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span style="width:36px;color:var(--txt)">Port</span>
+        <div style="flex:1;height:6px;background:var(--surf);border-radius:3px"><div style="width:${portBar}%;height:100%;background:var(--pri);border-radius:3px"></div></div>
+        <span style="width:44px;text-align:right;color:var(--txth);font-weight:600">${f2(portPct,1)}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span style="width:36px;color:var(--txt)">Bench</span>
+        <div style="flex:1;height:6px;background:var(--surf);border-radius:3px"><div style="width:${benchBar}%;height:100%;background:var(--acc);opacity:0.6;border-radius:3px"></div></div>
+        <span style="width:44px;text-align:right;color:var(--txt)">${f2(benchPct,1)}%</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="width:36px;color:var(--txt)">Active</span>
+        <span style="flex:1"></span>
+        <span style="color:${actCol};font-weight:700;font-size:12px">${fp(active,1)}%</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;font-size:10px;padding:5px 0;border-top:1px solid var(--grid);border-bottom:1px solid var(--grid);margin:6px 0">
+      <div><span style="color:var(--txt)">TE</span> <span style="color:var(--txth);font-weight:600">${f2(te,2)}%</span></div>
+      <div><span style="color:var(--txt)">%S</span> <span style="color:var(--txth);font-weight:600">${f2(pctS,2)}</span></div>
+      <div><span style="color:var(--txt)">RBE</span> <span style="color:${rbeCol};font-weight:600">${rbe==null?'\u2014':rbe.toFixed(2)}</span></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+      <div>${rankCellsInline}</div>
+      <button onclick="event.stopPropagation();toggleHoldExpand('${h.t}')" style="background:none;border:1px solid var(--grid);border-radius:4px;color:var(--txt);font-size:10px;padding:2px 8px;cursor:pointer;font-family:inherit">${expanded?'\u25b2 Hide':'\u25bc Detail'}</button>
+    </div>
+    ${expandedHtml}
+  </div>`;
+}
+function renderHoldCards(){
+  let page=fh.slice(0,_holdCardsChunk);
+  let cards=page.map(h=>renderOneHoldCard(h)).join('');
+  let remaining=fh.length-_holdCardsChunk;
+  let moreBtn=remaining>0?`<div style="text-align:center;margin-top:12px"><button onclick="loadMoreHoldCards()" style="padding:6px 16px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">Load more (${remaining} remaining)</button></div>`:'';
+  return `<div id="holdCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-bottom:8px">${cards}</div>${moreBtn}`;
+}
+function holdViewToggleHtml(){
+  return `<div class="toggle-wrap" style="margin:0" title="Switch between table and card layouts">
+    <button class="toggle-btn${_holdView==='table'?' active':''}" onclick="setHoldView('table')" style="padding:3px 10px;font-size:10px">Table</button>
+    <button class="toggle-btn${_holdView==='cards'?' active':''}" onclick="setHoldView('cards')" style="padding:3px 10px;font-size:10px">Cards</button>
+  </div>`;
+}
+
 function renderHoldTab(){
   let html=`${weekBannerHtml()}
     <div class="card" id="cardHoldings" style="margin-bottom:16px">
-      <div class="flex-between" style="margin-bottom:10px">
+      <div class="flex-between" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          ${holdViewToggleHtml()}
           <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardHoldings');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportAllHoldings();this.closest('.dl-drop').classList.remove('open')">Export All CSV</div></div></div>
-          <button class="export-btn" onclick="_showIndustry=!_showIndustry;renderHoldTab()" title="Toggle Industry column" style="${_showIndustry?'border-color:var(--pri);color:var(--pri)':''}">Industry ${_showIndustry?'▲':'▼'}</button>
+          <button class="export-btn" onclick="_showIndustry=!_showIndustry;renderHoldTab()" title="Toggle Industry column" style="${_showIndustry?'border-color:var(--pri);color:var(--pri)':''};${_holdView==='cards'?'display:none':''}">Industry ${_showIndustry?'▲':'▼'}</button>
           <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by sector">
             <option value="">All Sectors</option>
             ${SECS.map(s=>`<option value="${s}">${s}</option>`).join('')}
@@ -3609,7 +3736,7 @@ function renderHoldTab(){
         <span style="width:1px;height:16px;background:#334155;display:inline-block;margin:0 4px"></span>
         ${(()=>{let flagged=Object.keys(_holdFlags);return flagged.length?`<button onclick="toggleFlaggedFilter()" data-chip-key="flagged" style="padding:4px 12px;border-radius:16px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:11px;border:1px solid rgba(245,158,11,0.4);cursor:pointer;font-family:inherit">&#9873; Flagged (${flagged.length})</button>`:'';})()}
       </div>
-      <div style="overflow-x:auto">
+      ${_holdView==='cards' ? renderHoldCards() : `<div style="overflow-x:auto">
         <table>
           <thead><tr>
             <th style="cursor:pointer" onclick="sortHold('t')">Ticker</th>
@@ -3634,7 +3761,7 @@ function renderHoldTab(){
           <button onclick="hp=Math.max(1,hp-1);renderHoldTab()" ${hp<=1?'disabled':''}>Prev</button>
           <button onclick="hp=Math.min(Math.ceil(fh.length/PPG),hp+1);renderHoldTab()" ${hp>=Math.ceil(fh.length/PPG)?'disabled':''}>Next</button>
         </div>
-      </div>
+      </div>`}
     </div>
 
     <!-- Holdings Charts -->

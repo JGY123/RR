@@ -2567,6 +2567,70 @@ function riskDecompTree(s,factorRisk,idioRisk){
 }
 
 // ===== RISK TAB =====
+// Historical Trends mini-charts (Risk tab top) — 4 sparklines: TE / Active Share / Beta / Holdings
+function riskHistoricalTrends(s){
+  let hist=s.hist&&s.hist.sum||[];
+  if(!hist.length)return '';
+  let cur=hist[hist.length-1];
+  let prev=hist.length>=2?hist[hist.length-2]:null;
+  let metrics=[
+    {key:'te',id:'miniTE',label:'Tracking Error',fmt:v=>v!=null?f2(v,1)+'%':'—',drill:"oDrMetric('te')",color:'var(--pri)',dir:'neg'},
+    {key:'as',id:'miniAS',label:'Active Share',fmt:v=>v!=null?f2(v,1)+'%':'—',drill:"oDrMetric('as')",color:'var(--acc)',dir:'neutral'},
+    {key:'beta',id:'miniBeta',label:'Beta',fmt:v=>v!=null?f2(v,2):'—',drill:"oDrMetric('beta')",color:'var(--cyan)',dir:'neutral'},
+    {key:'h',id:'miniH',label:'Holdings',fmt:v=>v!=null?String(v):'—',drill:null,color:'var(--txth)',dir:'neutral'}
+  ];
+  let cards=metrics.map(m=>{
+    let cv=cur[m.key],pv=prev?prev[m.key]:null;
+    let d=cv!=null&&pv!=null?+(cv-pv).toFixed(m.key==='beta'?3:2):null;
+    let showD=d!=null&&Math.abs(d)>(m.key==='beta'?0.001:0.01);
+    let col=showD?(m.dir==='neg'?(d>0?'var(--neg)':'var(--pos)'):'var(--txt)'):'var(--txt)';
+    let arrow=showD?(d>0?'\u2191':'\u2193'):'';
+    let dTxt=showD?(d>0?'+':'')+(m.key==='h'?Math.round(d):d.toFixed(m.key==='beta'?3:2)):'';
+    let clk=m.drill?`onclick="${m.drill}" style="cursor:pointer"`:'style="cursor:default"';
+    return `<div ${clk}>
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--txt);font-weight:600">${m.label}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;margin-top:2px">
+        <span style="font-size:18px;font-weight:700;color:${m.color}">${m.fmt(cv)}</span>
+        ${showD?`<span style="font-size:10px;color:${col};font-weight:600">${arrow}${dTxt}</span>`:''}
+      </div>
+      <div id="${m.id}" style="height:48px;margin-top:4px"></div>
+    </div>`;
+  }).join('');
+  return `<div class="card" id="cardRiskHistTrends" style="margin-bottom:16px">
+    <div class="card-title" style="margin-bottom:10px">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span></div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px">${cards}</div>
+  </div>`;
+}
+
+function rRiskHistMinis(s){
+  let hist=s.hist&&s.hist.sum||[];
+  if(hist.length<2)return;
+  let dates=hist.map(h=>isoDate(h.d));
+  let specs=[
+    {id:'miniTE',vals:hist.map(h=>h.te),color:'#6366f1',fill:'rgba(99,102,241,.12)'},
+    {id:'miniAS',vals:hist.map(h=>h.as),color:'#8b5cf6',fill:'rgba(139,92,246,.12)'},
+    {id:'miniBeta',vals:hist.map(h=>h.beta),color:'#38bdf8',fill:'rgba(56,189,248,.12)'},
+    {id:'miniH',vals:hist.map(h=>h.h),color:'#94a3b8',fill:'rgba(148,163,184,.12)'}
+  ];
+  specs.forEach(sp=>{
+    let el=document.getElementById(sp.id);
+    if(!el)return;
+    // Skip rendering if all values are null/undefined
+    if(!sp.vals.some(v=>v!=null&&isFinite(v)))return;
+    Plotly.newPlot(sp.id,[{
+      x:dates,y:sp.vals,type:'scatter',mode:'lines',
+      line:{color:sp.color,width:1.5},fill:'tozeroy',fillcolor:sp.fill,
+      hovertemplate:'%{x|%b %d}: %{y}<extra></extra>'
+    }],{
+      paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+      margin:{l:0,r:0,t:2,b:2},
+      xaxis:{visible:false,fixedrange:true},
+      yaxis:{visible:false,fixedrange:true,rangemode:'tozero'},
+      showlegend:false,hovermode:'closest'
+    },{displayModeBar:false,staticPlot:false,responsive:true});
+  });
+}
+
 function rRisk(){
   let s=cs;
   let totalTE=s.sum.te;
@@ -2648,6 +2712,8 @@ function rRisk(){
       <div class="sub">${gt(s.hist.sum,'as')} trend</div>
     </div>
   </div>
+
+  ${riskHistoricalTrends(s)}
 
   ${riskDecompTree(s,factorRisk,idioRisk)}
 
@@ -2777,6 +2843,7 @@ function rRisk(){
 
   $('tab-risk').innerHTML=html;
   setTimeout(()=>{
+    rRiskHistMinis(s);
     rTEStackedArea(s,factorRisk,idioRisk);
     rMultiBeta(s);
     window._rfbMode='te';

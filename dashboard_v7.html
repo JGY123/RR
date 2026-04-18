@@ -1414,6 +1414,38 @@ const ORVQ_TH_PLAIN='<th style="text-align:center;border-left:1px solid rgba(99,
 let _secRankMode='wtd'; // 'wtd'=portfolio-weight-weighted, 'avg'=simple average, 'bm'=benchmark-weight-weighted
 // Shared rank-avg computation for all aggregation tables (sectors/regions/countries/groups)
 // S=sum of rank values, C=count, W=sum(rank*port_weight), PW=sum(port_weight), BW=sum(rank*bench_weight), BPW=sum(bench_weight)
+// ===== INLINE SPARKLINES (#9 from GAP_INVENTORY) =====
+// Windowed sparklines of historical active weight (.a) for sector & region rows.
+// Data source: cs.hist.sec[name] and cs.hist.reg[name] → [{d, p, b, a}, ...]
+let _secSparkWin=6,_regSparkWin=6;
+function setSecSparkWin(n){if(n===_secSparkWin)return;_secSparkWin=n;if(cs&&cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);applySectColVis&&applySectColVis();}}
+function setRegSparkWin(n){if(n===_regSparkWin)return;_regSparkWin=n;if(cs&&cs.regions){let w=document.querySelector('[data-col="regions"]');if(w)w.innerHTML=rWt(cs.regions,'reg',cs.hold);}}
+function sparkWinToggleHtml(kind){
+  let cur=kind==='sec'?_secSparkWin:_regSparkWin;
+  let setter=kind==='sec'?'setSecSparkWin':'setRegSparkWin';
+  return [2,4,6,13].map(n=>`<button class="toggle-btn${cur===n?' active':''}" onclick="event.stopPropagation();${setter}(${n})" style="padding:1px 5px;font-size:9px;min-width:0">${n}</button>`).join('');
+}
+function inlineSparkSvg(series,n,opts){
+  opts=opts||{};
+  let w=opts.width||64,h=opts.height||16,pad=1;
+  if(!series||!Array.isArray(series)||series.length<2)return `<span style="color:var(--txt);font-size:10px;opacity:.4">\u2014</span>`;
+  let data=series.slice(-n).map(p=>+(p.a||0));
+  if(data.length<2)return `<span style="color:var(--txt);font-size:10px;opacity:.4">\u2014</span>`;
+  let mn=Math.min(...data,0),mx=Math.max(...data,0),rng=mx-mn||1;
+  let pts=data.map((v,i)=>{
+    let x=(i/(data.length-1))*(w-2*pad)+pad;
+    let y=h-pad-((v-mn)/rng)*(h-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  let last=data[data.length-1];
+  let col=last>=0?'#10b981':'#ef4444';
+  let zeroY=h-pad-((0-mn)/rng)*(h-2*pad);
+  let zeroLine=(mn<0&&mx>0)?`<line x1="${pad}" y1="${zeroY.toFixed(1)}" x2="${w-pad}" y2="${zeroY.toFixed(1)}" stroke="${THEME().grid}" stroke-width="0.5" stroke-dasharray="2,2"/>`:'';
+  let lastX=((data.length-1)/(data.length-1))*(w-2*pad)+pad;
+  let lastY=h-pad-((last-mn)/rng)*(h-2*pad);
+  return `<svg width="${w}" height="${h}" style="display:inline-block;vertical-align:middle">${zeroLine}<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="1.5" fill="${col}"/></svg>`;
+}
+
 function rankAvg3(mode,S,C,W,PW,BW,BPW){
   if(mode==='avg')return C>0?S/C:null;
   if(mode==='bm')return BPW>0?BW/BPW:null;
@@ -1542,6 +1574,10 @@ function rWt(data,type,hold){
               +rankCellR(sAvg(regVS[d.n]||0,regVC[d.n]||0,regVW[d.n]||0,regVPW[d.n]||0,regVBW[d.n]||0,regVBPW[d.n]||0))
               +rankCellR(sAvg(regQS[d.n]||0,regQC[d.n]||0,regQW[d.n]||0,regQPW[d.n]||0,regQBW[d.n]||0,regQBPW[d.n]||0));
     }
+    // Trend sparkline cell (inline SVG of .a over last N periods)
+    let sparkSeries=type==='sec'?(cs.hist&&cs.hist.sec&&cs.hist.sec[d.n]):(cs.hist&&cs.hist.reg&&cs.hist.reg[d.n]);
+    let sparkWin=type==='sec'?_secSparkWin:_regSparkWin;
+    let sparkCell=`<td class="r" data-col="trend" style="width:72px;padding:4px 8px">${inlineSparkSvg(sparkSeries,sparkWin)}</td>`;
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
       <td>${d.n}</td>
       <td class="r" data-col="port" data-sv="${d.p}">${f2(d.p,1)}</td>
@@ -1549,6 +1585,7 @@ function rWt(data,type,hold){
       <td class="r ${cls}" data-col="active" data-sv="${d.a}">${fp(d.a,1)}</td>
       ${teBar}${stockTeCell}${factorTeCell}${rvqCells}
       ${d.s!=null&&type!=='sec'?`<td class="r" data-sv="${d.s}">${f2(d.s,1)}</td>`:''}
+      ${sparkCell}
     </tr>`;
   }).join('');
   let tblId=type==='sec'?'tbl-sec':'tbl-reg';
@@ -1572,11 +1609,15 @@ function rWt(data,type,hold){
       <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',8)" style="background:rgba(99,102,241,0.07)">R</th>
       <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',9)" style="background:rgba(99,102,241,0.07)">V</th>
       <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',10)" style="background:rgba(99,102,241,0.07)">Q</th>
+      <th class="tip" data-col="trend" data-tip="Active weight trend over last N periods (inline sparkline). Toggle window above." style="width:72px;padding:4px 8px;vertical-align:bottom">
+        <div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div>
+        <div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('sec')}</div>
+      </th>
     </tr>
   </thead>`;
   let table=type==='sec'
     ?`<table id="${tblId}">${secThead}<tbody>${rows}</tbody></table>`
-    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${hasRegRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',7)">Q</th>':''}</tr></thead><tbody>${rows}</tbody></table>`;
+    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${hasRegRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',7)">Q</th>':''}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
     let totalW=data.reduce((s,d)=>s+(d.p||0),0);

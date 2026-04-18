@@ -123,6 +123,24 @@ Is there a hit rate or "batting average" metric available — i.e., what percent
 
 ---
 
+**12b. Sector-Level Returns for Brinson Attribution**
+
+The dashboard is ready to display a classic Brinson attribution breakdown (Allocation / Selection / Interaction effects by sector), which is a standard PM view, but the current export doesn't include the inputs needed to compute it. We have sector-level **weights** (portfolio, benchmark, active) but no sector-level **returns**.
+
+To enable Brinson, we'd need, per period (weekly is ideal), **three fields**:
+
+1. `sector_port_return` — total return contribution of the portfolio holdings in each GICS sector
+2. `sector_bench_return` — total return contribution of the benchmark holdings in each GICS sector
+3. `bench_total_return` — the benchmark's total period return (single number, used as the baseline against which sector returns are compared)
+
+If FactSet already produces a Brinson or BHB-style attribution report that includes these, the cleanest path would be: append one row per sector per period with columns `SECTION_PORT_RET`, `SECTION_BENCH_RET` (plus a single `TOTAL_BENCH_RET` in the summary stats section of the file).
+
+Alternatively, holding-level period returns on every line of the holdings section (one new column `PERIOD_RETURN`) would let us aggregate up to any breakdown — sector, country, industry, custom group — and we could compute Brinson client-side. That would be more flexible and future-proof if the preference is for a single data addition rather than a new report structure.
+
+Either path works; I can adapt the parser to whichever is easier to produce.
+
+---
+
 **13. Historical Monthly Data**
 
 The sample contains one month (January 2026). For the production pull, I need as many trailing months as available — ideally 36 months — for trend analysis (trailing TE, Active Share, Beta, factor exposures over time).
@@ -185,6 +203,7 @@ For quick reference, here's everything in one list:
 - [ ] Enable Compounded Factor Return column (§10)
 - [ ] Add benchmark P/E and P/B to export (§11)
 - [ ] Add Hit Rate / Batting Average metric (§12)
+- [ ] Add sector-level portfolio return, benchmark return, and total benchmark return — to enable Brinson attribution (§12b). Alternative path: add a single `PERIOD_RETURN` column at the holding level.
 
 **Logistics:**
 - [ ] Confirm historical data format: separate files or concatenated (§13)

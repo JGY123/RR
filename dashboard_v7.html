@@ -1248,9 +1248,18 @@ function rExp(){
       <div id="scatDiv" style="height:320px"></div>
     </div>
     <div class="card" id="cardTreemap">
-      <div class="flex-between"><div class="card-title">Active Weight Treemap</div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings.">Holdings Treemap</div>
       <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardTreemap')">PNG</button></div></div>
-      <div id="treeDiv" style="height:320px"></div>
+      <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
+        <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Group</span>
+          <div class="toggle-wrap" style="margin:0" id="treeDimWrap"><button class="toggle-btn active" data-dim="sec" onclick="setTreeDim('sec')" style="padding:1px 6px;font-size:9px">Sector</button><button class="toggle-btn" data-dim="co" onclick="setTreeDim('co')" style="padding:1px 6px;font-size:9px">Country</button><button class="toggle-btn" data-dim="grp" onclick="setTreeDim('grp')" style="padding:1px 6px;font-size:9px">Group</button><button class="toggle-btn" data-dim="rank" onclick="setTreeDim('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
+        <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Size</span>
+          <div class="toggle-wrap" style="margin:0" id="treeSizeWrap"><button class="toggle-btn active" data-sz="wt" onclick="setTreeSize('wt')" style="padding:1px 6px;font-size:9px">Weight</button><button class="toggle-btn" data-sz="te" onclick="setTreeSize('te')" style="padding:1px 6px;font-size:9px">TE</button><button class="toggle-btn" data-sz="cnt" onclick="setTreeSize('cnt')" style="padding:1px 6px;font-size:9px">Count</button></div></div>
+        <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Color</span>
+          <div class="toggle-wrap" style="margin:0" id="treeColorWrap"><button class="toggle-btn active" data-cl="active" onclick="setTreeColor('active')" style="padding:1px 6px;font-size:9px">Active</button><button class="toggle-btn" data-cl="rank" onclick="setTreeColor('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
+      </div>
+      <div id="treeBreadcrumb" style="display:none;gap:8px;align-items:center;font-size:11px;margin-bottom:4px"></div>
+      <div id="treeDiv" style="height:360px"></div>
     </div>
   </div>
 
@@ -2487,20 +2496,106 @@ function rScat(s){
   }],{...plotBg,xaxis:{...plotBg.xaxis,title:'Marginal Contribution to Risk'},yaxis:{...plotBg.yaxis,title:'TE Contribution %'}},plotCfg);
 }
 
+// ===== HOLDINGS TREEMAP (#7 from GAP_INVENTORY) — dim/size/color/drill =====
+let _treeDim='sec',_treeSize='wt',_treeColor='active',_treeDrill=null;
+function setTreeDim(d){if(d===_treeDim)return;_treeDim=d;_treeDrill=null;if(cs)rTree(cs);}
+function setTreeSize(s){if(s===_treeSize)return;_treeSize=s;if(cs)rTree(cs);}
+function setTreeColor(c){if(c===_treeColor)return;_treeColor=c;if(cs)rTree(cs);}
+function treeDrillInto(name){_treeDrill=name;if(cs)rTree(cs);}
+function treeDrillBack(){_treeDrill=null;if(cs)rTree(cs);}
+function _treeRankColor(q){
+  let r=Math.round(q);
+  return r<=1?'#10b981':r===2?'#34d399':r===3?'#f59e0b':r===4?'#fb923c':'#ef4444';
+}
+function _refreshTreeToolbar(){
+  document.querySelectorAll('#treeDimWrap [data-dim]').forEach(b=>b.classList.toggle('active',b.dataset.dim===_treeDim));
+  document.querySelectorAll('#treeSizeWrap [data-sz]').forEach(b=>b.classList.toggle('active',b.dataset.sz===_treeSize));
+  document.querySelectorAll('#treeColorWrap [data-cl]').forEach(b=>b.classList.toggle('active',b.dataset.cl===_treeColor));
+}
 function rTree(s){
-  let labels=['Portfolio'],parents=[''],values=[0],colors=[THEME().card],actVals=[null];
-  (s.sectors||[]).filter(x=>x.n&&!/cash/i.test(x.n)&&isFinite(x.a)).forEach(sec=>{
-    let a=+(sec.a||0);
-    let size=Math.max(Math.abs(a),0.01);
-    labels.push(sec.n);parents.push('Portfolio');values.push(+size.toFixed(2));
-    colors.push(a>=0?'#10b981':'#ef4444');
-    actVals.push(a);
+  if(!s||!s.hold)return;
+  _refreshTreeToolbar();
+  let keyFn={
+    sec:h=>h.sec,
+    co:h=>h.co,
+    grp:h=>h.subg||null,
+    rank:h=>h.over!=null?'Q'+Math.round(h.over):null
+  }[_treeDim];
+  let buckets={};
+  s.hold.forEach(h=>{
+    if(isCash(h))return;
+    let k=keyFn(h);if(!k)return;
+    if(!buckets[k])buckets[k]={items:[],count:0,wt:0,te:0,active:0,rankSum:0,rankN:0};
+    let b=buckets[k];
+    b.items.push(h);
+    b.count++;
+    b.wt+=h.p||0;
+    b.te+=Math.abs(h.tr||0);
+    b.active+=h.a||0;
+    if(h.over!=null){b.rankSum+=h.over*(h.p>0?h.p:1);b.rankN+=(h.p>0?h.p:1);}
   });
+  let sizeOf=b=>_treeSize==='wt'?b.wt:_treeSize==='te'?b.te:b.count;
+  let bucketColor=b=>{
+    if(_treeColor==='rank'){let q=b.rankN>0?b.rankSum/b.rankN:3;return _treeRankColor(q);}
+    return b.active>=0?'#10b981':'#ef4444';
+  };
+  let labels=[],parents=[],values=[],colors=[],cds=[];
+  let T=THEME();
+  if(_treeDrill&&buckets[_treeDrill]){
+    let b=buckets[_treeDrill];
+    labels.push(_treeDrill);parents.push('');values.push(0);colors.push(T.card);cds.push(_treeDrill+' (root)');
+    let items=[...b.items].sort((x,y)=>{
+      let sx=_treeSize==='wt'?(x.p||0):_treeSize==='te'?Math.abs(x.tr||0):1;
+      let sy=_treeSize==='wt'?(y.p||0):_treeSize==='te'?Math.abs(y.tr||0):1;
+      return sy-sx;
+    }).slice(0,80); // cap to top 80 for performance
+    items.forEach(h=>{
+      let val=_treeSize==='wt'?(h.p||0):_treeSize==='te'?Math.abs(h.tr||0):1;
+      if(val<=0)return;
+      let cc=_treeColor==='rank'&&h.over!=null?_treeRankColor(h.over):(h.a||0)>=0?'#10b981':'#ef4444';
+      labels.push(h.t);parents.push(_treeDrill);values.push(+val.toFixed(4));colors.push(cc);
+      cds.push(`<b>${h.n||h.t}</b> (${h.t})<br>Weight: ${f2(h.p,2)}%<br>Active: ${fp(h.a,2)}<br>TE: ${f2(Math.abs(h.tr||0),2)}%<br>Rank: ${h.over!=null?'Q'+Math.round(h.over):'\u2014'}`);
+    });
+  }else{
+    labels.push('Portfolio');parents.push('');values.push(0);colors.push(T.card);cds.push('Portfolio');
+    let entries=Object.entries(buckets).sort((a,b)=>sizeOf(b[1])-sizeOf(a[1]));
+    entries.forEach(([k,b])=>{
+      let val=Math.max(sizeOf(b),0.01);
+      labels.push(k);parents.push('Portfolio');values.push(+val.toFixed(2));colors.push(bucketColor(b));
+      let avgQ=b.rankN>0?(b.rankSum/b.rankN).toFixed(1):'\u2014';
+      cds.push(`<b>${k}</b><br>Holdings: ${b.count}<br>Weight: ${f2(b.wt,1)}%<br>Active: ${fp(b.active,1)}<br>TE: ${f2(b.te,1)}%<br>Avg Rank: ${avgQ}<br><i>Click to drill</i>`);
+    });
+  }
+  Plotly.purge('treeDiv');
   Plotly.newPlot('treeDiv',[{type:'treemap',labels,parents,values,
-    marker:{colors,line:{width:1,color:THEME().grid}},textfont:{size:11,color:THEME().tickH},
-    customdata:actVals.map(a=>a==null?'':(a>=0?'+':'')+a.toFixed(2)+'%'),
-    hovertemplate:'%{label}<br>Active: %{customdata}<extra></extra>'
-  }],{...plotBg,margin:{l:5,r:5,t:5,b:5}},plotCfg);
+    marker:{colors,line:{width:1,color:T.grid}},textfont:{size:11,color:T.tickH},
+    customdata:cds,hovertemplate:'%{customdata}<extra></extra>',branchvalues:'total'
+  }],{...plotBg,margin:{l:5,r:5,t:5,b:5},height:360},plotCfg);
+  let div=document.getElementById('treeDiv');
+  if(div&&div.on)div.on('plotly_treemapclick',function(d){
+    if(!d||!d.points||!d.points.length)return false;
+    let pt=d.points[0],label=pt.label;
+    if(label==='Portfolio')return false;
+    if(_treeDrill){
+      // already drilled — clicking a holding opens stock detail
+      let h=s.hold.find(x=>x.t===label);
+      if(h&&typeof oSt==='function'){oSt(h.t);}
+      return false;
+    }
+    // click a bucket → drill in
+    treeDrillInto(label);
+    return false;
+  });
+  let bc=document.getElementById('treeBreadcrumb');
+  if(bc){
+    if(_treeDrill){
+      let dimLbl={sec:'Sector',co:'Country',grp:'Group',rank:'Rank'}[_treeDim]||_treeDim;
+      bc.innerHTML=`<span style="color:var(--txt)">${dimLbl} \u203a <span style="color:var(--txth);font-weight:600">${_treeDrill}</span></span><button onclick="treeDrillBack()" style="padding:2px 10px;font-size:10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:4px;cursor:pointer;font-family:inherit">\u2190 Back</button><span style="color:var(--txt);font-size:10px;margin-left:auto">Click a tile for stock detail</span>`;
+      bc.style.display='flex';
+    }else{
+      bc.style.display='none';
+    }
+  }
 }
 
 function rMCR(s){

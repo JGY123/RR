@@ -2683,7 +2683,7 @@ function rRisk(){
   window._riskAllFacs=allFacs;
   window._riskFacColors=facColors;
 
-  let html=`
+  let html=`${weekBannerHtml()}
   <!-- Risk Summary Cards -->
   <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
     <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}" onclick="oDrMetric('te')" title="Tracking error detail">
@@ -3400,7 +3400,7 @@ function rHold(){
 }
 
 function renderHoldTab(){
-  let html=`
+  let html=`${weekBannerHtml()}
     <div class="card" id="cardHoldings" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:10px">
         <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>

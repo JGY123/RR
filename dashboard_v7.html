@@ -1106,7 +1106,7 @@ function rExp(){
       <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error — click for top contributors">Idiosyncratic Risk</div>
       <div class="value" style="color:var(--acc)">${pctSpec}%</div>
     </div>
-    <div class="sum-card" onclick="oDrFacRiskBreak()" tabindex="0" role="button" aria-label="Factor risk breakdown">
+    <div class="sum-card" onclick="oDrMetric('fac')" tabindex="0" role="button" aria-label="Factor risk breakdown">
       <div class="label tip" data-tip="Factor-driven portion of tracking error — click for top factor contributors">Factor Risk</div>
       <div class="value" style="color:var(--pri)">${pctFac}%</div>
     </div>
@@ -4586,6 +4586,9 @@ let _facDrillRange='All';
 
 function oDrMetric(metric,range){
   let m=$('metricModal');
+
+  // Factor risk — delegate to the richer top-contributors modal
+  if(metric==='fac'){oDrFacRiskBreak();return;}
 
   // Idiosyncratic risk — show top 5 contributors
   if(metric==='idio'){

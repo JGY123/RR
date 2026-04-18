@@ -1138,6 +1138,8 @@ function rExp(){
     <div id="secChart" style="display:none"><div id="secChartDiv" style="height:320px"></div></div>
   </div>
 
+  ${benchOnlySecHtml(s)}
+
   <!-- Row 3: Factor Exposures -->
   <div class="grid g2">
     <div class="card" id="cardFacButt">
@@ -1838,6 +1840,54 @@ function rGroupTable(groups,hold){
   return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+
+// ===== BENCHMARK-ONLY SECTOR VIEW (#8 from GAP_INVENTORY) =====
+// Aggregates benchmark holdings we DON'T own, grouped by sector.
+// Returns '' when there are no bench-only holdings (card hides itself).
+function benchOnlySecHtml(s){
+  if(!s||!s.hold||!s.hold.length)return '';
+  let bySec={};
+  s.hold.forEach(h=>{
+    if(isCash(h))return;
+    if(!h.sec)return;
+    // Bench-only: has bench weight, zero-or-missing portfolio weight
+    let isBenchOnly=(h.b||0)>0&&(!h.p||h.p<=0);
+    if(!isBenchOnly)return;
+    if(!bySec[h.sec])bySec[h.sec]={count:0,wt:0,biggest:null};
+    let rec=bySec[h.sec];
+    rec.count++;
+    rec.wt+=(h.b||0);
+    if(!rec.biggest||(h.b||0)>(rec.biggest.b||0))rec.biggest=h;
+  });
+  let entries=Object.entries(bySec).filter(([,d])=>d.count>0);
+  if(!entries.length)return '';
+  // Sort by missed bench weight desc (biggest gap first)
+  entries.sort((a,b)=>b[1].wt-a[1].wt);
+  let totalMissed=entries.reduce((acc,[,d])=>acc+d.wt,0);
+  let totalCount=entries.reduce((acc,[,d])=>acc+d.count,0);
+  let shortNm=n=>{if(!n)return '';n=n.replace(/\s+(Ltd\.?|Limited|Inc\.?|Corp\.?|Corporation|Company|plc|PLC|AG|SA|Holdings?|Group|Class [A-Z])$/gi,'').trim();return n.length>26?n.slice(0,25)+'\u2026':n;};
+  let rows=entries.map(([sec,d])=>{
+    let big=d.biggest;
+    let bigLbl=big?`${shortNm(big.n||big.t)} <span style="color:var(--txt);font-size:10px">(${f2(big.b,2)}%)</span>`:'—';
+    let nm2=sec.replace(/'/g,"\\'");
+    return `<tr class="clickable" onclick="oDr('sec','${nm2}')">
+      <td data-sv="${sec}">${sec}</td>
+      <td class="r" data-sv="${d.count}" style="color:var(--txth);font-weight:600">${d.count}</td>
+      <td class="r" data-sv="${d.wt}" style="color:var(--warn);font-weight:600">${f2(d.wt,1)}%</td>
+      <td style="font-size:11px;color:var(--txth)">${bigLbl}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="card" id="cardBenchOnlySec" style="margin-top:16px;margin-bottom:16px">
+    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark holdings you don't own, aggregated by sector. Click a row to open the sector drill.">Benchmark-Only Holdings by Sector <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${totalCount} names \u00b7 ${f2(totalMissed,1)}% of benchmark missed</span></div>
+    <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardBenchOnlySec')">PNG</button><button class="export-btn" onclick="exportCSV('#tbl-bo-sec','bench_only_sec')" style="margin-left:4px">CSV</button></div></div>
+    <table id="tbl-bo-sec" style="margin-top:8px"><thead><tr>
+      <th onclick="sortTbl('tbl-bo-sec',0)">Sector</th>
+      <th class="r tip" data-tip="Count of benchmark-only holdings in this sector" onclick="sortTbl('tbl-bo-sec',1)">Missed</th>
+      <th class="r tip" data-tip="Sum of benchmark weights of holdings you don't own" onclick="sortTbl('tbl-bo-sec',2)">Bench Wt</th>
+      <th>Biggest Missed</th>
+    </tr></thead><tbody>${rows}</tbody></table>
+  </div>`;
+}
 
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
@@ -3609,6 +3659,30 @@ function oDr(type,name,range){
     <td class="r">${f2(h.mcr)}</td>${rORVQCells(h)}
   </tr>`).join('');
 
+  // Bench-only holdings in this sector/region — what we don't own from the benchmark (#8)
+  let benchOnlyHtml='';
+  if(type==='sec'){
+    let benchOnly=holdings.filter(h=>(h.b||0)>0&&(!h.p||h.p<=0)).sort((a,b)=>(b.b||0)-(a.b||0));
+    if(benchOnly.length){
+      let shown=benchOnly.slice(0,25);
+      let totalMissedWt=benchOnly.reduce((a,h)=>a+(h.b||0),0);
+      let boRows=shown.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')">
+        <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
+        <td class="r" style="color:var(--warn);font-weight:600">${f2(h.b,2)}%</td>
+        <td class="r" style="color:var(--neg);font-weight:600">${fp(-(h.b||0),2)}%</td>
+        ${rORVQCells(h)}
+      </tr>`).join('');
+      let moreNote=benchOnly.length>shown.length?`<p style="font-size:10px;color:var(--txt);margin:4px 0 0">Showing top ${shown.length} of ${benchOnly.length} by bench weight.</p>`:'';
+      benchOnlyHtml=`<div style="margin-top:16px">
+        <div class="flex-between"><div class="card-title tip" data-tip="Securities in the benchmark but not in the portfolio. Each represents an active underweight.">Benchmark-Only in ${name} <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:6px">${benchOnly.length} names \u00b7 ${f2(totalMissedWt,1)}% bench wt missed</span></div></div>
+        <div style="max-height:260px;overflow-y:auto;margin-top:6px">
+          <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Bench%</th><th class="r">Implied Active</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${boRows}</tbody></table>
+        </div>
+        ${moreNote}
+      </div>`;
+    }
+  }
+
   // Country breakdown for region drills
   let countryHtml='';
   if(type==='reg'){
@@ -3673,6 +3747,7 @@ function oDr(type,name,range){
         <div style="max-height:300px;overflow-y:auto">${miniCompare}</div>
       </div>
     </div>
+    ${benchOnlyHtml}
     ${countryHtml}`;
   m.classList.add('show');
 

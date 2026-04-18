@@ -1,8 +1,37 @@
 # RR Dashboard — Session State
 
-**Last updated:** 2026-04-17 00:25 (post Patch 015 + scatter/treemap/MCR fixes + enhanced map + 10-bucket archetype + inline region zoom + scaffolding for tile-by-tile audit)
-**Current git commit:** `0c606cd` (main) — inline country map region zoom + cross-sync
-**Working state:** ✅ Dashboard at **full 22-feature parity**. All originally-listed features present or intentionally deferred. Next phase: **tile-by-tile audit for data accuracy + functional parity + design**. See `TRANSITION_PROMPT.md` for session handoff.
+**Last updated:** 2026-04-19 02:30 (post overnight autonomous session — all 10 gap items closed + scaffolding + cross-project skills + agent ecosystem)
+**Current git commit:** `35fe01b` (main) — ORGINIZE_REVIEW + cross-project skills library shipped
+**Working state:** ✅ Dashboard at **full 22-feature parity + 10/10 gap items closed**. Next phase: **tile-by-tile audit pass** per FORWARD_PLAN.md Priority A. See `TRANSITION_PROMPT.md` for the 5-minute onboarding.
+
+## What shipped overnight (2026-04-18 → 04-19)
+
+| # | What | Commit | Tag |
+|---|---|---|---|
+| Gap 1 | Risk-tab Historical Trends mini-charts (TE / AS / Beta / H) | `55aaaa8` | `working.*.gap1` |
+| Gap 2 | Factor Risk hero sum-card → `oDrMetric('fac')` drill | `76d1931` | `working.*.gap2` |
+| Gap 3 | Historical week amber banner on all 3 tabs | `cea064a` | `working.*.gap3` |
+| Gap 4 | Sector heatmap cross-strategy title clarity | `fc8b92a` | — |
+| — | FactSet email §12b (Brinson data ask) | `658be02` | — |
+| Gap 8 | Benchmark-only sector card + drill sub-section | `cd5448f` | `working.20260419.0014.gap8` |
+| Gap 7 | Treemap dim/size/color toggles + drill-down + breadcrumb | `b085ad3` | `working.20260419.0056.gap7` |
+| Gap 9 | Inline trend sparklines on sector + region tables | `0593a96` | `working.20260419.0105.gap9` |
+| Gap 10 | Holdings card view + Table/Cards toggle + expand | `eec70df` | `working.20260419.0123.gap10` |
+| — | FORWARD_PLAN.md — post-recovery review + prioritized workstream | `196eab8` | — |
+| — | ORGINIZE_REVIEW.md — cross-project findings | `35fe01b` | — |
+
+**Gaps 5 (Stress Scenarios) and 6 (Brinson) intentionally deferred** — #5 per PM call, #6 blocked on FactSet data.
+
+## What shipped OUTSIDE RR overnight (cross-project)
+
+- `~/orginize/knowledge/skills/` — new directory with 6 transferable skill docs:
+  jsonl-gap-discovery, tile-audit-framework, theme-aware-helper,
+  regression-checkpoint, session-continuity, single-file-app
+- `~/orginize/knowledge/patterns.md` — pointer to skills/ added
+- `~/projects/apps/ai-talent-agency/agents/` — 3 new specialist agents:
+  gap-discovery-specialist, session-continuity-specialist, tile-audit-specialist
+
+**Note:** agency repo commit is local only — remote `yuda420-dev/ai-talent-agency` returned 404 on push. Needs either repo re-creation on GitHub or auth switch. Orginize has no remote by design; commits local-only.
 
 ## Quick start for the next session
 

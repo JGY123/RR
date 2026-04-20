@@ -1807,11 +1807,14 @@ function rCountryTable(countries,hold){
   let coRS={},coRC={},coRW={},coRPW={},coRBW={},coRBPW={};
   let coVS={},coVC={},coVW={},coVPW={},coVBW={},coVBPW={};
   let coQS={},coQC={},coQW={},coQPW={},coQBW={},coQBPW={};
+  let coTR={},coMCR={};
   if(hold){
     hold.forEach(h=>{
       if(!h.co||isCash(h))return;
       let w=h.p>0?h.p:0;
       let bw=h.b>0?h.b:0;
+      coTR[h.co]=(coTR[h.co]||0)+(h.tr||0);
+      coMCR[h.co]=(coMCR[h.co]||0)+(h.mcr||0);
       if(h.over!=null){coOS[h.co]=(coOS[h.co]||0)+h.over;coOC[h.co]=(coOC[h.co]||0)+1;coOW[h.co]=(coOW[h.co]||0)+h.over*w;coOPW[h.co]=(coOPW[h.co]||0)+w;coOBW[h.co]=(coOBW[h.co]||0)+h.over*bw;coOBPW[h.co]=(coOBPW[h.co]||0)+bw;}
       if(h.rev!=null){coRS[h.co]=(coRS[h.co]||0)+h.rev;coRC[h.co]=(coRC[h.co]||0)+1;coRW[h.co]=(coRW[h.co]||0)+h.rev*w;coRPW[h.co]=(coRPW[h.co]||0)+w;coRBW[h.co]=(coRBW[h.co]||0)+h.rev*bw;coRBPW[h.co]=(coRBPW[h.co]||0)+bw;}
       if(h.val!=null){coVS[h.co]=(coVS[h.co]||0)+h.val;coVC[h.co]=(coVC[h.co]||0)+1;coVW[h.co]=(coVW[h.co]||0)+h.val*w;coVPW[h.co]=(coVPW[h.co]||0)+w;coVBW[h.co]=(coVBW[h.co]||0)+h.val*bw;coVBPW[h.co]=(coVBPW[h.co]||0)+bw;}
@@ -1820,24 +1823,39 @@ function rCountryTable(countries,hold){
   }
   function coWAvg(S,C,W,PW,BW,BPW){return rankAvg3(_secRankMode,S,C,W,PW,BW||0,BPW||0);}
   const rankCell=(avg)=>{
-    if(avg==null)return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:#334155">—</td>`;
-    return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
+    let c=avg!=null?rc(Math.round(avg)):'#334155';
+    return`<td class="r" style="font-size:11px;font-weight:600;color:${c}" data-sv="${avg!=null?+avg.toFixed(2):''}">${avg!=null?f2(avg,1):'—'}</td>`;
   };
   let hasRanks=hold&&Object.keys(coOC).length>0;
+  let hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
   let sorted=[...countries].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
+  let maxTE=hasTE?Math.max(...sorted.map(c=>coTR[c.n]||0),0.01):1;
   let rows=sorted.map(c=>{
     let cls=activeStyle(c.a);
+    let threshCls=Math.abs(c.a)>5?'thresh-alert':Math.abs(c.a)>3?'thresh-warn':'';
+    let teTotal=hasTE?(coTR[c.n]||0):null;
+    let teMCR=hasTE?(coMCR[c.n]||0):null;
+    let teFactor=hasTE?+(teTotal-teMCR).toFixed(1):null;
+    let tePct=hasTE?Math.min((teTotal/maxTE)*100,100).toFixed(1):'0';
+    let teCells=hasTE?(
+      `<td class="r" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
+      `<td class="r" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
+      `<td class="r" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
+    ):'';
     let rvq=hasRanks?(
       rankCell(coWAvg(coOS[c.n]||0,coOC[c.n]||0,coOW[c.n]||0,coOPW[c.n]||0,coOBW[c.n]||0,coOBPW[c.n]||0))+
       rankCell(coWAvg(coRS[c.n]||0,coRC[c.n]||0,coRW[c.n]||0,coRPW[c.n]||0,coRBW[c.n]||0,coRBPW[c.n]||0))+
       rankCell(coWAvg(coVS[c.n]||0,coVC[c.n]||0,coVW[c.n]||0,coVPW[c.n]||0,coVBW[c.n]||0,coVBPW[c.n]||0))+
       rankCell(coWAvg(coQS[c.n]||0,coQC[c.n]||0,coQW[c.n]||0,coQPW[c.n]||0,coQBW[c.n]||0,coQBPW[c.n]||0))
     ):'';
-    return`<tr class="clickable" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${rvq}</tr>`;
+    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}</tr>`;
   }).join('');
-  let rvqTh=hasRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-ctry\',7)">Q</th>':'';
-  let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="4" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
-  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-ctry',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  let teTh=hasTE?'<th class="r tip" data-tip="% of total tracking error contributed by this country" onclick="sortTbl(\'tbl-ctry\',4)">TE Contrib</th><th class="r tip" data-tip="Stock-specific tracking error component" onclick="sortTbl(\'tbl-ctry\',5)">Stock TE</th><th class="r tip" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl(\'tbl-ctry\',6)">Factor TE</th>':'';
+  let rBase=hasTE?7:4;
+  let rvqTh=hasRanks?`<th class="r tip" data-tip="Avg Overall MFR rank" style="border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase})">O</th><th class="r tip" data-tip="Avg Revision rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+1})">R</th><th class="r tip" data-tip="Avg Value rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+2})">V</th><th class="r tip" data-tip="Avg Quality rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+3})">Q</th>`:'';
+  let leftCol=4+(hasTE?3:0);
+  let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
+  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',3)">Active</th>${teTh}${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rGroupTable(groups,hold){
@@ -2190,7 +2208,9 @@ function THEME(){
     ocean:light?'#f1f5f9':'#080e1e',
     heatMid:light?'#f1f5f9':'#12151e',
     card:g('--card')||'#0f172a',
-    bg:g('--bg')||'#080e1e'
+    bg:g('--bg')||'#080e1e',
+    pos:g('--pos')||'#10b981',
+    neg:g('--neg')||'#ef4444'
   };
 }
 function buildPlotBg(){
@@ -2489,7 +2509,7 @@ function rCountryChart(s){
   let all=[...top5,...bot5];
   Plotly.newPlot('countryChartDiv',[{
     y:all.map(x=>x.n),x:all.map(x=>x.a),type:'bar',orientation:'h',
-    marker:{color:all.map(x=>x.a>=0?'#10b981':'#ef4444')},
+    marker:{color:all.map(x=>x.a>=0?THEME().pos:THEME().neg)},
     text:all.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:THEME().tick}
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Weight %'}},plotCfg);
 }

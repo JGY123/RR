@@ -1307,6 +1307,7 @@ function rExp(){
           <option value="exp">By Exposure</option>
           <option value="dev">By Volatility</option>
         </select>
+        <button class="export-btn" onclick="exportCSV('#tbl-attrib','attribution')" title="Download CSV">CSV</button>
       </div>
     </div>
     <div id="attribTableArea"></div>
@@ -1498,6 +1499,7 @@ function secColDropHtml(){
 // ===== TABLE RENDERERS =====
 // hold param: optional array of holdings (used for sector TE contribution computation)
 function rWt(data,type,hold){
+  if(!data||!data.length)return`<p style="color:var(--txt);font-size:12px">No ${type==='sec'?'sector':type==='reg'?'region':'group'} data</p>`;
   // For sectors: compute TE + MCR split + O·R·V·Q weighted/simple rank averages per sector
   let secTEMap={},secMCRMap={};
   // Simple: _S=sum, _C=count. Weighted: _W=rank×weight sum, _PW=weight sum.
@@ -2320,7 +2322,7 @@ function rFacButt(s){
   // Single-trace diverging bar: f.a (active exposure) only
   // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
   let facs=s.factors;
-  if(!facs||!facs.length)return;
+  if(!facs||!facs.length){let el=document.getElementById('facButtDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
   let names=facs.map(f=>f.n);
   let vals=facs.map(f=>+(f.a??0).toFixed(3));
   let maxE=Math.max(...vals.map(Math.abs),0.3);
@@ -2548,7 +2550,8 @@ function rGroupChart(s){
 }
 
 function rScat(s){
-  let hold=s.hold.filter(h=>h.p>0&&!isCash(h));
+  let hold=(s.hold||[]).filter(h=>h.p>0&&!isCash(h));
+  if(!hold.length){let el=document.getElementById('scatDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings to plot</p>';return;}
   Plotly.newPlot('scatDiv',[{
     x:hold.map(h=>h.mcr||0),y:hold.map(h=>h.tr||0),mode:'markers+text',type:'scatter',
     text:hold.map(h=>h.t),textposition:'top center',textfont:{size:8,color:THEME().tick},
@@ -2574,7 +2577,7 @@ function _refreshTreeToolbar(){
   document.querySelectorAll('#treeColorWrap [data-cl]').forEach(b=>b.classList.toggle('active',b.dataset.cl===_treeColor));
 }
 function rTree(s){
-  if(!s||!s.hold)return;
+  if(!s||!s.hold||!s.hold.length){let el=document.getElementById('treeDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings to visualize</p>';return;}
   _refreshTreeToolbar();
   let keyFn={
     sec:h=>h.sec,
@@ -2661,7 +2664,8 @@ function rTree(s){
 
 function rMCR(s){
   // Top 10 by |mcr| so short/hedging positions (negative MCR) show alongside risk-adders
-  let top=[...s.hold].filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,10);
+  let top=[...(s.hold||[])].filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,10);
+  if(!top.length){let el=document.getElementById('mcrDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No MCR data available</p>';return;}
   top.sort((a,b)=>(b.mcr||0)-(a.mcr||0)); // positives at top, negatives at bottom
   Plotly.newPlot('mcrDiv',[{
     y:top.map(h=>h.t),x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
@@ -2674,6 +2678,7 @@ function rMCR(s){
 
 function rFRB(s){
   let facs=s.factors;
+  if(!facs||!facs.length){let el=document.getElementById('frbDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
   let total=facs.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
   Plotly.newPlot('frbDiv',[{
     labels:facs.map(f=>f.n),values:facs.map(f=>Math.abs(f.c||0)),type:'pie',
@@ -2803,7 +2808,7 @@ function riskHistoricalTrends(s){
     </div>`;
   }).join('');
   return `<div class="card" id="cardRiskHistTrends" style="margin-bottom:16px">
-    <div class="card-title" style="margin-bottom:10px">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span></div>
+    <div class="card-title" style="margin-bottom:10px">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px">${cards}</div>
   </div>`;
 }
@@ -2991,23 +2996,26 @@ function rRisk(){
   </div>
 
   <!-- Factor Exposures Table -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">Factor Exposures — click row for time series drill</div>
-    <table><thead><tr>
-      <th>Factor</th><th class="r">Exposure</th><th class="r">Contrib %</th>
-      <th class="r">MCR to TE</th><th class="r">Return %</th><th class="r">Impact</th>
+  <div class="card" id="cardRiskFacTbl" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:8px">
+      <div class="card-title" style="margin:0">Factor Exposures — click row for time series drill</div>
+      <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
+    </div>
+    <table id="tbl-risk-fac"><thead><tr>
+      <th onclick="sortTbl('tbl-risk-fac',0)">Factor</th><th class="r" onclick="sortTbl('tbl-risk-fac',1)">Exposure</th><th class="r" onclick="sortTbl('tbl-risk-fac',2)">Contrib %</th>
+      <th class="r" onclick="sortTbl('tbl-risk-fac',3)">MCR to TE</th><th class="r" onclick="sortTbl('tbl-risk-fac',4)">Return %</th><th class="r" onclick="sortTbl('tbl-risk-fac',5)">Impact</th>
       <th class="r">Trend</th>
     </tr></thead><tbody>${facMCR.map(f=>{
       let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
       let facHist=s.hist.fac[f.n];
       let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
-      return`<tr style="cursor:pointer" onclick="oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
+      return`<tr class="clickable" style="cursor:pointer" onclick="oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
         <td style="color:var(--txth);font-weight:500">${f.n}</td>
-        <td class="r ${cls}">${fp(f.e,3)}</td>
-        <td class="r">${f2(f.c,1)}</td>
-        <td class="r">${f2(f.mcrTE,3)}</td>
-        <td class="r" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-        <td class="r" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+        <td class="r ${cls}" data-sv="${f.e??''}">${fp(f.e,3)}</td>
+        <td class="r" data-sv="${f.c??''}">${f2(f.c,1)}</td>
+        <td class="r" data-sv="${f.mcrTE??''}">${f2(f.mcrTE,3)}</td>
+        <td class="r" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
+        <td class="r" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
         <td class="r">${mkSparkline(sparkVals,60,22,null)}</td>
       </tr>`;
     }).join('')}
@@ -3756,8 +3764,8 @@ function renderHoldTab(){
         <span style="width:1px;height:16px;background:#334155;display:inline-block;margin:0 4px"></span>
         ${(()=>{let flagged=Object.keys(_holdFlags);return flagged.length?`<button onclick="toggleFlaggedFilter()" data-chip-key="flagged" style="padding:4px 12px;border-radius:16px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:11px;border:1px solid rgba(245,158,11,0.4);cursor:pointer;font-family:inherit">&#9873; Flagged (${flagged.length})</button>`:'';})()}
       </div>
-      ${_holdView==='cards' ? renderHoldCards() : `<div style="overflow-x:auto">
-        <table>
+      ${fh.length===0 ? '<p style="color:var(--txt);font-size:12px;text-align:center;padding:24px">No holdings match your current filters. Try clearing the search box or sector/rank dropdowns.</p>' : (_holdView==='cards' ? renderHoldCards() : `<div style="overflow-x:auto">
+        <table id="tbl-hold">
           <thead><tr>
             <th style="cursor:pointer" onclick="sortHold('t')">Ticker</th>
             <th style="cursor:pointer" onclick="sortHold('n')">Name</th>
@@ -3781,7 +3789,7 @@ function renderHoldTab(){
           <button onclick="hp=Math.max(1,hp-1);renderHoldTab()" ${hp<=1?'disabled':''}>Prev</button>
           <button onclick="hp=Math.min(Math.ceil(fh.length/PPG),hp+1);renderHoldTab()" ${hp>=Math.ceil(fh.length/PPG)?'disabled':''}>Next</button>
         </div>
-      </div>`}
+      </div>`)}
     </div>
 
     <!-- Holdings Charts -->

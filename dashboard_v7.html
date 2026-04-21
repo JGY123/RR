@@ -12,6 +12,8 @@
 :root{
 --bg:#080e1e;--card:#0f172a;--surf:#1e293b;--grid:#334155;--txt:#94a3b8;--txth:#e2e8f0;
 --pos:#10b981;--neg:#ef4444;--warn:#a78bfa;--pri:#6366f1;--acc:#8b5cf6;--cyan:#38bdf8;
+--prof:#fb923c;
+--fac-bar-pos:rgba(99,102,241,.22);--fac-bar-neg:rgba(245,158,11,.22);
 --r1:#10b981;--r2:#22c55e;--r3:#eab308;--r4:#f97316;--r5:#ef4444;
 }
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
@@ -167,8 +169,8 @@ tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(
 /* Factor group pills */
 .fgp{padding:3px 12px;border-radius:12px;border:1px solid var(--grid);background:#1e293b;color:var(--txt);cursor:pointer;font-size:11px;font-family:inherit;transition:all 150ms}
 .fgp:hover{border-color:var(--pri);color:var(--txth)}
-.fgp.active{background:#6366f1;color:#fff;border-color:#6366f1;box-shadow:0 0 6px rgba(99,102,241,.35)}
-.fgp.prof.active{background:#fb923c;border-color:#fb923c;box-shadow:0 0 6px rgba(251,146,60,.35)}
+.fgp.active{background:var(--pri);color:#fff;border-color:var(--pri);box-shadow:0 0 6px rgba(99,102,241,.35)}
+.fgp.prof.active{background:var(--prof);border-color:var(--prof);box-shadow:0 0 6px rgba(251,146,60,.35)}
 /* Threshold range slider */
 input[type=range].thresh-sl{-webkit-appearance:none;height:3px;background:#334155;border-radius:2px;outline:none}
 input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#6366f1;cursor:pointer;box-shadow:0 0 3px rgba(99,102,241,.5)}
@@ -1159,7 +1161,7 @@ function rExp(){
     </div>
     <div class="card" id="cardFacDetail">
       <div class="flex-between" style="margin-bottom:6px">
-        <div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail.">Factor Detail</div>
+        <div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>
         <div style="display:flex;gap:6px;align-items:center">
           <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
           ${facColDropHtml()}
@@ -1171,7 +1173,7 @@ function rExp(){
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${facGroupPillsHtml()}</div>
-      ${rFac(s.factors,s.hold)}
+      ${rFac(s.factors)}
     </div>
   </div>
 
@@ -1279,9 +1281,9 @@ function rExp(){
       <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardMCR')">PNG</button></div></div>
       <div id="mcrDiv" style="height:300px"></div>
     </div>
-    <div class="card" id="cardFRB" style="cursor:pointer" onclick="oDrRiskBudget()">
-      <div class="flex-between"><div class="card-title tip" data-tip="Click for detailed factor risk budget breakdown">Factor Risk Budget</div>
-      <div style="display:flex;gap:6px;align-items:center"><div class="export-bar"><button class="export-btn" onclick="event.stopPropagation();screenshotCard('#cardFRB')">PNG</button></div><span style="font-size:10px;color:var(--pri)">Detail &#8594;</span></div></div>
+    <div class="card" id="cardFRB" style="cursor:pointer" tabindex="0" role="button" aria-label="Factor risk budget — open detailed breakdown" onclick="oDrRiskBudget()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();oDrRiskBudget();}">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click for detailed factor risk budget breakdown. Slice color: red = adds risk, green = diversifies." oncontextmenu="showNotePopup(event,'cardFRB');return false">Factor Risk Budget</div>
+      <span style="font-size:10px;color:var(--pri)">Detail &#8594;</span></div>
       <div id="frbDiv" style="height:260px"></div>
     </div>
   </div>
@@ -1327,8 +1329,7 @@ function rExp(){
   <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
     <div class="flex-between"><div class="card-title">Region Active Weights</div>
     <div style="display:flex;gap:6px;align-items:center">
-      <div style="font-size:10px;color:var(--txt);margin-right:4px">Region coverage may be low for US-focused strategies</div>
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardRegions');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#regTable table','regions');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
+      <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
     </div></div>
     <div id="regTable">${rWt(s.regions,'reg',s.hold)}</div>
@@ -1448,7 +1449,9 @@ function inlineSparkSvg(series,n,opts){
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
   let last=data[data.length-1];
-  let col=last>=0?'#10b981':'#ef4444';
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+  let col=last>=0?posC:negC;
   let zeroY=h-pad-((0-mn)/rng)*(h-2*pad);
   let zeroLine=(mn<0&&mx>0)?`<line x1="${pad}" y1="${zeroY.toFixed(1)}" x2="${w-pad}" y2="${zeroY.toFixed(1)}" stroke="${THEME().grid}" stroke-width="0.5" stroke-dasharray="2,2"/>`:'';
   let lastX=((data.length-1)/(data.length-1))*(w-2*pad)+pad;
@@ -1578,7 +1581,7 @@ function rWt(data,type,hold){
     if(type==='reg'&&hasRegRanks){
       const rankCellR=(avg)=>{
         let c=avg!=null?rc(Math.round(avg)):'#334155';
-        return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
+        return`<td data-sv="${avg!=null?+avg.toFixed(2):''}" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
       rvqCells=rankCellR(sAvg(regOS[d.n]||0,regOC[d.n]||0,regOW[d.n]||0,regOPW[d.n]||0,regOBW[d.n]||0,regOBPW[d.n]||0))
               +rankCellR(sAvg(regRS[d.n]||0,regRC[d.n]||0,regRW[d.n]||0,regRPW[d.n]||0,regRBW[d.n]||0,regRBPW[d.n]||0))
@@ -1628,7 +1631,7 @@ function rWt(data,type,hold){
   </thead>`;
   let table=type==='sec'
     ?`<table id="${tblId}">${secThead}<tbody>${rows}</tbody></table>`
-    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${hasRegRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',7)">Q</th>':''}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
+    :`<table id="${tblId}"><thead><tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${hasRegRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',4)" class="tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th class="tip" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',5)" data-tip="Avg Revision MFR rank">R</th><th class="tip" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',6)" data-tip="Avg Value MFR rank">V</th><th class="tip" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-reg\',7)" data-tip="Avg Quality MFR rank">Q</th>':''}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
     let totalW=data.reduce((s,d)=>s+(d.p||0),0);
@@ -1647,7 +1650,7 @@ const FAC_PRIMARY=new Set(['Momentum (Medium-Term)','Momentum','Volatility','Gro
 const FAC_GROUP_DEFS=[
   {id:'vg',label:'Value·Growth',color:'#6366f1',factors:['Value','Growth','Dividend Yield','Earnings Yield']},
   {id:'mb',label:'Market Behavior',color:'#a855f7',factors:['Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility']},
-  {id:'pf',label:'Profitability',color:'#fb923c',factors:['Profitability']},
+  {id:'pf',label:'Profitability',get color(){return getComputedStyle(document.body).getPropertyValue('--prof').trim()||'#fb923c'},factors:['Profitability']},
   {id:'sec',label:'Secondary',get color(){return THEME().tick},factors:null}  // null = all non-primary
 ];
 const FAC_COLS=[
@@ -1714,20 +1717,24 @@ function facGroupPillsHtml(){
   }).join('');
 }
 
-function rFac(factors,hold){
+function rFac(factors){
   if(!factors||!factors.length)return'<div id="tbl-fac-wrap"><p style="color:var(--txt);font-size:12px">No factor data</p></div>';
-  return`<div id="tbl-fac-wrap">${rFacTable(factors,hold)}</div>`;
+  return`<div id="tbl-fac-wrap">${rFacTable(factors)}</div>`;
 }
 
-function rFacTable(factors,hold){
+function rFacTable(factors){
   if(!factors||!factors.length)return'<p style="color:var(--txt);font-size:12px">No factor data</p>';
-  let facsSorted=[...factors].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+  let facsFinite=factors.filter(f=>f&&f.n&&isFinite(f.a));
+  let facsSorted=[...facsFinite].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
   const isFacPrimary=f=>FAC_PRIMARY.has(f.n)||/momentum/i.test(f.n);
   let showAll=_facView==='all';
   let visible=showAll?facsSorted:facsSorted.filter(isFacPrimary);
+  if(!visible.length&&!showAll){
+    return'<p style="color:var(--txt);font-size:12px;padding:6px 0">No primary factors in view — try All.</p>';
+  }
 
   // Max absolute exposure for diverging bar scaling
-  let maxExp=Math.max(...factors.map(f=>Math.abs(f.a||0)),0.01);
+  let maxExp=Math.max(...facsFinite.map(f=>Math.abs(f.a||0)),0.01);
 
   // Prior-period exposure map for Profitability warning
   let priorExpMap={};
@@ -1747,30 +1754,31 @@ function rFacTable(factors,hold){
     // Diverging bar: blue=positive right, amber=negative left; fills from center
     let pct=Math.round((expAbs/maxExp)*45);  // max 45% width so text stays readable
     let barBg=expVal>=0
-      ?`linear-gradient(to right, transparent 50%, rgba(99,102,241,0.22) 50%, rgba(99,102,241,0.22) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`
-      :`linear-gradient(to left, transparent 50%, rgba(245,158,11,0.22) 50%, rgba(245,158,11,0.22) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`;
+      ?`linear-gradient(to right, transparent 50%, var(--fac-bar-pos) 50%, var(--fac-bar-pos) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`
+      :`linear-gradient(to left, transparent 50%, var(--fac-bar-neg) 50%, var(--fac-bar-neg) calc(50% + ${pct}%), transparent calc(50% + ${pct}%))`;
     // Profitability: reversed color (positive exposure = good)
     let expColor=isProfitability
       ?(expVal>0.1?'var(--pos)':expVal<-0.1?'var(--neg)':'var(--txth)')
       :(expVal>0?'var(--pos)':'var(--neg)');
-    let rowBase=isProfitability?'background:rgba(251,146,60,0.06);border-left:4px solid #fb923c;':'border-left:4px solid transparent;';
+    let rowBase=isProfitability?'background:rgba(251,146,60,0.06);border-left:4px solid var(--prof);':'border-left:4px solid transparent;';
     // Profitability amber warning: exposure decreased vs prior week
     let profWarn='';
     if(isProfitability&&priorExpMap['Profitability']!=null&&priorExpMap['Profitability']<-0.05){
-      profWarn=' <span class="tip" data-tip="Profitability exposure decreased vs prior week" style="color:#fb923c;font-size:10px">⚠</span>';
+      profWarn=' <span class="tip" data-tip="Profitability exposure decreased vs prior week" style="color:var(--prof);font-size:10px">⚠</span>';
     }
     let profTip=isProfitability?' class="tip" data-tip="Intentional exposure — higher profitability is desired. Green=increasing (good), Red=decreasing (risk)."':'';
     let facHist=(cs.hist&&cs.hist.fac)?cs.hist.fac[f.n]:null;
     let sparkVals=facHist?facHist.slice(-12).map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
-    let spark=sparkVals.length>=2?mkSparkline(sparkVals,48,18,isProfitability?'#fb923c':null):'';
+    let profColor=getComputedStyle(document.body).getPropertyValue('--prof').trim()||'#fb923c';
+    let spark=sparkVals.length>=2?mkSparkline(sparkVals,48,18,isProfitability?profColor:null):'';
     let nm=f.n.replace(/'/g,"\\'");
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
       <td data-col="name"${profTip}>${isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n}</td>
       <td class="r" data-col="exp" data-sv="${expVal}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
-      <td class="r" data-col="te" data-sv="${f.c??0}">${f2(f.c,1)}%</td>
+      <td class="r" data-col="te" data-sv="${f.c??''}">${f2(f.c,1)}%</td>
       <td class="r" data-col="spark">${spark}</td>
-      <td class="r" data-col="ret" data-sv="${f.ret??0}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-      <td class="r" data-col="imp" data-sv="${f.imp??0}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+      <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
+      <td class="r" data-col="imp" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
     </tr>`;
   };
 
@@ -1778,7 +1786,7 @@ function rFacTable(factors,hold){
     <th data-col="name" onclick="sortTbl('tbl-fac',0)">Factor</th>
     <th class="r tip" data-col="exp" data-tip="Active exposure vs benchmark" onclick="sortTbl('tbl-fac',1)">Exposure</th>
     <th class="r tip" data-col="te" data-tip="Contribution to tracking error" onclick="sortTbl('tbl-fac',2)">TE%</th>
-    <th class="r" data-col="spark" onclick="sortTbl('tbl-fac',3)">12wk</th>
+    <th class="r" data-col="spark">12wk</th>
     <th class="r tip" data-col="ret" data-tip="Factor return for the period" onclick="sortTbl('tbl-fac',4)">Return</th>
     <th class="r tip" data-col="imp" data-tip="Exposure × Return impact" onclick="sortTbl('tbl-fac',5)">Impact</th>
   </tr></thead>`;
@@ -2281,13 +2289,16 @@ function rSecChart(s){
 }
 
 function rRegChart(s){
-  let d=[...s.regions].filter(x=>x.n).sort((a,b)=>b.a-a.a);
-  if(!d.length)return;
+  let el=$('regChartDiv');
+  let d=[...(s.regions||[])].filter(x=>x.n).sort((a,b)=>b.a-a.a);
+  if(!d.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No region data</p>';return;}
   let names=d.map(x=>x.n);
   let pvals=d.map(x=>+(x.p||0).toFixed(2));
   let bvals=d.map(x=>+(x.b||0).toFixed(2));
   let h=Math.max(200,d.length*36+80);
-  let el=$('regChartDiv');if(el)el.style.height=h+'px';
+  if(el)el.style.height=h+'px';
+  let priC=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#6366f1';
+  let bmC=getComputedStyle(document.body).getPropertyValue('--txt').trim()||'#6b7280';
   let maxW=Math.max(...pvals,...bvals,5);
   let xmax=Math.ceil((maxW+5)/5)*5;
   let tvStep=xmax>=20?5:2;
@@ -2295,10 +2306,10 @@ function rRegChart(s){
   for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
   Plotly.newPlot('regChartDiv',[
     {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
-     marker:{color:'rgba(99,102,241,0.85)'},customdata:pvals,
+     marker:{color:priC,opacity:0.85},customdata:pvals,
      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
     {name:'Benchmark',type:'bar',orientation:'h',y:names,x:bvals,
-     marker:{color:'rgba(75,85,99,0.85)'},
+     marker:{color:bmC,opacity:0.6},
      hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'}
   ],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'Inter',color:THEME().tick,size:11},height:h,barmode:'overlay',
@@ -2691,15 +2702,20 @@ function rMCR(s){
 }
 
 function rFRB(s){
-  let facs=s.factors;
-  if(!facs||!facs.length){let el=document.getElementById('frbDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
-  let total=facs.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
+  let facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.c));
+  let el=document.getElementById('frbDiv');
+  if(!facs.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
+  let posColor=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negColor=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+  let cData=facs.map(f=>[+(f.c).toFixed(2), f.c>=0?'adds risk':'diversifies']);
   Plotly.newPlot('frbDiv',[{
-    labels:facs.map(f=>f.n),values:facs.map(f=>Math.abs(f.c||0)),type:'pie',
-    marker:{colors:['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899']},
+    labels:facs.map(f=>f.n),values:facs.map(f=>Math.abs(f.c)),type:'pie',
+    marker:{colors:facs.map(f=>f.c>=0?negColor:posColor)},
+    customdata:cData,
     hole:0.4,textinfo:'label+percent',textfont:{size:10,color:THEME().tickH},
-    hovertemplate:'%{label}<br>Contrib: %{value:.2f}%<br>%{percent}<extra></extra>'
+    hovertemplate:'<b>%{label}</b><br>TE contribution: %{customdata[0]}% (%{customdata[1]})<br>Share of factor risk: %{percent}<extra></extra>'
   }],{...plotBg,margin:{l:20,r:20,t:10,b:10},showlegend:false},plotCfg);
+  if(el&&el.on){el.on('plotly_click',function(d){if(d&&d.points&&d.points[0]&&typeof oDrF==='function'){oDrF(d.points[0].label);}});}
 }
 
 // Toggle helpers
@@ -4829,7 +4845,7 @@ function savePrefs(){try{localStorage.setItem(PREFS_KEY,JSON.stringify(_prefs));
 function savePref(key,val){_prefs[key]=val;savePrefs();}
 // ===== ALERT THRESHOLDS =====
 const THRESHOLDS_KEY='rr_thresholds';
-const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,asDeltaMin:-1,freshAmberDays:8,freshRedDays:21};
+const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,intentionalFactorSigma:0.2,asDeltaMin:-1,freshAmberDays:8,freshRedDays:21};
 let _thresholds={..._thresholdsDefault};
 function loadThresholds(){
   try{let s=JSON.parse(localStorage.getItem(THRESHOLDS_KEY)||'{}');
@@ -5385,13 +5401,14 @@ function oDrChar(metric){
 // ===== RISK BUDGET DETAILED DRILL =====
 function oDrRiskBudget(){
   let m=$('riskBudgetModal');
-  let facs=cs.factors;
-  let total=facs.reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
+  let facs=(cs.factors||[]).filter(f=>f&&f.n&&isFinite(f.c));
+  let total=facs.reduce((a,f)=>a+Math.abs(f.c),0)||1;
+  let intentionalSigma=_thresholds.intentionalFactorSigma??_thresholdsDefault.intentionalFactorSigma;
 
   let details=facs.map(f=>{
-    let pctOfTotal=Math.abs(f.c||0)/total*100;
-    let intentional=Math.abs(f.a??0)>0.2;
-    return{n:f.n,e:f.a,c:f.c||0,pct:pctOfTotal,mcr:+(f.c*cs.sum.te/100||0).toFixed(3),intentional};
+    let pctOfTotal=Math.abs(f.c)/total*100;
+    let intentional=Math.abs(f.a??0)>intentionalSigma;
+    return{n:f.n,e:f.a,c:f.c,pct:pctOfTotal,mcr:+(f.c*cs.sum.te/100||0).toFixed(3),intentional};
   }).sort((a,b)=>b.pct-a.pct);
 
   let rows=details.map(d=>`<tr>
@@ -5417,14 +5434,17 @@ function oDrRiskBudget(){
   m.classList.add('show');
 
   setTimeout(()=>{
+    let posColor=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+    let negColor=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+    let priColor=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#6366f1';
     Plotly.newPlot('rbPieDiv',[{
       labels:details.map(d=>d.n),values:details.map(d=>d.pct),type:'pie',hole:0.45,
-      marker:{colors:['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899']},
+      marker:{colors:details.map(d=>d.c>=0?negColor:posColor)},
       textinfo:'label+percent',textfont:{size:10,color:THEME().tickH}
     }],{...plotBg,margin:{l:10,r:10,t:10,b:10},showlegend:false},plotCfg);
 
     Plotly.newPlot('rbBarDiv',[
-      {x:details.map(d=>d.n),y:details.map(d=>d.pct),type:'bar',name:'% of Total Risk',marker:{color:details.map(d=>d.intentional?'#6366f1':'#ef4444')},
+      {x:details.map(d=>d.n),y:details.map(d=>d.pct),type:'bar',name:'% of Total Risk',marker:{color:details.map(d=>d.intentional?priColor:negColor)},
       text:details.map(d=>f2(d.pct,1)+'%'),textposition:'outside',textfont:{size:10,color:THEME().tick}}
     ],{...plotBg,yaxis:{...plotBg.yaxis,title:'% of Total Risk'},xaxis:{...plotBg.xaxis}},plotCfg);
   },50);

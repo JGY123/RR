@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-21 (Chief of Staff handoff session)
+last_updated: 2026-04-21 (Batch 1 closed)
 ---
 
 # Session State — Live
@@ -13,39 +13,38 @@ last_updated: 2026-04-21 (Chief of Staff handoff session)
 ---
 
 ## Current phase
-**Tier 1 tile audits, Batch 1 about to launch.**
+**Tier 1 tile audits, Batch 1 closed.** Ready to plan Batch 2.
 Production deployment planning paused pending Redwood IT confirmation of server layout.
 
 ---
 
 ## Just finished (this session, 2026-04-21)
-- `v1.0` release tagged and pushed — cross-cutting ship-readiness sweep (sort/export/empty-state parity on all data tables)
-- `cardCountry` tile audit v1 + v1.fixes applied
-- `tile-specs/AUDIT_LEARNINGS.md` — shared ledger, read first by every future audit agent
-- `HANDOFF.md` — 11-section operations doc (tile inventory, ingestion contract, gotchas, release procedure)
-- `LIEUTENANT_BRIEF.md` — fast-orientation doc for any new Claude thread or subagent
-- SurpriseEdge lessons extracted and applied (freshness badge confirmed live at `dashboard_v7.html:709`)
-- Chief of Staff mandate formalized by user — execute with judgment, flag context length proactively, maintain transition files
+- **Batch 1 fixes committed + pushed** — `e50409a` on main; tags `tileaudit.{cardThisWeek,cardChars,cardFacButt}.v1` + `.v1.fixes` pushed
+- Applied ~17 trivial fixes across 3 tiles (PNG removals, tooltips, isFinite guards, theme colors, plotly_click drill wiring, threshold defaults, empty-state card, +N more tail, truncation unify, data-sv null fix)
+- Phantom `portfolio-characteristics-spec.md` deleted; still-applicable ideas salvaged into `BACKLOG.md` as B1
+- `BACKLOG.md` created — 8 non-trivial items queued (B1–B8) with origin / size / blockers
+- `v1.0` release + `docs.governance.v1` (earlier in session) — governance triad (HANDOFF + LIEUTENANT_BRIEF + SESSION_STATE) committed
+- Batch 1 audits (cardThisWeek, cardChars, cardFacButt) — each YELLOW, documented under `tile-specs/`; cross-tile patterns appended to `AUDIT_LEARNINGS.md`
+- Chief of Staff mandate formalized — context-length tripwire + transition files + lieutenant training
 
 ---
 
 ## In flight
-*(none — at a checkpoint)*
+Nothing in flight. Awaiting user direction for Batch 2 scoping (or other priority work).
+
+### New cross-tile learnings appended
+- Week-selector trap (tiles reading `s.sum` vs `getSelectedWeekSum()`) → added to Shared state traps
+- Sort-null anti-pattern (`data-sv="${c.b??0}"` corrupts sort) → seen in ≥3 tiles
+- Plotly click-drill parity (viz tiles often miss it despite having a full-screen sibling wired) → new Plotly section
+- New "Synthesis / insight tiles" section (narrative cards with drill-link expectations)
 
 ---
 
 ## Next up (in order)
-1. **Commit** the 4 untracked governance docs (`HANDOFF.md`, `LIEUTENANT_BRIEF.md`, `SESSION_STATE.md`, `tile-specs/AUDIT_LEARNINGS.md`) with tag `docs.governance.v1`.
-2. **Launch Batch 1 tile audits** — 3 parallel `tile-audit` subagents:
-   - `cardThisWeek` (Overview tab, week-level KPI card)
-   - `cardChars` (Overview tab, portfolio characteristics)
-   - `cardFacButt` (Factors tab, factor-exposure button grid)
-   Each must read `tile-specs/AUDIT_LEARNINGS.md` first and append cross-tile insights on exit.
-3. **Review audits, apply trivial fixes** in main session (subagents never edit `dashboard_v7.html`).
-4. **Tag** `tileaudit.{tile}.v1` per tile signed off; `tileaudit.{tile}.v1.fixes` after applying.
-5. **Update this file** after Batch 1 lands.
-
-Batches 2–8 triage (22 tiles remaining) — see `HANDOFF.md §6`. Not scheduled until Batch 1 closes.
+1. **Plan Batch 2** — pick next 2–3 tiles from `HANDOFF.md §6` (22 tiles remaining). Candidates: Overview siblings (`cardTE`, `cardAS`, `cardBeta`, `cardHoldingsKpi`) or move to Sectors/Regions tab tiles.
+2. **Consider scheduling B3 (cardThisWeek drill links)** — smallest non-trivial (~30 lines), no blockers, locked-in value.
+3. **Ask user** re: priority tile OR greenlight Batch 2 by judgment.
+4. **Continue cadence**: spawn tile-audit subagents → review → apply trivial fixes → tag `.v1` + `.v1.fixes` → push.
 
 ---
 
@@ -74,13 +73,16 @@ Do not wait for auto-compact. Surface the option; let the user choose.
 
 ## Current tags / markers
 - `v1.0` — ship-readiness sweep, pushed to origin
-- `tileaudit.cardSectors.v1`, `tileaudit.cardHoldings.v1`, `tileaudit.cardCountry.v1`, `tileaudit.cardCountry.v1.fixes`
-- `working.20260420.1805.pre-v1-sweep` — most recent pre-risk safety tag
+- `docs.governance.v1` — HANDOFF + LIEUTENANT_BRIEF + SESSION_STATE triad
+- `tileaudit.cardSectors.v1`, `cardHoldings.v1`, `cardCountry.v1`(+`.fixes`)
+- `tileaudit.cardThisWeek.v1`(+`.fixes`), `cardChars.v1`(+`.fixes`), `cardFacButt.v1`(+`.fixes`) — Batch 1 signed off + fixes applied
+- `working.20260421.*.pre-batch1-fixes` — most recent pre-risk safety tag
 
 ---
 
 ## Checkpoint log (append-only, newest on top)
-- **2026-04-21 · Chief of Staff handoff** — user formalized Chief of Staff role, asked for context-length alert discipline + lieutenant training. Created `LIEUTENANT_BRIEF.md` + this fresh `SESSION_STATE.md`. Archived prior state log to `archive/session-states/`. About to commit governance docs, then launch Batch 1.
+- **2026-04-21 · Batch 1 closed** — 9 Edits (~17 trivial fixes) across cardChars/cardFacButt/cardThisWeek applied, verified (disk greps + browser render + 0 console errors), committed `e50409a`, tagged ×6, pushed to origin. Phantom spec deleted; `BACKLOG.md` created with B1–B8.
+- **2026-04-21 · Chief of Staff handoff** — user formalized Chief of Staff role, asked for context-length alert discipline + lieutenant training. Created `LIEUTENANT_BRIEF.md` + fresh `SESSION_STATE.md`. Archived prior state log to `archive/session-states/`. Committed governance docs, launched Batch 1.
 - **2026-04-20** — `v1.0` shipped. cardCountry v1 audit + fixes. `AUDIT_LEARNINGS.md` + `HANDOFF.md` created.
 - **2026-04-19** — cardSectors v1 + cardHoldings v1 audits signed off. Cross-project ecosystem sync.
 - Earlier history → `archive/session-states/SESSION_STATE-2026-04-19.md`.

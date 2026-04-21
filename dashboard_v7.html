@@ -949,7 +949,7 @@ function thisWeekCardHtml(s){
   // TE status
   let te=s.sum.te;
   if(te!=null){
-    let teRed=_thresholds.teRed||8,teAmb=_thresholds.teAmber||6;
+    let teRed=_thresholds.teRed??_thresholdsDefault.teRed,teAmb=_thresholds.teAmber??_thresholdsDefault.teAmber;
     if(te>=teRed) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is above the ${teRed}% red threshold — elevated risk budget.`);
     else if(te>=teAmb) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is in amber territory (${teAmb}\u2013${teRed}% band).`);
     else if(te>0) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is within the ${teAmb}% amber threshold.`);
@@ -969,14 +969,17 @@ function thisWeekCardHtml(s){
     stateBullets.push(`<strong>${shortN}</strong> dominates risk: ${f2(topRisk.p,1)}% weight, ${f2(Math.abs(topRisk.tr||0),1)}% of TE.`);
   }
   // Factor tilts > 0.5σ
-  let sigma=_thresholds.factorSigma||0.5;
-  let bigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>=sigma).sort((a,b)=>Math.abs(b.a||0)-Math.abs(a.a||0)).slice(0,3);
+  let sigma=_thresholds.factorSigma??_thresholdsDefault.factorSigma;
+  let allBigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>=sigma).sort((a,b)=>Math.abs(b.a||0)-Math.abs(a.a||0));
+  let bigFac=allBigFac.slice(0,3);
   if(bigFac.length){
     let names=bigFac.map(f=>`${f.n} ${fp(f.a,2)}\u03c3`).join(', ');
-    stateBullets.push(`Significant factor tilts (\u2265${sigma}\u03c3): ${names}.`);
+    let moreN=allBigFac.length-bigFac.length;
+    let tail=moreN>0?`, +${moreN} more`:'';
+    stateBullets.push(`Significant factor tilts (\u2265${sigma}\u03c3): ${names}${tail}.`);
   }
   // Cash position
-  let cashMax=_thresholds.cashMax||5;
+  let cashMax=_thresholds.cashMax??_thresholdsDefault.cashMax;
   if(s.sum.cash!=null&&s.sum.cash>cashMax){
     stateBullets.push(`Cash position <strong>${f2(s.sum.cash,1)}%</strong> exceeds the ${cashMax}% alert threshold.`);
   }
@@ -1026,20 +1029,27 @@ function thisWeekCardHtml(s){
         diffs.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
         diffs.slice(0,2).forEach(dd=>{
           let col=dd.d>0?'var(--pos)':'var(--neg)',arrow=dd.d>0?'\u2191':'\u2193';
-          let shortN=(dd.n||dd.t).length>20?(dd.n||dd.t).slice(0,19)+'\u2026':(dd.n||dd.t);
+          let shortN=(dd.n||dd.t).length>24?(dd.n||dd.t).slice(0,23)+'\u2026':(dd.n||dd.t);
           changeBullets.push(`<strong>${shortN}:</strong> <span style="color:${col}">${arrow}${fp(dd.d,2)}%</span> weight`);
         });
       }
     }
   }catch(e){}
 
-  if(!stateBullets.length&&!changeBullets.length)return '';
+  let tD=_thresholdsDefault;
+  let thresholdTipBase=`Thresholds (configurable in Settings): TE red \u2265 ${_thresholds.teRed??tD.teRed}%, TE amber \u2265 ${_thresholds.teAmber??tD.teAmber}%, factor |\u03c3| \u2265 ${_thresholds.factorSigma??tD.factorSigma}, cash > ${_thresholds.cashMax??tD.cashMax}%.`;
+  if(!stateBullets.length&&!changeBullets.length){
+    return `<div class="card" id="cardThisWeek" style="margin-bottom:16px">
+      <div class="card-title">This Week \u2014 ${s.name||s.id}</div>
+      <p style="color:var(--txt);font-size:12px;margin-top:8px">No material state alerts or week-over-week changes exceed current thresholds. <span class="tip" data-tip="${thresholdTipBase}" style="cursor:help;text-decoration:underline dotted">(thresholds)</span></p>
+    </div>`;
+  }
   let stateHtml=stateBullets.length?`<div style="flex:1;min-width:300px">
-    <div style="font-size:10px;color:var(--pri);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px">State</div>
+    <div class="tip" data-tip="${thresholdTipBase}" style="font-size:10px;color:var(--pri);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px;cursor:help">State</div>
     <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--txth)">${stateBullets.map(b=>`<li>${b}</li>`).join('')}</ul>
   </div>`:'';
   let changeHtml=changeBullets.length?`<div style="flex:1;min-width:300px">
-    <div style="font-size:10px;color:var(--pri);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px">Changes vs Prior Week</div>
+    <div class="tip" data-tip="Week-over-week deltas vs the previous weekly snapshot. TE up \u2192 red (more risk); other deltas shown neutral unless beta is moving further from 1.0." style="font-size:10px;color:var(--pri);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px;cursor:help">Changes vs Prior Week</div>
     <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--txth)">${changeBullets.map(b=>`<li>${b}</li>`).join('')}</ul>
   </div>`:'';
   return `<div class="card" id="cardThisWeek" style="margin-bottom:16px">
@@ -1143,8 +1153,7 @@ function rExp(){
   <!-- Row 3: Factor Exposures -->
   <div class="grid g2">
     <div class="card" id="cardFacButt">
-      <div class="flex-between"><div class="card-title">Factor Risk Map</div>
-      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardFacButt')">PNG</button></div></div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Active factor exposures (portfolio − benchmark, in σ). Bars diverge: positive = overweight, negative = underweight. Click a bar to drill into the factor." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Risk Map</div></div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
       <div id="facButtDiv" style="height:480px"></div>
     </div>
@@ -1231,8 +1240,8 @@ function rExp(){
       ${rRnk(s.ranks)}
     </div>
     <div class="card" id="cardChars">
-      <div class="flex-between"><div class="card-title tip" data-tip="Click a metric for historical comparison">Portfolio Characteristics</div>
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardChars');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#cardChars table','characteristics');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div></div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals. Click a metric for details.">Portfolio Characteristics</div>
+      <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button></div>
       ${rChr(s.chars)}
     </div>
   </div>
@@ -1796,10 +1805,11 @@ function filterByRank(rank){
 function rChr(chars){
   if(!chars.length)return'<p style="color:var(--txt);font-size:12px">No characteristic data</p>';
   let rows=chars.map(c=>{
-    let diff=c.b!=null?c.p-c.b:null;let cls=diff!=null&&diff>0?'pos':diff!=null?'neg':'';
-    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r" data-sv="${c.p}">${f2(c.p,1)}</td><td class="r" data-sv="${c.b??0}">${f2(c.b,1)}</td><td class="r ${cls}" data-sv="${diff??0}">${diff!=null?fp(diff,1):'—'}</td></tr>`;
+    let diff=(c.b!=null&&c.p!=null&&isFinite(c.p)&&isFinite(c.b))?c.p-c.b:null;
+    let cls=diff!=null&&diff>0?'pos':diff!=null&&diff<0?'neg':'';
+    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r" data-sv="${c.p??''}">${f2(c.p,1)}</td><td class="r" data-sv="${c.b??''}">${f2(c.b,1)}</td><td class="r ${cls}" data-sv="${diff??''}">${diff!=null?fp(diff,1):'—'}</td></tr>`;
   }).join('');
-  return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r" onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r tip" data-tip="Portfolio value for this metric" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r tip" data-tip="Benchmark value (— if FactSet did not provide it)" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r tip" data-tip="Portfolio minus benchmark. Green = portfolio higher, red = lower. See metric tooltip for whether higher is better." onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rCountryTable(countries,hold){
@@ -2312,7 +2322,7 @@ function rFacTopTeStrip(s){
     let ow=a>=0;
     let bg=ow?'rgba(34,197,94,0.12)':'rgba(239,68,68,0.12)';
     let bd=ow?'rgba(34,197,94,0.45)':'rgba(239,68,68,0.45)';
-    let accent=ow?'#22c55e':'#ef4444';
+    let accent=ow?'var(--pos)':'var(--neg)';
     return `<span style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:${bg};border:1px solid ${bd};font-size:11px"><span style="color:var(--txth);font-weight:600">${f.n}</span><span style="color:${accent};font-weight:600">${fp(a,2)}\u03c3</span><span style="color:var(--txt)">${f2(c,1)}% TE</span></span>`;
   }).join('');
 }
@@ -2321,10 +2331,11 @@ function rFacButt(s){
   rFacTopTeStrip(s);
   // Single-trace diverging bar: f.a (active exposure) only
   // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
-  let facs=s.factors;
-  if(!facs||!facs.length){let el=document.getElementById('facButtDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
+  let facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a));
+  if(!facs.length){let el=document.getElementById('facButtDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
   let names=facs.map(f=>f.n);
-  let vals=facs.map(f=>+(f.a??0).toFixed(3));
+  let vals=facs.map(f=>+(f.a).toFixed(3));
+  let cData=facs.map(f=>[isFinite(f.c)?f2(f.c,1):'—', isFinite(f.dev)?fp(f.dev,2):'—']);
   let maxE=Math.max(...vals.map(Math.abs),0.3);
   let xmax=Math.ceil(maxE*10)/10+0.2;
   let tvStep=xmax>1?0.5:xmax>0.5?0.2:0.1;
@@ -2336,11 +2347,13 @@ function rFacButt(s){
   let el=document.getElementById('facButtDiv');
   if(el)el.style.height=h+'px';
   let T=THEME();
+  let posColor=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#22c55e';
+  let negColor=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
   Plotly.newPlot('facButtDiv',[{
     name:'Active Exposure',type:'bar',orientation:'h',
-    y:names,x:vals,
-    marker:{color:vals.map(v=>v>=0?'#6366f1':'#a78bfa')},
-    hovertemplate:'<b>%{y}</b><br>Active Exposure: %{x:.3f}<extra></extra>'
+    y:names,x:vals,customdata:cData,
+    marker:{color:vals.map(v=>v>=0?posColor:negColor)},
+    hovertemplate:'<b>%{y}</b><br>Active Exposure: %{x:.3f}\u03c3<br>TE Contrib: %{customdata[0]}%<br>Factor σ: %{customdata[1]}<extra></extra>'
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'Inter',color:T.tick,size:11},
@@ -2353,6 +2366,7 @@ function rFacButt(s){
            tickfont:{color:T.tick,size:9},title:'Active Exposure'},
     showlegend:false
   },plotCfg);
+  if(el&&el.on){el.on('plotly_click',function(d){if(d&&d.points&&d.points[0]&&typeof oDrF==='function')oDrF(d.points[0].y);});}
 }
 
 const COUNTRY_ISO3={

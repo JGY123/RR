@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-21
+last_updated: 2026-04-21 (Batch 2 closed)
 ---
 
 # RR Backlog
@@ -14,6 +14,72 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - When an item ships, move to "Shipped" section at bottom.
 
 ---
+
+## B19 · cardFRB — week-selector awareness
+- **Origin:** `tile-specs/cardFRB-audit-2026-04-21.md` §7
+- **Size:** S (~20 lines)
+- **Blockers:** none on latest week; historical weeks only have `hist.sum` — factor-contribution slices unavailable pre-current-week.
+- **Notes:** When `_selectedWeek` ≠ latest, either hide FRB with a "(latest week only)" banner or render a greyed-out snapshot. Parallel to B4.
+
+## B18 · cardFRB — hover/focus affordance on clickable card
+- **Origin:** cardFRB audit §7
+- **Size:** XS (~5 lines CSS)
+- **Blockers:** none
+- **Notes:** `.card[role=button]:hover{box-shadow:...}` + focus ring. Applies to cardFacButt too (same pattern).
+
+## B17 · cardFRB / factor drill — sortable + drillable detail table
+- **Origin:** cardFRB audit §7
+- **Size:** S–M (~60 lines)
+- **Blockers:** none
+- **Notes:** `oDrRiskBudget()` currently renders static summary. Upgrade: sortable table with factor name / TE contribution / direction / share-of-factor-risk; row click → `oDrF(factorName)`. Pattern mirrors existing `rFacTable`.
+
+## B16 · cardFRB — CSV export
+- **Origin:** cardFRB audit §7
+- **Size:** XS (~10 lines)
+- **Blockers:** none
+- **Notes:** Add `CSV` export button pattern from neighbor tiles; export `[factor, contribution, direction]`. Hidden-table + `exportCSV` pattern.
+
+## B15 · cardRegions — Spotlight two-row header parity
+- **Origin:** `tile-specs/cardRegions-audit-2026-04-21.md` §7
+- **Size:** S (~25 lines)
+- **Blockers:** decision on whether to expose `rankToggleHtml3` for regions (shared `_secRankMode` with sectors — may be appropriate or may be confusing).
+- **Notes:** The reg-branch table at rWt renders R/V/Q as plain columns. The sec-branch wraps them with a "Spotlight / Wtd·Avg·BM" two-row header. Parity would make the ranks discoverable and mode-switchable.
+
+## B14 · Region column-picker
+- **Origin:** cardRegions audit §7
+- **Size:** S (~30 lines)
+- **Blockers:** none
+- **Notes:** Regions table has no column-visibility toggle (unlike sectors). Add `applyRegColVis()` + a small gear/eye toggle. Low priority — regions have fewer columns.
+
+## B13 · CMAP drift telemetry
+- **Origin:** cardRegions + cardFacDetail audits (cross-tile)
+- **Size:** S (~20 lines)
+- **Blockers:** none
+- **Notes:** Multiple tiles read CSS vars in JS (`getComputedStyle(...).getPropertyValue('--pos')`). If a token is removed/renamed the fallback silently activates. Add a startup check that warns to console if any expected var is empty.
+
+## B12 · Sparkline active-vs-raw mode when no bench
+- **Origin:** cardRegions audit §6 (inlineSparkSvg)
+- **Size:** XS (~10 lines)
+- **Blockers:** none
+- **Notes:** `inlineSparkSvg` plots `.a` (active weight). For strategies with no/low bench coverage, `.a` ≈ `.p`. Tooltip or line styling could indicate this. Low priority.
+
+## B11 · Profitability-decrease threshold → `_thresholds`
+- **Origin:** cardFacDetail audit §7
+- **Size:** XS (~3 lines)
+- **Blockers:** none
+- **Notes:** Hardcoded `-0.05` σ threshold for Profitability-warn span lives in `facRow`. Should move to `_thresholdsDefault` as `profitabilityWarnSigma`.
+
+## B10 · Factor primary/secondary regex → explicit enumeration
+- **Origin:** cardFacDetail audit §7 (AUDIT_LEARNINGS cross-tile)
+- **Size:** XS (~5 lines)
+- **Blockers:** none
+- **Notes:** `/momentum/i.test(f.n)` in `rFacTable` is a regex workaround for FAC_PRIMARY set miss. Replace with explicit `FAC_PRIMARY` population at config time. Fragile as-is.
+
+## B9 · Factor-group palette canonicalization
+- **Origin:** cardFacDetail + cardFRB + cardFacButt audits (cross-tile)
+- **Size:** S (~25 lines CSS + JS)
+- **Blockers:** none
+- **Notes:** Factor-group hex colors (indigo, amber/prof, etc.) are duplicated across `FAC_GROUP_DEFS`, `.fgp` CSS, cardFacDetail row borders, FRB labels. Consolidate into a `--fac-*` CSS-var suite + single source of truth in `FAC_GROUP_DEFS`. Shared CSS additions in this batch (`--prof`, `--fac-bar-pos/neg`) are a first step; finish the job.
 
 ## B8 · Weekly-append ingestion automation
 - **Origin:** HANDOFF.md §7, user direction 2026-04-20

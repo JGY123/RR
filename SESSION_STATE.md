@@ -13,8 +13,10 @@ last_updated: 2026-04-21 (Batch 2 closed)
 ---
 
 ## Current phase
-**Tier 1 tile audits, Batch 2 closed.** 6 of ~24 tiles signed off. Ready to plan Batch 3.
+**Tier 1 tile audits, Batch 2 closed.** 6 of ~24 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon at the end where user reviews each tile in-browser and gives explicit OK.
 Production deployment planning paused pending Redwood IT confirmation of server layout.
+
+> **Language discipline:** `.v1` / `.v1.fixes` tags = "audit complete" / "trivial fixes applied". These are NOT signoff. Signoff happens in the review marathon. Never write "signed off" in checkpoints, commits, or docs until user has explicitly OK'd the tile in-browser.
 
 ---
 
@@ -76,15 +78,16 @@ Do not wait for auto-compact. Surface the option; let the user choose.
 - `v1.0` — ship-readiness sweep, pushed to origin
 - `docs.governance.v1` — HANDOFF + LIEUTENANT_BRIEF + SESSION_STATE triad
 - `tileaudit.cardSectors.v1`, `cardHoldings.v1`, `cardCountry.v1`(+`.fixes`)
-- `tileaudit.cardThisWeek.v1`(+`.fixes`), `cardChars.v1`(+`.fixes`), `cardFacButt.v1`(+`.fixes`) — Batch 1 signed off + fixes applied
-- `tileaudit.cardFacDetail.v1`(+`.fixes`), `cardFRB.v1`(+`.fixes`), `cardRegions.v1`(+`.fixes`) — Batch 2 signed off + fixes applied
+- `tileaudit.cardThisWeek.v1`(+`.fixes`), `cardChars.v1`(+`.fixes`), `cardFacButt.v1`(+`.fixes`) — Batch 1 audited + fixes applied, pending review
+- `tileaudit.cardFacDetail.v1`(+`.fixes`), `cardFRB.v1`(+`.fixes`), `cardRegions.v1`(+`.fixes`) — Batch 2 audited + fixes applied, pending review
 - `working.20260421.2131.pre-batch2-commit` — most recent pre-risk safety tag
 
 ---
 
 ## Checkpoint log (append-only, newest on top)
-- **2026-04-21 · Batch 2 closed** — ~20 trivial fixes across cardFacDetail/cardFRB/cardRegions + PM-gated sign-colorize on cardFRB (user: "yes" → Option 1). Shared CSS tokens added (`--prof`, `--fac-bar-pos/neg`). Verified via browser (tested both sign branches green/red, confirmed plotly_click drill opens Country Factor Drill modal, 0 console errors). Committed `3dcdae8`, tagged ×6, pushed. BACKLOG extended B9–B19.
-- **2026-04-21 · Batch 1 closed** — 9 Edits (~17 trivial fixes) across cardChars/cardFacButt/cardThisWeek applied, verified (disk greps + browser render + 0 console errors), committed `e50409a`, tagged ×6, pushed to origin. Phantom spec deleted; `BACKLOG.md` created with B1–B8.
+- **2026-04-21 · Review cadence set to Option 3** — user clarified: `.v1.fixes` tags ≠ signoff. All tiles await in-browser review once auditing is complete. Audit-all-first, then batch-review marathon. Language corrected in SESSION_STATE.
+- **2026-04-21 · Batch 2 audited + fixes applied, pending review** — ~20 trivial fixes across cardFacDetail/cardFRB/cardRegions + PM-gated sign-colorize on cardFRB (user: "yes" → Option 1). Shared CSS tokens added (`--prof`, `--fac-bar-pos/neg`). Verified via browser (tested both sign branches green/red, confirmed plotly_click drill opens Country Factor Drill modal, 0 console errors). Committed `3dcdae8`, tagged ×6, pushed. BACKLOG extended B9–B19.
+- **2026-04-21 · Batch 1 audited + fixes applied, pending review** — 9 Edits (~17 trivial fixes) across cardChars/cardFacButt/cardThisWeek applied, verified (disk greps + browser render + 0 console errors), committed `e50409a`, tagged ×6, pushed to origin. Phantom spec deleted; `BACKLOG.md` created with B1–B8.
 - **2026-04-21 · Chief of Staff handoff** — user formalized Chief of Staff role, asked for context-length alert discipline + lieutenant training. Created `LIEUTENANT_BRIEF.md` + fresh `SESSION_STATE.md`. Archived prior state log to `archive/session-states/`. Committed governance docs, launched Batch 1.
 - **2026-04-20** — `v1.0` shipped. cardCountry v1 audit + fixes. `AUDIT_LEARNINGS.md` + `HANDOFF.md` created.
 - **2026-04-19** — cardSectors v1 + cardHoldings v1 audits signed off. Cross-project ecosystem sync.

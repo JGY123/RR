@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-21 (Batch 3 audited + fixes applied, pending review)
+last_updated: 2026-04-23 (Batch 4 audited + fixes applied, pending review)
 ---
 
 # RR Backlog
@@ -13,6 +13,46 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## B53–B60 · cardCorr non-trivials
+Origin: `tile-specs/cardCorr-audit-2026-04-23.md`. Trivial fixes (themed colorscale via `--pri`/`--neg`/`--txth`, CSV export `exportCorrCsv()`, threshold externalization to `_thresholdsDefault.corrHigh/corrDiversifier`, pearson null-when-n<3 + "—" cell text, insight-factor `oDrF` drill links, localStorage save/restore of period/freq/facs, monthly dedupe inline-comment, min-history filter `>=3`, note popup, data-tip on live card-title, ghost `screenshotCard` PNG button removed) applied inline.
+
+- **B53 · Active-vs-raw exposure policy (cross-tile)** — `rUpdateCorr` L2168 correlates raw exposure `e` but the Risk-tab UX implies **active** exposure (`e−bm`). Same conflation already confirmed at cardFacDetail L1764. PM gate: unify on one field, or expose `[Active|Raw]` toggle on both tiles. Whichever lands, the tile rename (B60) follows.
+- **B54 · Date-aligned pearson** — current pearson aligns by array index, not by date. Any factor with missing observations on some weeks shifts the alignment for that pair. Build per-factor `{date→value}` Maps, intersect dates pairwise, then compute. ~25 LOC.
+- **B55 · Half-triangle toggle** — symmetric matrix redundantly renders both halves. Add `[Full | Upper]` toolbar toggle; upper-triangle view halves visual noise on 20+ factor grids. ~10 LOC.
+- **B56 · Factor-pair drill** — click a cell → open a modal with the two factors' exposure series + correlation over time. Re-uses `oDrF` rendering patterns. ~60 LOC + PM call on modal layout.
+- **B57 · Full-screen variant (`renderFsCorr`)** — 20+ factors cramped at tile size. Mirror `renderFsScatter`. ~50 LOC.
+- **B58 · Id on live Risk-tab card** — anonymous card at L3096 wraps the real heatmap; `id="cardCorr"` currently belongs to the ghost placeholder (L1299). Deferred pending B59 disposition. ~2 LOC once B59 lands.
+- **B59 · Ghost tile disposition (PM gate)** — `#cardCorr` at L1299 is a named placeholder whose innerHTML is never set. Options: (a) delete, (b) promote to a second (Exposures-tab) correlation view, (c) rename ghost + give live card its own id. Blocks B58.
+- **B60 · Tile rename (post B53)** — once active-vs-raw resolves, rename card title to match ("Active Factor Correlations" vs "Factor Exposure Correlations"). ~2 LOC.
+
+---
+
+## B45–B52 · cardAttrib non-trivials
+Origin: `tile-specs/cardAttrib-audit-2026-04-23.md`. Trivial fixes (waterfall card id `cardAttribWaterfall`, tip+oncontextmenu on both card titles, `isFinite(f.imp)` filter, waterfall height cap `min(900,max(160,N*32)+20)` + overflow-y, themed bar colors via `--pos`/`--neg`, `data-col`/`data-sv` on attrib table, `plotly_click → oDrAttrib` on attrib bar, subtitle "Click any row or bar for time series") applied inline.
+
+- **B45 · `full_period_imp` semantics** — parser emits a single "full period" impact column whose window is implicit. Surface the window (e.g. "trailing 13 weeks") in the subtitle + tooltip. PM gate on exact phrasing.
+- **B46 · Week-selector awareness** — `rAttribTable` and `rFacWaterfall` silently show latest when `_selectedWeek` is set. Either hide with banner or render the selected-week slice. Same shape as B19/B43.
+- **B47 · `classifyAttrib` heuristic → explicit enumeration** — regex-based factor-family classifier is fragile; move to explicit `FAC_GROUP_DEFS` lookup. Parallel to B10.
+- **B48 · Two bar charts visual distinguishability** — `cardAttribWaterfall` (bars by factor contribution) and attrib bar inside `cardAttrib` render nearly identically. PM call: retitle, reorder, or merge. ~15 LOC + PM.
+- **B49 · Factor-name escaping in onclick handlers** — `oDrAttrib('${name}')` breaks on names with apostrophes. Use `data-factor` attribute + delegated listener. ~10 LOC.
+- **B50 · Top-20 / top-10 cap policy** — waterfall caps at 20, table caps at 10, tile-subtitle implies "full". Expose as `[Top 10 | Top 20 | All]` toggle. ~15 LOC.
+- **B51 · Keyboard handler on attrib modal** — Esc-to-close + arrow-key nav through factor rows. Mirror holdings modal pattern. ~15 LOC.
+- **B52 · Per-week drill on weekly-bars chart** — bars are clickable at week level but drill isn't wired. `plotly_click → selectWeek(bar.x)`. ~10 LOC.
+
+---
+
+## B39–B44 · cardMCR non-trivials
+Origin: `tile-specs/cardMCR-audit-2026-04-23.md`. Trivial fixes (themed `--pri`/`--pos` via getComputedStyle, zeroline, PNG removed + `exportMcrCsv()` added, `plotly_click → oSt(ticker)`, tip+oncontextmenu note popup, top-bottom disclaimer in subtitle) applied inline.
+
+- **B39 · MCR domain rename — paired with B20 (cardScatter)** — `h.mcr` is FactSet `%S` (stock-specific TE), not true marginal contribution to risk. Must land atomically across cardMCR + cardScatter + full-screen `renderFsScatter` + any sibling drill. PM gate: (a) rename to "Stock-Specific TE" / "Idiosyncratic Risk" end-to-end, or (b) document "MCR = stock-specific TE contribution" as PM shorthand. Recommend (a). Highest-value Batch 4 PM gate.
+- **B40 · Negative %S narrative** — some holdings have negative `h.mcr` (short/hedge). Current tile renders them in green but without explanation. Add hover-text line "Negative MCR = position reduces portfolio TE (hedge/short)." ~5 LOC + PM copy.
+- **B41 · Color-semantic unification** — tile colors top bars indigo (positive MCR) and bottom bars green (negative/risk-reducing); full-screen sibling inverts green/red. Same class of tile↔FS drift as cardScatter (B21). Unify or expose mode toggle.
+- **B42 · Full-screen variant (`renderFsMCR`)** — 10 bars cramped on large monitors; siblings all have ⛶. Preserve ordering + axis labels. ~60 LOC.
+- **B43 · Week-selector disclaimer** — MCR always renders latest holdings (no per-week MCR history). Subtitle hints at this but not visibly during historical week view. Add banner when `_selectedWeek` ≠ latest. ~10 LOC.
+- **B44 · CSV extension beyond top-10** — `exportMcrCsv()` currently emits only the rendered top-10+bottom-10. Extend to full holdings MCR table with opt-in via second button or modal. ~10 LOC.
 
 ---
 

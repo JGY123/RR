@@ -1226,9 +1226,9 @@ function rExp(){
 
   <!-- Row 5: Redwood Groups -->
   <div class="card" id="cardGroups">
-    <div class="flex-between"><div class="card-title">Redwood Groups</div>
+    <div class="flex-between"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div>
     <div style="display:flex;gap:6px;align-items:center">
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardGroups');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#grpTable table','groups');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
+      <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
     </div></div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
@@ -1917,25 +1917,26 @@ function rGroupTable(groups,hold){
     });
   }
   function grpWAvg(S,C,W,PW,BW,BPW){return rankAvg3(_secRankMode,S,C,W,PW,BW||0,BPW||0);}
-  const rankCell=(avg)=>{
-    if(avg==null)return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:#334155">—</td>`;
-    return`<td style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
+  const rankCell=(avg,col)=>{
+    if(avg==null)return`<td data-col="${col}" data-sv="" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:var(--txt)">—</td>`;
+    return`<td data-col="${col}" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
   };
   let hasRanks=hold&&Object.keys(grpOC).length>0;
   let rows=displayGroups.map(g=>{
     let cls=activeStyle(g.a);
     let gn=g.n;
+    let threshCls=Math.abs(g.a||0)>5?'thresh-alert':Math.abs(g.a||0)>3?'thresh-warn':'';
     let rvq=hasRanks?(
-      rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0,grpOBW[gn]||0,grpOBPW[gn]||0))+
-      rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0,grpRBW[gn]||0,grpRBPW[gn]||0))+
-      rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0,grpVBW[gn]||0,grpVBPW[gn]||0))+
-      rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0,grpQBW[gn]||0,grpQBPW[gn]||0))
+      rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0,grpOBW[gn]||0,grpOBPW[gn]||0),'o')+
+      rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0,grpRBW[gn]||0,grpRBPW[gn]||0),'r')+
+      rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0,grpVBW[gn]||0,grpVBPW[gn]||0),'v')+
+      rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0,grpQBW[gn]||0,grpQBPW[gn]||0),'q')
     ):'';
-    return`<tr class="clickable" onclick="oDrGroup('${g.n}')"><td><span class="chip">${g.n}</span></td><td class="r" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-sv="${g.a}">${fp(g.a)}</td>${rvq}</tr>`;
+    return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td><td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${rvq}</tr>`;
   }).join('');
-  let rvqTh=hasRanks?'<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',4)" class="tip" data-tip="Avg Overall MFR rank">O</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',5)">R</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',6)">V</th><th style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',7)">Q</th>':'';
+  let rvqTh=hasRanks?'<th data-col="o" style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',4)" class="tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',5)" class="tip" data-tip="Avg Revision MFR rank">R</th><th data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',6)" class="tip" data-tip="Avg Value MFR rank">V</th><th data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',7)" class="tip" data-tip="Avg Quality MFR rank">Q</th>':'';
   let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="4" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
-  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" data-col="port" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -2641,6 +2642,8 @@ function rGroupChart(s){
            tickfont:{color:THEME().tick,size:10}},
     legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
   },plotCfg);
+  let grpEl=document.getElementById('grpChartDiv');
+  if(grpEl&&grpEl.on)grpEl.on('plotly_click',d=>{let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n)oDrGroup(n);});
 }
 
 function rScat(s){
@@ -2920,18 +2923,22 @@ function riskDecompTree(s,factorRisk,idioRisk){
 function riskHistoricalTrends(s){
   let hist=s.hist&&s.hist.sum||[];
   if(!hist.length)return '';
-  let cur=hist[hist.length-1];
-  let prev=hist.length>=2?hist[hist.length-2]:null;
+  // T5: _selectedWeek-aware cur/prev — match the amber week banner
+  let idx=(typeof _selectedWeek!=='undefined'&&_selectedWeek)?hist.findIndex(h=>h.d===_selectedWeek):hist.length-1;
+  if(idx<0)idx=hist.length-1;
+  let cur=hist[idx];
+  let prev=idx>0?hist[idx-1]:null;
   let metrics=[
     {key:'te',id:'miniTE',label:'Tracking Error',fmt:v=>v!=null?f2(v,1)+'%':'—',drill:"oDrMetric('te')",color:'var(--pri)',dir:'neg'},
     {key:'as',id:'miniAS',label:'Active Share',fmt:v=>v!=null?f2(v,1)+'%':'—',drill:"oDrMetric('as')",color:'var(--acc)',dir:'neutral'},
     {key:'beta',id:'miniBeta',label:'Beta',fmt:v=>v!=null?f2(v,2):'—',drill:"oDrMetric('beta')",color:'var(--cyan)',dir:'neutral'},
-    {key:'h',id:'miniH',label:'Holdings',fmt:v=>v!=null?String(v):'—',drill:null,color:'var(--txth)',dir:'neutral'}
+    {key:'h',id:'miniH',label:'Holdings',fmt:v=>v!=null?String(v):'—',drill:"oDrMetric('h')",color:'var(--txth)',dir:'neutral'}
   ];
   let cards=metrics.map(m=>{
     let cv=cur[m.key],pv=prev?prev[m.key]:null;
     let d=cv!=null&&pv!=null?+(cv-pv).toFixed(m.key==='beta'?3:2):null;
-    let showD=d!=null&&Math.abs(d)>(m.key==='beta'?0.001:0.01);
+    // T8: raise noise floor — suppress near-zero WoW deltas on TE/AS (>0.05) and beta (>0.005)
+    let showD=d!=null&&Math.abs(d)>(m.key==='beta'?0.005:0.05);
     let col=showD?(m.dir==='neg'?(d>0?'var(--neg)':'var(--pos)'):'var(--txt)'):'var(--txt)';
     let arrow=showD?(d>0?'\u2191':'\u2193'):'';
     let dTxt=showD?(d>0?'+':'')+(m.key==='h'?Math.round(d):d.toFixed(m.key==='beta'?3:2)):'';
@@ -2946,20 +2953,32 @@ function riskHistoricalTrends(s){
     </div>`;
   }).join('');
   return `<div class="card" id="cardRiskHistTrends" style="margin-bottom:16px">
-    <div class="card-title" style="margin-bottom:10px">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
+    <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:10px">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px">${cards}</div>
   </div>`;
 }
 
 function rRiskHistMinis(s){
   let hist=s.hist&&s.hist.sum||[];
-  if(hist.length<2)return;
+  // T4: render short-history placeholder instead of empty div
+  if(hist.length<2){
+    ['miniTE','miniAS','miniBeta','miniH'].forEach(id=>{let el=document.getElementById(id);if(el)el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--txt);font-size:10px">—</div>';});
+    return;
+  }
   let dates=hist.map(h=>isoDate(h.d));
+  // T3: tokenize — pull CSS vars so theme toggles work
+  let gcs=getComputedStyle(document.body);
+  let priC=gcs.getPropertyValue('--pri').trim()||'#6366f1';
+  let accC=gcs.getPropertyValue('--acc').trim()||'#8b5cf6';
+  let cyanC=gcs.getPropertyValue('--cyan').trim()||'#38bdf8';
+  let txtC=gcs.getPropertyValue('--txt').trim()||'#94a3b8';
+  let hex2rgba=(hex,a)=>{let h=hex.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');let r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},${a})`;};
+  // T2/T7: per-metric hovertemplate with units + per-metric rangemode (normal for Beta/AS so variation isn't crushed to a flat line)
   let specs=[
-    {id:'miniTE',vals:hist.map(h=>h.te),color:'#6366f1',fill:'rgba(99,102,241,.12)'},
-    {id:'miniAS',vals:hist.map(h=>h.as),color:'#8b5cf6',fill:'rgba(139,92,246,.12)'},
-    {id:'miniBeta',vals:hist.map(h=>h.beta),color:'#38bdf8',fill:'rgba(56,189,248,.12)'},
-    {id:'miniH',vals:hist.map(h=>h.h),color:'#94a3b8',fill:'rgba(148,163,184,.12)'}
+    {id:'miniTE',vals:hist.map(h=>h.te),color:priC,fill:hex2rgba(priC,0.12),hover:'%{x|%b %d}: %{y:.2f}%<extra></extra>',rangemode:'tozero'},
+    {id:'miniAS',vals:hist.map(h=>h.as),color:accC,fill:hex2rgba(accC,0.12),hover:'%{x|%b %d}: %{y:.2f}%<extra></extra>',rangemode:'normal'},
+    {id:'miniBeta',vals:hist.map(h=>h.beta),color:cyanC,fill:hex2rgba(cyanC,0.12),hover:'%{x|%b %d}: %{y:.3f}<extra></extra>',rangemode:'normal'},
+    {id:'miniH',vals:hist.map(h=>h.h),color:txtC,fill:hex2rgba(txtC,0.12),hover:'%{x|%b %d}: %{y:d}<extra></extra>',rangemode:'tozero'}
   ];
   specs.forEach(sp=>{
     let el=document.getElementById(sp.id);
@@ -2969,12 +2988,12 @@ function rRiskHistMinis(s){
     Plotly.newPlot(sp.id,[{
       x:dates,y:sp.vals,type:'scatter',mode:'lines',
       line:{color:sp.color,width:1.5},fill:'tozeroy',fillcolor:sp.fill,
-      hovertemplate:'%{x|%b %d}: %{y}<extra></extra>'
+      hovertemplate:sp.hover
     }],{
       paper_bgcolor:'transparent',plot_bgcolor:'transparent',
       margin:{l:0,r:0,t:2,b:2},
       xaxis:{visible:false,fixedrange:true},
-      yaxis:{visible:false,fixedrange:true,rangemode:'tozero'},
+      yaxis:{visible:false,fixedrange:true,rangemode:sp.rangemode},
       showlegend:false,hovermode:'closest'
     },{displayModeBar:false,staticPlot:false,responsive:true});
   });
@@ -3136,27 +3155,31 @@ function rRisk(){
   <!-- Factor Exposures Table -->
   <div class="card" id="cardRiskFacTbl" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Factor Exposures — click row for time series drill</div>
+      <div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>
       <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
     </div>
     <table id="tbl-risk-fac"><thead><tr>
-      <th onclick="sortTbl('tbl-risk-fac',0)">Factor</th><th class="r" onclick="sortTbl('tbl-risk-fac',1)">Exposure</th><th class="r" onclick="sortTbl('tbl-risk-fac',2)">Contrib %</th>
-      <th class="r" onclick="sortTbl('tbl-risk-fac',3)">MCR to TE</th><th class="r" onclick="sortTbl('tbl-risk-fac',4)">Return %</th><th class="r" onclick="sortTbl('tbl-risk-fac',5)">Impact</th>
-      <th class="r">Trend</th>
-    </tr></thead><tbody>${facMCR.map(f=>{
+      <th data-col="n" onclick="sortTbl('tbl-risk-fac',0)">Factor</th>
+      <th class="r tip" data-col="e" data-tip="Active factor exposure (portfolio − benchmark), in factor-std-dev units." onclick="sortTbl('tbl-risk-fac',1)">Active Exposure</th>
+      <th class="r tip" data-col="c" data-tip="Percent of total portfolio tracking error attributable to this factor." onclick="sortTbl('tbl-risk-fac',2)">Contrib %</th>
+      <th class="r tip" data-col="mcrTE" data-tip="Marginal contribution to TE = Total TE × |Contrib%|. Units: TE (bps or %)." onclick="sortTbl('tbl-risk-fac',3)">MCR to TE</th>
+      <th class="r tip" data-col="ret" data-tip="Factor return over the selected period." onclick="sortTbl('tbl-risk-fac',4)">Return %</th>
+      <th class="r tip" data-col="imp" data-tip="Per-factor return impact on the portfolio = factor return × exposure." onclick="sortTbl('tbl-risk-fac',5)">Impact</th>
+      <th class="r tip" data-col="trend" data-tip="Weekly active-exposure history for this factor.">Trend</th>
+    </tr></thead><tbody>${facMCR.length?facMCR.map(f=>{
       let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
       let facHist=s.hist.fac[f.n];
       let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
       return`<tr class="clickable" style="cursor:pointer" onclick="oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
-        <td style="color:var(--txth);font-weight:500">${f.n}</td>
-        <td class="r ${cls}" data-sv="${f.e??''}">${fp(f.e,3)}</td>
-        <td class="r" data-sv="${f.c??''}">${f2(f.c,1)}</td>
-        <td class="r" data-sv="${f.mcrTE??''}">${f2(f.mcrTE,3)}</td>
-        <td class="r" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-        <td class="r" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
-        <td class="r">${mkSparkline(sparkVals,60,22,null)}</td>
+        <td data-col="n" style="color:var(--txth);font-weight:500">${f.n}</td>
+        <td class="r ${cls}" data-col="e" data-sv="${f.e??''}">${fp(f.e,3)}</td>
+        <td class="r" data-col="c" data-sv="${f.c??''}">${f2(f.c,1)}</td>
+        <td class="r" data-col="mcrTE" data-sv="${f.mcrTE??''}">${f2(f.mcrTE,3)}</td>
+        <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
+        <td class="r" data-col="imp" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+        <td class="r" data-col="trend">${mkSparkline(sparkVals,60,22,null)}</td>
       </tr>`;
-    }).join('')}
+    }).join(''):'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--txt);font-size:11px">No factor data</td></tr>'}
     </tbody></table>
   </div>
 
@@ -3373,9 +3396,6 @@ function rRiskFacBarsMode(){
   }
 }
 
-// Legacy alias
-function rRiskFacBars(s,facMCR){window._rfbData=facMCR;window._rfbMode='te';rRiskFacBarsMode();}
-
 // Factor group pill handler
 const FAC_GROUPS={
   all:null,
@@ -3570,7 +3590,9 @@ function oDrFRisk(name,range){
       let expAvg=numExp.length?(numExp.reduce((a,v)=>a+v,0)/numExp.length):null;
       let expSd=numExp.length>1&&expAvg!=null?Math.sqrt(numExp.reduce((a,v)=>a+(v-expAvg)**2,0)/numExp.length):0;
       let rfShapes=[{type:'line',y0:0,y1:0,x0:expDates[0],x1:isoDate(last.d),line:{color:THEME().tick,dash:'dot'}}];
-      let rfAnno=[{x:isoDate(last.d),y:last.e||last.a,text:'Current: '+(last.e||last.a).toFixed(3),showarrow:true,arrowcolor:'#6366f1',font:{size:10,color:THEME().tickH},bgcolor:'#1e293b',bordercolor:'#6366f1',borderwidth:1,borderpad:4}];
+      // T9: annotation must match the trace (active exposure), not raw. Prefer h.a, fallback to (e−bm) when bm present, else raw e.
+      let lastVal=last.a!=null?last.a:(last.bm!=null?+(last.e-last.bm).toFixed(3):last.e);
+      let rfAnno=[{x:isoDate(last.d),y:lastVal,text:'Current: '+(lastVal!=null?lastVal.toFixed(3):'—'),showarrow:true,arrowcolor:'#6366f1',font:{size:10,color:THEME().tickH},bgcolor:'#1e293b',bordercolor:'#6366f1',borderwidth:1,borderpad:4}];
       let rfTraces=[];
       if(expAvg!=null&&expSd>0){
         rfTraces.push(
@@ -3582,7 +3604,7 @@ function oDrFRisk(name,range){
       }
       rfTraces.push({x:expDates,y:expVals,name:'Active Exposure',line:{color:'#6366f1',width:2.5},fill:'tozeroy',fillcolor:'rgba(99,102,241,.08)'});
       let xRf={...plotBg.xaxis,rangeslider:{visible:true,bgcolor:THEME().card,thickness:0.08}};
-      Plotly.newPlot('riskFacHistDiv',rfTraces,{...plotBg,yaxis:{...plotBg.yaxis,title:'Exposure',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2},xaxis:xRf,shapes:rfShapes,annotations:rfAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
+      Plotly.newPlot('riskFacHistDiv',rfTraces,{...plotBg,yaxis:{...plotBg.yaxis,title:'Active Exposure',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2},xaxis:xRf,shapes:rfShapes,annotations:rfAnno,margin:{...plotBg.margin,r:40}},modalPlotCfg);
 
       if(document.getElementById('riskFacRetDiv')){
         Plotly.newPlot('riskFacRetDiv',[
@@ -5460,11 +5482,9 @@ function oDrUnowned(ticker){
 function oDrGroup(groupName){
   let m=$('groupModal');
   let subgroups=cs.groups.filter(g=>g.n===groupName);
-  // Find all holdings in sectors belonging to this group (match by subgroup name in GROUPS_DEF)
-  let groupDef=GROUPS_DEF.filter(gd=>gd.sg===groupName||gd.sg===groupName.toUpperCase());
-  let groupSecs=new Set();
-  groupDef.forEach(gd=>gd.secs.forEach(s=>groupSecs.add(s)));
-  let holdings=cs.hold.filter(h=>groupSecs.has(h.sec)).sort((a,b)=>b.p-a.p);
+  // Filter holdings by FactSet's authoritative h.subg (exclusive bucketing, matches cs.groups[] labels).
+  // Prior impl mapped GROUPS_DEF abbreviated sector names (e.g. "Info Technology") against h.sec full names ("Information Technology") and returned 0 holdings.
+  let holdings=cs.hold.filter(h=>h.subg===groupName).sort((a,b)=>b.p-a.p);
   let totalP=subgroups.reduce((a,g)=>a+(g.p||0),0);
   let totalB=subgroups.reduce((a,g)=>a+(g.b||0),0);
 

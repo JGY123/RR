@@ -160,3 +160,21 @@ Fix direction: one `RANK_COLORS = [null,'var(--r1)','var(--r2)','var(--r3)','var
 
 ## Completed audits (append-only — 2026-04-21 batch 3 continued)
 - ✅ cardRanks (2026-04-21, audit only — YELLOW/YELLOW/YELLOW; top finding = parser `ranks.{overall,rev,val,qual}` discarded in normalize() L612; REV/VAL/QUAL tiles never exist; unranked holdings drop silently; fragile tab-nav drill; trivial fix queue of 9, non-trivial 5 → B29–B33)
+
+## Ghost-tile anti-pattern (NEW — surfaced 2026-04-23, cardCorr)
+Named card with `id="..."` exists in the DOM but its innerHTML is never set by any renderer — a visible placeholder that silently renders empty. The live version of the tile renders inside a neighbor card (often an anonymous Risk-tab container with no id). Seen: `#cardCorr` at L1299 (placeholder, never populated) while the real factor-correlation heatmap renders at L3096 inside an anonymous Risk-tab `<div class="card">`. Consequence: (a) users see an empty-looking card; (b) audits mis-target the placeholder assuming id = live tile; (c) `screenshotCard('#cardCorr')` + any other id-addressed helpers hit the wrong element.
+Detection heuristic: after locating a tile's render function, grep for `getElementById('<tileId>')` or `#<tileId>` in JS; if none of the render functions write to the id-addressed node, it's a ghost. Audit next: any tile whose card shell sits in a different tab than where its data renders.
+
+## Anonymous Risk-tab cards (NEW — surfaced 2026-04-23, cardCorr)
+Multiple Risk-tab cards have no `id` at all — the real renderer targets a child chart div (e.g. `corrChartDiv`, `mcrDiv`) rather than the card wrapper. Makes tile-audit targeting ambiguous, blocks `oncontextmenu="showNotePopup(event,'...')"` on the card-title (needs a card id to key notes), and hides tile identity from `screenshotCard` / CSV-export helpers. Assign stable `id="cardXxx"` to every live card on the Risk tab as a follow-up sweep.
+
+## Active-vs-raw series conflation (NEW — surfaced 2026-04-23, cardCorr; now ≥2 sites)
+Confirmed at **two** sites:
+1. cardFacDetail L1764 — `facRow` reads `f.e` (raw exposure) for some computations while the tile narrative implies `f.a` (active `e−bm`).
+2. cardCorr L2168 — `rUpdateCorr` correlates raw exposure `e` but Risk-tab UX implies active.
+Both tiles are PM-gated on the same decision: policy of "active" vs "raw" for factor-exposure-derived views. Either unify globally or expose `[Active|Raw]` toggle. Cross-tile: any factor tile reading `f.e` directly deserves an audit checkmark for this conflation.
+
+## Completed audits (append-only — 2026-04-23 batch 4)
+- ✅ cardMCR (2026-04-23, audit only — **RED/YELLOW/YELLOW**; top finding = same `h.mcr` = stock-specific TE mislabel as cardScatter, paired rename PM gate (B39 ↔ B20); 6 trivial applied, 6 non-trivial → B39–B44)
+- ✅ cardAttrib (2026-04-23, audit only — YELLOW/YELLOW/YELLOW; top finding = waterfall card id-less (fixed), Impact column sort broken (fixed via data-sv), no `plotly_click` on either bar chart (fixed on attrib bar, weekly-bars deferred); 10 trivial applied, 8 non-trivial → B45–B52)
+- ✅ cardCorr (2026-04-23, audit only — **RED/YELLOW/YELLOW**; top finding = ghost tile at `#cardCorr` L1299 while live heatmap renders in anonymous Risk-tab card L3096; active-vs-raw conflation 2nd site; 9 trivial applied, 8 non-trivial → B53–B60)

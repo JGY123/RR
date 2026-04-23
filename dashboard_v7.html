@@ -1179,9 +1179,9 @@ function rExp(){
   </div>
 
   <!-- Factor Attribution Waterfall -->
-  <div class="card" style="margin-top:16px">
-    <div class="card-title">Factor Attribution — Return Impact</div>
-    <div id="facWaterfallDiv" style="height:${Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20}px"></div>
+  <div class="card" id="cardAttribWaterfall" style="margin-top:16px">
+    <div class="card-title tip" data-tip="Per-factor return impact for the latest period. Green = positive contribution, red = negative. Click a bar for factor detail." oncontextmenu="showNotePopup(event,'cardAttribWaterfall');return false">Factor Attribution — Return Impact</div>
+    <div id="facWaterfallDiv" style="height:${Math.min(900,Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20)}px;overflow-y:auto"></div>
   </div>
 
   ${isUSOnly?`<div style="margin-top:16px;padding:10px 14px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;font-size:11px;color:var(--txt)">ⓘ US-focused strategy — country and region analysis not applicable</div>`:''}
@@ -1277,8 +1277,8 @@ function rExp(){
   <!-- Row 8: MCR + Risk Weight Budget -->
   <div class="grid g2">
     <div class="card" id="cardMCR">
-      <div class="flex-between"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions).">Marginal Contribution to Risk (Top & Bottom)</div>
-      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardMCR')">PNG</button></div></div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions). Always shows latest holdings — historical MCR not persisted. Click a bar for stock detail." oncontextmenu="showNotePopup(event,'cardMCR');return false">Marginal Contribution to Risk (Top & Bottom)</div>
+      <div class="export-bar"><button class="export-btn" onclick="exportMcrCsv()">CSV</button></div></div>
       <div id="mcrDiv" style="height:300px"></div>
     </div>
     <div class="card" id="cardFRB" style="cursor:pointer" tabindex="0" role="button" aria-label="Factor risk budget — open detailed breakdown" onclick="oDrRiskBudget()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();oDrRiskBudget();}">
@@ -1295,17 +1295,16 @@ function rExp(){
     ${rUnowned(s.unowned)}
   </div>
 
-  <!-- Row 11: Factor Correlation -->
+  <!-- Row 11: Factor Correlation (placeholder — live heatmap on Risk tab) -->
   <div class="card" id="cardCorr">
-    <div class="flex-between"><div class="card-title tip" data-tip="Factor correlations computed from historical exposure data. Full heatmap available in Risk tab.">Factor Correlation Matrix</div>
-    <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardCorr')">PNG</button></div></div>
+    <div class="card-title tip" data-tip="Factor correlations computed from historical exposure data. Full heatmap available in Risk tab.">Factor Correlation Matrix</div>
     <div style="overflow-x:auto;max-width:100%" id="corrMatrixCardArea"><p style="color:var(--txt);font-size:12px">Computed from historical factor data — see Risk tab.</p></div>
   </div>
 
   <!-- Row 12: Factor Attribution (from 18 Style Snapshot) -->
   <div class="card" id="cardAttrib">
     <div class="flex-between">
-      <div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot. Shows how each country, industry, and currency contributed to portfolio returns over time.">Factor Attribution</div>
+      <div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot. Shows how each country, industry, and currency contributed to portfolio returns over time. Click any row or bar for time series." oncontextmenu="showNotePopup(event,'cardAttrib');return false">Factor Attribution</div>
       <div style="display:flex;gap:6px;align-items:center">
         <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
           <option value="all">All</option>
@@ -1348,8 +1347,10 @@ function rExp(){
 
 function rFacWaterfall(s){
   // Sort: most positive at top, most negative at bottom
-  let facs=s.factors.filter(f=>f.imp!=null).sort((a,b)=>(b.imp||0)-(a.imp||0));
-  if(!facs.length||!document.getElementById('facWaterfallDiv'))return;
+  let facs=(s.factors||[]).filter(f=>isFinite(f.imp)).sort((a,b)=>(b.imp||0)-(a.imp||0));
+  let el=document.getElementById('facWaterfallDiv');
+  if(!el)return;
+  if(!facs.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:40px">No factor impact data</p>';return;}
   let vals=facs.map(f=>+(f.imp||0));
   let maxAbs=Math.max(...vals.map(Math.abs),0.1);
   let xmax=+(Math.ceil(maxAbs*10)/10+0.1).toFixed(2);
@@ -1358,9 +1359,11 @@ function rFacWaterfall(s){
   let cd=s.current_date||(s.available_dates&&s.available_dates[s.available_dates.length-1]);
   if(cd){let d=parseDate(cd);if(d)periodStr='Period ending '+d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
   let T=THEME();
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
   Plotly.newPlot('facWaterfallDiv',[{
     y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
-    marker:{color:vals.map(v=>v>=0?'#10b981':'#ef4444')},
+    marker:{color:vals.map(v=>v>=0?posC:negC)},
     hovertemplate:'<b>%{y}</b><br>Impact: %{x:+.3f}%<extra></extra>'
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
@@ -1375,6 +1378,7 @@ function rFacWaterfall(s){
       showarrow:false,font:{size:10,color:T.tick},xanchor:'center',yanchor:'bottom'
     }]:[]
   },plotCfg);
+  if(el.on){el.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrF==='function')oDrF(n);});}
 }
 
 // ===== SORT HELPER =====
@@ -2030,28 +2034,30 @@ function rAttribTable(){
     let impCls=i.full_period_imp>0?'pos':'neg';
     let expCls=i.exp>0?'pos':i.exp<0?'neg':'';
     return`<tr class="clickable" onclick="oDrAttrib('${i.name.replace(/'/g,"\\'")}')">
-      <td><span style="font-size:10px;margin-right:4px">${typeIcon[i.type]||''}</span><span style="color:var(--txth);font-weight:500">${i.name}</span></td>
-      <td class="r ${expCls}" style="font-size:11px">${fp(i.exp,2)}</td>
-      <td class="r" style="font-size:11px">${f2(i.dev,1)}</td>
-      <td class="r" style="font-size:11px;font-weight:600;color:${i.full_period_imp>0?'var(--pos)':'var(--neg)'}">${fp(i.full_period_imp,2)}%</td>
+      <td data-col="name"><span style="font-size:10px;margin-right:4px">${typeIcon[i.type]||''}</span><span style="color:var(--txth);font-weight:500">${i.name}</span></td>
+      <td class="r ${expCls}" data-col="exp" data-sv="${i.exp??''}" style="font-size:11px">${fp(i.exp,2)}</td>
+      <td class="r" data-col="dev" data-sv="${i.dev??''}" style="font-size:11px">${f2(i.dev,1)}</td>
+      <td class="r" data-col="imp" data-sv="${i.full_period_imp??''}" style="font-size:11px;font-weight:600;color:${i.full_period_imp>0?'var(--pos)':'var(--neg)'}">${fp(i.full_period_imp,2)}%</td>
     </tr>`;
   }).join('');
 
   $('attribTableArea').innerHTML=`<table id="tbl-attrib"><thead><tr>
-    <th onclick="sortTbl('tbl-attrib',0)">Factor</th>
-    <th class="r" onclick="sortTbl('tbl-attrib',1)">Exposure</th>
-    <th class="r" onclick="sortTbl('tbl-attrib',2)">Std Dev</th>
-    <th class="r" onclick="sortTbl('tbl-attrib',3)">Impact (%)</th>
+    <th data-col="name" onclick="sortTbl('tbl-attrib',0)">Factor</th>
+    <th class="r" data-col="exp" onclick="sortTbl('tbl-attrib',1)">Exposure</th>
+    <th class="r" data-col="dev" onclick="sortTbl('tbl-attrib',2)">Std Dev</th>
+    <th class="r" data-col="imp" onclick="sortTbl('tbl-attrib',3)">Impact (%)</th>
   </tr></thead><tbody>${rows}</tbody></table>
-  <p style="font-size:9px;color:var(--txt);margin-top:6px">${items.length} items · Impact = compounded return attribution over full period · Click row for time series</p>`;
+  <p style="font-size:9px;color:var(--txt);margin-top:6px">${items.length} items · Impact = compounded return attribution over full period · Click any row or bar for time series</p>`;
 
   // Chart: top 10 by impact as horizontal bar
   let chart10=items.slice(0,10);
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
   Plotly.newPlot('attribChartDiv',[{
     y:chart10.map(i=>i.name),
     x:chart10.map(i=>i.full_period_imp||0),
     type:'bar',orientation:'h',
-    marker:{color:chart10.map(i=>(i.full_period_imp||0)>0?'#10b981':'#ef4444')},
+    marker:{color:chart10.map(i=>(i.full_period_imp||0)>0?posC:negC)},
     text:chart10.map(i=>fp(i.full_period_imp,2)+'%'),
     textposition:'outside',textfont:{size:10,color:THEME().tick},
     customdata:chart10.map(i=>[f2(i.exp,2),f2(i.dev,1)]),
@@ -2061,6 +2067,8 @@ function rAttribTable(){
     xaxis:{...plotBg.xaxis,title:'Cumulative Impact (%)'},
     margin:{...plotBg.margin,l:180}
   },plotCfg);
+  let achEl=document.getElementById('attribChartDiv');
+  if(achEl&&achEl.on){achEl.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrAttrib==='function')oDrAttrib(n);});}
 }
 
 // Attribution drill — show cumulative impact time series for one item
@@ -2138,6 +2146,25 @@ function rUpdateCorr(){
   let periodEl=document.getElementById('corrPeriod');
   let freqEl=document.getElementById('corrFreq');
   if(!periodEl||!freqEl)return;
+  // B66: restore persisted UI state once per page load
+  if(!window._corrRestored){
+    try{
+      let pp=localStorage.getItem('rr.corr.period');if(pp)periodEl.value=pp;
+      let pf=localStorage.getItem('rr.corr.freq');if(pf)freqEl.value=pf;
+      let pfacs=JSON.parse(localStorage.getItem('rr.corr.facs')||'null');
+      if(Array.isArray(pfacs)&&pfacs.length){
+        document.querySelectorAll('.corr-fac-chk').forEach(el=>{el.checked=pfacs.includes(el.value);});
+      }
+    }catch(e){}
+    window._corrRestored=true;
+  }
+  // B66: save current state
+  try{
+    localStorage.setItem('rr.corr.period',periodEl.value);
+    localStorage.setItem('rr.corr.freq',freqEl.value);
+    let checked=[...document.querySelectorAll('.corr-fac-chk:checked')].map(el=>el.value);
+    if(checked.length)localStorage.setItem('rr.corr.facs',JSON.stringify(checked));
+  }catch(e){}
   let wks=periodEl.value==='all'?Infinity:parseInt(periodEl.value);
   let freq=freqEl.value;
   let wrap=document.getElementById('corrMatrixWrap');
@@ -2157,6 +2184,7 @@ function rUpdateCorr(){
   if(facNames.length<2){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:12px;text-align:center">Select at least 2 factors</p>';return;}
 
   // Slice each factor series to period — use ACTIVE exposure (e - bm)
+  // B76: monthly dedupe keeps the FIRST observation per YYYY-MM; assumes hist.fac is chronologically ordered (parser-guaranteed)
   let sliced={};
   facNames.forEach(fn=>{
     let arr=facHist[fn]||[];
@@ -2167,43 +2195,61 @@ function rUpdateCorr(){
     }
     sliced[fn]=arr.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(+(h.e||0)));
   });
+  // B75: filter out factors with <3 observations so they don't silently appear as all-zero rows
+  facNames=facNames.filter(fn=>(sliced[fn]||[]).length>=3);
+  if(facNames.length<2){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:12px;text-align:center">Not enough factors with ≥3 observations in selected window</p>';return;}
   function pearson(a,b){
     let n=Math.min(a.length,b.length);
-    if(n<3)return 0;
+    if(n<3)return null; // B62: null instead of silent 0
     let ma=a.slice(0,n).reduce((s,v)=>s+v,0)/n;
     let mb=b.slice(0,n).reduce((s,v)=>s+v,0)/n;
     let num=0,da=0,db=0;
     for(let i=0;i<n;i++){num+=(a[i]-ma)*(b[i]-mb);da+=(a[i]-ma)**2;db+=(b[i]-mb)**2;}
     let denom=Math.sqrt(da*db);
-    return denom<1e-10?0:+(num/denom).toFixed(3);
+    return denom<1e-10?null:+(num/denom).toFixed(3); // B62: null for zero-variance
   }
   let minLen=Math.min(...facNames.map(fn=>(sliced[fn]||[]).length));
   if(minLen<3){
     wrap.innerHTML=`<p style="font-size:12px;color:var(--warn);padding:16px;text-align:center">⚠ Insufficient data — need at least 3 data points (have ${minLen})</p>`;
     return;
   }
-  // Build correlation matrix
+  // Build correlation matrix (B62: null entries render as "—" in cell text)
   let corrMatrix=facNames.map(f1=>facNames.map(f2=>f1===f2?1:pearson(sliced[f1]||[],sliced[f2]||[])));
-  // Build insights: ⚠ r>0.7, ✓ r<-0.5
+  // Stash for CSV export
+  window._corrExport={facNames,corrMatrix,period:periodEl.value,freq};
+  // Build insights using configurable thresholds (B73)
+  let hiT=_thresholds.corrHigh??_thresholdsDefault.corrHigh;
+  let divT=_thresholds.corrDiversifier??_thresholdsDefault.corrDiversifier;
   let insights=[];
   for(let i=0;i<facNames.length;i++){
     for(let j=i+1;j<facNames.length;j++){
       let r=corrMatrix[i][j];
-      if(r>0.7)insights.push(`⚠ <strong>${facNames[i]}</strong> & <strong>${facNames[j]}</strong>: r=${r.toFixed(2)} — high positive correlation`);
-      else if(r<-0.5)insights.push(`✓ <strong>${facNames[i]}</strong> & <strong>${facNames[j]}</strong>: r=${r.toFixed(2)} — diversifying`);
+      if(r==null)continue;
+      let aEsc=facNames[i].replace(/'/g,"\\'"),bEsc=facNames[j].replace(/'/g,"\\'");
+      // B74: factor names clickable via oDrF
+      let aHtml=`<a onclick="oDrF('${aEsc}')" style="color:var(--pri);cursor:pointer;text-decoration:underline"><strong>${facNames[i]}</strong></a>`;
+      let bHtml=`<a onclick="oDrF('${bEsc}')" style="color:var(--pri);cursor:pointer;text-decoration:underline"><strong>${facNames[j]}</strong></a>`;
+      if(r>hiT)insights.push(`⚠ ${aHtml} &amp; ${bHtml}: r=${r.toFixed(2)} — high positive correlation`);
+      else if(r<divT)insights.push(`✓ ${aHtml} &amp; ${bHtml}: r=${r.toFixed(2)} — diversifying`);
     }
   }
   let noteHtml=minLen<10?`<div style="font-size:10px;color:var(--warn);margin-bottom:6px">⚠ Only ${minLen} data points in selected period</div>`:'';
   // Render Plotly heatmap
   let heatH=Math.max(260,facNames.length*36+80);
   wrap.innerHTML=noteHtml+`<div id="corrHeatPlot" style="height:${heatH}px"></div>`;
+  // B64: themed colorscale + text color
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+  let priC=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#6366f1';
+  let gridC=getComputedStyle(document.body).getPropertyValue('--grid').trim()||'#e2e8f0';
+  let textC=getComputedStyle(document.body).getPropertyValue('--txth').trim()||'#0f172a';
   setTimeout(()=>{
     Plotly.newPlot('corrHeatPlot',[{
       z:corrMatrix,x:facNames,y:facNames,type:'heatmap',
-      colorscale:[[0,'#ef4444'],[0.5,'#e2e8f0'],[1,'#6366f1']],
+      colorscale:[[0,negC],[0.5,gridC],[1,priC]],
       zmin:-1,zmax:1,
-      text:corrMatrix.map(row=>row.map(v=>v.toFixed(2))),
-      texttemplate:'%{text}',textfont:{size:10,color:'#0f172a'},
+      text:corrMatrix.map(row=>row.map(v=>v==null?'—':v.toFixed(2))),
+      texttemplate:'%{text}',textfont:{size:10,color:textC},
       hovertemplate:'%{y} × %{x}<br>r = %{z:.3f}<extra></extra>',
       showscale:true,colorbar:{len:0.9,title:{text:'r',side:'right'},tickfont:{size:9},thickness:12}
     }],{...plotBg,
@@ -2219,6 +2265,23 @@ function rUpdateCorr(){
       ?`<div style="padding:8px 10px;background:var(--surf);border-radius:6px;font-size:11px;color:var(--txt);line-height:1.8">${insights.join('<br>')}</div>`
       :`<div style="font-size:10px;color:var(--txt)">No high-correlation pairs in selected window</div>`;
   }
+}
+function exportCorrCsv(){
+  let ex=window._corrExport;
+  if(!ex||!ex.facNames||!ex.corrMatrix){return;}
+  let lines=[];
+  // Header row: blank corner + factor names
+  lines.push(['',...ex.facNames.map(n=>`"${(n||'').replace(/"/g,'""')}"`)].join(','));
+  ex.facNames.forEach((row,i)=>{
+    let cells=ex.corrMatrix[i].map(v=>v==null?'':v.toFixed(3));
+    lines.push([`"${(row||'').replace(/"/g,'""')}"`,...cells].join(','));
+  });
+  let blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement('a');a.href=url;
+  a.download=((cs&&(cs.name||cs.id))||'strategy')+'_factor_correlation_'+ex.period+'_'+ex.freq+'.csv';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),100);
 }
 
 // ===== CHART RENDERERS =====
@@ -2717,15 +2780,33 @@ function rTree(s){
 function rMCR(s){
   // Top 10 by |mcr| so short/hedging positions (negative MCR) show alongside risk-adders
   let top=[...(s.hold||[])].filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,10);
-  if(!top.length){let el=document.getElementById('mcrDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No MCR data available</p>';return;}
+  let el=document.getElementById('mcrDiv');
+  if(!top.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No MCR data available</p>';return;}
   top.sort((a,b)=>(b.mcr||0)-(a.mcr||0)); // positives at top, negatives at bottom
+  let priC=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#8b5cf6';
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
   Plotly.newPlot('mcrDiv',[{
     y:top.map(h=>h.t),x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
-    marker:{color:top.map(h=>(h.mcr||0)>=0?'#8b5cf6':'#10b981')},
+    marker:{color:top.map(h=>(h.mcr||0)>=0?priC:posC)},
     text:top.map(h=>fp(h.mcr,2)),textposition:'outside',textfont:{size:10,color:THEME().tick},
     customdata:top.map(h=>h.n||h.t),
     hovertemplate:'<b>%{customdata}</b> (%{y})<br>MCR: %{x:.2f}%<extra></extra>'
   }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category'},xaxis:{...plotBg.xaxis,title:'MCR %',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1}},plotCfg);
+  if(el&&el.on){el.on('plotly_click',function(d){let t=d&&d.points&&d.points[0]&&d.points[0].y;if(t&&typeof oSt==='function')oSt(t);});}
+}
+function exportMcrCsv(){
+  if(!cs||!cs.hold){return;}
+  let rows=(cs.hold||[]).filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0));
+  let lines=['ticker,name,sector,port_pct,active_pct,mcr_pct,te_contribution'];
+  rows.forEach(h=>{
+    let n=(h.n||'').replace(/"/g,'""');
+    let sec=(h.sec||'').replace(/"/g,'""');
+    lines.push(`"${h.t||''}","${n}","${sec}",${h.p||0},${h.a||0},${h.mcr||0},${h.tr||0}`);
+  });
+  let blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement('a');a.href=url;a.download=(cs.name||cs.id||'mcr')+'_mcr.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),100);
 }
 
 function rFRB(s){
@@ -3095,7 +3176,7 @@ function rRisk(){
   <!-- Factor Correlation Matrix -->
   <div class="card">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Factor Correlation Matrix</div>
+      <div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (e−bm) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray.">Factor Correlation Matrix</div>
       <div style="display:flex;gap:8px;align-items:center">
         <select id="corrPeriod" onchange="rUpdateCorr()" style="font-size:11px;padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit">
           <option value="all" selected>All</option><option value="156">3Y</option><option value="52">1Y</option><option value="26">6M</option><option value="13">3M</option>
@@ -3103,6 +3184,7 @@ function rRisk(){
         <select id="corrFreq" onchange="rUpdateCorr()" style="font-size:11px;padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit">
           <option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option>
         </select>
+        <button class="export-btn" onclick="exportCorrCsv()" title="Download correlation matrix as CSV">CSV</button>
       </div>
     </div>
     <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
@@ -4872,7 +4954,7 @@ function savePrefs(){try{localStorage.setItem(PREFS_KEY,JSON.stringify(_prefs));
 function savePref(key,val){_prefs[key]=val;savePrefs();}
 // ===== ALERT THRESHOLDS =====
 const THRESHOLDS_KEY='rr_thresholds';
-const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,intentionalFactorSigma:0.2,asDeltaMin:-1,freshAmberDays:8,freshRedDays:21};
+const _thresholdsDefault={teRed:8,teAmber:6,singleNameTE:10,cashMax:5,q5WeightMax:15,factorSigma:0.5,intentionalFactorSigma:0.2,asDeltaMin:-1,freshAmberDays:8,freshRedDays:21,corrHigh:0.7,corrDiversifier:-0.5};
 let _thresholds={..._thresholdsDefault};
 function loadThresholds(){
   try{let s=JSON.parse(localStorage.getItem(THRESHOLDS_KEY)||'{}');

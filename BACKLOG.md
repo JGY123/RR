@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-23 (Batch 5 audited + fixes applied, pending review)
+last_updated: 2026-04-23 (Batch 6 audited + fixes applied, pending review)
 ---
 
 # RR Backlog
@@ -13,6 +13,31 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## B79–B87 · Batch 6 non-trivials (cardBenchOnlySec · cardUnowned · cardWatchlist)
+
+### cardBenchOnlySec
+Origin: `tile-specs/cardBenchOnlySec-audit-2026-04-23.md`. Trivial fixes (card-title note-hook, PNG button removed, `data-col` on 4 ths+tds, sort wiring + `data-sv` on Biggest Missed col 3, tooltip on col 3 th) applied inline.
+
+- **B79 · Rename "% of benchmark missed" suffix (PM gate)** — Label ambiguity (same denominator-clarity family as factor "% of TE vs % of factor risk"). `totalMissed` = Σ `h.b` for bench-only holdings = **% of total benchmark weight** not held. Suggest: `"${f2(totalMissed,1)}% bench wt not held"`. PM sign-off on label. Trivial once approved (~1 line).
+
+### cardUnowned
+Origin: `tile-specs/cardUnowned-audit-2026-04-23.md`. Trivial fixes (card-title note-hook, `data-col` + `data-sv` null-guards, sort null-guard `Math.abs(b.tr||0)-...`, ticker escaping in drill invocation, region label lookup `Usa→USA · English→UK · Far East→Asia Pacific ex-Japan`, header tooltips on Bench Wt% + TE Contrib, defensive fallback `u.b??u.bw` and `u.tr??u.pct_t`, TE column color softened from hardcoded `--neg` to neutral `--txth` given empty data) applied inline.
+
+- **B80 · Unowned Risk Contributors has no data source (RED — blocks entire tile)** — Data probe across all 7 strategies: `bw=null`, `pct_t=null`, `pct_s=null` on 100% of rows (22 rows total). Parser's `_extract_security` L577–644 partitions to `unowned` bucket iff `w`/`bw`/`aw` ALL None — so by construction these rows carry no weight and no TE. The "stocks not held that contribute most to TE" narrative is aspirational; actual bucket is orphan securities / rights / detached cash (e.g. `"Worldline SA Rights 2026-27.03.2026"`, `"Great Eagle (Detached 2)"`). Three options: (A) parser change to extract a real unowned-benchmark-TE feed from a different FactSet CSV section — adds to the pending-FactSet questions list; (B) hide the tile entirely until source is wired; (C) rename to "Unattributed Benchmark Rows" and drop TE/weight columns it can't populate. PM gate — blocks B81/B82/B83 cosmetics.
+- **B81 · Pattern B variant: `normalize()` skips `st.unowned` rows** — L562–L573 maps `hn.b ?? hn.bw ?? 0` and `hn.tr ?? hn.pct_t ?? 0` for holdings only. `st.unowned` rows retain parser's `bw`/`pct_t` key names. Render read `u.b`/`u.tr` was silently `undefined` before the Batch 6 defensive fallback. Permanent fix: mirror the holdings field-name remap inside the unowned loop (2-line patch at L562). Ships together with B80 once source is decided.
+- **B82 · Drill modal `oDrUnowned` narrative guard** — `oDrUnowned` L5475 hardcodes `"This stock has a ${f2(u.b)}% weight in the benchmark..."` which renders as `"This stock has a — % weight..."` for every current row. Guard with `isFinite(u.b)?normal:'No weight data available for this security.'`. Deferred until B80 resolves.
+- **B83 · Sign-color semantic on TE Contrib column (4th sign-collapse site — links B74)** — Static `color:var(--neg)` was the 4th member of the sign-collapse family. Softened to neutral `var(--txth)` as Batch 6 trivial; permanent policy (magnitude-always-red vs signed vs neutral) rolls into B74 shared-helper decision.
+
+### cardWatchlist
+Origin: `tile-specs/cardWatchlist-audit-2026-04-23.md`. Trivial fixes (per-section `<table id="tbl-watch-{key}">`, `<thead>` with sortable `<th>` + per-column tooltips, `data-col` + `data-sv` on every cell, CSV export via new `exportWatchlistCsv(sid)`, empty-state shell with onboarding copy instead of invisible-until-populated, exited-ticker detection with muted row + `EXITED` chip, `cycleFlag` now re-renders `#cardWatchlist` in place, card-title note-hook + card-title tooltip, `FLAG_COLORS` tokenized `#f59e0b/#ef4444/#10b981` → `var(--warn/--neg/--pos)`, isCash filter, name-cell `data-sv` lowercase + `title=` hover, ticker escaping in `oSt` drill) applied inline.
+
+- **B84 · Row-hover remove (×) affordance (trivial-ish deferred)** — Per-row hover-reveal `×` button that calls `delete _holdFlags[t]; saveHoldFlags(); re-render`. Ships after PM confirms user wants in-tile remove vs the existing "cycle `⚑` three times to clear" path from Holdings tab.
+- **B85 · Threshold shading on watchlist Active % cell** — Apply the cardSectors `thresh-alert` (`|a|>5`) / `thresh-warn` (`|a|>3`) classes for visual parity with other tables. Deferred because watchlist is a flag-curated view and threshold semantics may differ — PM call on whether to signal risk-size of flagged positions.
+- **B86 · Cross-strategy flag sharing (PM gate)** — Current `rr_flags_${s.id}` per-strategy scoping means a watchlist entry in IDM doesn't appear when switching to ISC. Arguably a ticker watched on one mandate often deserves watching on related mandates. PM: keep per-strategy isolation, or add a "shared" vs "strategy-local" toggle on each flag?
+- **B87 · Merge Watch/Reduce/Add into single sortable table (PM gate)** — Current layout is three stacked sections with their own `<thead>`. Alternative: one table with a Flag column (`⚑ ▼ ▲` icons), fully sortable, denser. Loses narrative grouping; gains scanability for larger watchlists. PM decision.
 
 ---
 

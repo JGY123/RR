@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-21 (Batch 2 closed)
+last_updated: 2026-04-23 (Batch 3 closed)
 ---
 
 # Session State — Live
@@ -13,41 +13,51 @@ last_updated: 2026-04-21 (Batch 2 closed)
 ---
 
 ## Current phase
-**Tier 1 tile audits, Batch 2 closed.** 6 of ~24 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon at the end where user reviews each tile in-browser and gives explicit OK.
+**Tier 1 tile audits, Batch 3 closed.** 9 of ~24 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon at the end where user reviews each tile in-browser and gives explicit OK.
 Production deployment planning paused pending Redwood IT confirmation of server layout.
 
 > **Language discipline:** `.v1` / `.v1.fixes` tags = "audit complete" / "trivial fixes applied". These are NOT signoff. Signoff happens in the review marathon. Never write "signed off" in checkpoints, commits, or docs until user has explicitly OK'd the tile in-browser.
 
 ---
 
-## Just finished (this session, 2026-04-21)
-- **Batch 2 fixes committed + pushed** — `3dcdae8` on main; tags `tileaudit.{cardFacDetail,cardFRB,cardRegions}.v1` + `.v1.fixes` pushed
-- Applied ~20 trivial fixes across 3 tiles + 1 PM-gated option (cardFRB sign-colorize: red=adds risk, green=diversifies)
-- Added shared CSS tokens: `--prof`, `--fac-bar-pos`, `--fac-bar-neg` — first pass of factor-group palette canonicalization (B9)
-- cardFRB: plotly_click → oDrF drill wired; customdata hovertemplate showing TE contribution + direction + share-of-factor-risk
-- `BACKLOG.md` extended — B9–B19 queued (factor-palette, regex→enumeration, threshold extraction, FRB week-awareness, hover affordance, drillable table, CSV export, Spotlight parity, region column-picker, CMAP telemetry, sparkline active-vs-raw)
-- Cross-tile learnings appended to `AUDIT_LEARNINGS.md`: factor-palette fragmentation, sparkline-sort trap, note-popup convention, unused-param cleanup, CMAP drift, `_facView` shared-state
-- **Batch 1 fixes** (earlier in session) — `e50409a`; 3 tiles, ~17 trivial fixes
+## Just finished (this session, 2026-04-23)
+- **Batch 3 fixes committed + pushed** — `875ea84` on main; tags `tileaudit.{cardRanks,cardScatter,cardTreemap}.v1` + `.v1.fixes` pushed
+- Applied 20 trivial fixes across 3 tiles, deferring 4 items for review marathon
+- cardRanks (YELLOW): keyboard a11y, data-col, tooltips, note popup, PNG removal, "—" empty-state, .pos/.neg sign colors with dead zone
+- cardScatter (RED → fixes applied; MCR label domain bug deferred as PM gate B20): themed Plotly colorscale (--pos/--neg/--txt), zeroline, colorbar title, margin.r=60, exportScatCsv() replacing PNG, note popup, tooltip rewrite
+- cardTreemap (YELLOW): bucketColor() uses --pos/--neg vars, _treeDrill=null reset on strategy switch, PNG removal, note popup
+- `BACKLOG.md` extended — B20–B38 across 3 tile sections (cardScatter B20–B28 with RED MCR label as B20 PM gate; cardRanks B29–B33; cardTreemap B34–B38). B27 supersedes B9 factor-palette canonicalization.
+- Disk-verified (wc -l=6562, 0 PNG button refs, 9 showNotePopup, 10 helpers) + browser-verified (all 3 tiles render, 0 console errors, themed colors resolve, attributes in place)
+
+### Previously (2026-04-21)
+- **Batch 2 fixes** — `3dcdae8`; 3 tiles (cardFacDetail/cardFRB/cardRegions), ~20 trivial + PM-gated sign-colorize on cardFRB. Shared CSS tokens `--prof`, `--fac-bar-pos/neg`.
+- **Batch 1 fixes** — `e50409a`; 3 tiles (cardChars/cardFacButt/cardThisWeek), ~17 trivial fixes.
 
 ---
 
 ## In flight
-Nothing in flight. Awaiting user direction for Batch 3 scoping (or other priority work).
+Nothing in flight. Ready to scope Batch 4.
 
-### New cross-tile learnings appended
-- Week-selector trap (tiles reading `s.sum` vs `getSelectedWeekSum()`) → added to Shared state traps
-- Sort-null anti-pattern (`data-sv="${c.b??0}"` corrupts sort) → seen in ≥3 tiles
-- Plotly click-drill parity (viz tiles often miss it despite having a full-screen sibling wired) → new Plotly section
-- New "Synthesis / insight tiles" section (narrative cards with drill-link expectations)
+### New cross-tile learnings appended (Batch 3)
+- **Parser-populated-then-discarded anti-pattern (Pattern B)** — cardScatter case: parser populates `h.mcr` with stock-specific TE but the axis labels/hover imply it's total MCR. Domain-level label error, PM must adjudicate.
+- **Themed Plotly colorscales** — viz tiles with continuous colorscales should pull `--pos`/`--neg`/`--txt` via `getComputedStyle(document.body).getPropertyValue(...)` rather than hex literals; keeps theme toggles working.
+- **Treemap drill state reset** — `_treeDrill=null` must reset in `go()` alongside other per-strategy mutable globals; otherwise drill persists across strategy switches.
+
+### Carried from Batch 2
+- Week-selector trap (`s.sum` vs `getSelectedWeekSum()`)
+- Sort-null anti-pattern (`data-sv="${v??0}"` corrupts numeric sort; use `??''`)
+- Plotly click-drill parity gap (viz tiles often miss drill despite having full-screen sibling wired)
+- Synthesis / insight tile expectations
 
 ---
 
 ## Next up (in order)
-1. **Plan Batch 3** — pick next 2–3 tiles from `HANDOFF.md §6` (19 tiles remaining). Candidates: Overview KPI tiles (`cardTE`, `cardAS`, `cardBeta`, `cardHoldingsKpi`) or Risk-tab tiles (`cardMCR`, `cardScat`, `cardTree`, `cardFacWaterfall`).
-2. **Consider scheduling B3 (cardThisWeek drill links)** — smallest non-trivial (~30 lines), no blockers, locked-in value.
-3. **Consider B9 (factor-group palette canonicalization)** — Batch 2 seeded the CSS vars, finishing the job would consolidate 4 duplicate color lists.
-4. **Ask user** re: priority tile OR greenlight Batch 3 by judgment.
-5. **Continue cadence**: spawn tile-audit subagents → review → apply trivial fixes → tag `.v1` + `.v1.fixes` → push.
+1. **Plan Batch 4** — ~15 tiles remaining. Top priority candidate: **`cardMCR`** — likely has the same stock-specific-vs-total MCR labeling bug as cardScatter. Auditing it side-by-side would either confirm or isolate the domain error for a joint PM decision.
+2. **Other Batch 4 candidates** — `cardGroups`, `cardBenchOnlySec`, `cardUnowned`, `cardCorr`, `cardAttrib`, `cardRiskHistTrends`, `cardRiskFacTbl`, `cardWatchlist`, `cardRating`, `cardFacWaterfall`.
+3. **Consider batching by theme** — e.g. Risk-tab MCR-family (cardMCR + cardFacWaterfall) for shared PM decision on MCR labeling.
+4. **Ask user** re: priority tile OR greenlight Batch 4 by judgment.
+5. **Continue cadence**: spawn tile-audit subagents → review audits → apply trivial fixes → tag `.v1` + `.v1.fixes` → push.
+6. **End-game**: once all ~24 tiles at `.v1.fixes`, prep review marathon — surface each tile with screenshot + changes made + outstanding PM gates for explicit in-browser OK.
 
 ---
 
@@ -80,11 +90,13 @@ Do not wait for auto-compact. Surface the option; let the user choose.
 - `tileaudit.cardSectors.v1`, `cardHoldings.v1`, `cardCountry.v1`(+`.fixes`)
 - `tileaudit.cardThisWeek.v1`(+`.fixes`), `cardChars.v1`(+`.fixes`), `cardFacButt.v1`(+`.fixes`) — Batch 1 audited + fixes applied, pending review
 - `tileaudit.cardFacDetail.v1`(+`.fixes`), `cardFRB.v1`(+`.fixes`), `cardRegions.v1`(+`.fixes`) — Batch 2 audited + fixes applied, pending review
-- `working.20260421.2131.pre-batch2-commit` — most recent pre-risk safety tag
+- `tileaudit.cardRanks.v1`(+`.fixes`), `cardScatter.v1`(+`.fixes`), `cardTreemap.v1`(+`.fixes`) — Batch 3 audited + fixes applied, pending review
+- `working.20260423.pre-batch3-commit` — most recent pre-risk safety tag
 
 ---
 
 ## Checkpoint log (append-only, newest on top)
+- **2026-04-23 · Batch 3 audited + fixes applied, pending review** — 20 trivial fixes across cardRanks (YELLOW) / cardScatter (RED; MCR label bug deferred as PM gate B20) / cardTreemap (YELLOW). Themed Plotly colorscale pattern adopted (`--pos`/`--neg`/`--txt` via `getComputedStyle`). exportScatCsv() replaces Scatter PNG. Verified via disk greps + browser (0 console errors). Committed `875ea84`, tagged ×6, pushed. BACKLOG extended B20–B38 (cardScatter 20–28, cardRanks 29–33, cardTreemap 34–38).
 - **2026-04-21 · Review cadence set to Option 3** — user clarified: `.v1.fixes` tags ≠ signoff. All tiles await in-browser review once auditing is complete. Audit-all-first, then batch-review marathon. Language corrected in SESSION_STATE.
 - **2026-04-21 · Batch 2 audited + fixes applied, pending review** — ~20 trivial fixes across cardFacDetail/cardFRB/cardRegions + PM-gated sign-colorize on cardFRB (user: "yes" → Option 1). Shared CSS tokens added (`--prof`, `--fac-bar-pos/neg`). Verified via browser (tested both sign branches green/red, confirmed plotly_click drill opens Country Factor Drill modal, 0 console errors). Committed `3dcdae8`, tagged ×6, pushed. BACKLOG extended B9–B19.
 - **2026-04-21 · Batch 1 audited + fixes applied, pending review** — 9 Edits (~17 trivial fixes) across cardChars/cardFacButt/cardThisWeek applied, verified (disk greps + browser render + 0 console errors), committed `e50409a`, tagged ×6, pushed to origin. Phantom spec deleted; `BACKLOG.md` created with B1–B8.

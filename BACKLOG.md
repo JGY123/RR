@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-21 (Batch 2 closed)
+last_updated: 2026-04-21 (Batch 3 audited + fixes applied, pending review)
 ---
 
 # RR Backlog
@@ -12,6 +12,44 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Append-only. Newest at top.
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
+- When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## B34–B38 · cardTreemap non-trivials
+Origin: `tile-specs/cardTreemap-audit-2026-04-21.md` §7. Trivial fixes (note popup, theme tokens for active-sign color, `_treeDrill=null` on strategy switch) applied inline; toolbar-class adoption (B27 in audit) deferred as low-risk visual change for review marathon.
+
+- **B34 · Full-screen variant** — 360px is cramped for Country/80-bucket views; siblings all have ⛶. Must preserve Dim/Size/Color/Drill state. ~60–100 LOC mirroring `renderFsCountryMap`.
+- **B35 · Bucket → sector/country detail modal (`oDr`) route** — user clicking "Financials" expects the gold-standard sector drill. Needs PM UX call (shift-click? breadcrumb button? context menu?). ~20 LOC + PM decision.
+- **B36 · CSV export of bucket table** — `{label, count, wt, active, te, avgRank}`. ~15 LOC + new `exportTreeBuckets()` helper.
+- **B37 · Toolbar state persistence to localStorage** — `_treeDim/_treeSize/_treeColor/_treeDrill`. Pattern: `rr.tree.*`. PMs using daily expect sticky. ~10 LOC.
+- **B38 · Populate `h.subg` in `enrichHold` using GROUPS_DEF** — the "Group" toggle button is silently dead because `h.subg` is never populated (parser maps from a non-existent `SEC_SUBGROUP` column). PM gate on GROUPS_DEF overlap resolution (first-match heuristic vs multi-attribution). ~6 LOC + PM call.
+
+---
+
+## B29–B33 · cardRanks non-trivials
+Origin: `tile-specs/cardRanks-audit-2026-04-21.md` §7.
+
+- **B29 · Consume FactSet pre-aggregated rank tables as source-of-truth** — parser extracts `ranks.{overall,rev,val,qual}[{q,w,bw,aw}]`; `normalize()` L612 discards and rebuilds from holdings. Unblocks REV/VAL/QUAL sibling tiles (high value). Adds holdings-vs-FactSet divergence telemetry. ~30–50 LOC across parser + normalize + rRnk. Highest-value cardRanks item.
+- **B30 · "Unranked holdings" affordance** — holdings with `h.r==null` silently fall out of every quintile. Surface as 6th row or subtitle. ~10 LOC + PM call on format.
+- **B31 · Robust tab navigation in `filterByRank`** — replace magic `querySelectorAll('.tab')[2]` + `setTimeout(100)` with symbolic lookup + proper render callback. ~15 LOC.
+- **B32 · Filter preservation on rank-drill** — current `ah=[...cs.hold]` clobbers any pre-existing Holdings-tab sector/search filter. PM call on whether preserve or intentional reset. ~20 LOC.
+- **B33 · Drill breadcrumb / exit affordance** — visible "Filtered: Q3 (clear)" chip on Holdings tab when navigated from rank-drill. ~15 LOC.
+
+---
+
+## B20–B28 · cardScatter non-trivials
+Origin: `tile-specs/cardScatter-audit-2026-04-21.md` §11. Trivial fixes (isFinite filter, theme-aware colors, opacity, 9px label, zeroline, widen right margin, plotly_click→oSt drill, CSV export replacing PNG, note popup, rewritten hover + axis + tooltip text) applied inline. T11 "MCR" rename deferred as PM-gated.
+
+- **B20 · "MCR" axis-label domain rename** — `h.mcr` is FactSet `%S` (stock-specific TE), NOT marginal contribution to risk. PM gate: (a) rename to "Stock-Specific TE" / "Idiosyncratic Risk" end-to-end, or (b) keep "MCR" as PM shorthand + document. Recommend (a). Ripples: card title L1254, tooltip, `renderFsScatter` L5632. Same bug likely on cardMCR — audit next.
+- **B21 · Color-semantic unification tile ↔ full-screen** — tile colors by continuous active weight; full-screen colors by quintile rank. Two legit views but inconsistent. Add color-mode toggle `[Active|Rank|Sector]` in both. ~30–50 LOC.
+- **B22 · Historical scatter (per-holding history)** — blocked: parser doesn't persist per-holding history. No week-selector drill possible. Parser change needed.
+- **B23 · Quadrant annotations + portfolio-average crosshair** — requested in phantom spec 2026-04-13, never landed. Highest-PM-value chart addition. ~80 LOC.
+- **B24 · Axis toggle (MCR/Return, Exp/Vol, ActWt/TE)** — blocked on per-holding return from FactSet. Phantom-spec item.
+- **B25 · Label thinning + sizeref normalization** — `mode:'markers+text'` overlaps into mush on 80+ holdings. Thin to top-N by `|tr|`. PM call on N (~20–30). ~15 LOC.
+- **B26 · Full-screen panel table → standard primitives** — `<table id>`, sortable `<th>`, CSV export. Primitives checklist applied to modal panel. ~20 LOC.
+- **B27 · Shared `RANK_COLORS` palette helper** — `[#10b981, #34d399, #f59e0b, #fb923c, #ef4444]` duplicated in cardTreemap L2597 + FS scatter L5623 + FS panel L5659. Zero-behavior refactor. Folds into / supersedes earlier B9 (factor-palette canonicalization) — consolidate under one ticket when scheduled.
+- **B28 · Phantom-spec quarantine rule** — institutionalize in AUDIT_LEARNINGS: any `tile-specs/*.md` whose contents begin with JSONL gets renamed `*.phantom-DATE.md` on sight. Two phantom specs identified so far (cardChars, cardScatter).
 
 ---
 

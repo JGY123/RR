@@ -750,6 +750,7 @@ function go(id,btn){
   if(sel){let dd=sel.querySelector('select');if(dd&&dd.value!==id)dd.value=id;}
   hp=1;sortCol=null;sortDir=1;
   _selectedWeek=null;
+  _treeDrill=null; // reset treemap drill on strategy switch
   initWeekSelector();
   // Brief loading shimmer
   showLoading('tab-'+activeTab);
@@ -1237,8 +1238,8 @@ function rExp(){
   <!-- Row 6: Quant Ranks + Characteristics -->
   <div class="grid g2">
     <div class="card" id="cardRanks">
-      <div class="flex-between"><div class="card-title tip" data-tip="Click a rank to filter the Holdings tab">Quant Ranks</div>
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardRanks');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#cardRanks table','ranks');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div></div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Click a rank to filter the Holdings tab. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Quant Ranks</div>
+      <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks')" style="padding:3px 7px;font-size:13px">⬇ CSV</button></div>
       ${rRnk(s.ranks)}
     </div>
     <div class="card" id="cardChars">
@@ -1251,16 +1252,15 @@ function rExp(){
   <!-- Row 7: Scatter + Treemap -->
   <div class="grid g2">
     <div class="card" id="cardScatter">
-      <div class="flex-between"><div class="card-title tip" data-tip="Marginal contribution to risk vs TE contribution. Bubble size = portfolio weight.">MCR vs TE Contribution</div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Stock-specific TE (x) vs total TE contribution (y). Bubble size = portfolio weight. Color = active weight. Click a dot for details." oncontextmenu="showNotePopup(event,'cardScatter');return false">MCR vs TE Contribution</div>
       <div class="export-bar" style="display:flex;gap:4px">
         <button onclick="openFullScreen('scatter')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
-        <button class="export-btn" onclick="screenshotCard('#cardScatter')">PNG</button>
+        <button class="export-btn" title="Download CSV" onclick="exportScatCsv()">CSV</button>
       </div></div>
       <div id="scatDiv" style="height:320px"></div>
     </div>
     <div class="card" id="cardTreemap">
-      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings.">Holdings Treemap</div>
-      <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardTreemap')">PNG</button></div></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div></div>
       <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
         <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Group</span>
           <div class="toggle-wrap" style="margin:0" id="treeDimWrap"><button class="toggle-btn active" data-dim="sec" onclick="setTreeDim('sec')" style="padding:1px 6px;font-size:9px">Sector</button><button class="toggle-btn" data-dim="co" onclick="setTreeDim('co')" style="padding:1px 6px;font-size:9px">Country</button><button class="toggle-btn" data-dim="grp" onclick="setTreeDim('grp')" style="padding:1px 6px;font-size:9px">Group</button><button class="toggle-btn" data-dim="rank" onclick="setTreeDim('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
@@ -1796,8 +1796,14 @@ function rFacTable(factors){
 
 function rRnk(ranks){
   if(!ranks.length)return'<p style="color:var(--txt);font-size:12px">No rank data</p>';
-  let rows=ranks.map(r=>`<tr class="clickable" onclick="filterByRank(${r.r})"><td data-sv="${r.r}"><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r" data-sv="${r.ct}">${r.ct}</td><td class="r" data-sv="${r.p}">${f2(r.p)}%</td><td class="r" data-sv="${r.a??0}">${r.a!=null?f2(r.a)+'%':'—'}</td></tr>`).join('');
-  return`<table id="tbl-rnk"><thead><tr><th onclick="sortTbl('tbl-rnk',0)">Rank</th><th class="r" onclick="sortTbl('tbl-rnk',1)">Count</th><th class="r" onclick="sortTbl('tbl-rnk',2)">Port%</th><th class="r" onclick="sortTbl('tbl-rnk',3)">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
+  let rows=ranks.map(r=>{
+    let empty=r.ct===0;
+    let portTxt=empty?'—':f2(r.p)+'%';
+    let actTxt=(r.a==null||empty)?'—':f2(r.a)+'%';
+    let actCls=(r.a!=null&&!empty&&r.a>0.01)?'pos':((r.a!=null&&!empty&&r.a<-0.01)?'neg':'');
+    return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${r.l}" onclick="filterByRank(${r.r})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.r});}"><td data-col="rank" data-sv="${r.r}"><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r" data-col="count" data-sv="${r.ct}">${r.ct}</td><td class="r" data-col="port" data-sv="${r.p??''}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a??''}">${actTxt}</td></tr>`;
+  }).join('');
+  return`<table id="tbl-rnk"><thead><tr><th class="tip" data-col="rank" data-tip="Quintile bucket. Q1 = best-ranked by overall quant score, Q5 = worst." onclick="sortTbl('tbl-rnk',0)">Rank</th><th class="r tip" data-col="count" data-tip="Number of portfolio holdings in this quintile." onclick="sortTbl('tbl-rnk',1)">Count</th><th class="r tip" data-col="port" data-tip="Sum of portfolio weights in this quintile." onclick="sortTbl('tbl-rnk',2)">Port%</th><th class="r tip" data-col="active" data-tip="Sum of active weights (portfolio − benchmark) in this quintile." onclick="sortTbl('tbl-rnk',3)">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 function filterByRank(rank){
   activeTab='holdings';
@@ -2575,14 +2581,33 @@ function rGroupChart(s){
 }
 
 function rScat(s){
-  let hold=(s.hold||[]).filter(h=>h.p>0&&!isCash(h));
-  if(!hold.length){let el=document.getElementById('scatDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings to plot</p>';return;}
+  let el=document.getElementById('scatDiv');
+  let hold=(s.hold||[]).filter(h=>h.p>0&&!isCash(h)&&isFinite(h.mcr)&&isFinite(h.tr));
+  if(!hold.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings to plot</p>';return;}
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+  let midC=getComputedStyle(document.body).getPropertyValue('--txt').trim()||'#94a3b8';
   Plotly.newPlot('scatDiv',[{
     x:hold.map(h=>h.mcr||0),y:hold.map(h=>h.tr||0),mode:'markers+text',type:'scatter',
-    text:hold.map(h=>h.t),textposition:'top center',textfont:{size:8,color:THEME().tick},
-    marker:{size:hold.map(h=>Math.max(h.p*3,6)),color:hold.map(h=>h.a),colorscale:[[0,'#ef4444'],[0.5,'#94a3b8'],[1,'#10b981']],showscale:true,colorbar:{title:'Active',titlefont:{size:10},tickfont:{size:9},len:0.8}},
-    hovertemplate:'%{text}<br>MCR: %{x:.2f}<br>TE Contrib: %{y:.2f}%<extra></extra>'
-  }],{...plotBg,xaxis:{...plotBg.xaxis,title:'Marginal Contribution to Risk'},yaxis:{...plotBg.yaxis,title:'TE Contribution %'}},plotCfg);
+    text:hold.map(h=>h.t),textposition:'top center',textfont:{size:9,color:THEME().tick},
+    marker:{size:hold.map(h=>Math.max(h.p*3,6)),opacity:0.8,color:hold.map(h=>h.a),colorscale:[[0,negC],[0.5,midC],[1,posC]],showscale:true,colorbar:{title:'Active',titlefont:{size:10},tickfont:{size:9},len:0.8}},
+    hovertemplate:'%{text}<br>Stock-Specific TE: %{x:.2f}<br>TE Contrib: %{y:.2f}%<extra></extra>'
+  }],{...plotBg,margin:{...(plotBg.margin||{}),r:60},xaxis:{...plotBg.xaxis,title:'Stock-Specific TE (MCR)',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1},yaxis:{...plotBg.yaxis,title:'TE Contribution %'}},plotCfg);
+  if(el&&el.on){el.on('plotly_click',function(d){let t=d&&d.points&&d.points[0]&&d.points[0].text;if(t&&typeof oSt==='function')oSt(t);});}
+}
+function exportScatCsv(){
+  if(!cs||!cs.hold){return;}
+  let rows=(cs.hold||[]).filter(h=>h.p>0&&!isCash(h)&&isFinite(h.mcr)&&isFinite(h.tr));
+  let lines=['ticker,name,sector,port_pct,active_pct,stock_specific_te,te_contribution'];
+  rows.forEach(h=>{
+    let n=(h.n||'').replace(/"/g,'""');
+    let sec=(h.sec||'').replace(/"/g,'""');
+    lines.push(`"${h.t||''}","${n}","${sec}",${h.p||0},${h.a||0},${h.mcr||0},${h.tr||0}`);
+  });
+  let blob=new Blob([lines.join('\n')],{type:'text/csv'});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement('a');a.href=url;a.download=(cs.name||cs.id||'scatter')+'_stock_specific_te.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),100);
 }
 
 // ===== HOLDINGS TREEMAP (#7 from GAP_INVENTORY) — dim/size/color/drill =====
@@ -2624,9 +2649,11 @@ function rTree(s){
     if(h.over!=null){b.rankSum+=h.over*(h.p>0?h.p:1);b.rankN+=(h.p>0?h.p:1);}
   });
   let sizeOf=b=>_treeSize==='wt'?b.wt:_treeSize==='te'?b.te:b.count;
+  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
   let bucketColor=b=>{
     if(_treeColor==='rank'){let q=b.rankN>0?b.rankSum/b.rankN:3;return _treeRankColor(q);}
-    return b.active>=0?'#10b981':'#ef4444';
+    return b.active>=0?posC:negC;
   };
   let labels=[],parents=[],values=[],colors=[],cds=[];
   let T=THEME();

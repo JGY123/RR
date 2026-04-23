@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-23 (Batch 4 closed)
+last_updated: 2026-04-23 (Batch 5 closed)
 ---
 
 # Session State — Live
@@ -13,7 +13,7 @@ last_updated: 2026-04-23 (Batch 4 closed)
 ---
 
 ## Current phase
-**Tier 1 tile audits, Batch 4 closed.** 12 of ~21 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon at the end where user reviews each tile in-browser and gives explicit OK.
+**Tier 1 tile audits, Batch 5 closed.** 15 of ~21 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon at the end where user reviews each tile in-browser and gives explicit OK.
 Production deployment planning paused pending Redwood IT confirmation of server layout.
 
 > **Language discipline:** `.v1` / `.v1.fixes` tags = "audit complete" / "trivial fixes applied". These are NOT signoff. Signoff happens in the review marathon. Never write "signed off" in checkpoints, commits, or docs until user has explicitly OK'd the tile in-browser.
@@ -21,7 +21,17 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 ---
 
 ## Just finished (this session, 2026-04-23)
-- **Batch 4 fixes committed + pushed** — `3052d69` on main; tags `tileaudit.{cardMCR,cardAttrib,cardCorr}.v1` + `.v1.fixes` pushed (6 tags)
+- **Batch 5 fixes committed + pushed** — `f709e6e` on main; tags `tileaudit.{cardGroups,cardRiskHistTrends,cardRiskFacTbl}.v1` + `.v1.fixes` pushed (6 tags)
+- Risk-tab sweep — 25 trivial fixes; 2 RED verdicts with PM gates deferred; 3 new cross-tile patterns; 2 ledger corrections
+- cardGroups (RED): fixed dead drill (oDrGroup now uses h.subg direct match, was broken GROUPS_DEF+SEC_ALIAS filter where "Info Technology"≠"Information Technology"); plotly_click → oDrGroup; data-col/data-sv/R·V·Q tooltips/themed colors/thresh-alert/warn row classes on table; PNG+CSV dropdown → single CSV; note-hook. RED: ORVQ rank-aggregation taxonomy deferred as **B61** PM gate.
+- cardRiskHistTrends (YELLOW): fixed `_selectedWeek`-blind cur/prev lookup (was always last week); Holdings metric drill:null → oDrMetric('h'); 4 hardcoded colors tokenized via getComputedStyle + hex2rgba helper; per-metric hovertemplate/rangemode; short-history placeholder; noise floor 0.05/0.005; note-hook.
+- cardRiskFacTbl (RED): card-title note-hook; "Exposure" → "Active Exposure" (header + oDrFRisk y-axis); per-column data-tips; data-col on all th/td; empty-state fallback; oDrFRisk annotation uses `a` when present; dead `rRiskFacBars` alias removed (0 callers). RED: active-vs-raw 3rd site (B73, supersedes B53) + sign-collapse 4th site (B74) escalated as cross-tile refactor — deferred.
+- `BACKLOG.md` extended B61–B78 across 3 sections (B73 supersedes B53; B74 supersedes prior cardFRB sign-collapse scope; B65 supersedes B38).
+- `AUDIT_LEARNINGS.md` extended with **3 new cross-tile patterns** (Pattern C render-side re-derivation from wrong config; parser dual-path — `_collect_riskm_data` hardcodes `bm:None` vs `_build_factor_list` populates `a`; mini-chart sub-checklist) + **2 ledger corrections** (h.subg populated ~85% non-cash; inlineSparkSvg tokenized L1456-1457) + active-vs-raw escalation to 3 sites + sign-collapse escalation to 4 sites with shared-helper recommendation.
+- Disk-verified (wc -l=6664 +20, PNG refs 6 ↓1, showNotePopup refs 15 ↑3, rRiskFacBars=0, data-col=64) + node syntax check (all 3 `<script>` blocks parse clean). Browser verification deferred to review marathon — preview session stale post-compaction.
+
+### Previously
+- **2026-04-23 Batch 4** — `3052d69`; cardMCR/cardAttrib/cardCorr; 25 trivials + BACKLOG B39–B60; ghost-tile anti-pattern + anonymous Risk-tab cards + active-vs-raw 2nd site learnings
 - Applied 25 trivial fixes across 3 tiles; deferring PM gates for review marathon
 - cardMCR (RED): themed `--pri`/`--pos` via getComputedStyle, zeroline, PNG removed + exportMcrCsv(), plotly_click → oSt, note popup. MCR domain rename deferred as **B39** (paired with cardScatter B20)
 - cardAttrib (YELLOW): waterfall card id added, tip+oncontextmenu both titles, isFinite filter, height cap min(900,max(160,N*32)+20), themed bar colors, data-col/data-sv on table, plotly_click → oDrAttrib
@@ -32,6 +42,7 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 
 ### Previously
 - **2026-04-23 Batch 3** — `875ea84`; cardRanks/cardScatter/cardTreemap; 20 trivials + BACKLOG B20–B38. Themed Plotly colorscale pattern. exportScatCsv() replacing PNG.
+- **2026-04-23 Batch 4** — `3052d69`; cardMCR/cardAttrib/cardCorr; 25 trivials + BACKLOG B39–B60; ghost-tile + anonymous Risk-tab + active-vs-raw 2nd site learnings.
 - **2026-04-21 Batch 2** — `3dcdae8`; cardFacDetail/cardFRB/cardRegions; ~20 trivials + PM-gated sign-colorize on cardFRB. Shared CSS tokens `--prof`, `--fac-bar-pos/neg`.
 - **2026-04-21 Batch 1** — `e50409a`; cardChars/cardFacButt/cardThisWeek; ~17 trivials.
 
@@ -40,12 +51,18 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 ## In flight
 Nothing in flight. Ready to scope Batch 5.
 
-### New cross-tile learnings appended (Batch 4)
-- **Ghost-tile anti-pattern** — `#cardCorr` at L1299 is a named placeholder whose innerHTML is never set; live heatmap renders in an anonymous Risk-tab card at L3096. Detection heuristic: grep render-fns for `getElementById('<id>')` — no match = ghost.
-- **Anonymous Risk-tab cards lacking ids** — multiple Risk-tab cards key only their child chart div (corrChartDiv, mcrDiv). Blocks tile-audit targeting and note-popup keying. Follow-up sweep to assign stable ids.
-- **Active-vs-raw series conflation (≥2 sites)** — cardFacDetail L1764 + cardCorr L2168 both read raw `f.e` while UX implies active `e−bm`. Same PM gate governs both (B53 leads the decision).
+### New cross-tile learnings appended (Batch 5)
+- **Pattern C — render-side re-derivation from wrong config** — new anti-pattern class, distinct from Pattern A (parser-empty) / Pattern B (parser-populated-then-discarded). `oDrGroup` re-derives holdings from `GROUPS_DEF + SEC_ALIAS` instead of just reading the stored `h.subg` that was already computed upstream; fragile because config drifts ("Info Technology" vs "Information Technology"). Fix: read the stored field, not re-derive.
+- **Parser dual-path for factor exposures** — `_collect_riskm_data` (L468) hardcodes `bm:None`; `_build_factor_list` (L857) populates `a`. Downstream renderers that rely on `bm` to compute active silently fall through to raw `e`. One-line parser fix: `bm = e - a if a is not None else None`.
+- **Mini-chart sub-checklist** — Risk-tab synthesis tiles (4-up mini-charts) need: `_selectedWeek`-aware cur/prev lookup; per-metric hovertemplate+units; per-metric rangemode; short-history placeholder (not empty div); drill on every metric card (not just some); themed colors via getComputedStyle.
+- **Active-vs-raw escalation to 3 sites** — cardFacDetail L1764 + cardCorr L2168 + cardRiskFacTbl in-row L3152/L3149. Moves from "watch" to cross-tile refactor (B73 supersedes B53).
+- **Sign-collapse escalation to 4 sites** — shared helper recommended (B74 supersedes prior cardFRB sign-collapse scope).
+- **Ledger corrections** — prior notes struck: (a) `h.subg` IS populated (~85% of non-cash holdings); (b) `inlineSparkSvg` IS tokenized (L1456-1457). Dataset-driven spot-checks revealed stale ledger claims.
 
 ### Carried from prior batches
+- Ghost-tile anti-pattern (cardCorr L1299 placeholder vs live heatmap at L3096)
+- Anonymous Risk-tab cards lacking ids (sweep pending — B78)
+- Active-vs-raw series conflation (now 3 sites)
 - Parser-populated-then-discarded (Pattern B) — cardScatter L1254 / cardMCR same field
 - Themed Plotly colorscales via getComputedStyle(--pos/--neg/--txt)
 - Treemap drill-state reset (_treeDrill=null on strategy switch)
@@ -57,9 +74,9 @@ Nothing in flight. Ready to scope Batch 5.
 ---
 
 ## Next up (in order)
-1. **Plan Batch 5** — ~9 tiles remaining. Candidates: `cardGroups`, `cardBenchOnlySec`, `cardUnowned`, `cardWatchlist`, `cardRating`, `cardRiskHistTrends`, `cardRiskFacTbl`, `cardFacWaterfall`, plus any anonymous Risk-tab cards that deserve named audits.
-2. **Consider batching by theme** — e.g. Risk-tab anonymous-card sweep (heatmaps + trend mini-charts + any Risk-tab cards lacking ids) to convert them into properly-id'd audit targets in one pass.
-3. **Ask user** re: priority tile OR greenlight Batch 5 by judgment.
+1. **Plan Batch 6** — ~6 tiles remaining. Candidates: `cardBenchOnlySec`, `cardUnowned`, `cardWatchlist`, `cardRating`, `cardFacWaterfall`, plus anonymous Risk-tab card sweep (B78 — assign stable ids so the remaining Risk-tab cards become addressable tile-audit targets).
+2. **Consider batching by theme** — Holdings-centric trio (cardBenchOnlySec + cardUnowned + cardWatchlist) is a natural cluster; Rating + Waterfall are synthesis; anonymous-card sweep is structural refactor.
+3. **Ask user** re: priority tile OR greenlight Batch 6 by judgment.
 4. **Continue cadence**: spawn tile-audit subagents → review audits → apply trivial fixes → tag `.v1` + `.v1.fixes` → push.
 5. **End-game**: once all ~21 tiles at `.v1.fixes`, prep review marathon — surface each tile with screenshot + changes made + outstanding PM gates for explicit in-browser OK.
 
@@ -96,11 +113,13 @@ Do not wait for auto-compact. Surface the option; let the user choose.
 - `tileaudit.cardFacDetail.v1`(+`.fixes`), `cardFRB.v1`(+`.fixes`), `cardRegions.v1`(+`.fixes`) — Batch 2
 - `tileaudit.cardRanks.v1`(+`.fixes`), `cardScatter.v1`(+`.fixes`), `cardTreemap.v1`(+`.fixes`) — Batch 3
 - `tileaudit.cardMCR.v1`(+`.fixes`), `cardAttrib.v1`(+`.fixes`), `cardCorr.v1`(+`.fixes`) — Batch 4 audited + fixes applied, pending review
-- `working.20260423.pre-batch3-commit` — most recent pre-risk safety tag
+- `tileaudit.cardGroups.v1`(+`.fixes`), `cardRiskHistTrends.v1`(+`.fixes`), `cardRiskFacTbl.v1`(+`.fixes`) — Batch 5 audited + fixes applied, pending review
+- `working.20260423.pre-batch5-commit` (or prior `.pre-batch3-commit`) — most recent pre-risk safety tag
 
 ---
 
 ## Checkpoint log (append-only, newest on top)
+- **2026-04-23 · Batch 5 audited + fixes applied, pending review** — 25 trivial fixes across cardGroups (RED; ORVQ rank taxonomy B61 PM gate + dead-drill FIXED via `h.subg` direct match) / cardRiskHistTrends (YELLOW; `_selectedWeek`-blind cur/prev fixed, 4 colors tokenized, Holdings drill added) / cardRiskFacTbl (RED; active-vs-raw 3rd site + sign-collapse 4th site deferred as B73/B74 cross-tile refactor; header "Exposure"→"Active Exposure"). 3 new cross-tile patterns (Pattern C render-side re-derivation, parser dual-path `bm:None`, mini-chart sub-checklist) + 2 ledger corrections (h.subg populated ~85%, inlineSparkSvg tokenized). Verified via disk greps + node syntax check (all 3 `<script>` blocks clean). Committed `f709e6e`, tagged ×6, pushed. BACKLOG extended B61–B78 (B73 supersedes B53; B74 supersedes prior cardFRB sign-collapse scope; B65 supersedes B38). Tile count 15 of ~21.
 - **2026-04-23 · Batch 4 audited + fixes applied, pending review** — 25 trivial fixes across cardMCR (RED; MCR rename deferred as PM gate B39 paired with cardScatter B20) / cardAttrib (YELLOW) / cardCorr (RED; ghost-tile B59 + active-vs-raw B53 deferred as PM gates). 3 new cross-tile learnings (ghost-tile anti-pattern, anonymous Risk-tab cards, active-vs-raw conflation 2nd site). Verified via disk greps + browser (0 console errors). Committed `3052d69`, tagged ×6, pushed. BACKLOG extended B39–B60. Tile count 12 of ~21.
 - **2026-04-23 · Batch 3 audited + fixes applied, pending review** — 20 trivial fixes across cardRanks (YELLOW) / cardScatter (RED; MCR label bug deferred as PM gate B20) / cardTreemap (YELLOW). Themed Plotly colorscale pattern adopted. exportScatCsv() replaces Scatter PNG. Committed `875ea84`, tagged ×6, pushed. BACKLOG extended B20–B38.
 - **2026-04-21 · Review cadence set to Option 3** — user clarified: `.v1.fixes` tags ≠ signoff. All tiles await in-browser review once auditing is complete. Audit-all-first, then batch-review marathon.

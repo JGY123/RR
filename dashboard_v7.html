@@ -1290,7 +1290,7 @@ function rExp(){
 
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
-    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail.">Unowned Risk Contributors</div>
+    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>
     <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button></div></div>
     ${rUnowned(s.unowned)}
   </div>
@@ -1970,29 +1970,36 @@ function benchOnlySecHtml(s){
     let bigLbl=big?`${shortNm(big.n||big.t)} <span style="color:var(--txt);font-size:10px">(${f2(big.b,2)}%)</span>`:'—';
     let nm2=sec.replace(/'/g,"\\'");
     return `<tr class="clickable" onclick="oDr('sec','${nm2}')">
-      <td data-sv="${sec}">${sec}</td>
-      <td class="r" data-sv="${d.count}" style="color:var(--txth);font-weight:600">${d.count}</td>
-      <td class="r" data-sv="${d.wt}" style="color:var(--warn);font-weight:600">${f2(d.wt,1)}%</td>
-      <td style="font-size:11px;color:var(--txth)">${bigLbl}</td>
+      <td data-col="sec" data-sv="${sec}">${sec}</td>
+      <td class="r" data-col="missed" data-sv="${d.count}" style="color:var(--txth);font-weight:600">${d.count}</td>
+      <td class="r" data-col="wt" data-sv="${d.wt}" style="color:var(--warn);font-weight:600">${f2(d.wt,1)}%</td>
+      <td data-col="biggest" data-sv="${big?.b??''}" style="font-size:11px;color:var(--txth)">${bigLbl}</td>
     </tr>`;
   }).join('');
   return `<div class="card" id="cardBenchOnlySec" style="margin-top:16px;margin-bottom:16px">
-    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark holdings you don't own, aggregated by sector. Click a row to open the sector drill.">Benchmark-Only Holdings by Sector <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${totalCount} names \u00b7 ${f2(totalMissed,1)}% of benchmark missed</span></div>
-    <div class="export-bar"><button class="export-btn" onclick="screenshotCard('#cardBenchOnlySec')">PNG</button><button class="export-btn" onclick="exportCSV('#tbl-bo-sec','bench_only_sec')" style="margin-left:4px">CSV</button></div></div>
+    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark holdings you don't own, aggregated by sector. Click a row to open the sector drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBenchOnlySec');return false">Benchmark-Only Holdings by Sector <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${totalCount} names \u00b7 ${f2(totalMissed,1)}% of benchmark missed</span></div>
+    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#tbl-bo-sec','bench_only_sec')">CSV</button></div></div>
     <table id="tbl-bo-sec" style="margin-top:8px"><thead><tr>
-      <th onclick="sortTbl('tbl-bo-sec',0)">Sector</th>
-      <th class="r tip" data-tip="Count of benchmark-only holdings in this sector" onclick="sortTbl('tbl-bo-sec',1)">Missed</th>
-      <th class="r tip" data-tip="Sum of benchmark weights of holdings you don't own" onclick="sortTbl('tbl-bo-sec',2)">Bench Wt</th>
-      <th>Biggest Missed</th>
+      <th data-col="sec" onclick="sortTbl('tbl-bo-sec',0)">Sector</th>
+      <th data-col="missed" class="r tip" data-tip="Count of benchmark-only holdings in this sector" onclick="sortTbl('tbl-bo-sec',1)">Missed</th>
+      <th data-col="wt" class="r tip" data-tip="Sum of benchmark weights of holdings you don't own" onclick="sortTbl('tbl-bo-sec',2)">Bench Wt</th>
+      <th data-col="biggest" class="tip" data-tip="Largest single benchmark holding you don't own in this sector (by bench weight)" onclick="sortTbl('tbl-bo-sec',3)">Biggest Missed</th>
     </tr></thead><tbody>${rows}</tbody></table>
   </div>`;
 }
 
+const UNOWNED_REG_LABEL={'Usa':'USA','English':'UK','Far East':'Asia Pacific ex-Japan'};
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
-  let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr)-Math.abs(a.tr));
-  let rows=sorted.map(u=>`<tr class="clickable" onclick="oDrUnowned('${u.t}')"><td data-sv="${u.t}" style="color:var(--txth);font-weight:500">${u.t}</td><td>${u.n}</td><td data-sv="${u.reg||''}">${u.reg||'—'}</td><td class="r" data-sv="${u.b}">${f2(u.b)}</td><td class="r" data-sv="${u.tr}" style="color:var(--neg);font-weight:600">${fp(u.tr)}</td></tr>`).join('');
-  return`<table id="tbl-unowned"><thead><tr><th onclick="sortTbl('tbl-unowned',0)">Ticker</th><th onclick="sortTbl('tbl-unowned',1)">Name</th><th onclick="sortTbl('tbl-unowned',2)">Region</th><th class="r" onclick="sortTbl('tbl-unowned',3)">Bench Wt%</th><th class="r" onclick="sortTbl('tbl-unowned',4)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
+  let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
+  let rows=sorted.map(u=>{
+    let tEsc=(u.t||'').replace(/'/g,"\\'");
+    let regLbl=UNOWNED_REG_LABEL[u.reg]||u.reg||'\u2014';
+    let bVal=u.b!=null?u.b:(u.bw!=null?u.bw:null);
+    let trVal=u.tr!=null?u.tr:(u.pct_t!=null?u.pct_t:null);
+    return `<tr class="clickable" onclick="oDrUnowned('${tEsc}')"><td data-col="t" data-sv="${u.t||''}" style="color:var(--txth);font-weight:500">${u.t||''}</td><td data-col="n" data-sv="${(u.n||'').toLowerCase()}">${u.n||''}</td><td data-col="reg" data-sv="${regLbl}">${regLbl}</td><td class="r" data-col="bw" data-sv="${bVal??''}">${bVal!=null?f2(bVal):'\u2014'}</td><td class="r" data-col="tr" data-sv="${trVal??''}" style="color:var(--txth);font-weight:600">${trVal!=null?fp(trVal):'\u2014'}</td></tr>`;
+  }).join('');
+  return`<table id="tbl-unowned"><thead><tr><th data-col="t" onclick="sortTbl('tbl-unowned',0)">Ticker</th><th data-col="n" onclick="sortTbl('tbl-unowned',1)">Name</th><th data-col="reg" onclick="sortTbl('tbl-unowned',2)">Region</th><th data-col="bw" class="r tip" data-tip="Benchmark weight of this unowned stock (% of benchmark)" onclick="sortTbl('tbl-unowned',3)">Bench Wt%</th><th data-col="tr" class="r tip" data-tip="Contribution of this unowned stock to tracking error (% of TE)" onclick="sortTbl('tbl-unowned',4)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -3663,7 +3670,7 @@ function loadHoldFlags(){if(!cs)return{};try{return JSON.parse(localStorage.getI
 function saveHoldFlags(){if(!cs)return;try{localStorage.setItem('rr_flags_'+cs.id,JSON.stringify(_holdFlags));}catch(e){}}
 const FLAG_CYCLE=[null,'watch','reduce','add'];
 const FLAG_ICONS={watch:'\u2605',reduce:'\u25bc',add:'\u25b2'};
-const FLAG_COLORS={watch:'#f59e0b',reduce:'#ef4444',add:'#10b981'};
+const FLAG_COLORS={watch:'var(--warn)',reduce:'var(--neg)',add:'var(--pos)'};
 function cycleFlag(ticker,e){
   e.stopPropagation();
   let cur=_holdFlags[ticker]||null;
@@ -3678,6 +3685,16 @@ function cycleFlag(ticker,e){
     btn.classList.toggle('flagged',!!f);
     btn.title=f?'Flag: '+f+' (click to cycle)':'Flag (watch/reduce/add)';
   }
+  // Re-render watchlist tile in place if mounted (Overview tab)
+  let wlCard=document.getElementById('cardWatchlist');
+  if(wlCard&&cs){
+    let html=watchlistCardHtml(cs);
+    if(html){
+      let tmp=document.createElement('div');tmp.innerHTML=html;
+      let newCard=tmp.firstElementChild;
+      if(newCard)wlCard.replaceWith(newCard);
+    }
+  }
 }
 
 function watchlistCardHtml(s){
@@ -3685,19 +3702,31 @@ function watchlistCardHtml(s){
   let flags={};
   try{flags=JSON.parse(localStorage.getItem('rr_flags_'+s.id)||'{}');}catch(e){}
   let tickers=Object.keys(flags);
-  if(!tickers.length)return '';
-  let holdMap={};(s.hold||[]).forEach(h=>{if(h.t)holdMap[h.t]=h;});
+  let holdMap={};(s.hold||[]).forEach(h=>{if(h.t&&!isCash(h))holdMap[h.t]=h;});
   let groups={watch:[],reduce:[],add:[]};
   tickers.forEach(t=>{
     let f=flags[t];if(!groups[f])return;
-    let h=holdMap[t]||{};
-    groups[f].push({t,f,n:h.n||t,p:+(h.p||0),a:+(h.a||0)});
+    let h=holdMap[t];
+    let exited=!h;
+    groups[f].push({t,f,n:(h&&h.n)||t,p:exited?null:+(h.p||0),a:exited?null:+(h.a||0),exited});
   });
-  Object.values(groups).forEach(arr=>arr.sort((x,y)=>Math.abs(y.a)-Math.abs(x.a)));
+  Object.values(groups).forEach(arr=>arr.sort((x,y)=>Math.abs(y.a||0)-Math.abs(x.a||0)));
   let total=tickers.length;
+  // Empty state: show the tile with onboarding copy instead of hiding entirely
+  if(!total){
+    return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
+      <div class="flex-between"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div></div>
+      <div style="font-size:11px;color:var(--txt);padding:8px 6px">No tickers watchlisted yet \u2014 click the \u2691 flag icon on any holding row (Holdings tab) to add it.</div>
+    </div>`;
+  }
   let mkRow=(item,col)=>{
-    let actCol=item.a>=0?'var(--pos)':'var(--neg)';
-    return `<tr class="clickable" onclick="oSt('${item.t}')" style="cursor:pointer"><td style="color:${col};font-weight:600;width:22px;padding:4px 6px;text-align:center">${FLAG_ICONS[item.f]||''}</td><td style="font-weight:600;color:var(--txth);padding:4px 6px;width:80px">${item.t}</td><td style="color:var(--txt);padding:4px 6px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.n}</td><td class="r" style="padding:4px 6px;width:60px">${f2(item.p)}</td><td class="r" style="color:${actCol};padding:4px 6px;width:60px;font-weight:600">${fp(item.a,2)}</td></tr>`;
+    let actCol=item.exited?'var(--txt)':((item.a||0)>=0?'var(--pos)':'var(--neg)');
+    let pCell=item.exited?'\u2014':f2(item.p);
+    let aCell=item.exited?'\u2014':fp(item.a,2);
+    let exitTag=item.exited?' <span style="font-size:9px;color:var(--warn);background:rgba(245,158,11,0.15);padding:1px 4px;border-radius:3px;margin-left:4px">EXITED</span>':'';
+    let tEsc=(item.t||'').replace(/'/g,"\\'");
+    let nameEsc=(item.n||'').replace(/"/g,'&quot;');
+    return `<tr class="clickable" onclick="oSt('${tEsc}')" style="cursor:pointer;opacity:${item.exited?'0.65':'1'}"><td data-col="flag" data-sv="${item.f}" style="color:${col};font-weight:600;width:22px;padding:4px 6px;text-align:center">${FLAG_ICONS[item.f]||''}</td><td data-col="t" data-sv="${item.t||''}" style="font-weight:600;color:var(--txth);padding:4px 6px;width:80px">${item.t}${exitTag}</td><td data-col="n" data-sv="${(item.n||'').toLowerCase()}" title="${nameEsc}" style="color:var(--txt);padding:4px 6px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.n}</td><td class="r" data-col="p" data-sv="${item.p??''}" style="padding:4px 6px;width:60px">${pCell}</td><td class="r" data-col="a" data-sv="${item.a??''}" style="color:${actCol};padding:4px 6px;width:60px;font-weight:600">${aCell}</td></tr>`;
   };
   let sections=[
     {key:'watch',label:'Watch'},
@@ -3707,9 +3736,30 @@ function watchlistCardHtml(s){
     let arr=groups[g.key];if(!arr.length)return '';
     let col=FLAG_COLORS[g.key],icon=FLAG_ICONS[g.key];
     let rows=arr.map(item=>mkRow(item,col)).join('');
-    return `<div style="margin-top:8px"><div style="font-size:10px;color:${col};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table style="width:100%;font-size:11px;border-collapse:collapse"><tbody>${rows}</tbody></table></div>`;
+    let tblId='tbl-watch-'+g.key;
+    return `<div style="margin-top:8px"><div style="font-size:10px;color:${col};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table id="${tblId}" style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr><th data-col="flag" style="width:22px"></th><th data-col="t" class="tip" data-tip="Ticker symbol" onclick="sortTbl('${tblId}',1)">Ticker</th><th data-col="n" class="tip" data-tip="Security name" onclick="sortTbl('${tblId}',2)">Name</th><th data-col="p" class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('${tblId}',3)">Port %</th><th data-col="a" class="r tip" data-tip="Active weight vs benchmark %" onclick="sortTbl('${tblId}',4)">Active %</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }).join('');
-  return `<div class="card" id="cardWatchlist" style="margin-bottom:16px"><div class="card-title">My Watchlist (${total})</div>${sections}</div>`;
+  return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
+    <div class="flex-between"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportWatchlistCsv('${s.id}')">CSV</button></div></div>
+    ${sections}
+  </div>`;
+}
+
+function exportWatchlistCsv(sid){
+  let keys=['watch','reduce','add'];
+  let rows=[['Flag','Ticker','Name','Portfolio %','Active %']];
+  keys.forEach(key=>{
+    let tbl=document.getElementById('tbl-watch-'+key);
+    if(!tbl)return;
+    tbl.querySelectorAll('tbody tr').forEach(tr=>{
+      let cells=tr.querySelectorAll('td');
+      rows.push([key,(cells[1]?.textContent||'').trim(),(cells[2]?.textContent||'').trim(),(cells[3]?.textContent||'').trim(),(cells[4]?.textContent||'').trim()]);
+    });
+  });
+  let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='watchlist_'+sid+'.csv';a.click();
 }
 
 // ===== HOLDINGS INTELLIGENCE =====

@@ -10,7 +10,7 @@
 - `cs.sectors[]`, `cs.countries[]`, `cs.regions[]`, `cs.groups[]` — all share the 19-col aggregate layout: `{n, p, b, a}` + ORVQ ranks. Per SCHEMA_COMPARISON.md L66–L97, offsets are stable.
 - `cs.hold[]` — per-holding; carries `{t, n, sec, co, p, b, a, mcr, tr, over, rev, val, qual, factor_contr}`. Region is derived at normalize-time: `h.reg = CMAP[h.co]||'Other'` (dashboard_v7.html:512) — any holding with `h.co` not in `CMAP` silently buckets to "Other" (same class of drift as cardCountry's COUNTRY_ISO3).
 - Weighted-rank aggregation uses shared `rankAvg3(_secRankMode, ...)`. The mode is GLOBAL — toggling in one tile re-renders all ORVQ tiles.
-- `h.subg` is **declared** by the parser (factset_parser.py:544 `SEC_SUBGROUP→subg`) but FactSet CSV does not currently ship that column → `h.subg` is `undefined` in every strategy. Any tile reading `h.subg` silently renders empty. Seen: cardTreemap Group-by toggle (dashboard_v7.html:2610). Fix = derive `h.subg` in `enrichHold` from GROUPS_DEF/SEC_ALIAS (same lookup rWt uses at L1895), first-match heuristic — needs PM call on overlap (Info Technology → GROWTH CYCLICAL vs GROWTH).
+- ~~`h.subg` is **declared** by the parser (factset_parser.py:544 `SEC_SUBGROUP→subg`) but FactSet CSV does not currently ship that column → `h.subg` is `undefined` in every strategy.~~ **UPDATED 2026-04-23 (cardGroups audit):** `h.subg` **IS populated** (~85% of non-cash holdings carry it on all 7 strategies in current data). FactSet's `SEC_SUBGROUP` column IS shipping. `h.subg` is authoritative and exclusive (each holding in exactly one subgroup, labels match `cs.groups[].n`). This unblocks cardTreemap Group-by toggle (one-line fix: `buckets[h.subg||'Other']`) and simplifies cardGroups rank aggregation + drill filtering (see Pattern C below).
 
 ## Shared state traps
 - `_secRankMode` (Wtd / Avg / BM) is shared across cardSectors, cardCountry, cardGroups, cardRegions. Per-tile state would require splitting into `_secRankMode`, `_coRankMode`, `_grpRankMode`, `_regRankMode`. Deferred until a PM asks.
@@ -43,7 +43,7 @@ Chart-only tiles (cardTreemap, cardScatter, cardMCR, cardFRB donut, cardFacButt)
 
 ## Viz-renderer pattern (no table)
 - Plotly target divs (scatDiv, treeDiv, mcrDiv, frbDiv, facButtDiv, **regChartDiv**, etc.): guard `if(!data.length){ el.innerHTML='<p>No X data</p>'; return; }` — must write to the div, not silent return. `rRegChart` (L2283-2285) silent-returns and leaves stale prior render on strategy switch.
-- Use `THEME().pos` / `THEME().neg` (extended 2026-04-20) instead of hardcoded `#10b981` / `#ef4444`. Also `inlineSparkSvg` (L1438) hardcodes `#10b981`/`#ef4444` at L1451 — affects both sector and region sparklines. `rRegChart` hardcodes `rgba(99,102,241,0.85)` / `rgba(75,85,99,0.85)` port/bench colors (L2298/2301) — no `--pri`/`--bench` tokens currently exist. **cardTreemap** hardcodes both `#10b981`/`#ef4444` (L2629, L2644) and a 5-color rank palette at L2597.
+- Use `THEME().pos` / `THEME().neg` (extended 2026-04-20) instead of hardcoded `#10b981` / `#ef4444`. ~~Also `inlineSparkSvg` (L1438) hardcodes `#10b981`/`#ef4444` at L1451~~ **RESOLVED 2026-04-23:** `inlineSparkSvg` is tokenized at L1456-1457 (verified during cardRiskHistTrends audit). `rRegChart` hardcodes `rgba(99,102,241,0.85)` / `rgba(75,85,99,0.85)` port/bench colors (L2298/2301) — no `--pri`/`--bench` tokens currently exist. **cardTreemap** hardcodes both `#10b981`/`#ef4444` (L2629, L2644) and a 5-color rank palette at L2597.
 - Click-to-drill parity: if a full-screen sibling wires `plotly_click → oDrX(name)`, the half-size tile should too. Seen missing on cardFacButt; full-screen `renderFsFactorMap` has it (L5542). `rRegChart` has NO click handler — regions chart is read-only, unlike sector/country charts.
 - Apply `.filter(f => isFinite(f.a))` (or equivalent) before mapping chart inputs — Plotly silently coerces NaN/null to 0, hiding missing data.
 
@@ -178,3 +178,52 @@ Both tiles are PM-gated on the same decision: policy of "active" vs "raw" for fa
 - ✅ cardMCR (2026-04-23, audit only — **RED/YELLOW/YELLOW**; top finding = same `h.mcr` = stock-specific TE mislabel as cardScatter, paired rename PM gate (B39 ↔ B20); 6 trivial applied, 6 non-trivial → B39–B44)
 - ✅ cardAttrib (2026-04-23, audit only — YELLOW/YELLOW/YELLOW; top finding = waterfall card id-less (fixed), Impact column sort broken (fixed via data-sv), no `plotly_click` on either bar chart (fixed on attrib bar, weekly-bars deferred); 10 trivial applied, 8 non-trivial → B45–B52)
 - ✅ cardCorr (2026-04-23, audit only — **RED/YELLOW/YELLOW**; top finding = ghost tile at `#cardCorr` L1299 while live heatmap renders in anonymous Risk-tab card L3096; active-vs-raw conflation 2nd site; 9 trivial applied, 8 non-trivial → B53–B60)
+
+## Data-pipeline layering patterns (codified — surfaced 2026-04-23, cardGroups)
+Three distinct layering anti-patterns in the parser↔normalize↔render chain. Every future audit should grep for all three:
+1. **Pattern A — "`hist.X:{}`":** parser writes empty dict; render can't display. Sites: `hist.reg`, `hist.grp`, `hist.country` (never declared); `hist.sec` partial. Result: sparkline / trend / historical-drill columns are shell-only. Flagged in Known Blockers.
+2. **Pattern B — "parser-populated → normalize-discarded":** parser fills a field; dashboard `normalize()` overwrites with a local recomputation. Site: `s.ranks` — parser emits pre-aggregated FactSet quintile totals, `normalize()` L612 discards and rebuilds from holdings. Symptoms: FactSet authoritative values never displayed; parallel subfields (REV/VAL/QUAL quintiles) become orphaned.
+3. **Pattern C — "render-side re-derivation from wrong config" (NEW):** parser fills correctly AND holdings carry authoritative labels, yet render reconstructs the mapping locally via a legacy config that disagrees with source. Site: `rGroupTable` L1895–L1918 recomputes ORVQ ranks via `GROUPS_DEF + SEC_ALIAS` (non-exclusive: Info Tech → both GROWTH CYCLICAL and GROWTH) while holdings carry `h.subg` (exclusive bucketing matching `cs.groups[].n`). Detection heuristic: if render-side code has a config constant whose entries overlap with fields already on the data model (here GROUPS_DEF vs `h.subg`), grep every usage for consistency with source. Decide which is truth and enforce.
+
+## Active-vs-raw factor-exposure conflation (ESCALATED — 3 sites, surfaced 2026-04-23 cardRiskFacTbl)
+Now confirmed at **3 sites**:
+1. cardFacDetail L1764 — `facRow` reads raw `f.e` while tile narrative implies active `f.a`.
+2. cardCorr L2168 — `rUpdateCorr` correlates raw `e` while Risk-tab UX implies active.
+3. cardRiskFacTbl (WITHIN-ROW divergence): Exposure cell L3152 renders `f.a` (active), Trend sparkline L3149 falls through to raw `h.e` whenever `h.bm==null` — **which is always on the riskm path** because parser `_collect_riskm_data` L468 hardcodes `bm: None`. Same row, two different readings. Drill annotation at L3573 self-contradicts with trace (annotation used `last.e||last.a`, trace plots `e−bm`).
+Escalation: 3 sites moves this from "watch" to **cross-tile refactor** (BACKLOG B73, supersedes B53). Parser-side complementary fix: populate `bm` in riskm path via `bm = e − a` algebra (one-line parser change at L468).
+
+## Sign-collapse on risk-budget / MCR views (ESCALATED — 4 sites, surfaced 2026-04-23 cardRiskFacTbl)
+`Math.abs(f.c || 0)` erases direction of factor TE contribution. Confirmed at **4 sites**:
+1. cardFRB L2696
+2. `oDrRiskBudget` L5389
+3. Risk Decomp Tree L2770
+4. cardRiskFacTbl MCR-to-TE L2996 + drill KPI L3526
+Pattern is now widespread enough that a shared helper (`mcrSigned(f, totalTE)`) and a shared "colorize risk-add vs diversifier" convention should be adopted. `Math.abs` reserved only for strict-magnitude views (Top-|MCR| bars). BACKLOG B74 (supersedes scope of earlier cardFRB items).
+
+## Parser dual-path for factor exposures (NEW — surfaced 2026-04-23, cardRiskFacTbl)
+`factset_parser.py` has two paths that populate `exposures[fname]`:
+1. `_collect_riskm_data` L460-469 — always sets `bm: None`, stores `c_val` as both `c` and `e` (port exposure).
+2. `_build_factor_list` L847-865 — relies on whatever `exposures` was set to for the current riskm entry, so `bm` stays None. But `f.a` (active) DOES get populated (L857) from `active_factor_cols`.
+Net: `f.a` reliable; `hist.fac[*][*].bm` unreliable (always None on riskm path). Any render consuming `hist.fac[*][].bm` silent-falls-through to raw. **One-line parser fix** (L468): `bm = e - a if a is not None else None`. Lands with B73 active-vs-raw refactor.
+
+## Week-selector trap — extends to synthesis/trend tiles (surfaced 2026-04-23, cardRiskHistTrends)
+Beyond detail tables (cardSectors/Regions/Countries silently-latest by two-layer-history design), **any tile computing `cur = hist[length-1]` / WoW deltas against `hist[length-2]` silently ignores `_selectedWeek`**. Seen: cardRiskHistTrends L2923 (value row + delta arrow) — fixed by index lookup `idx = _selectedWeek ? hist.findIndex(h=>h.d===_selectedWeek) : hist.length-1`. Even when the underlying chart shows all history, a vertical marker at `_selectedWeek` is still missing. Audit every new tile with `hist.sum` access for this.
+
+## Mini-chart (sparkline) sub-checklist (NEW — surfaced 2026-04-23, cardRiskHistTrends)
+Supplements "Viz-tile chart checklist" for the sparkline subset:
+- [ ] Per-metric `hovertemplate` with units (`%{y:.2f}%` for TE/AS, `%{y:.3f}` for Beta, `%{y:d}` for count metrics).
+- [ ] `rangemode` reviewed per-metric — `'tozero'` crushes ref-1-centered metrics like Beta to a flat line; prefer `'normal'` for Beta/AS, keep `'tozero'` for TE/Holdings.
+- [ ] Keyed child chart div ids (not anonymous) — enables targeted re-render.
+- [ ] Delta-arrow noise floor calibrated — `>0.05` on pp metrics, `>0.005` on Beta. `>0.01` always fires.
+- [ ] Theme-token fills via `getComputedStyle(document.body).getPropertyValue('--x')` + a tiny `hex2rgba()` for alpha-layered fills.
+
+## Drill symmetry across metric cards (NEW — surfaced 2026-04-23, cardRiskHistTrends)
+When a multi-metric card wires 3-of-N metrics to drill modals and leaves 1 undrillable (`drill:null`), the asymmetry (some cursor:pointer, some cursor:default) reads as broken. Either add the missing drill (generic `oDrMetric(key)` usually accepts arbitrary keys with `hist[key]` if `labels[key]` + `units[key]` exist) or make the intentional omission visible (annotate the undrillable card `title="Drill not available"`). Seen fixed on cardRiskHistTrends Holdings card (`drill:"oDrMetric('h')"`).
+
+## Dataset-driven audits are high-ROI (NEW — surfaced 2026-04-23, cardGroups)
+The cardGroups RED finding (ranks off by up to 2 quintile points) was ONLY visible by running numeric comparison against `latest_data.json`. Prior aggregate-tile audits (sectors/country/regions) did not run a data probe and did not catch analogous issues. **Heuristic:** always run at least one "parser value vs rendered value" spot-check when the render re-computes from holdings data that parser already aggregated. Add to the audit skill template.
+
+## Completed audits (append-only — 2026-04-23 batch 5)
+- ✅ cardGroups (2026-04-23, audit only — **RED/YELLOW/YELLOW**; top finding = render recomputes ORVQ ranks via non-exclusive `GROUPS_DEF + SEC_ALIAS` taxonomy, silently mis-reporting HARD CYCLICAL as Q1 when FactSet says Q3; dead `oDrGroup` drill filter fixed inline via `h.subg` switch; `h.subg` populated (contradicts earlier ledger — now corrected); 10 trivial applied, 8 non-trivial → B61–B68)
+- ✅ cardRiskHistTrends (2026-04-23, audit only — YELLOW/YELLOW/YELLOW; top finding = `_selectedWeek`-blind cur/prev (fixed via idx lookup) + 4 tokenizable Plotly colors (fixed) + Holdings drill asymmetry (fixed via `oDrMetric('h')`); 8 trivial applied, 4 non-trivial → B69–B72)
+- ✅ cardRiskFacTbl (2026-04-23, audit only — **RED/YELLOW/YELLOW**; top findings = active-vs-raw 3rd site in-row between Exposure cell and Trend sparkline (parser L468 `bm: None` root cause); sign-collapse 4th site on MCR-to-TE; header mislabel Exposure → Active Exposure (fixed inline); 7 trivial applied, 3 deferred pending B73/B74 PM policy, 6 non-trivial → B73–B78)

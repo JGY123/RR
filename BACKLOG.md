@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-23 (Batch 4 audited + fixes applied, pending review)
+last_updated: 2026-04-23 (Batch 5 audited + fixes applied, pending review)
 ---
 
 # RR Backlog
@@ -13,6 +13,42 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## B73–B78 · cardRiskFacTbl non-trivials
+Origin: `tile-specs/cardRiskFacTbl-audit-2026-04-23.md`. Trivial fixes (header rename Exposure→Active Exposure, tip+oncontextmenu, per-column data-tips, empty-state fallback, data-col on every th+td, drill annotation fix with a-fallback chain + y-axis relabel "Active Exposure", legacy alias `rRiskFacBars` dropped) applied inline.
+
+- **B73 · Active-vs-raw unification (3rd site — escalates to cross-tile refactor; supersedes B53)** — cardFacDetail L1764 + cardCorr L2168 + cardRiskFacTbl (in-row divergence: Exposure cell renders `f.a` while Trend sparkline falls through to raw `h.e` whenever `h.bm==null`, which is always on riskm path per parser L468 `bm: None`). Decision needed globally: always active (`e−bm`), always raw, or expose `[Active|Raw]` toggle. Ripples: 3 tile renders + 1 drill + parser labelling. Highest-leverage single Risk-tab PM decision. Parser-side sub-fix: populate `bm` in riskm path via `bm=e-a` algebra (one line at factset_parser.py:468).
+- **B74 · Sign-collapse policy on risk-budget views (4th site — escalates; supersedes scope of existing cardFRB Math.abs items)** — cardFRB L2696 + `oDrRiskBudget` L5389 + Risk Decomp Tree L2770 + cardRiskFacTbl MCR-to-TE L2996 + drill KPI L3526. PM gate: if keeping magnitude, colorize direction separately (stripes/icon/sign prefix); if preserving sign, reconcile with the "risk-budget always sums to 100%" narrative. Extract a shared `mcrSigned(f,totalTE)` helper when policy lands.
+- **B75 · Consolidate `oDrF` + `oDrFRisk` drills** — L5513 vs L4216, ~150 LoC duplication; nearly identical modals with slightly different KPI cards. PM: two drills (Attribution-focused vs Risk-focused) or one unified modal with a context-toggle?
+- **B76 · Risk-tab `_selectedWeek` awareness** — `rRisk()` L3048 never consults `getSelectedWeekSum()`; `cs.factors` is always latest, but `cs.hist.fac` is populated and could source a historical-week snapshot. PM: replay historical factor exposures when selecting a past week, or stay latest with disclaimer?
+- **B77 · Primary/All toggle on cardRiskFacTbl** — mirror cardFacDetail `_facView` state; shared with group pills and `FAC_PRIMARY`. Most Risk-tab sibling bars filter to primary (L3332/L3342); table shows all. PM: default all or default primary?
+- **B78 · Standardize Risk-tab card note-hooks (anonymous-cards sweep)** — Factor Contributions bars L3087, Factor Exposure History L3164, Factor Correlation Matrix L3177 (live cardCorr), TE Stacked Area L3070 all lack stable ids + `class="tip"`/`oncontextmenu` hooks. Batch assign. Mechanical sweep.
+
+---
+
+## B69–B72 · cardRiskHistTrends non-trivials
+Origin: `tile-specs/cardRiskHistTrends-audit-2026-04-23.md`. Trivial fixes (tip+oncontextmenu, per-metric hovertemplate units, themed `--pri`/`--acc`/`--cyan`/`--txt` via getComputedStyle + hex2rgba fill, short-history placeholder in mini divs, `_selectedWeek`-aware cur/prev index, Holdings card drill via `oDrMetric('h')`, per-metric `rangemode:'normal'` for Beta/AS — `'tozero'` kept for TE/Holdings, raised noise floor `>0.05` TE/AS and `>0.005` beta) applied inline.
+
+- **B69 · Beta `dir:'from1'` coloring (PM gate)** — Beta has a canonical reference at 1.0; rising beta above 1 = procyclical. Current `dir:'neutral'` gives no narrative direction. Flip to `dir:'from1'` → red as |beta−1| grows, green as it shrinks. PM call on whether to match cardThisWeek's beta bullet framing.
+- **B70 · Vertical week-selector marker (cross-tile design-lead gate)** — when `_selectedWeek` is set, draw a vertical marker/shape on all 4 mini-charts at that date. Same treatment would apply to `rMultiBeta` + `teStackedArea`. Unified design decision: marker-only, marker-plus-faded-future-region, or full-range-dimming?
+- **B71 · Recent-vs-All range toggle** — 3-year files dilute recent TE spikes against 156 weeks of history. Simplest: `[Last 52w | All]` 2-state toggle. Alternative: full 3M/6M/1Y/3Y/All bar matching `oDrMetric`. PM: how much history should glance-view show by default?
+- **B72 · CSV export of `hist.summary`** — no `<table>` in this tile, so need a helper tweak to `exportCSV` to accept a data array, or render hidden `<table id="tbl-risk-hist">` and wire existing `exportCSV`. ~15 LOC.
+
+---
+
+## B61–B68 · cardGroups non-trivials
+Origin: `tile-specs/cardGroups-audit-2026-04-23.md`. Trivial fixes (card-title tip + oncontextmenu, threshold row classes via `activeStyle(g.a)`, **dead-drill fix via `h.subg === groupName`** replacing broken `GROUPS_DEF + SEC_ALIAS` sector-match at `oDrGroup` L5464, `data-sv=""` on null rank cell, tokenize `#334155`→`var(--txt)`, PNG dropdown item removed from download menu, `plotly_click → oDrGroup` on chart, `data-col` on every th+td, R/V/Q header tooltips) applied inline.
+
+- **B61 · Render recomputes ORVQ ranks via wrong (non-exclusive) GROUPS_DEF taxonomy (RED PM gate)** — `rGroupTable` L1895–L1918 accumulates O/R/V/Q from `cs.hold` via `GROUPS_DEF + SEC_ALIAS` where Info Tech, Materials, Energy, Health Care map to TWO subgroups each. Result (ACWI): **HARD CYCLICAL renders Q1 (green, "best") — FactSet authoritative value is Q3 (amber, mid)**; COMMODITY Q1 vs Q2; BOND PROXIES and SOFT CYCLICAL render ranks where FactSet returns null. Same PM-facing severity class as cardScatter `h.mcr` mislabel. Fix options: (a) consume `cs.groups[].over/rev/val/qual` directly (drops hold-loop; static-Wtd only); (b) keep loop but filter by `h.subg === gn` (enables `_secRankMode` toggle; matches parser values exactly in Wtd mode). PM picks policy.
+- **B62 · `hist.grp` pipeline (batch with B6 / `hist.reg`)** — parser `factset_parser.py:834-839` hardcodes `hist:{summary,fac,sec:{},reg:{}}` — no `grp` key. Blocks cardGroups sparkline column + `oDrGroup` historical chart + range selector. Same shape as B6 (hist.reg) — ship together as "hist.geo/grp/reg parser pass".
+- **B63 · `oDrGroup` drill parity uplift** — mirror `oDr('sec',n)`: historical chart (needs B62), range selector, rank distribution, factor tilt summary, bench-only holdings section (addable today without deps — useful because BOND PROXIES / SOFT CYCLICAL have p=0 b>0 and bench-only rows fall off the top-15 truncation).
+- **B64 · Rank-mode toggle per tile (conditional on B61 resolution path)** — if PM picks B61(b), `_secRankMode` toggle needs per-tile state so cardGroups can bucket exclusively while cardSectors stays weighted-portfolio. Re-raise only if (b) lands.
+- **B65 · cardTreemap Group-by toggle unblock** — cardTreemap D1 silent-dead because prior audit believed `h.subg` was unpopulated. **Updated ledger (see AUDIT_LEARNINGS): `h.subg` IS populated (~85% of non-cash holdings).** One-line fix: `buckets[h.subg||'Other']`. Supersedes B38 (`enrichHold` from GROUPS_DEF) — no parser change needed.
+- **B66 · PNG removal sweep (cross-tile)** — user pref "no PNG on RR tiles" (MEMORY). Known offenders remaining: cardRegions download menu, probably cardTreemap dropdown, potentially cardCorr and cardRating. Low-risk single-session sweep.
+- **B67 · Keyboard a11y sweep (cross-tile)** — `tabindex="0"` + `role="button"` + `onkeydown` on all `.clickable` rows and `.card[onclick]`. Batch across sectors/countries/regions/groups/ranks tiles when PM prioritizes.
+- **B68 · GROUPS_DEF vs h.subg reconciliation memo (blocks B61 + closes taxonomy ambiguity)** — document: is Redwood's taxonomy the GROUPS_DEF overlap view (Info Tech in both GROWTH and GROWTH CYCLICAL) or FactSet's exclusive SEC_SUBGROUP view (each holding in one bucket)? Current code is schizophrenic: rank loop uses overlap, drill holdings-list uses sector membership of overlap groups (broken per T3 prior to this batch), `cs.groups[].p/b/a` are exclusive (sum to ~97%). Upstream cause of B61. PM decision memo needed before B61 lands.
 
 ---
 

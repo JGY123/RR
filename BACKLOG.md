@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-24 (Batch 7 audited + fixes applied, pending review — ALL TILES AT .v1.fixes)
+last_updated: 2026-04-24 (data-foundation-v1 shipped; Tier 2 tile queue B102–B104 registered pending post-marathon build)
 ---
 
 # RR Backlog
@@ -13,6 +13,53 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## 🧩 Tier 2 tile queue — post-marathon build (B102–B104)
+
+**Status: deferred pending review-marathon signoff of the 21 Tier-1 tiles.**
+Origin: data-foundation integration closing discussion (2026-04-24). `data-foundation-v1` shipped raw_fac + security_ref enrichment into the JSON; these tiles are the dashboard surface that consumes it. Built as a cluster after marathon — each follows the Batch 1–7 tile-audit cadence (safety tag → build → verify → tag `.v1`+`.v1.fixes` → review).
+
+**User's literal words (2026-04-24, on receiving the Excel + new CSV):**
+> "when security has 2% contribution to risk from country you will be able to using that data to map which country etc. this is very important and we need to make it right."
+
+B102 is the tile that answers that ask.
+
+### B102 · `cardRiskByDim` — risk contribution decomposed by country / currency / industry (USER KEY ASK)
+- **Origin:** INTEGRATION_BRIEF.md Phase 3b.
+- **Size:** M (new tile from scratch, ~200 LOC JS + a few CSS nits)
+- **Where it lives:** Risk tab. Sibling to `cardRiskFacTbl`.
+- **What it does:** for the active dimension toggle (Country / Currency / Industry), aggregate every holding's `%T` (TE contribution) by the security's static category (via `security_ref` enrichment, now on every `holding.country / .currency / .industry`). Render as a sorted horizontal bar chart — largest TE contributor at top.
+- **Interaction:** Click a bar → drill modal listing the contributing stocks + their individual TE contributions. Mirror `oDrFRisk` drill pattern (modal with history chart + stock list table).
+- **Dimension toggle:** 3-way pill group `[Country | Currency | Industry]` — default Country. Persist selection in `rr.cardRiskByDim.dim` localStorage per viz-tile checklist.
+- **Data source:** `cs.hold[]` with `h.country`, `h.currency`, `h.industry` (already populated by parser enrichment in data-foundation-v1). Fallback for the 3–7% unmapped holdings: bucket as `"Unmapped"` and surface with a small warning badge.
+- **Threshold:** option to hide bars below a threshold (default 0.5% TE contrib). Slider UX similar to cardFacContribBars threshold.
+- **Tests:** aggregation math (sum of bars = total `%T` ± rounding), unmapped-bucket accounting.
+- **Blockers:** none — data is live.
+- **Must-have on v1:** note-hook, data-col/data-sv on drill table, CSV export, plotly_click wire, themed colors, empty-state fallback, no PNG button.
+
+### B103 · Per-security raw factor drill (in `oSt` modal)
+- **Origin:** INTEGRATION_BRIEF.md Phase 3a.
+- **Size:** S (~80 LOC — extending an existing modal, not new tile)
+- **Where it lives:** Inside the stock-detail modal opened by `oSt(ticker)` — add a new section below the existing KPI row and above the per-factor contribution table.
+- **What it does:** for the given security, show its 12 raw factor z-scores (from `strategy.raw_fac[sedol].e` with labels from `strategy.raw_fac_labels`) as a horizontal bar chart. Color by sign. Below the chart, a tiny 4-period sparkline per factor drawn from `raw_fac[sedol].hist` (monthly cadence in current sample; weekly in production).
+- **Data source:** `cs.raw_fac[sedol]` — keyed by the same identifier (`h.t` / Level2) already used throughout the dashboard. Fallback for 0–7% unmapped: show "Raw factor exposures unavailable for this security" panel, don't break the modal.
+- **Narrative:** this tile answers "why is this stock in the portfolio" — e.g. "+2.3σ Profitability, +1.7σ Value, -1.1σ Leverage". Complements the existing active-weight + sector + country KPIs.
+- **Must-have on v1:** note-hook keyed to the holding's ticker (per the existing modal convention), hovertemplate with factor label + z-score + direction word, themed colors, sparkline tokenized via `getComputedStyle`.
+
+### B104 · Portfolio raw-exposure aggregate — synthesis hero
+- **Origin:** INTEGRATION_BRIEF.md Phase 3c.
+- **Size:** M (new tile, depends on B103 landing for sparkline helpers)
+- **Where it lives:** Risk tab. Could slot between `cardFacContribBars` and `cardRiskFacTbl` or as a wider full-width hero above them.
+- **What it does:** weight each holding's 12 raw factor z-scores by portfolio weight → aggregate portfolio raw exposure per factor. Do the same for the benchmark (weight by `h.b` not `h.p`). The **difference** is the portfolio's *active raw factor tilt* — which should reconcile with `cs.factors[].a` (already displayed in cardFacButt / cardFacDetail / cardRiskFacTbl).
+- **Payoff:** a decomposition view — "this +0.8σ Momentum tilt is driven 55% by these 5 stocks". Click a factor bar → drill listing the top-N contributing holdings with their per-security Momentum z-score + portfolio weight.
+- **Math invariant:** `Σ(h.p * h.raw_fac[i]) - Σ(h.b * h.raw_fac[i])` should ≈ `cs.factors[label_at_i].a` within rounding + coverage caveat. Sanity-check on render; if divergence > 0.05σ, log a console warning (diagnostic for enrichment-miss impact).
+- **Blockers:** B103 first (for the sparkline helper), coverage audit (what happens when 3–7% of holdings lack raw_fac entries — is reconciliation still meaningful?).
+- **Must-have on v1:** note-hook, CSV export of contribution table, reconciliation-diagnostic, themed colors.
+
+### After these three land
+Tier 2 complete = 24 tiles at `.v1.fixes`. Second mini-marathon to sign off B102–B104. Then whatever the user wants next (production deploy, B80/B96 RED-gate resolutions, B73/B74 cross-tile refactors).
 
 ---
 

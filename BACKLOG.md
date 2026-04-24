@@ -16,6 +16,15 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 
 ---
 
+## B101 · Recover legacy parser-behavior test coverage [optional, low priority]
+Origin: Phase 3 of data-foundation integration (commit `33b6618`, 2026-04-24). Old
+test_parser.py had ~40 tests for positional parser semantics; replaced with ~17
+new-API tests. If future parser refactors want tight regression nets on dedup,
+weekly-date slicing, or historical multi-year logic, recover intent from the
+pre-replacement commit (last valid at `0d6699a`).
+
+---
+
 ## B88–B96 · Batch 7 non-trivials (cardAttribWaterfall · cardFacContribBars · cardTEStacked)
 
 ### cardAttribWaterfall

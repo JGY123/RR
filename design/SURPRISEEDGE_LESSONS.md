@@ -1,281 +1,315 @@
-# SurpriseEdge Design Study — 2026-04-24
+# SurpriseEdge Design & Feature Study — FULL APP-LEVEL ADOPTION PLAN
 
-**Reference file:** `~/Downloads/surpriseedge_report_65080rows_2026-02-17.html` (21 MB, single-file HTML dashboard; 65,080 securities analyzed)
-**Why this file:** user flagged it as "very clean and sharp — take whatever you can learn to get RR to look super amazing."
-
-This doc catalogs the **15 adoptable design patterns** extracted from SurpriseEdge's CSS, layout, and rendering code, ranked by impact × risk. Code snippets are ready to paste.
+**Updated:** 2026-04-24 (after deep-dive on the actual v3.2.0 Tauri desktop app source, not just the HTML report)
+**Source location:** `~/Desktop/SurpriseEdge-Handoff/SurpriseEdge-v3.2.0-source/` + `~/Desktop/SurpriseEdge.app` + `~/Desktop/SE_screenshots/`
+**Supersedes:** the prior (HTML-report-only) version of this document.
 
 ---
 
-## Tier A — Global polish (low risk, high payoff, ship as one commit)
+## What SurpriseEdge actually is
 
-### A1. Deeper dark palette — 5-tone gray ramp + cyan accent
+Not a one-off HTML report. It's a **production Tauri 2 desktop app** shipped at Redwood ISC:
+- **~9,200 lines React + 750 lines Rust**
+- **48+ analytics tiles across 7 tabs** (Overview, Spotlight, Returns, Analytics, Trends, Detail, Explorer)
+- **Tech:** React 18 + Recharts + Vite + Tauri 2 + Claude API (SSE streaming via Rust)
+- **Custom fonts:** DM Sans (body) + JetBrains Mono (numbers) — woff2 bundled
+- **Tests:** 80 Vitest tests, 0 ESLint warnings
+- **Distribution:** `.app` bundle macOS + Windows installer, auto-updater via shared network folder
+- **Binary size:** 16 MB (vs Electron's ~150 MB)
+
+**Tag line:** "Earnings Surprise Analytics for the Whole Firm" — built to a pitch-deck-ready level of polish.
+
+## Honest gap assessment — RR vs SurpriseEdge
+
+| Dimension | SurpriseEdge | RR (today) | Gap |
+|---|---|---|---|
+| **Visual polish** | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | LARGE — fonts, palette, card chrome, hex-alpha discipline |
+| **Interactivity depth** | ⭐⭐⭐⭐ (card AI, lineage, manual links) | ⭐⭐⭐ (note-hook, drill) | MEDIUM — meta-layer features RR lacks |
+| **Data richness** | ⭐⭐⭐ (1 universe, earnings surprise) | ⭐⭐⭐⭐⭐ (7 strategies, multi-week hist, factors, raw_fac, security_ref) | RR WINS |
+| **Historical state** | ⭐ (snapshot) | ⭐⭐⭐⭐ (week selector + hist.fac/summary) | RR WINS |
+| **Framework weight** | Tauri + React (native app) | Single-file vanilla JS (no build) | Different goals — RR is simpler by design |
+| **Distribution** | Installer, auto-updater, CI builds | HTML file you double-click | SurpriseEdge WINS |
+
+**Summary:** RR has MORE data/history/capability. SurpriseEdge has MORE polish and meta-layer. To "match or exceed" we adopt the polish + meta-layer WITHOUT giving up RR's data richness or single-file simplicity.
+
+---
+
+## Design tokens — adopt as-is
+
+From `src/constants.js` (SurpriseEdge's canonical palette):
 
 ```css
-/* Replace the RR palette tokens (currently --bg, --surf, --grid, --txt, --txth, --pri, --pos, --neg) with a tighter ramp */
---bg:           #0b0e14;   /* body — noticeably deeper than RR's current */
---surf:         #12161f;   /* card body */
---grid:         #1e2433;   /* borders, dividers, scrollbar thumb */
---txt:          #c8cdd8;   /* body copy */
---txth:         #e2e8f0;   /* headings/emphasis */
---dim:          #5a6178;   /* muted, captions, labels */
---pri:          #22d3ee;   /* accent — fresh cyan, NOT indigo */
---pos:          #10b981;   /* green (same) */
---neg:          #ef4444;   /* red (same) */
---warn:         #f59e0b;   /* amber (same) */
+/* DARK PALETTE — dept register: enterprise fintech */
+--bg:          #0b0e14;  /* body, deeper than RR's current */
+--card:        #12161f;  /* card surface */
+--cardBorder:  #1e2433;  /* card border, dividers, grid lines */
+--text:        #c8cdd8;  /* body copy */
+--textDim:     #6b7280;  /* muted / captions */
+--textBright:  #eef0f4;  /* headings / emphasis */
+--accent:      #22d3ee;  /* CYAN — primary accent (not indigo!) */
+--accentDim:   #0e7490;  /* darker cyan for accents-on-accents */
+--beat:        #10b981;  /* positive/green (same as RR today) */
+--beatBg:      #10b98118; /* 18 hex = ~9% alpha — for tinted backgrounds */
+--inline:      #f59e0b;  /* neutral/amber (same as RR today) */
+--inlineBg:    #f59e0b18;
+--miss:        #ef4444;  /* negative/red */
+--missBg:      #ef444418;
+--port:        #22d3ee;  /* portfolio = cyan */
+--univ:        #6366f1;  /* universe/benchmark = indigo — RR's current --pri */
+--upload:      #8b5cf6;  /* purple — for upload/CTA buttons */
+--uploadBg:    #8b5cf620;
 ```
 
-**Impact:** SurpriseEdge reads as "enterprise fintech" — RR currently reads as "consumer dark mode". Deeper `#0b0e14` body + cooler accents flips the register. The cyan accent (`#22d3ee`) is especially distinctive — indigo (`#6366f1`, RR's current `--pri`) is everywhere; cyan is rare and feels sharp.
+**Key insights:**
+1. **Cyan (`#22d3ee`) is the primary accent**, NOT indigo. RR's current `--pri: #6366f1` becomes `--univ` (secondary/benchmark color).
+2. **Hex-alpha pattern**: `#<color><alpha>` where alpha is 2 hex chars. `18 = ~9%`, `20 = ~12.5%`, `25 = ~15%`, `60 = ~38%`. Used EVERYWHERE for tinted backgrounds, chip borders, hover states.
+3. **Upload/CTA** uses a linear gradient: `linear-gradient(135deg, #8b5cf6, #22d3ee)` with a glow shadow `0 0 20px #8b5cf630`. Distinctive, memorable.
 
-**Migration:** token swap only — no component changes needed. Every tile that uses `var(--pri)` etc. inherits automatically. Visual regression on the 24 audited tiles would be zero-structural, just a palette shift.
+## Typography — adopt the fonts
 
-**Caveat:** if we swap `--pri` to cyan, the purple+pink tones in cardFRB, cardFacContribBars (`#a78bfa` etc.) may clash. Recommend keeping `--pri-alt` as a purple fallback OR migrating palette holistically.
+SurpriseEdge bundles these as woff2:
+- **DM Sans** — body font (400 + 700 weights)
+- **JetBrains Mono** — every numeric cell, every statistic
 
----
+**Impact of font choice:** This single change is MORE visually transformative than palette change. System-ui looks like "web app." DM Sans looks like "Bloomberg Terminal." JetBrains Mono on numbers is the single biggest "enterprise feel" lever.
 
-### A2. Custom scrollbars — immediate polish, 4 lines
+**Adoption path for RR (vanilla JS):**
+1. Copy the 4 woff2 files from `~/Desktop/SurpriseEdge-Handoff/SurpriseEdge-v3.2.0-source/src/fonts/` into `~/RR/fonts/`
+2. Inline the `@font-face` declarations from `fonts.css` into the `<style>` block of `dashboard_v7.html`
+3. Set `body { font-family: 'DM Sans', system-ui, sans-serif; }`
+4. Add `.mono { font-family: 'JetBrains Mono', Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }`
+5. Apply `.mono` to every numeric cell (sweep across 24 tiles).
+
+**Total size added to HTML:** ~80 KB (woff2 files can be embedded as base64 or loaded from same-dir path). Negligible.
+
+## The "6 things that make it sharp" (unchanged from prior study, confirmed)
+
+1. **Deeper palette** (`#0b0e14`) + cyan accent
+2. **Custom 6px scrollbars** — `::-webkit-scrollbar`
+3. **`.mono` class on every number** (JetBrains Mono)
+4. **Card titles**: 11px uppercase, 600 weight, 1.5px letter-spacing, `textDim` color
+5. **Subtle row separators** at 8% alpha
+6. **Hex-alpha pills** with color-matched border/bg/text
+
+## NEW patterns I didn't catch in the HTML-only study
+
+### Card toolbar icons (every card has these in top-right)
+
+From `Card.jsx`:
+
+```
+[ ⛶ expand ]    [ 💡 Ask AI ]    [ ℹ insight ]    [ 🔵3 notes ]
+```
+
+- **Expand**: opens card in full-page view
+- **Ask AI**: opens Claude panel with tile-specific context + lineage
+- **Insight (ℹ)**: toggleable panel showing methodology + clickable field lineage + manual PDF link
+- **Notes badge**: count chip in accent color, only shows if count > 0
+
+Each icon is a 22×22 button with subtle hover state (border + bg change on hover). Very polished.
+
+### Card left-border accent when notes exist
 
 ```css
-::-webkit-scrollbar{width:6px;height:6px}
-::-webkit-scrollbar-track{background:var(--bg)}
-::-webkit-scrollbar-thumb{background:var(--grid);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--dim)}
+border-left: 3px solid var(--accent);  /* when noteCount > 0 */
+border-left: 1px solid var(--cardBorder);  /* default */
 ```
 
-**Impact:** Default Chrome/Safari scrollbars are chunky (17px) and clash with any dark theme. 6px themed thumbs read as designed. Applied globally — every table, every overflow panel inherits.
+Instantly shows which cards have your notes. RR has the note badge but not the border highlight.
 
-**Migration:** drop into the existing `<style>` block at the top of dashboard_v7.html. Zero functional change.
+### Insight panel — inline toggleable methodology
 
----
+The `ℹ` button opens an in-card expandable panel with:
+- Short methodology description
+- **"Data fields"** chip list — each field is a toggle (click to disable per-tile)
+- **"Open in Manual (p. 47)"** link — opens the bundled PDF at the right page
 
-### A3. Monospace numeric cells — uniform decimal alignment
+This is HUGE for user trust — they see EXACTLY what data each tile consumes and can toggle fields off to see impact.
 
-```css
-.mono { font-family: 'SF Mono', Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+### Smart filter bar (top-of-dashboard)
+
+Pattern:
+```
+[SCOPE] <All>  <Portfolio>  <Universe>  |  [BIM] <All> <Beat> <Inline> <Miss>  |  [RETURN] <+1D> <+10D> ...  |  ⌕ Search  |  [≡ Filters (3)]  + [chips of active filters]
 ```
 
-Then: every `<td>` that holds a number gets `class="r mono"` (right-align + mono). SurpriseEdge applies it to every numeric cell across every table.
+- Labeled groups separated by 1px × 20px vertical rules
+- Each pill's active state inverts colors (bg=accent, text=bg)
+- BIM pills USE the semantic color when active (not just accent)
+- Search box with inline ⌕ icon and ✕ clear
+- **Filter count badge** — cyan pill with count when dimensional filters active
+- **Active filter chips** — inline removable pill per active filter dimension
+- Vertical rules every group — tight visual grouping
 
-**Impact:** Decimal points line up perfectly across rows. `24.6%` / `-4.7%` / `15.2%` column looks like a data grid, not a sentence. Huge professionalism gain on tables like cardSectors, cardHoldings, cardCountry.
+### Header branding
 
-**Migration:** add `.mono` class, then sweep every `data-col` numeric cell in dashboard_v7.html (cardSectors, cardHoldings, cardCountry, cardGroups, cardRegions, cardRanks, cardWatchlist, cardBenchOnlySec, cardUnowned, cardRiskFacTbl, etc.). ~30-50 Edit operations. Safe — cosmetic only, pure CSS class addition.
-
-**Alternative lower-effort:** add `td.r { font-family: monospace; }` to catch every right-aligned cell globally. One line; may catch non-numeric cells too (rare in RR).
-
----
-
-### A4. Card-title typography tightening
-
-SurpriseEdge:
-```css
-.card-title {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--txth);
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-```
-
-RR currently uses ~13px sentence-case for `.card-title`. The SurpriseEdge version feels tighter, more enterprise, more Bloomberg-terminal.
-
-**Impact:** every card instantly reads as "dashboard panel" vs "web card". Uniform across 24 tiles.
-
-**Migration:** swap the `.card-title` CSS rule in dashboard_v7.html. Test on 2-3 tiles first — uppercase can make long titles (like "Marginal Contribution to Risk (Top & Bottom)" on cardMCR) feel aggressive. If so, retain sentence case but keep the 11px size + letter-spacing.
-
-**My lean:** 11px + letter-spacing 0.5px, but keep sentence case. Best of both.
-
----
-
-### A5. Subtle row separators with hex-alpha
-
-```css
-/* SurpriseEdge uses this for every table row border: */
-border-bottom: 1px solid #1e243315;   /* 15 hex = ~8% alpha — almost invisible but gives rhythm */
-
-/* Equivalent in RR-token form: */
-border-bottom: 1px solid color-mix(in srgb, var(--grid) 15%, transparent);
-```
-
-**Impact:** table rows separate without being "loud". Current RR table rows use `1px solid var(--grid)` at full alpha — reads heavier. SurpriseEdge's 8% alpha is more modern.
-
-**Migration:** update the `table td` border rule in dashboard_v7.html's style block. Every table inherits.
-
----
-
-### A6. Pill pattern with hex-alpha background
-
-```css
-.pill {
-  padding: 3px 10px;
-  border-radius: 12px;
-  font-size: 10px;
-  font-weight: 600;
-  cursor: pointer;
-  border: 1px solid var(--grid);
-  background: transparent;
-  color: var(--dim);
-}
-.pill.active {
-  border-color: var(--pri);
-  background: color-mix(in srgb, var(--pri) 12%, transparent);
-  color: var(--pri);
-}
-.pill.pos  { border-color: var(--pos);  background: color-mix(in srgb, var(--pos) 12%, transparent);  color: var(--pos); }
-.pill.neg  { border-color: var(--neg);  background: color-mix(in srgb, var(--neg) 12%, transparent);  color: var(--neg); }
-.pill.warn { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
-```
-
-**Impact:** uniform "chip" look across every toggle/filter/status pill. RR currently varies pill styling per tile (cardFacContribBars toggle vs cardTreemap dim picker vs cardRanks rank pills). One convention = one visual register.
-
-**Migration:** refactor the 5-6 pill variants currently scattered through the CSS block into this single convention. Per-tile inline `style=` overrides can be removed. Medium touch; high payoff.
-
-**Pre-existing good news:** cardFacContribBars (Batch 7) already uses `var(--riskFacMode, var(--pri))` for its mode-toggle — easy to migrate.
-
----
-
-## Tier B — Targeted tile wins (moderate effort, specific tiles benefit)
-
-### B1. Live result count in header — "I know what I'm looking at"
-
-SurpriseEdge's header has:
 ```html
-<span style="font-size:10px;color:var(--pri);font-weight:700;font-family:monospace">
-  3247<span style="color:var(--dim);font-weight:400">/65080</span>
+<div style="width:4px;height:24px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--univ))"></div>
+<span style="font-size:16px;font-weight:700;color:var(--textBright);letter-spacing:-0.3px">
+  Surprise<span style="color:var(--accent)">Edge</span>
 </span>
 ```
 
-Shows count of filtered results / total, using the accent color for the live number. Updated on every filter change.
+4px vertical gradient bar + two-tone wordmark. Distinctive identity element.
 
-**Adopt for RR:** the top-header bar (currently has strategy selector + week selector + export). Add a filtered-holdings counter when any filter is active (e.g., cardHoldings has a rank-quintile filter applied → header shows `88/775` in cyan). Especially valuable on EM (1219 holdings) and GSC (3874 holdings).
+**For RR:** could render as `Redwood<cyan>Risk</cyan>` with the same gradient bar.
 
-**Where:** `rHeader()` / `rTopBar()` — find the existing header render in dashboard_v7.html.
+### Multi-select filter panel (not a dropdown, an inline panel)
 
----
+Each dimension opens as a checkbox list:
+- Uppercase label + "(count)" dim
+- "Clear" button top-right if any selected
+- Scrolls if >8 options
+- Each option: 14×14 checkbox (accent border when checked) + label + **port/univ count in mono** (`88/1712`)
 
-### B2. Stat cards — big numbers, punchy
+RR currently uses per-tile pill groups for filtering. The multi-select panel is DENSER for dimensions with >5 options.
 
-SurpriseEdge overview tab:
-```html
-<div class="card">
-  <div class="card-title">Portfolio Beat Rate</div>
-  <div style="font-size:26px;font-weight:800;color:var(--pos);font-family:monospace">78.1%</div>
-  <div style="font-size:9px;color:var(--dim);margin-top:2px">234 / 300 portfolio</div>
-</div>
-```
+### Key Takeaways tile (auto-generated + pinnable)
 
-**26px monospace 800** for the hero number, with a 9px muted caption underneath giving denominator/context.
+Example findings shown in `03_key_takeaways.png`:
+- `▲ Best sector: Consumer Discretionary 71% n=93`
+- `★ Rank 1 beat rate 59.1% n=3377`
+- `⭕ 606 portfolio / 25461 universe`
+- `▼ Worst sector: Telecommunication Services 0% n=0`
+- `→ Port vs Univ spread: +14.3pp avg`
+- `↑ Beat rate 2024→2025: +4.6pp`
 
-**Adopt for RR:** cardThisWeek's TE/AS/Beta/Holdings hero row could use this treatment. Currently 18-22px Inter — upgrade to 26px mono + tiny caption with period-over-period delta reference. Much more "terminal dashboard" feel.
+Each has:
+- Semantic icon (colored by direction)
+- Bold label + key number in semantic color + dim caption
+- **Pin icon** on right — click to persist as a saved takeaway across sessions
+- Green dot when "pinned AND current findings still match"; red when "pinned BUT stale"
 
----
+### Ask AI integration per tile
 
-### B3. Side-panel detail view (alternative to modal for stock drill)
-
-```css
-.detail-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 360px;
-  height: 100vh;
-  background: var(--surf);
-  border-left: 2px solid var(--pri);
-  z-index: 100;
-  overflow-y: auto;
-  padding: 20px;
-  box-shadow: -4px 0 20px rgba(0,0,0,0.5);
-}
-```
-
-**Compared to RR's modal-overlay** for `oSt(ticker)`: SurpriseEdge's side-panel leaves the main table visible, so user can compare row-by-row without modal flicker. Click another row → panel updates, no close+reopen.
-
-**Adopt for RR:** this is a bigger UX decision. **Recommend deferring to Tier 2 build phase** (B103 per-security raw factor drill would be a natural place to try it). Don't touch modal pattern before marathon.
-
----
-
-### B4. Filter bar with thin vertical separators
-
-```html
-<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
-  <span style="font-size:9px;color:var(--dim);font-weight:600">SCOPE</span>
-  <button class="pill active">All</button>
-  <button class="pill">Portfolio</button>
-  <span style="width:1px;height:16px;background:var(--grid);margin:0 4px"></span>
-  <span style="font-size:9px;color:var(--dim);font-weight:600">BIM</span>
-  <button class="pill">Beat</button>
-  <!-- ... -->
-</div>
-```
-
-Groups of pills separated by thin 1px vertical rules, each group labeled with a 9px uppercase label in dim color. Very readable, very compact.
-
-**Adopt for RR:** ideal for B102 `cardRiskByDim` when built (dimension toggle + threshold slider + reset). Also a candidate retrofit for cardFacContribBars' toolbar (currently has group pills + checkboxes + slider in one row without visual grouping).
-
----
-
-### B5. Reset-filter pill (conditional visibility)
-
+Each card carries:
 ```js
-if (anyFilterActive) {
-  html += '<button class="pill" style="background:color-mix(in srgb, var(--neg) 13%, transparent);color:var(--neg);border-color:color-mix(in srgb, var(--neg) 38%, transparent)" data-reset="1">✕ Reset</button>';
-}
+const aiPrompt = `FOCUS: The "${title}" tile in SurpriseEdge.
+Tile description: ${insightStr}
+Data lineage: ${lineageStr}
+For this specific tile:
+1. What key patterns or signals does it reveal?
+2. Are there any anomalies or concerns?
+3. How should I interpret the data shown?
+4. What actionable insights can I derive?`;
 ```
 
-Only appears when a filter is active. Clicking it clears all filters. Clean.
+Clicking the 💡 button opens a side panel with Claude's response streamed in real time. The context is rich: tile title + methodology + exact data fields consumed + aggregate context.
 
-**Adopt for RR:** any tile with multiple filter dimensions (cardFacContribBars group-pill + threshold + checkboxes). User currently has to click each filter to clear — one-click reset is a real QoL win.
+### Winsorize controls per tile
 
----
+Small toolbar that appears on outlier-sensitive tiles:
+```
+[Winsorize] <None> <1%> <2.5%> <5%> <10%>     n=25,461 (234 clipped)
+```
 
-## Tier C — Heavy lift (don't do without explicit ask)
+Click a percentile to trim tails. Shows clipped count in JetBrains Mono. "Rec" badge above the system's recommended choice.
 
-### C1. Custom SVG charts instead of Plotly for small tiles
-SurpriseEdge writes inline SVG for bar/line charts (60 LOC each). No Plotly dependency. For tiles where Plotly is overkill (cardChars metric bars, cardRanks quintile distribution, cardBenchOnlySec rows), inline SVG would cut weight + render instantly. But: loses Plotly's built-in interactivity (hover tooltips, zoom, CSV export). **Don't adopt unless we hit a real performance ceiling.**
+### Lazy tile placeholder
 
-### C2. Full layout refactor to `grid-template-columns: repeat(4, 1fr)` with span
-SurpriseEdge's overview tab uses a clean 4-column grid with `grid-column: span N` per card. RR's Overview tab is mostly `grid g2` / `grid g3` — functional but rigid. Refactoring to a 4-col base with spans would give more layout flexibility but touches every card wrapper. Big diff. **Defer.**
+Heavy tiles (big scatter, complex aggregations) don't compute until requested:
+```
+        [  🔄 Load  ]
+        Click to compute
+```
 
-### C3. Tab-based navigation within Risk tab
-SurpriseEdge's 4-tab structure (Overview / Analytics / Returns / Detail) works because their data is simpler. RR's tabs are by domain (Overview / Sectors / Regions / Factors / Risk) — correct for the data model. **Don't refactor.**
-
----
-
-## Adoption priority ladder
-
-### **Stage 1 — Pre-marathon (optional, 30 min, zero risk)**
-- A2 custom scrollbars (4 lines CSS)
-- A5 subtle row separators (1 line CSS)
-- A3 `.mono` helper class + apply to the 3-4 most prominent tables (cardHoldings, cardSectors, cardCountry)
-
-If we do this, marathon reviews happen against the polished version. User sees a nicer dashboard while walking through tile signoffs. But risk: any per-tile visual change could trigger "wait that looks different than at audit time" confusion. **Only do Stage 1 if user explicitly asks.**
-
-### **Stage 2 — Post-marathon design polish pass (1–2 hours)**
-Apply A1–A6 as a single commit. Tag `design-polish-v1`. Run browser regression on all 24 tiles. Commit message references this doc.
-
-### **Stage 3 — Tier 2 tile builds (B102/B103/B104) adopt polish from day 1**
-All three new tiles use the new palette, pills, stat cards, filter-bar patterns, and — if the user likes it — the side-panel detail pattern for B103.
-
-### **Stage 4 — Selective B-tier adoption**
-B1 live count, B2 stat cards, B4/B5 filter bar patterns, applied per-tile based on where they most help.
+Big green button with refresh icon, glow shadow. Label underneath.
 
 ---
 
-## What to NOT copy
+## Revised adoption plan — phased by ambition
 
-- **SurpriseEdge is view-only**; RR is interactive (note-hook right-click, drill modals, week selector, sort/filter persistence). Don't trade RR's richer interactivity for SurpriseEdge's cleaner read-only layout.
-- **SurpriseEdge has no week-selector or historical state.** RR's `_selectedWeek` banner + multi-week `hist.summary` is a capability SurpriseEdge doesn't have.
-- **SurpriseEdge shows data density via pagination** (`PER_PAGE=50`). RR shows density via Top-N + full-list drill. RR's approach is better for the "review every position" workflow.
+### 🎯 Phase 1 — "Look as sharp" (~2 hours, single commit, zero risk)
+
+**Goal:** RR visually reads at SurpriseEdge's level. No behavioral changes.
+
+- Adopt palette tokens (swap `--pri` to cyan, add `--univ` as RR's old indigo)
+- Bundle DM Sans + JetBrains Mono woff2 files, `@font-face` declarations
+- `.mono` class applied to every numeric cell across 24 tiles
+- 11px uppercase card-titles + 1.5px letter-spacing
+- 6px custom scrollbars
+- 8%-alpha row separators
+- Hex-alpha pill convention across all toggles/filters
+- Header gradient bar + two-tone wordmark
+
+**Shipping:** tag `design-polish-v1`, browser regression check on all 24 tiles.
+
+### 🎯 Phase 2 — "Feel as sharp" (~3–4 hours, multi-commit)
+
+**Goal:** RR interaction patterns match the smart-filter + card-toolbar feel.
+
+- **Card toolbar** (⛶ expand / 💡 AI / ℹ insight) on every tile — 3 buttons top-right. Expand + AI are stub-wired for now; insight button becomes the existing note-hook's companion.
+- **Left-border accent** when card has notes
+- **Smart filter bar** at top of dashboard — SCOPE / WEEK / STRATEGY pills with vertical-rule separators, search box, filter-count badge, active-filter chips
+- **Multi-select filter panel** replacing the 4 separate cardRanks / cardCountry / etc. inline toggles with a shared component
+- **Key Takeaways** tile on Overview — auto-generated findings with pin-to-persist (upgrade to cardThisWeek)
+
+**Shipping:** tag `feel-parity-v1`.
+
+### 🎯 Phase 3 — "Meta-layer depth" (~1–2 days, larger scope)
+
+**Goal:** match SurpriseEdge on card AI / insight / lineage / manual. Adds RR's distinctive twist — historical context that SurpriseEdge lacks.
+
+- **Insight panel per card** — toggleable "ℹ" showing methodology + data lineage + field toggles
+- **Ask AI per card** — side panel with tile-specific prompts. Requires a Claude API key entry in settings. Integrates with RR's `AUDIT_LEARNINGS.md` so the AI knows the audit history of each tile ("you are inspecting cardMCR, which had a RED T1 finding on domain rename pair B20/B39, since resolved at .v1.fixes stage…")
+- **Data lineage per card** — declare field sources in a `CARD_LINEAGE` map; render as clickable chips in insight panel
+- **Manual deep links** — ship a PDF manual generated from the audit files, with `open_manual_pdf(page)` (Tauri) equivalent for a vanilla JS dashboard = open a new browser tab with `#page=N` anchor
+- **Winsorize** for outlier-sensitive tiles (cardScatter, cardMCR, etc.)
+- **Lazy tile placeholders** for heavy computations
+
+**Shipping:** tag `depth-v1`.
+
+### 🎯 Phase 4 — "Exceed" (the distinctive RR advantages, amplified)
+
+**Goal:** RR does things SurpriseEdge cannot. Make them visible.
+
+- **Time-travel banner** — when `_selectedWeek` is set, show a colored strip across the top: "Viewing WEEK OF Apr 17 2026 (2 weeks ago). Latest: Apr 24." Click strip to return to latest.
+- **Strategy comparison overlay** — any tile's render can compare 2+ strategies side-by-side (RR has 7; SurpriseEdge has 1 universe).
+- **Raw factor exposure decomposition** (B102–B104 already planned) — these are NATIVE to RR's data model; SurpriseEdge doesn't have this feature.
+- **Historical animation** — play a tile's data through the weekly hist as a "heartbeat" view. New concept; pure RR differentiator.
+
+**Shipping:** per-feature tags. This is post-review-marathon.
 
 ---
 
-## Where this doc lives
+## Sequencing decision — what to ship now
 
-- `design/SURPRISEEDGE_LESSONS.md` (this file, committed to repo).
-- `SESSION_STATE.md` "Next up" — add pointer after marathon.
-- `BACKLOG.md` — register **B105 · Design polish pass — SurpriseEdge palette + typography adoption** as the tracker for Stage 2.
+**My recommendation:** **Phase 1 before marathon.** Here's why:
+
+- Phase 1 is pure CSS + font swap + class additions. **Zero tile-render-function edits.** Every `.v1.fixes` state is preserved at the behavior level.
+- Marathon reviews run on a dashboard that looks the way the user wants it to look.
+- When user says "OK" to a tile, they're signing off on the polished version from day 1, not the pre-polish version that would need re-review post-polish.
+- Biggest emotional payoff for the 2-hour investment: user sees the transformation in Stage 1 before they've invested marathon effort.
+
+**Risks:**
+- A font swap can subtly shift layouts (DM Sans is slightly narrower than system-ui). A browser regression pass across 24 tiles is mandatory. If any tile has hardcoded widths that get weird, we fix inline.
+- Cyan accent (`#22d3ee`) replaces RR's current indigo (`#6366f1`). Any tile that uses `var(--pri)` as a color in semantic contexts (not just "accent") may need a review. Expected: <5 sites.
+
+**Phase 2 and beyond:** post-marathon. Not worth destabilizing review state for the smart-filter-bar and card-toolbar lifts.
 
 ---
 
-**Summary:** SurpriseEdge is not a revolution — it's six small disciplined choices (palette depth, custom scrollbars, mono numerics, card-title letterspacing, subtle row borders, hex-alpha pills) that compound into "professional" vs "web". All adoptable in one afternoon. The user's instinct is right — RR can look super amazing with surgical work, no rewrite required.
+## Files referenced in this study (all on ~/Desktop)
+
+- `SurpriseEdge-Handoff/SurpriseEdge-v3.2.0-source/`
+  - `src/constants.js` — canonical palette
+  - `src/fonts/fonts.css` + woff2 files — font stack
+  - `src/components/Card.jsx` — card primitive with toolbar + contexts
+  - `src/components/UIComponents.jsx` — Pill, MultiSelectFilterSection, CustomTooltip
+  - `src/App.jsx` — top-level layout, tabs, filter bar, header (lines 4280+ = header; 1174 = tab state)
+  - `src/utils/formatters.js` — fmtVal, fmtMktCap
+  - `SurpriseEdge-Cover-Letter.md` — product intent + tech stack rationale
+  - `HANDOFF.md` — full technical handoff
+- `SE_screenshots/` — 02_portfolio_vs_universe.png, 03_key_takeaways.png, 04_beat_rate_year.png (unique; others are duplicates)
+- `SurpriseEdge.app/` — compiled .app bundle (8 MB native binary)
+
+---
+
+## BACKLOG update needed
+
+Update B105 entry (currently scoped only to Tier A items from the prior study). Expand to reflect:
+- **B105 · Phase 1 design polish** (palette + fonts + .mono + scrollbars + card-title typography + row separators + hex-alpha pills) — ~2 hours, PRE-marathon on user greenlight
+- **B106 · Phase 2 feel parity** (smart filter bar + card toolbar + left-border-accent + multi-select filter panel + Key Takeaways tile) — ~3–4 hours, POST-marathon
+- **B107 · Phase 3 meta-layer depth** (insight panels + Ask AI + lineage + manual deep links + winsorize + lazy placeholders) — ~1–2 days, POST-Phase 2
+
+**Sequence to be pinned in SESSION_STATE "Next up":** marathon → B105 → Tier 2 tile builds (B102/B103/B104 adopting polish) → B106 → B107.

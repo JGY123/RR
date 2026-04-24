@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-24 (data-foundation-v1 shipped — Raw Factors + security_ref enrichment live)
+last_updated: 2026-04-24 (SurpriseEdge deep-study complete — B105/B106/B107 ambition ladder registered)
 ---
 
 # Session State — Live
@@ -124,8 +124,12 @@ Nothing in flight. Ready to scope Batch 5.
 
 ## Next up (in order)
 1. **🎯 Review marathon of the 21 Tier-1 tiles** — dossier at `REVIEW_MARATHON_DOSSIER.md` (committed separately). User walks tiles in-browser; each tile → `.signedoff` tag at current HEAD, or deferred with PM-gate reference. Expected 60–90 min total.
-2. **🎨 Design polish pass — B105** (SurpriseEdge adoption). Full catalog at `design/SURPRISEEDGE_LESSONS.md`. Tier A items only (palette + scrollbars + mono + card-title typography + row separators + hex-alpha pills). Ships as `design-polish-v1` tag. Sequenced AFTER marathon signoff, BEFORE Tier 2 tile builds, so B102–B104 inherit polish from day 1.
-3. **🧩 Tier 2 tile build queue — deferred pending marathon + B105 (B102–B104 in BACKLOG)**. These CONSUME data-foundation-v1 (raw_fac + security_ref enrichment):
+2. **🎨 SurpriseEdge adoption — 3-phase ambition ladder** (full study at `design/SURPRISEEDGE_LESSONS.md` after direct source inspection of the v3.2.0 Tauri app on desktop, NOT just the HTML report):
+   - **B105 · Phase 1 "Look as sharp"** (~2 hours, single commit, zero risk): palette swap to `--accent:#22d3ee` cyan + bundle DM Sans/JetBrains Mono woff2 + `.mono` everywhere + 11px uppercase card-titles + 6px scrollbars + 8%-alpha row separators + hex-alpha pill convention + gradient-bar wordmark. **Ships PRE-marathon on user greenlight** — every `.v1.fixes` state preserved at behavior level. Tag `design-polish-v1`.
+   - **B106 · Phase 2 "Feel as sharp"** (~3–4 hours, POST-marathon): card toolbar (⛶/💡/ℹ) + left-border-accent-on-notes + smart filter bar with separators/chips/counter + multi-select filter panel + Key Takeaways tile with pin-to-persist. Tag `feel-parity-v1`.
+   - **B107 · Phase 3 "Meta-layer depth"** (~1–2 days, POST-Phase 2): insight panels per card with data-lineage chips + Ask AI integration with tile-specific prompts pulling from AUDIT_LEARNINGS + PDF manual auto-generated with deep links + winsorize controls + lazy tile placeholders + Claude API key settings. Tag `depth-v1`.
+   - **Phase 4 "Exceed" (post-depth-v1):** time-travel banner on `_selectedWeek`, strategy comparison overlay, B102–B104 raw-factor decomposition tiles, historical heartbeat animation. Features RR has that SurpriseEdge can't.
+3. **🧩 Tier 2 tile build queue — deferred pending marathon + B105 polish (B102–B104 in BACKLOG)**. These CONSUME data-foundation-v1 (raw_fac + security_ref enrichment):
    - **B102 · `cardRiskByDim`** — risk decomposed by Country / Currency / Industry. **User's key 2026-04-24 ask** ("when security has 2% contribution to risk from country you'll be able to map which country etc."). M-size build on Risk tab.
    - **B103 · Per-security raw factor drill** — inside `oSt(ticker)` modal, 12-factor z-score bar chart + 4-period sparklines. S-size modal extension.
    - **B104 · Portfolio raw-exposure aggregate** — synthesis hero reconciling weighted-sum of security exposures against `cs.factors[].a`. M-size; depends on B103. All three together = "second mini-marathon" after the Tier-1 marathon closes.

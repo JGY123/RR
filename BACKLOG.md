@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-24 (data-foundation-v1 shipped; Tier 2 tile queue B102–B104 registered pending post-marathon build)
+last_updated: 2026-04-24 (SurpriseEdge deep-study done — B105/B106/B107 registered as 3-phase ambition ladder; Tier 2 tile queue preserved)
 ---
 
 # RR Backlog
@@ -16,13 +16,58 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 
 ---
 
-## B105 · Design polish pass — SurpriseEdge palette + typography adoption
-- **Origin:** Design study of `~/Downloads/surpriseedge_report_*.html` — user asked advisor to "take a close look at surprise edge that looks very clean and sharp" (2026-04-24). Full lesson catalog at `design/SURPRISEEDGE_LESSONS.md`.
-- **Size:** M (~1–2 hours, single commit); pure CSS + token migration + class additions. Zero functional changes.
-- **Scope (Stage 2 per lessons doc):** Tier A items — deeper palette `--bg:#0b0e14` + cyan accent `--pri:#22d3ee`, custom 6px scrollbars, `.mono` class applied to every numeric cell across 24 tiles, 11px uppercase card-titles with 0.5px letter-spacing, subtle `#1e243315` row separators, unified hex-alpha pill convention.
-- **Priority:** after Tier-1 review marathon signoff, before Tier 2 tile builds (so B102–B104 inherit polish from day 1).
-- **Do NOT include in this ticket:** side-panel detail pattern (separate UX decision, defer to B103 build), inline-SVG replacement for Plotly (Tier C), full grid refactor (Tier C).
-- **Tag at ship:** `design-polish-v1`. Browser regression check across all 24 tiles required before push.
+## 🎨 SurpriseEdge adoption — 3-phase ambition ladder (B105 / B106 / B107)
+
+**Origin:** Deep-dive study of the SurpriseEdge v3.2.0 Tauri desktop app on user's desktop (not just the HTML report). Full catalog at `design/SURPRISEEDGE_LESSONS.md` (rewritten 2026-04-24 after direct source inspection). User asked to "match or exceed" SurpriseEdge; honest gap analysis in the doc.
+
+### B105 · Phase 1 — "Look as sharp" [~2 hours, can ship PRE-marathon on user greenlight]
+- **Scope:** pure CSS + font bundle + class additions. Zero tile-render-function edits. Preserves all 24 `.v1.fixes` states at behavior level.
+- **Deliverables:**
+  - Adopt SurpriseEdge palette tokens: `--bg:#0b0e14`, `--accent:#22d3ee` (cyan primary), `--univ:#6366f1` (RR's old `--pri` becomes secondary), full hex-alpha convention
+  - Bundle DM Sans + JetBrains Mono woff2 files (~80 KB, copied from `~/Desktop/SurpriseEdge-Handoff/SurpriseEdge-v3.2.0-source/src/fonts/`); inline `@font-face`
+  - `.mono` class with `font-variant-numeric: tabular-nums`, applied to every numeric cell across 24 tiles
+  - 11px uppercase card-titles, 600 weight, 1.5px letter-spacing, `--textDim` color
+  - `::-webkit-scrollbar` 6px themed
+  - Row separators at 8%-alpha
+  - Unified pill convention (border + bg + text same-color hex-alpha)
+  - Two-tone wordmark + 4px vertical gradient bar header accent
+- **Risks:** DM Sans is slightly narrower than system-ui — browser regression check across 24 tiles mandatory. Cyan accent replaces indigo — expected <5 semantic-context sites need review.
+- **Tag:** `design-polish-v1`. Browser regression check required before push.
+
+### B106 · Phase 2 — "Feel as sharp" [~3–4 hours, POST-marathon]
+- **Scope:** interaction patterns match SurpriseEdge's feel. Some render-fn edits required.
+- **Deliverables:**
+  - Card toolbar: ⛶ expand / 💡 Ask AI / ℹ insight icons top-right of every card (AI/insight stub-wired initially)
+  - Left-border accent (`3px solid var(--accent)`) when card has notes
+  - Smart filter bar at dashboard top: SCOPE / WEEK / STRATEGY pills with 1px vertical-rule separators, search box with ⌕/✕, filter-count cyan badge, inline active-filter chips
+  - Multi-select filter panel component replacing per-tile inline toggles where >5 options
+  - Key Takeaways tile on Overview — auto-generated findings with pin-to-persist (upgrade path for cardThisWeek)
+- **Tag:** `feel-parity-v1`.
+
+### B107 · Phase 3 — "Meta-layer depth" [~1–2 days, POST-Phase 2]
+- **Scope:** meta-layer features that make SurpriseEdge feel deep. Adds RR's historical context as distinctive twist.
+- **Deliverables:**
+  - Insight panel per card (toggleable `ℹ`): methodology + data lineage chips (clickable to toggle fields per tile) + manual deep link
+  - Ask AI per card: side panel with tile-specific Claude prompt (tile title + methodology + lineage + audit history from AUDIT_LEARNINGS)
+  - `CARD_LINEAGE` map: every tile declares which fields it reads
+  - PDF manual auto-generated from the 24 audit files + deep-linkable per tile
+  - Winsorize controls for outlier-sensitive tiles (cardScatter, cardMCR)
+  - Lazy tile placeholders for heavy computations
+  - Settings panel for Claude API key entry
+- **Tag:** `depth-v1`.
+
+### Ambition beyond — Phase 4 "Exceed" [later, per-feature tags]
+- Time-travel banner when `_selectedWeek` set (distinctive RR advantage — SurpriseEdge has no historical data model)
+- Strategy comparison overlay (RR has 7 strategies; SurpriseEdge has 1 universe)
+- Raw factor exposure decomposition (already scoped in B102–B104 Tier 2 queue)
+- Historical animation / "heartbeat" view — pure RR differentiator
+
+### Sequencing pinned in SESSION_STATE
+```
+marathon → B105 → Tier 2 tiles (B102/B103/B104 adopting polish) → B106 → B107 → Phase 4
+```
+
+B105 MAY ship pre-marathon on user greenlight — lowest-risk, highest emotional payoff; marathon reviews happen on polished version.
 
 ---
 

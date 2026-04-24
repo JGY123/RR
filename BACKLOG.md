@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-23 (Batch 6 audited + fixes applied, pending review)
+last_updated: 2026-04-24 (Batch 7 audited + fixes applied, pending review — ALL TILES AT .v1.fixes)
 ---
 
 # RR Backlog
@@ -13,6 +13,35 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## B88–B96 · Batch 7 non-trivials (cardAttribWaterfall · cardFacContribBars · cardTEStacked)
+
+### cardAttribWaterfall
+Origin: `tile-specs/cardAttribWaterfall-audit-2026-04-24.md`. Verdicts: GREEN/YELLOW/YELLOW. Trivial fixes (CSV export button + `exportFacAttribCsv()` helper, flex-between header chrome, "Right-click for notes" tooltip addendum) applied inline. Confirmed **NOT** a B73 or B74 site — tile consumes only `f.imp` (signed, unambiguous).
+
+- **B88 · Factor-family week-selector awareness sweep (audit-derived)** — when `_selectedWeek` is set, cardAttribWaterfall's "Period ending" label still shows latest `current_date`. Same pattern as cardRiskHistTrends Batch 5 fix but extended to 6 factor-family tiles (cardAttribWaterfall, cardFacDetail, cardFacButt, cardFRB donut, cardFRB donut, cardRiskFacTbl trends). Parser already preserves per-period `imp` at `factset_parser.py:703`, so the data exists — render-side exposure is the gap. Either render a historical-week disclaimer banner per factor-tile, or add explicit `getSelectedWeekFacImp()` lookup.
+- **B89 · "Waterfall" naming disambiguation (PM gate)** — chart is a diverging bar chart, not a running-cumulative waterfall. Either rename the card title to "Factor Return Impact" (simpler) or implement a true cumulative waterfall with totals bar (more informative). Low-risk; PM sign-off on naming convention.
+
+### cardFacContribBars (was anonymous Risk-tab card)
+Origin: `tile-specs/cardFacContribBars-audit-2026-04-24.md`. Verdicts: RED/RED/YELLOW. Trivial fixes (id `cardFacContribBars` assigned per B78 sweep, card-title tip+oncontextmenu, `plotly_click → oDrFRisk` wired, `#fb923c` tokenized → `var(--prof)` at 4 sites, non-prof bar palette tokenized via getComputedStyle `--pri`/`--pri-alt`/`--warn` + inline `hex2rgba` helper, dead `--riskFacMode` custom-prop removed, `role="radiogroup"` + `tabindex` + focus-outline, `setFacGroup` + `setFacBarAll` now intersect with threshold slider instead of silently overriding it, `FAC_PRIMARY` filter dropped from Both mode so Secondary-group selections are visible, "TE Contrib %" → "|TE Contrib %|" label clarifying magnitude-only semantic) applied inline. Deferred: CSV export, localStorage persistence (large additions pending B94/B95).
+
+- **B90 · cardFacContribBars CSV export ("export as visible")** — toggle+threshold state means standard `exportCSV` won't target the right rows; needs `exportFacBarVisible()` that snapshots currently-rendered `_rfbData` filtered by the checkbox set. ~15 LOC. No blockers, just deferred to a design-discussion round.
+- **B91 · cardFacContribBars toolbar state persistence** — `_rfbMode` + threshold + group pill + checkbox set should save to `rr.facContrib.*` localStorage and restore on `rRiskNew`. ~20 LOC. Every reload resetting the toolbar is a daily-user irritant.
+- **B92 · cardFacContribBars TE-mode shadow-bar denominator ambiguity** — `devPct` shadow (factor σ / total TE * 100) and main bar (`|f.c|` = % of TE) share x-axis but are different denominators. Either remove the shadow or clarify hovertemplate (currently "Factor σ: %{x:.1f}% of TE" vs "TE Contribution: %{x:.1f}% of total TE" — denominators visually look identical but semantically differ).
+- **B93 · `setFacGroup` substring match is lossy** — L3465 uses bidirectional `includes()` match → "Momentum" checkbox matches "Momentum" group AND "Momentum (Medium-Term)" partial — acceptable today but fragile when FactSet adds new factor names. Switch to explicit `FAC_GROUPS[k]` membership check against `chk.value`.
+- **B94 · cardFacContribBars full-screen variant (PM gate)** — worth it for a 3-mode bar chart with toolbar state? Same FS pattern as cardScatter / cardCountry.
+- **B95 · cardFacContribBars Profitability alert data probe** — `hist.fac['Profitability'][].a ?? .e` fallback: confirm `a` populated across all 7 strategies. Couples to B73/parser L468 root cause. Spurious-alert risk if `a` ever falls through to raw `e`.
+
+### cardTEStacked (was anonymous Risk-tab card)
+Origin: `tile-specs/cardTEStacked-audit-2026-04-24.md`. Verdicts: RED/RED/YELLOW. Trivial fixes (id `cardTEStacked` assigned per B78 sweep, card-title tip+oncontextmenu, `plotly_click → oDrMetric('te')` wired, empty-state write-through `el.innerHTML='No TE history'` instead of silent return, fillcolor/line rgba tokenized via `_teStackColors()` helper using `--warn`/`--cyan` + hex2rgba, rangeslider border tokenized to `--pri`, CSV export `exportTEStackedCsv()` helper) applied inline.
+
+- **B96 · cardTEStacked `pct_specific`/`pct_factor` semantics resolution (RED — PM gate, couples B74 scope)** — per `CSV_STRUCTURE_SPEC.md` L184, `pct_specific`/`pct_factor` are **"% of Total Risk, not % of TE"** but render at L3253 multiplies by `h.te` as if TE-shares. If CSV spec is authoritative, the stacked-area decomposition is mathematically wrong under `sqrt` assumption (Total Risk decomposes as variance, not as linear TE-shares). Fix depends on PM+parser-team decision: (A) trust the CSV's % semantics and render over Total Risk axis instead of TE, (B) recompute factor+specific TE from parser-side variance budget, (C) add disclaimer that current chart uses linear allocation proxy. Parallels B74's factor-tile-semantics cleanup family. Highest-impact Risk-tab data finding in Batch 7.
+- **B97 · cardTEStacked `_selectedWeek` vertical marker (cross-tile design-lead gate, links B70)** — no vertical shape drawn when `_selectedWeek` is set. Same unified design decision as B70 (cardRiskHistTrends). Scope-merged with B70 once design lands.
+- **B98 · Rangeslider state persistence** — user drags slider → navigates away → returns to Risk tab → range resets. Save `xaxis.range` post-relayout to `rr.teStacked.range` and restore on next render.
+- **B99 · `factorRisk`/`idioRisk` heuristic audit (new cross-tile)** — fallback values built at `rRisk()` L3014 are a heuristic (`Σ|f.c|/100 * 1.2`, capped 0.85) used when `pct_*` missing. Every downstream consumer of these vars (cardTEStacked, riskDecompTree, potentially cardFRB) inherits the fudge coefficient silently. Audit every reader and either disclaim the heuristic nature in the UI or compute from a sounder base.
+- **B100 · `--idio` / `--factor` palette tokens (design-system gate)** — amber/cyan split used by cardTEStacked + future decomposition tiles. Promote to shared `--idio:#f59e0b` / `--factor:#06b6d4` tokens so downstream consumers (riskDecompTree, Risk tab hero future variants) inherit consistently.
 
 ---
 

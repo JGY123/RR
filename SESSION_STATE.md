@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-24 (SurpriseEdge deep-study complete — B105/B106/B107 ambition ladder registered)
+last_updated: 2026-04-24 (design-polish-v1 shipped — B105 Phase 1 SurpriseEdge-parity)
 ---
 
 # Session State — Live
@@ -20,7 +20,18 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 
 ---
 
-## Just finished (this session, 2026-04-24 — data-foundation integration)
+## Just finished (this session, 2026-04-24 — B105 Phase 1 design polish)
+- **Tagged `design-polish-v1` at `cf6b008`** — pushed to origin (JGY123). Safety tag `working.20260424.1821.pre-b105` preserved at pre-edit HEAD.
+- **Fonts bundled** — 4 woff2 files (~85 KB total) copied from `~/Desktop/SurpriseEdge-Handoff/SurpriseEdge-v3.2.0-source/src/fonts/` into `~/RR/fonts/`. `@font-face` declarations inlined at top of `<style>` block. Body font → `'DM Sans', system-ui`. `.mono` class (JetBrains Mono + `tabular-nums`) applied globally via `td.r` rule (every right-aligned numeric cell auto-inherits).
+- **Palette migrated to SurpriseEdge canonical tokens** — `--bg #0b0e14` (deeper), `--card #12161f`, `--cardBorder #1e2433`, `--text #c8cdd8`, `--textDim #6b7280` (new), `--textBright #eef0f4`, `--accent/--pri #22d3ee` (cyan primary — was indigo), `--accentDim #0e7490` (new for cyan hover states), `--univ #6366f1` (new — retains old RR indigo as benchmark-semantic color), `--warn #f59e0b` (amber — was purple `#a78bfa`; aligns with existing `rgba(245,158,11,…)` warn-state UI chrome that already used amber). Hex-alpha bg siblings `--posBg/--negBg/--warnBg/--uploadBg` added.
+- **Custom chrome adopted** — 6px themed `::-webkit-scrollbar` (track=bg, thumb=cardBorder, hover=textDim); `.card-title` 11px/1.5px letter-spacing/uppercase/textDim (was 12px/0.5px/txt); `td` border softened to `rgba(30,36,51,.45)` (was `rgba(51,65,85,.3)`); `.pill.tgl` SurpriseEdge filter-pill convention added as opt-in variants (`.pill.tgl.active/.pos/.neg/.warn` with color-mix hex-alpha backgrounds) — existing `.pill`/`.pill-pos`/`.pill-neg` drill-modal badges unchanged for backward-compat.
+- **Header branding** — 4px vertical gradient bar (cyan→indigo via `linear-gradient(180deg,var(--accent),var(--univ))`) next to REDWOOD wordmark; wordmark now two-tone `RED<cyan>WOOD</cyan>`.
+- **Semantic indigo→accentDim hover fix** — `.btn-pri:hover` and `.upload-zone label:hover` were hardcoded to `#2563eb` (old indigo-600, meant as darker `--pri`). After palette swap these would have flipped cyan→indigo on hover — swapped to `var(--accentDim)` = `#0e7490` for consistent cyan shade.
+- **Scope discipline** — zero tile-render-function edits. All 24 `.v1.fixes` states preserved at behavior level; only visual chrome changed. No PNG buttons touched, no tile logic modified.
+- **Verification** — disk: 4 woff2 present + 4 `@font-face` + palette tokens wired + `wc -l=6804 (+27 net)`. Node syntax check: 3 `<script>` blocks, 0 errors. Browser regression (preview port 3099, sample_data.json loaded): confirmed body font=DM Sans, bg=`rgb(11,14,20)`=`#0b0e14`, text=`#c8cdd8`; `.card-title`=11px/1.5px/upper/textDim; `td.r`=JetBrains Mono + tabular-nums; `.tab.active` border=`rgb(34,211,238)`=`#22d3ee`. 13 Plotly charts rendered on Risk tab, 0 console errors across Exposures/Risk/Holdings tab switches. Gradient bar + two-tone wordmark confirmed in screenshot.
+- **Marathon now runs on the polished dashboard.** User sees the transformation BEFORE reviewing tiles — per advisor's emotional-context framing ("one that is just as good").
+
+### Previously (2026-04-24 — data-foundation integration)
 - **Tagged `data-foundation-v1` at `85c83a2`** — 4 commits pushed to origin (JGY123). Parser bumped to `PARSER_VERSION=3.1.0` / `FORMAT_VERSION=4.2`. Safety tag `working.20260424.1513.pre-phase1` preserved at pre-edit HEAD.
 - **Phase 1 — Raw Factors capture** (`7bef572`): added `RAW_FACTOR_ORDER` (12 alphabetical factor names, positional fallback), `_extract_raw_factors()` method on `FactSetParserV3` (detects distinct per-period headers for future-proofing, else uses positional order), wired into `_assemble()` to emit `strategy.raw_fac` (≥700 entries/strategy, each with 12-float `e[]` and ascending `hist[]`) + `strategy.raw_fac_labels`.
 - **Phase 2 — security_ref enrichment** (`fc2a8b5`): module-level load of `data/security_ref.json` (6,390 SEDOLs from baked Excel); `_enrich_holding()` function with SEDOL-exact → zero-stripped → name-fallback (lowercase-alnum-first-30) chain; populates `country`/`currency`/`industry` on every holding. Coverage: 100% on 4 of 7 strategies, ≥90% on all 7 (better than brief's 93-98% estimate). `strategy.security_ref_version` emitted per strategy.

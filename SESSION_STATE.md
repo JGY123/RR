@@ -123,9 +123,13 @@ Nothing in flight. Ready to scope Batch 5.
 ---
 
 ## Next up (in order)
-1. **🎯 Review marathon prep** — all 21 tiles at `.v1.fixes`. Propose structure: per-tile one-page dossier with (a) screenshot in current browser state, (b) Batch # + tag + commit SHA, (c) trivial-fixes-applied summary, (d) deferred PM gates with B-ids. User walks through each tile in-browser and gives explicit OK; OK converts `.v1.fixes` → `.signedoff` tag.
-2. **Post-closeout B78 structural commit** — close remaining 2 anonymous Risk-tab cards (`cardBetaHist` at L3105, `cardFacHist` at L3194) in one id+note-hook structural pass. Not a full audit — just addressability. ~15 LOC.
-3. **PM-gate queue — priority-ranked for the marathon** (block a tile's signoff until resolved):
+1. **🎯 Review marathon of the 21 Tier-1 tiles** — dossier at `REVIEW_MARATHON_DOSSIER.md` (committed separately). User walks tiles in-browser; each tile → `.signedoff` tag at current HEAD, or deferred with PM-gate reference. Expected 60–90 min total.
+2. **🧩 Tier 2 tile build queue — deferred pending marathon (B102–B104 in BACKLOG)**. These CONSUME data-foundation-v1 (raw_fac + security_ref enrichment):
+   - **B102 · `cardRiskByDim`** — risk decomposed by Country / Currency / Industry. **User's key 2026-04-24 ask** ("when security has 2% contribution to risk from country you'll be able to map which country etc."). M-size build on Risk tab.
+   - **B103 · Per-security raw factor drill** — inside `oSt(ticker)` modal, 12-factor z-score bar chart + 4-period sparklines. S-size modal extension.
+   - **B104 · Portfolio raw-exposure aggregate** — synthesis hero reconciling weighted-sum of security exposures against `cs.factors[].a`. M-size; depends on B103. All three together = "second mini-marathon" after the Tier-1 marathon closes.
+3. **Post-closeout B78 structural commit** — close remaining 2 anonymous Risk-tab cards (`cardBetaHist` at L3105, `cardFacHist` at L3194) in one id+note-hook structural pass. Not a full audit — just addressability. ~15 LOC. Sequence-free — could ride with B102–B104 or stand alone.
+4. **PM-gate queue — priority-ranked for the marathon** (block a tile's signoff until resolved):
    - **B80** · cardUnowned data-source decision — whole tile dead without it (parser change / rename / hide)
    - **B96** · cardTEStacked `pct_specific`/`pct_factor` denominator — mathematically dubious stacked decomposition
    - **B73** · active-vs-raw unification (4 sites) — Risk-tab-wide policy
@@ -133,8 +137,8 @@ Nothing in flight. Ready to scope Batch 5.
    - **B61** · cardGroups ORVQ rank taxonomy
    - **B20/B39** · MCR + Scatter label rename pair
    - Secondary: B59 ghost-tile retire, B79 benchOnly label, B86/B87 watchlist UX, B89 waterfall naming, B88/B97/B70 week-selector sweep, B99 heuristic audit, B100 palette tokens, B90–B95 cardFacContribBars follow-ups
-4. **Parser-side one-liner pending** — `factset_parser.py:468` `bm: None` → `bm = e - a if a is not None else None`. Unblocks B73 for the riskm path. Ships with next parser release or as a standalone commit before review marathon.
-5. **Production deployment target** — still blocked on Redwood IT confirmation of server layout. Unrelated to marathon.
+5. **Parser-side one-liner pending** — `factset_parser.py:468` `bm: None` → `bm = e - a if a is not None else None`. Unblocks B73 for the riskm path. Ships with next parser release or as a standalone commit before review marathon.
+6. **Production deployment target** — still blocked on Redwood IT confirmation of server layout. Unrelated to marathon.
 
 ---
 

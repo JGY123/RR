@@ -124,7 +124,8 @@ Nothing in flight. Ready to scope Batch 5.
 
 ## Next up (in order)
 1. **🎯 Review marathon of the 21 Tier-1 tiles** — dossier at `REVIEW_MARATHON_DOSSIER.md` (committed separately). User walks tiles in-browser; each tile → `.signedoff` tag at current HEAD, or deferred with PM-gate reference. Expected 60–90 min total.
-2. **🧩 Tier 2 tile build queue — deferred pending marathon (B102–B104 in BACKLOG)**. These CONSUME data-foundation-v1 (raw_fac + security_ref enrichment):
+2. **🎨 Design polish pass — B105** (SurpriseEdge adoption). Full catalog at `design/SURPRISEEDGE_LESSONS.md`. Tier A items only (palette + scrollbars + mono + card-title typography + row separators + hex-alpha pills). Ships as `design-polish-v1` tag. Sequenced AFTER marathon signoff, BEFORE Tier 2 tile builds, so B102–B104 inherit polish from day 1.
+3. **🧩 Tier 2 tile build queue — deferred pending marathon + B105 (B102–B104 in BACKLOG)**. These CONSUME data-foundation-v1 (raw_fac + security_ref enrichment):
    - **B102 · `cardRiskByDim`** — risk decomposed by Country / Currency / Industry. **User's key 2026-04-24 ask** ("when security has 2% contribution to risk from country you'll be able to map which country etc."). M-size build on Risk tab.
    - **B103 · Per-security raw factor drill** — inside `oSt(ticker)` modal, 12-factor z-score bar chart + 4-period sparklines. S-size modal extension.
    - **B104 · Portfolio raw-exposure aggregate** — synthesis hero reconciling weighted-sum of security exposures against `cs.factors[].a`. M-size; depends on B103. All three together = "second mini-marathon" after the Tier-1 marathon closes.

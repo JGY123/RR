@@ -9,14 +9,33 @@
 <script src="html2canvas.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
+
+/* --- B105 Phase 1: SurpriseEdge-parity font bundle --- */
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:400 700;font-display:swap;src:url('fonts/dm-sans-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:400 700;font-display:swap;src:url('fonts/dm-sans-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 700;font-display:swap;src:url('fonts/jetbrains-mono-latin-ext.woff2') format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+@font-face{font-family:'JetBrains Mono';font-style:normal;font-weight:400 700;font-display:swap;src:url('fonts/jetbrains-mono-latin.woff2') format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+
 :root{
---bg:#080e1e;--card:#0f172a;--surf:#1e293b;--grid:#334155;--txt:#94a3b8;--txth:#e2e8f0;
---pos:#10b981;--neg:#ef4444;--warn:#a78bfa;--pri:#6366f1;--acc:#8b5cf6;--cyan:#38bdf8;
---prof:#fb923c;
+/* --- SurpriseEdge-canonical palette (B105 Phase 1, adopted 2026-04-24) --- */
+--bg:#0b0e14;--card:#12161f;--cardBorder:#1e2433;--surf:#1e293b;--grid:#1e2433;
+--text:#c8cdd8;--txt:#c8cdd8;--textDim:#6b7280;--textBright:#eef0f4;--txth:#eef0f4;
+--accent:#22d3ee;--pri:#22d3ee;--accentDim:#0e7490;--univ:#6366f1;--acc:#8b5cf6;--cyan:#22d3ee;
+--pos:#10b981;--posBg:#10b98118;
+--neg:#ef4444;--negBg:#ef444418;
+--warn:#f59e0b;--warnBg:#f59e0b18;
+--prof:#fb923c;--upload:#8b5cf6;--uploadBg:#8b5cf620;--zero:#1e2433;
 --fac-bar-pos:rgba(99,102,241,.22);--fac-bar-neg:rgba(245,158,11,.22);
 --r1:#10b981;--r2:#22c55e;--r3:#eab308;--r4:#f97316;--r5:#ef4444;
 }
-body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
+body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
+.mono{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+
+/* --- B105 Phase 1: 6px themed scrollbars --- */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--cardBorder);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--textDim)}
 .header{display:flex;align-items:center;gap:16px;padding:10px 24px;background:var(--card);border-bottom:1px solid var(--grid);position:sticky;top:0;z-index:100}
 .header h1{font-size:18px;font-weight:700;color:var(--txth);letter-spacing:-0.5px}
 .header h1 span{color:var(--pos);font-weight:300}
@@ -32,7 +51,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .tab:hover:not(.active){color:var(--txth)}
 .upload-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;height:calc(100vh - 100px);gap:16px}
 .upload-zone label{padding:16px 32px;background:var(--pri);color:#fff;border-radius:12px;cursor:pointer;font-weight:600;font-size:15px;transition:all .2s}
-.upload-zone label:hover{background:#2563eb}
+.upload-zone label:hover{background:var(--accentDim)}
 .upload-zone p{color:var(--txt);font-size:13px}
 #content{display:none;padding:16px 24px 32px}
 .grid{display:grid;gap:16px;margin-bottom:16px}
@@ -43,7 +62,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .g32{grid-template-columns:3fr 2fr}
 .g12{grid-template-columns:1fr 2fr}
 .card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:visible;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
-.card-title{font-size:12px;font-weight:600;color:var(--txt);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px}
+.card-title{font-size:11px;font-weight:600;color:var(--textDim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
 .sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
 .sum-card:hover{border-color:var(--pri);transform:translateY(-2px)}
@@ -54,14 +73,21 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .sum-card.warn{border-color:var(--warn);background:rgba(245,158,11,.05)}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;padding:8px 10px;color:var(--txt);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;border-bottom:1px solid var(--grid);white-space:nowrap}
-td{padding:7px 10px;border-bottom:1px solid rgba(51,65,85,.3);white-space:nowrap;font-variant-numeric:tabular-nums}
+td{padding:7px 10px;border-bottom:1px solid rgba(30,36,51,.45);white-space:nowrap;font-variant-numeric:tabular-nums}
 tr:hover td{background:#1e293b}
 th.r,td.r{text-align:right}
+td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn-t{color:var(--warn)}
 .alert-t{color:var(--neg);font-weight:600}
 .pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
 .pill-pos{background:rgba(16,185,129,.15);color:var(--pos)}
 .pill-neg{background:rgba(239,68,68,.15);color:var(--neg)}
+/* --- B105 Phase 1: SurpriseEdge-canonical filter-pill convention (opt-in via .pill.tgl) --- */
+.pill.tgl{padding:4px 12px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;background:transparent;color:var(--textDim);border:1px solid var(--cardBorder);white-space:nowrap}
+.pill.tgl.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.pill.tgl.pos{background:color-mix(in srgb,var(--pos) 15%,transparent);color:var(--pos);border-color:color-mix(in srgb,var(--pos) 40%,transparent)}
+.pill.tgl.neg{background:color-mix(in srgb,var(--neg) 15%,transparent);color:var(--neg);border-color:color-mix(in srgb,var(--neg) 40%,transparent)}
+.pill.tgl.warn{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
 .bar-cell{display:flex;align-items:center;gap:6px}
 .bar-bg{height:6px;background:var(--surf);border-radius:3px;flex:1;overflow:hidden}
 .bar-fill{height:100%;border-radius:3px}
@@ -81,7 +107,7 @@ th.r,td.r{text-align:right}
 .trend{display:inline-block;font-size:10px;margin-left:4px}
 .trend.up{color:var(--pos)}.trend.down{color:var(--neg)}.trend.flat{color:var(--txt)}
 .btn{padding:8px 16px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
-.btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:#2563eb}
+.btn-pri{background:var(--pri);color:#fff}.btn-pri:hover{background:var(--accentDim)}
 .btn-sec{background:var(--surf);color:var(--txt);border:1px solid var(--grid)}.btn-sec:hover{color:var(--txth)}
 .btn-sm{padding:4px 10px;font-size:11px}
 .toggle-wrap{display:flex;gap:4px;margin-bottom:10px}
@@ -319,8 +345,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <body>
 <div class="header">
 <!-- Left: branding -->
-<div style="min-width:130px;flex-shrink:0">
-  <h1 style="font-size:13px;font-weight:700;letter-spacing:2px;color:var(--txth);line-height:1;margin:0">REDWOOD</h1>
+<div style="min-width:130px;flex-shrink:0;display:flex;align-items:center;gap:8px">
+  <div style="width:4px;height:20px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--univ))"></div>
+  <h1 style="font-size:13px;font-weight:700;letter-spacing:2px;color:var(--textBright);line-height:1;margin:0">RED<span style="color:var(--accent)">WOOD</span></h1>
 </div>
 <!-- Center: strategy + report date -->
 <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">

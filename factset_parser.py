@@ -30,8 +30,8 @@ import sys
 import time
 from datetime import datetime
 
-PARSER_VERSION = "3.0.0"
-FORMAT_VERSION = "4.1"
+PARSER_VERSION = "3.1.0"
+FORMAT_VERSION = "4.2"
 
 # ── Strategy code → dashboard ID mapping ─────────────────────────────────────
 # Only ACWIXUS gets renamed (to IOP). Anything else passes through unchanged —
@@ -114,6 +114,27 @@ SECURITY_WILDCARDS = [
 
 GROUP_MARKER = "Period Start Date"
 FIXED_PREFIX_NAMES = {"Section", "ACCT", "DATE", "PortfolioCurCode", "Level", "Level2", "SecurityName"}
+
+# ── Raw Factors positional order ─────────────────────────────────────────────
+# The "Raw Factors" section ships 12 per-security z-score columns per period
+# with NO distinct header labels (all 12 cols read "Raw Factor Exposure").
+# Positional order is alphabetical and confirmed by user (2026-04-24).
+# If FactSet ever supplies distinct header labels in future files, honor them —
+# see _extract_raw_factors for the fallback path.
+RAW_FACTOR_ORDER = [
+    "Dividend Yield",
+    "Earnings Yield",
+    "Exchange Rate Sensitivity",
+    "Growth",
+    "Leverage",
+    "Liquidity",
+    "Market Sensitivity",
+    "Medium-Term Momentum",
+    "Profitability",
+    "Size",
+    "Value",
+    "Volatility",
+]
 
 # GICS industry reclassification (unify old and new names)
 GICS_NAME_MAP = {
@@ -704,6 +725,65 @@ class FactSetParserV3:
             }
         return out
 
+    # ---- Raw Factors (12 unlabeled z-scores per security per period)
+
+    def _extract_raw_factors(self, acct_code):
+        """Extract per-security raw factor exposures from the "Raw Factors" section.
+
+        Shape: 13-col period block = [Period Start Date, v0..v11]. The 12 value
+        columns share an identical header ("Raw Factor Exposure") so column
+        names can't identify each factor — we use RAW_FACTOR_ORDER positionally.
+        If a future file ships 12 distinct header labels, we detect that and
+        emit the distinct labels instead (see `labels` branch below)."""
+        schema = self.schemas.get("Raw Factors")
+        rows = self.section_rows.get("Raw Factors", [])
+        if not schema or not rows or schema.num_groups == 0:
+            return {}, RAW_FACTOR_ORDER
+        if schema.group_size != 13:
+            return {}, RAW_FACTOR_ORDER
+
+        # Detect distinct per-column header labels (future-proof path).
+        # Slice the 12 value cols from the first group: cols [group_start+1 .. group_start+13).
+        g0 = schema.group_start
+        header_slice = schema.raw_cols[g0 + 1:g0 + 13]
+        distinct_headers = [h for h in header_slice if h and h != "Raw Factor Exposure"]
+        if len(distinct_headers) == 12 and len(set(distinct_headers)) == 12:
+            labels = distinct_headers
+        else:
+            labels = list(RAW_FACTOR_ORDER)
+
+        out = {}
+        for row in rows:
+            if len(row) < 7 or row[1].strip() != acct_code:
+                continue
+            ident = row[5].strip() if len(row) > 5 else ""
+            if not ident or ident in ("Data", "@NA", "[Unassigned]", "[Cash]"):
+                continue
+            if ident.startswith("CASH_"):
+                continue
+            name = row[6].strip() if len(row) > 6 else ""
+
+            periods = []
+            for gi in range(schema.num_groups):
+                base = schema.group_start + gi * schema.group_size
+                if base + 12 >= len(row):
+                    continue
+                d = parse_date(row[base])
+                if not d:
+                    continue
+                exps = [safe_float(row[base + 1 + i]) for i in range(12)]
+                periods.append({"d": d, "e": exps})
+
+            if not periods:
+                continue
+            periods.sort(key=lambda p: p["d"] or "")
+            out[ident] = {
+                "n": name,
+                "e": periods[-1]["e"],
+                "hist": periods,
+            }
+        return out, labels
+
     # ---- Rank tables (Overall / REV / VAL / QUAL)
 
     def _extract_rank_table(self, section_name, acct_code):
@@ -747,6 +827,7 @@ class FactSetParserV3:
             groups     = self._extract_group_table("Group", acct)
             holdings, unowned_hold = self._extract_security(acct)
             snap       = self._extract_snapshot(acct)
+            raw_fac, raw_fac_labels = self._extract_raw_factors(acct)
 
             ranks = {
                 "overall": self._extract_rank_table("Overall", acct),
@@ -838,6 +919,8 @@ class FactSetParserV3:
                     "reg": {},
                 },
                 "unowned": unowned_hold,
+                "raw_fac": raw_fac,
+                "raw_fac_labels": raw_fac_labels,
                 "_portchars_metrics": pc_metric_names,
             }
             strategies[dash_id] = s

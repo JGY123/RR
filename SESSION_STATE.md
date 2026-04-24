@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-24 (Batch 7 closed — 🎯 ALL TILES AUDITED)
+last_updated: 2026-04-24 (data-foundation-v1 shipped — Raw Factors + security_ref enrichment live)
 ---
 
 # Session State — Live
@@ -20,7 +20,16 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 
 ---
 
-## Just finished (this session, 2026-04-24)
+## Just finished (this session, 2026-04-24 — data-foundation integration)
+- **Tagged `data-foundation-v1` at `85c83a2`** — 4 commits pushed to origin (JGY123). Parser bumped to `PARSER_VERSION=3.1.0` / `FORMAT_VERSION=4.2`. Safety tag `working.20260424.1513.pre-phase1` preserved at pre-edit HEAD.
+- **Phase 1 — Raw Factors capture** (`7bef572`): added `RAW_FACTOR_ORDER` (12 alphabetical factor names, positional fallback), `_extract_raw_factors()` method on `FactSetParserV3` (detects distinct per-period headers for future-proofing, else uses positional order), wired into `_assemble()` to emit `strategy.raw_fac` (≥700 entries/strategy, each with 12-float `e[]` and ascending `hist[]`) + `strategy.raw_fac_labels`.
+- **Phase 2 — security_ref enrichment** (`fc2a8b5`): module-level load of `data/security_ref.json` (6,390 SEDOLs from baked Excel); `_enrich_holding()` function with SEDOL-exact → zero-stripped → name-fallback (lowercase-alnum-first-30) chain; populates `country`/`currency`/`industry` on every holding. Coverage: 100% on 4 of 7 strategies, ≥90% on all 7 (better than brief's 93-98% estimate). `strategy.security_ref_version` emitted per strategy.
+- **Phase 3 — test suite replacement** (`33b6618`): prior `test_parser.py` imported 14 symbols from the retired positional 96/101-col parser (architectural replacement, not rename — forensic SHA `0d6699a`). Wrote new 17-test suite across 7 classes: TestRawFactorOrder (2), TestRawFacShape (4), TestEnrichHolding (4 unit), TestEnrichmentCoverage (2 integration), TestStrategyInvariant (2 regression), TestLegacyBehavior (3 — cash filter / comma-in-name / GICS full label). All green against the new-format sample. BACKLOG **B101** logs the legacy-coverage recovery option.
+- **Phase 4 — regenerate sample_data.json** (`85c83a2`): 21KB ISC-only stale sample → 19MB full 7-strategy new-format. Browser regression via preview server (`port 3099`): all 24 audited tiles render, zero console errors, raw_fac + enrichment fields carry through `normalize()` spread intact. Dashboard unchanged — no edits to `dashboard_v7.html` or tile render fns.
+- **Phase 5 — commit + tag + push** (this checkpoint): 4 commits landed on main; tag `data-foundation-v1` annotated "Raw Factors captured, security_ref enrichment live, all tests green, all 21 tiles render."; pushed via `gh auth switch --user JGY123`.
+- **Invariant preserved:** `.v1.fixes` state across all 21 Tier-1 tiles is untouched. Review marathon still the next phase.
+
+### Previously (2026-04-24 Batch 7)
 - **Batch 7 fixes committed + pushed** — `01cbba0` on main; tags `tileaudit.{cardAttribWaterfall,cardFacContribBars,cardTEStacked}.v1` + `.v1.fixes` (6 tags) + milestone tag `tier1-audit-complete` all pushed
 - **🎯 Initial Tier-1 tile-audit phase closed.** 21/21 tiles at `.v1.fixes`. Review marathon is the next phase.
 - cardAttribWaterfall (GREEN/YELLOW/YELLOW): CSV export button + `exportFacAttribCsv()` helper, flex-between header chrome. Explicitly confirmed **NOT a B73/B74 site** (tile consumes only signed `f.imp` — no sign-collapse, no active-vs-raw). Non-finding discipline: 2 PM gates → B88 factor-family week-selector sweep + B89 waterfall naming.

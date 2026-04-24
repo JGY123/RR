@@ -16,6 +16,16 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 
 ---
 
+## B105 · Design polish pass — SurpriseEdge palette + typography adoption
+- **Origin:** Design study of `~/Downloads/surpriseedge_report_*.html` — user asked advisor to "take a close look at surprise edge that looks very clean and sharp" (2026-04-24). Full lesson catalog at `design/SURPRISEEDGE_LESSONS.md`.
+- **Size:** M (~1–2 hours, single commit); pure CSS + token migration + class additions. Zero functional changes.
+- **Scope (Stage 2 per lessons doc):** Tier A items — deeper palette `--bg:#0b0e14` + cyan accent `--pri:#22d3ee`, custom 6px scrollbars, `.mono` class applied to every numeric cell across 24 tiles, 11px uppercase card-titles with 0.5px letter-spacing, subtle `#1e243315` row separators, unified hex-alpha pill convention.
+- **Priority:** after Tier-1 review marathon signoff, before Tier 2 tile builds (so B102–B104 inherit polish from day 1).
+- **Do NOT include in this ticket:** side-panel detail pattern (separate UX decision, defer to B103 build), inline-SVG replacement for Plotly (Tier C), full grid refactor (Tier C).
+- **Tag at ship:** `design-polish-v1`. Browser regression check across all 24 tiles required before push.
+
+---
+
 ## 🧩 Tier 2 tile queue — post-marathon build (B102–B104)
 
 **Status: deferred pending review-marathon signoff of the 21 Tier-1 tiles.**

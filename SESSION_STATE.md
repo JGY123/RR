@@ -1,7 +1,7 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-23 (Batch 6 closed)
+last_updated: 2026-04-24 (Batch 7 closed — 🎯 ALL TILES AUDITED)
 ---
 
 # Session State — Live
@@ -13,15 +13,25 @@ last_updated: 2026-04-23 (Batch 6 closed)
 ---
 
 ## Current phase
-**Tier 1 tile audits, Batch 6 closed.** 18 of ~21 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon at the end where user reviews each tile in-browser and gives explicit OK.
+**🎯 Tier 1 tile-audit phase COMPLETE (Batch 7 closed 2026-04-24).** 21/21 tiles audited + trivial fixes applied + tagged. **None signed off yet** — user elected Option 3 cadence (2026-04-21): audit all tiles first, then run a single batch-review marathon where user reviews each tile in-browser and gives explicit OK. We are now at that marathon-entry point. Milestone tag: `tier1-audit-complete` at commit `01cbba0`.
 Production deployment planning paused pending Redwood IT confirmation of server layout.
 
 > **Language discipline:** `.v1` / `.v1.fixes` tags = "audit complete" / "trivial fixes applied". These are NOT signoff. Signoff happens in the review marathon. Never write "signed off" in checkpoints, commits, or docs until user has explicitly OK'd the tile in-browser.
 
 ---
 
-## Just finished (this session, 2026-04-23)
-- **Batch 6 fixes committed + pushed** — `ef0cac3` on main; tags `tileaudit.{cardBenchOnlySec,cardUnowned,cardWatchlist}.v1` + `.v1.fixes` pushed (6 tags)
+## Just finished (this session, 2026-04-24)
+- **Batch 7 fixes committed + pushed** — `01cbba0` on main; tags `tileaudit.{cardAttribWaterfall,cardFacContribBars,cardTEStacked}.v1` + `.v1.fixes` (6 tags) + milestone tag `tier1-audit-complete` all pushed
+- **🎯 Initial Tier-1 tile-audit phase closed.** 21/21 tiles at `.v1.fixes`. Review marathon is the next phase.
+- cardAttribWaterfall (GREEN/YELLOW/YELLOW): CSV export button + `exportFacAttribCsv()` helper, flex-between header chrome. Explicitly confirmed **NOT a B73/B74 site** (tile consumes only signed `f.imp` — no sign-collapse, no active-vs-raw). Non-finding discipline: 2 PM gates → B88 factor-family week-selector sweep + B89 waterfall naming.
+- cardFacContribBars (RED/RED/YELLOW, was anonymous Risk-tab card → id assigned per B78): id + note-hook + plotly_click wired; `#fb923c` × 4 tokenized to `var(--prof)`; non-prof bar palette tokenized via getComputedStyle + `hex2rgba`; dead `--riskFacMode` custom-prop removed; radio-group a11y (`role="radiogroup"` + tabindex + focus); `setFacGroup`/`setFacBarAll` now intersect threshold slider (was silently overriding); `FAC_PRIMARY` filter dropped from Both mode (Secondary selections now visible); Both-mode label relabeled `|TE Contrib %|` as narrative disclaimer until B74 lands. **6th B74 sign-collapse site** + **4th B73 active-vs-raw site** confirmed.
+- cardTEStacked (RED/RED/YELLOW, was anonymous Risk-tab card → id assigned per B78): id + note-hook + `plotly_click → oDrMetric('te')` wired; empty-state write-through; rangeslider border + fill/line rgba tokenized via new `_teStackColors()` helper using `--warn`/`--cyan`/`--pri`; CSV export `exportTEStackedCsv()` helper. **RED T1:** `pct_specific`/`pct_factor` interpreted as TE-shares but `CSV_STRUCTURE_SPEC.md` L184 says "% of Total Risk not TE" — mathematically dubious stacked decomposition. Deferred as **B96 — highest-impact Risk-tab data finding this batch.** Also synthesized `factorRisk`/`idioRisk` heuristic at `rRisk()` L3014 (`Σ|f.c|/totalTE * 1.2`, capped 0.85) silently pollutes 3 consumer tiles — new cross-tile pattern "Synthesized fallback leakage" → B99.
+- `BACKLOG.md` extended **B88–B100** (13 new non-trivials). **B96 joins B80** as highest-leverage tile-level blockers (both PM-gated, both block correctness on a specific tile).
+- `AUDIT_LEARNINGS.md` extended with **5 new entries**: (1) Sign-collapse escalated to 6 tiles (B74 graduates from "recommended" to "required"), (2) B78 anonymous-Risk-tab sweep 2-of-4 converted (cardBetaHist + cardFacHist pending post-closeout structural commit), (3) Non-finding discipline (explicit not-a-site findings prevent silent scope creep), (4) Synthesized fallback leakage — render-synthesized heuristics pollute downstream tiles (distinct pattern class from A/B/C), (5) FactSet `pct_X` denominator ambiguity — `pct_specific`/`pct_factor` = "% of Total Risk" not "% of TE".
+- Disk-verified (wc -l=6777 +63, 2 new card ids, note-hooks 18 ↑2, 4 export helpers, 0 hardcoded-hex net increase) + node syntax check (3 `<script>` blocks clean). Browser verification deferred to review marathon.
+
+### Previously
+- **2026-04-23 Batch 6** — `ef0cac3`; cardBenchOnlySec/cardUnowned/cardWatchlist; 25 trivials + BACKLOG B79–B87; normalize-skips-unowned + parser-bucket-semantics-mismatch + synthesis-invisible-until-populated + mutation-handlers-dont-rerender + ghost-data-anti-pattern learnings.
 - Holdings trio sweep — 25 trivial fixes; 1 RED (cardUnowned no-data-source); 5 new cross-tile patterns
 - cardBenchOnlySec (GREEN/YELLOW/GREEN): note-hook, PNG button removed, data-col ×4, sort wiring + data-sv on Biggest Missed col 3, col-3 tooltip. PM gate: B79 "% of benchmark missed" label rename.
 - cardUnowned (RED/YELLOW/YELLOW): note-hook, data-col ×5, data-sv null-guards, sort null-guard, ticker escaping, region label normalization (Usa→USA · English→UK · Far East→Asia Pacific ex-Japan), header tooltips, defensive Pattern B fallback (`u.b??u.bw`), 4th sign-collapse site softened to neutral pending B74. **RED T1:** tile has NO data — `bw=pct_t=None` on 100% of 22 rows across 7 strategies because parser bucket is "orphan securities" not "unowned benchmark TE contributors". Deferred as **B80** PM gate: parser change / rename / hide.
@@ -30,7 +40,7 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 - `AUDIT_LEARNINGS.md` extended with **5 new cross-tile patterns**: (1) normalize() remap skips non-holdings collections (`st.unowned` etc.), (2) parser bucket semantics ≠ tile semantics (read partition condition not bucket name), (3) sign-collapse 4th site (neutral softening as trivial, policy via B74), (4) synthesis tiles invisible-until-populated (empty-state card required), (5) mutation handlers that don't re-render dependent tiles (cycleFlag pattern), (6) ghost-data anti-pattern for localStorage refs to removed entities.
 - Disk-verified (wc -l=6714 +50, PNG refs 5 ↓1, showNotePopup on card-titles=16 +4 [cardBenchOnlySec+cardUnowned+cardWatchlist×2 incl empty-state], data-col=76 +12, `exportWatchlistCsv`=2 [defn+call]) + node syntax check (all 3 `<script>` blocks parse clean). Browser verification deferred to review marathon.
 
-### Previously
+### Before Batch 6
 - **2026-04-23 Batch 5** — `f709e6e`; cardGroups/cardRiskHistTrends/cardRiskFacTbl; 25 trivials + BACKLOG B61–B78; Pattern C render-side re-derivation + parser dual-path `bm:None` + mini-chart sub-checklist learnings
 - Risk-tab sweep — 25 trivial fixes; 2 RED verdicts with PM gates deferred; 3 new cross-tile patterns; 2 ledger corrections
 - cardGroups (RED): fixed dead drill (oDrGroup now uses h.subg direct match, was broken GROUPS_DEF+SEC_ALIAS filter where "Info Technology"≠"Information Technology"); plotly_click → oDrGroup; data-col/data-sv/R·V·Q tooltips/themed colors/thresh-alert/warn row classes on table; PNG+CSV dropdown → single CSV; note-hook. RED: ORVQ rank-aggregation taxonomy deferred as **B61** PM gate.
@@ -62,13 +72,26 @@ Production deployment planning paused pending Redwood IT confirmation of server 
 ## In flight
 Nothing in flight. Ready to scope Batch 5.
 
-### New cross-tile learnings appended (Batch 6)
-- **normalize() remap skips non-holdings collections** — L562–L573 maps field names (`bw→b`, `pct_t→tr`) on `st.hold` only; `st.unowned`/`st.watchlist`/etc. retain parser's original keys. Render reading normalized names silently gets `undefined`. Defensive render fallback `u.b ?? u.bw` works; permanent fix mirrors the remap.
-- **Parser bucket semantics ≠ tile semantics** — `st.unowned` is partitioned by "rows with no weight data" (orphans/rights/cash), not "benchmark-unowned TE contributors". Audit heuristic: for every parser collection, read the PARTITION CONDITION from source, not the name. Cross-check narrative.
-- **Sign-collapse 4th site** — cardUnowned static `color:var(--neg)` regardless of sign. Adds another member to B74 shared-helper scope. Detection grep: `color:var(--neg)` without surrounding `?:` ternary.
-- **Synthesis tiles invisible-until-populated** — tiles that early-return `''` on empty user-generated state silently hide the feature from new users. Fix: empty-state shell with onboarding copy. Affects cardWatchlist, cardThisWeek, riskAlerts (≥4 sites).
-- **Mutation handlers that don't re-render dependent tiles** — `cycleFlag` wrote to `_holdFlags` but only patched one button; `cardWatchlist` stayed stale until next `upd()`. Audit: grep every `onclick` that writes to a shared state var, grep every reader of that var, confirm mutation triggers re-render.
-- **Ghost-data anti-pattern for localStorage refs** — user-generated state (flags, notes, alerts) keyed by entity ID that may have left the dataset. Watchlist ticker exits → row silently renders 0.00/0.00. Fix: presence-check at render, show EXITED chip + muted opacity.
+### New cross-tile learnings appended (Batch 7)
+- **Sign-collapse escalated to 6 tiles** — cardFacContribBars added 4 inline `Math.abs(f.c)` sites + dual-axis Both-mode overlay of signed vs magnitude-only. B74 shared-helper graduates from "strongly recommended" to "required before next Risk-tab UX pass".
+- **B78 anonymous-Risk-tab-card sweep: 2-of-4 done** — `cardFacContribBars` + `cardTEStacked` now have stable ids + note-hooks. `cardBetaHist` + `cardFacHist` (Factor Exposure History) remaining; close via a single post-closeout structural commit (id+note-hook only, no full audits).
+- **Non-finding discipline** — `cardAttribWaterfall` explicitly NOT a B73/B74 site. Recording negative findings bounds the scope of open refactors and prevents silent scope creep.
+- **Synthesized fallback leakage (new pattern class)** — render-synthesized heuristics like `factorRisk`/`idioRisk` at L3014 (`Σ|f.c|/totalTE * 1.2` with fudge coefficient) silently pollute downstream consumers. Distinct from Pattern C (render-side re-derivation from wrong config) because here there's no config to derive from; the value is made up. Any var computed at top of render fn via filter/reduce/Math.min/max needs PARSER vs RENDER-SYNTH classification + optional `/* synthesized */` comment + UI disclaimer.
+- **FactSet `pct_X` denominator must be identified** — `pct_specific`/`pct_factor` per `CSV_STRUCTURE_SPEC.md` L184 are "% of Total Risk, not % of TE", but cardTEStacked multiplies by `h.te` as if TE-shares. Variance decomposition ≠ linear TE decomposition under sqrt. Audit heuristic: never assume `pct_X` → `X%`. Always locate the denominator before rendering as a share.
+
+### Carried from prior batches
+- normalize() remap skips non-holdings collections (Pattern B variant, Batch 6)
+- Parser bucket semantics ≠ tile semantics (Batch 6)
+- Synthesis tiles invisible-until-populated / Mutation handlers that don't re-render / Ghost-data anti-pattern (Batch 6)
+- Pattern C render-side re-derivation (Batch 5)
+- Parser dual-path `bm:None` in riskm path (Batch 5; one-line parser fix pending)
+- Mini-chart sub-checklist (Batch 5)
+- Active-vs-raw conflation — **4 sites** (B73, now includes cardFacContribBars Both-mode overlay)
+- Sign-collapse — **6 sites** confirmed (B74, required)
+- Ghost-tile anti-pattern (cardCorr L1299 placeholder vs live heatmap at L3096; retire decision B59)
+- Anonymous Risk-tab cards — **2 of 4 done** (cardBetaHist + cardFacHist remaining)
+- PNG-button sweep: 5 refs remain; cardRegions L1331 still flagged
+- Dataset-driven spot-checks catch RED findings pure-code-reading misses
 
 ### Carried from prior batches
 - Pattern C render-side re-derivation (cardGroups)
@@ -91,11 +114,18 @@ Nothing in flight. Ready to scope Batch 5.
 ---
 
 ## Next up (in order)
-1. **Plan Batch 7 (final audit batch)** — ~3 tiles remaining. Candidates: `cardRating`, `cardFacWaterfall`, plus the anonymous Risk-tab card sweep (B78 — assign stable ids to `factorContribBarsDiv`/`teStackedArea`/`corrChartDiv`/`facHistDiv` wrappers, converting each into a tile-audit target in one pass). Three-audit natural cluster.
-2. **Alternative** — if user wants to prep for review marathon before closing Batch 7, we could pause tile audits and generate the review-marathon dossier for the 18 tiles at `.v1.fixes` (per-tile screenshot spec + changes made + outstanding PM gates). PM gates queue is now: B20/B39 (MCR+Scatter rename pair), B53 (cardFRB sign-collapse context now folded into B74), B59 (ghost-tile disposition), B61 (cardGroups ORVQ taxonomy), B73 (active-vs-raw policy), B74 (sign-collapse shared helper), B79 (benchOnly label), B80 (cardUnowned source-of-truth — **highest-leverage**), B86/B87 (watchlist PM UX calls).
-3. **Ask user** re: Batch 7 vs marathon-prep OR greenlight Batch 7 by judgment.
-4. **Continue cadence**: spawn tile-audit subagents → review audits → apply trivial fixes → tag `.v1` + `.v1.fixes` → push.
-5. **End-game**: once all ~21 tiles at `.v1.fixes`, prep review marathon — surface each tile with screenshot + changes made + outstanding PM gates for explicit in-browser OK.
+1. **🎯 Review marathon prep** — all 21 tiles at `.v1.fixes`. Propose structure: per-tile one-page dossier with (a) screenshot in current browser state, (b) Batch # + tag + commit SHA, (c) trivial-fixes-applied summary, (d) deferred PM gates with B-ids. User walks through each tile in-browser and gives explicit OK; OK converts `.v1.fixes` → `.signedoff` tag.
+2. **Post-closeout B78 structural commit** — close remaining 2 anonymous Risk-tab cards (`cardBetaHist` at L3105, `cardFacHist` at L3194) in one id+note-hook structural pass. Not a full audit — just addressability. ~15 LOC.
+3. **PM-gate queue — priority-ranked for the marathon** (block a tile's signoff until resolved):
+   - **B80** · cardUnowned data-source decision — whole tile dead without it (parser change / rename / hide)
+   - **B96** · cardTEStacked `pct_specific`/`pct_factor` denominator — mathematically dubious stacked decomposition
+   - **B73** · active-vs-raw unification (4 sites) — Risk-tab-wide policy
+   - **B74** · sign-collapse shared `mcrSigned()` helper (6 sites) — graduated to required
+   - **B61** · cardGroups ORVQ rank taxonomy
+   - **B20/B39** · MCR + Scatter label rename pair
+   - Secondary: B59 ghost-tile retire, B79 benchOnly label, B86/B87 watchlist UX, B89 waterfall naming, B88/B97/B70 week-selector sweep, B99 heuristic audit, B100 palette tokens, B90–B95 cardFacContribBars follow-ups
+4. **Parser-side one-liner pending** — `factset_parser.py:468` `bm: None` → `bm = e - a if a is not None else None`. Unblocks B73 for the riskm path. Ships with next parser release or as a standalone commit before review marathon.
+5. **Production deployment target** — still blocked on Redwood IT confirmation of server layout. Unrelated to marathon.
 
 ---
 
@@ -132,11 +162,14 @@ Do not wait for auto-compact. Surface the option; let the user choose.
 - `tileaudit.cardMCR.v1`(+`.fixes`), `cardAttrib.v1`(+`.fixes`), `cardCorr.v1`(+`.fixes`) — Batch 4 audited + fixes applied, pending review
 - `tileaudit.cardGroups.v1`(+`.fixes`), `cardRiskHistTrends.v1`(+`.fixes`), `cardRiskFacTbl.v1`(+`.fixes`) — Batch 5 audited + fixes applied, pending review
 - `tileaudit.cardBenchOnlySec.v1`(+`.fixes`), `cardUnowned.v1`(+`.fixes`), `cardWatchlist.v1`(+`.fixes`) — Batch 6 audited + fixes applied, pending review
-- `working.20260423.1654.pre-batch6` — most recent pre-risk safety tag
+- `tileaudit.cardAttribWaterfall.v1`(+`.fixes`), `cardFacContribBars.v1`(+`.fixes`), `cardTEStacked.v1`(+`.fixes`) — Batch 7 audited + fixes applied, pending review
+- **🎯 `tier1-audit-complete`** at `01cbba0` — milestone tag marking all 21 Tier-1 tiles audited
+- `working.20260424.1009.pre-batch7` — most recent pre-risk safety tag
 
 ---
 
 ## Checkpoint log (append-only, newest on top)
+- **2026-04-24 · 🎯 Batch 7 closed — ALL 21 TIER-1 TILES AUDITED** — 20 trivial fixes across cardAttribWaterfall (GREEN/YELLOW/YELLOW; confirmed NOT a B73/B74 site) / cardFacContribBars (**RED/RED/YELLOW**; was anonymous, id assigned, 6th B74 + 4th B73 site, threshold-override bug fixed, FAC_PRIMARY filter dropped from Both mode, `#fb923c` × 4 tokenized) / cardTEStacked (**RED/RED/YELLOW**; was anonymous, id assigned, `pct_specific`/`pct_factor` semantic mismatch → B96 highest-impact data finding; synthesized `factorRisk`/`idioRisk` heuristic leakage → B99 new pattern). 5 new cross-tile patterns (sign-collapse → 6 tiles, B78 sweep 2-of-4, non-finding discipline, synthesized fallback leakage, FactSet pct_X denominator discipline). Verified via disk greps (6777 lines +63, 2 new card ids, note-hooks 18, 4 export helpers) + node syntax check (3 script blocks clean). Committed `01cbba0`, tagged ×6 + milestone `tier1-audit-complete`, pushed. BACKLOG extended B88–B100. **Tile count 21 of 21. Next phase: review marathon.**
 - **2026-04-23 · Batch 6 audited + fixes applied, pending review** — 25 trivial fixes across cardBenchOnlySec (GREEN/YELLOW/GREEN; "% bench missed" label B79) / cardUnowned (**RED**/YELLOW/YELLOW; tile has NO data — bw=pct_t=None on 100% of 22 rows across all 7 strategies because parser bucket is orphan securities not benchmark-unowned TE contributors; B80 blocks full remediation, 4 cosmetic fixes deferred) / cardWatchlist (YELLOW/**RED**/YELLOW; RED T2 = no `<thead>`, no sort, no CSV, no empty-state, `cycleFlag` didn't re-render — all fixed; ghost-holding EXITED chip added; FLAG_COLORS tokenized). 5 new cross-tile patterns (normalize skips non-holdings collections, parser bucket semantics ≠ tile semantics, sign-collapse 4th site, synthesis invisible-until-populated, mutation handlers that don't re-render dependent tiles, ghost-data anti-pattern for localStorage refs). Verified via disk greps (6714 lines, PNG refs 5↓1, note-hooks 16↑4, data-col 76↑12) + node syntax check (3 script blocks clean). Committed `ef0cac3`, tagged ×6, pushed. BACKLOG extended B79–B87. Tile count 18 of ~21.
 - **2026-04-23 · Batch 5 audited + fixes applied, pending review** — 25 trivial fixes across cardGroups (RED; ORVQ rank taxonomy B61 PM gate + dead-drill FIXED via `h.subg` direct match) / cardRiskHistTrends (YELLOW; `_selectedWeek`-blind cur/prev fixed, 4 colors tokenized, Holdings drill added) / cardRiskFacTbl (RED; active-vs-raw 3rd site + sign-collapse 4th site deferred as B73/B74 cross-tile refactor; header "Exposure"→"Active Exposure"). 3 new cross-tile patterns (Pattern C render-side re-derivation, parser dual-path `bm:None`, mini-chart sub-checklist) + 2 ledger corrections (h.subg populated ~85%, inlineSparkSvg tokenized). Verified via disk greps + node syntax check (all 3 `<script>` blocks clean). Committed `f709e6e`, tagged ×6, pushed. BACKLOG extended B61–B78 (B73 supersedes B53; B74 supersedes prior cardFRB sign-collapse scope; B65 supersedes B38). Tile count 15 of ~21.
 - **2026-04-23 · Batch 4 audited + fixes applied, pending review** — 25 trivial fixes across cardMCR (RED; MCR rename deferred as PM gate B39 paired with cardScatter B20) / cardAttrib (YELLOW) / cardCorr (RED; ghost-tile B59 + active-vs-raw B53 deferred as PM gates). 3 new cross-tile learnings (ghost-tile anti-pattern, anonymous Risk-tab cards, active-vs-raw conflation 2nd site). Verified via disk greps + browser (0 console errors). Committed `3052d69`, tagged ×6, pushed. BACKLOG extended B39–B60. Tile count 12 of ~21.

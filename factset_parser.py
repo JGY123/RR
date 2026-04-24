@@ -26,6 +26,7 @@ Output JSON shape matches v2 (FORMAT_VERSION 4.1 — same consumers, new fields)
 import csv
 import json
 import os
+import re
 import sys
 import time
 from datetime import datetime
@@ -135,6 +136,49 @@ RAW_FACTOR_ORDER = [
     "Value",
     "Volatility",
 ]
+
+# ── Security reference (static country/currency/industry lookup) ─────────────
+# Baked from security_flags_source.xlsx; 97% coverage of new-format CSV SEDOLs.
+# Emits country/currency/industry onto each holding so the dashboard can
+# decompose risk by dimension without a separate runtime lookup.
+_SECURITY_REF_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "security_ref.json"
+)
+_SECURITY_REF = {}
+_SECURITY_REF_BY_NAME = {}
+_SECURITY_REF_META = {}
+try:
+    with open(_SECURITY_REF_PATH) as _f:
+        _sr_raw = json.load(_f)
+    _SECURITY_REF = _sr_raw.get("by_sedol", {}) or {}
+    _SECURITY_REF_META = _sr_raw.get("meta", {}) or {}
+    for _k, _v in _SECURITY_REF.items():
+        _nn = re.sub(r"[^a-z0-9]", "", (_v.get("n") or "").lower())[:30]
+        if _nn:
+            _SECURITY_REF_BY_NAME.setdefault(_nn, _v)
+except (FileNotFoundError, json.JSONDecodeError):
+    pass
+
+
+def _enrich_holding(h):
+    """Attach country / currency / industry from security_ref lookup.
+
+    Tries SEDOL (h['t']) direct, then SEDOL with leading zeros stripped,
+    then a lowercase-alphanumeric-first-30-chars name fallback. On miss,
+    leaves fields absent so the dashboard can fall back to CSV-native sec/co."""
+    if not _SECURITY_REF:
+        return h
+    key = (h.get("t") or "").upper()
+    ref = _SECURITY_REF.get(key) or _SECURITY_REF.get(key.lstrip("0"))
+    if not ref:
+        nn = re.sub(r"[^a-z0-9]", "", (h.get("n") or "").lower())[:30]
+        if nn:
+            ref = _SECURITY_REF_BY_NAME.get(nn)
+    if ref:
+        h["country"] = ref.get("country")
+        h["currency"] = ref.get("ccy")
+        h["industry"] = ref.get("industry")
+    return h
 
 # GICS industry reclassification (unify old and new names)
 GICS_NAME_MAP = {
@@ -656,6 +700,7 @@ class FactSetParserV3:
             if not h["_extra"]:
                 del h["_extra"]
 
+            _enrich_holding(h)
             # Separate active (have weight) from historical-only (no weight in latest)
             if h.get("w") is None and h.get("bw") is None and h.get("aw") is None:
                 unowned.append(h)
@@ -829,6 +874,12 @@ class FactSetParserV3:
             snap       = self._extract_snapshot(acct)
             raw_fac, raw_fac_labels = self._extract_raw_factors(acct)
 
+            if _SECURITY_REF:
+                enriched = sum(1 for h in holdings if h.get("country"))
+                total = len(holdings)
+                pct = (100.0 * enriched / total) if total else 0.0
+                print(f"  {dash_id}: security_ref enrichment {enriched}/{total} ({pct:.1f}%)")
+
             ranks = {
                 "overall": self._extract_rank_table("Overall", acct),
                 "rev":     self._extract_rank_table("REV", acct),
@@ -921,6 +972,7 @@ class FactSetParserV3:
                 "unowned": unowned_hold,
                 "raw_fac": raw_fac,
                 "raw_fac_labels": raw_fac_labels,
+                "security_ref_version": _SECURITY_REF_META.get("schema_version") if _SECURITY_REF else None,
                 "_portchars_metrics": pc_metric_names,
             }
             strategies[dash_id] = s

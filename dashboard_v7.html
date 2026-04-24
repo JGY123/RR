@@ -1180,7 +1180,8 @@ function rExp(){
 
   <!-- Factor Attribution Waterfall -->
   <div class="card" id="cardAttribWaterfall" style="margin-top:16px">
-    <div class="card-title tip" data-tip="Per-factor return impact for the latest period. Green = positive contribution, red = negative. Click a bar for factor detail." oncontextmenu="showNotePopup(event,'cardAttribWaterfall');return false">Factor Attribution — Return Impact</div>
+    <div class="flex-between"><div class="card-title tip" data-tip="Per-factor return impact for the latest period. Green = positive contribution, red = negative. Click a bar for factor detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardAttribWaterfall');return false">Factor Attribution — Return Impact</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportFacAttribCsv()">CSV</button></div></div>
     <div id="facWaterfallDiv" style="height:${Math.min(900,Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20)}px;overflow-y:auto"></div>
   </div>
 
@@ -1379,6 +1380,16 @@ function rFacWaterfall(s){
     }]:[]
   },plotCfg);
   if(el.on){el.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrF==='function')oDrF(n);});}
+}
+
+function exportFacAttribCsv(){
+  if(!cs||!cs.factors)return;
+  let facs=cs.factors.filter(f=>isFinite(f.imp)).sort((a,b)=>(b.imp||0)-(a.imp||0));
+  let rows=[['Factor','Impact %','Active Exposure','Contrib %']];
+  facs.forEach(f=>rows.push([f.n,f.imp!=null?(+f.imp).toFixed(3):'',f.a!=null?(+f.a).toFixed(3):'',f.c!=null?(+f.c).toFixed(2):'']));
+  let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='factor_attrib_'+cs.id+'.csv';a.click();
 }
 
 // ===== SORT HELPER =====
@@ -3093,10 +3104,10 @@ function rRisk(){
   ${riskDecompTree(s,factorRisk,idioRisk)}
 
   <!-- TE Stacked Area Chart (HERO, full width) -->
-  <div class="card" style="margin-bottom:16px">
+  <div class="card" id="cardTEStacked" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:6px">
-      <div class="card-title" style="margin:0">Tracking Error — Factor vs Stock-Specific Decomposition</div>
-      <span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} weeks · drag range slider to zoom</span>
+      <div class="card-title tip" data-tip="Weekly tracking error decomposed into factor vs stock-specific components. Drag range slider to zoom. Click for drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Factor vs Stock-Specific Decomposition</div>
+      <div style="display:flex;gap:8px;align-items:center"><span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} weeks</span><button class="export-btn" onclick="exportTEStackedCsv()">CSV</button></div>
     </div>
     <div id="teStackedDiv" style="height:300px"></div>
   </div>
@@ -3111,11 +3122,11 @@ function rRisk(){
   </div>
 
   <!-- Factor Contribution Bars with toggle -->
-  <div class="card" style="margin-bottom:16px">
+  <div class="card" id="cardFacContribBars" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Factor Contributions</div>
-      <div style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
-        <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--riskFacMode,var(--pri));color:#fff" id="rfbLblTE">
+      <div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>
+      <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
+        <label tabindex="0" style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
           <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
         </label>
         <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
@@ -3150,7 +3161,7 @@ function rRisk(){
     <div id="facBarToggles" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
       ${facMCR.map(f=>{
         let isProf=f.n==='Profitability';
-        return`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid ${isProf?'#fb923c':' var(--grid)'}${isProf?';background:rgba(251,146,60,0.08)':''}"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" checked onchange="rRiskFacBarsMode()"><span style="color:${isProf?'#fb923c':'var(--txth)'}">${f.n}${isProf?' ✦':''}</span></label>`;
+        return`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid ${isProf?'var(--prof)':'var(--grid)'}${isProf?';background:rgba(251,146,60,0.08)':''}"><input type="checkbox" class="fac-bar-chk" value="${f.n}" data-c="${Math.abs(f.c||0).toFixed(2)}" checked onchange="rRiskFacBarsMode()"><span style="color:${isProf?'var(--prof)':'var(--txth)'}">${f.n}${isProf?' ✦':''}</span></label>`;
       }).join('')}
     </div>
     <div id="profAlert" style="display:none;margin-bottom:8px;padding:6px 10px;background:rgba(245,158,11,.1);border-left:3px solid var(--warn);border-radius:0 4px 4px 0;font-size:11px;color:var(--warn)">
@@ -3237,9 +3248,24 @@ function rRisk(){
   },50);
 }
 
+// Module-scope palette tokens (tokenized per Batch 7 cardTEStacked audit T3)
+function _teStackColors(){
+  let gcs=getComputedStyle(document.body);
+  let warn=gcs.getPropertyValue('--warn').trim()||'#f59e0b';
+  let cyan=gcs.getPropertyValue('--cyan').trim()||'#06b6d4';
+  let pri=gcs.getPropertyValue('--pri').trim()||'#6366f1';
+  let hex2rgba=(hex,a)=>{let h=hex.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');let r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},${a})`;};
+  return {
+    idioFill:hex2rgba(warn,0.25),idioLine:hex2rgba(warn,0.8),
+    facFill:hex2rgba(cyan,0.22),facLine:hex2rgba(cyan,0.65),
+    rsBorder:pri
+  };
+}
 function rTEStackedArea(s,factorRisk,idioRisk){
   let hist=s.hist.sum;
-  if(!hist.length)return;
+  let el=document.getElementById('teStackedDiv');
+  if(!el)return;
+  if(!hist.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:40px">No TE history</p>';return;}
   let te=s.sum.te||1;
   let idioFrac=te>0?idioRisk/te:0.5;
   let facFrac=1-idioFrac;
@@ -3253,22 +3279,42 @@ function rTEStackedArea(s,factorRisk,idioRisk){
     return +(h.te*(raw_s/tot)).toFixed(3);
   });
   let facVals=hist.map((h,i)=>+(h.te-idioVals[i]).toFixed(3));
+  let C=_teStackColors();
   Plotly.newPlot('teStackedDiv',[
     {x:dates,y:idioVals,name:'Idiosyncratic (Stock-Specific)',type:'scatter',mode:'lines',
-      fill:'tozeroy',fillcolor:'rgba(245,158,11,0.25)',line:{color:'rgba(245,158,11,0.8)',width:1},
+      fill:'tozeroy',fillcolor:C.idioFill,line:{color:C.idioLine,width:1},
       stackgroup:'te',hovertemplate:'Stock-Specific: %{y:.2f}%<extra></extra>'},
     {x:dates,y:facVals,name:'Factor',type:'scatter',mode:'lines',
-      fill:'tonexty',fillcolor:'rgba(6,182,212,0.22)',line:{color:'rgba(6,182,212,0.65)',width:1},
+      fill:'tonexty',fillcolor:C.facFill,line:{color:C.facLine,width:1},
       stackgroup:'te',hovertemplate:'Factor: %{y:.2f}%<extra></extra>'},
     {x:dates,y:teVals,name:'Total TE',type:'scatter',mode:'lines',
       line:{color:THEME().tickH,width:2.5},fill:'none',
       hovertemplate:'%{x|%b %d %Y} — TE: %{y:.2f}%<extra></extra>'}
   ],{...plotBg,
-    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:THEME().card,bordercolor:'#6366f1',borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
+    xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:THEME().card,bordercolor:C.rsBorder,borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
     yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},
     legend:{orientation:'h',y:1.12,font:{size:11}},
     hovermode:'x unified'
   },{...plotCfg,scrollZoom:true});
+  if(el.on){el.on('plotly_click',function(){if(typeof oDrMetric==='function')oDrMetric('te');});}
+}
+
+function exportTEStackedCsv(){
+  if(!cs||!cs.hist||!cs.hist.sum)return;
+  let hist=cs.hist.sum;
+  let te=cs.sum.te||1;
+  let rows=[['Date','Total TE %','Stock-Specific %','Factor %']];
+  hist.forEach(h=>{
+    let raw_s=h.pct_specific!=null?h.pct_specific:50;
+    let raw_f=h.pct_factor!=null?h.pct_factor:50;
+    let tot=raw_s+raw_f||100;
+    let idio=+(h.te*(raw_s/tot)).toFixed(3);
+    let fac=+(h.te-idio).toFixed(3);
+    rows.push([h.d,h.te,idio,fac]);
+  });
+  let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='te_decomp_'+cs.id+'.csv';a.click();
 }
 
 function rMultiBeta(s){
@@ -3335,9 +3381,15 @@ function rRiskFacBarsMode(){
   let traces=[];
   let layout={...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},margin:{l:140,r:80,t:10,b:40}};
 
-  // Profitability bar color helper
-  let facBarColor=f=>f.n==='Profitability'?((f.e??0)>=0?'#fb923c':'#fb923c'):(f.e??0)>=0?'#6366f1':'#a78bfa';
-  let facShadowColor=f=>f.n==='Profitability'?'rgba(251,146,60,0.15)':(f.e??0)>=0?'rgba(99,102,241,0.15)':'rgba(167,139,250,0.15)';
+  // Profitability bar color helper — tokenized via CSS vars
+  let _gcs=getComputedStyle(document.body);
+  let _prof=_gcs.getPropertyValue('--prof').trim()||'#fb923c';
+  let _pri=_gcs.getPropertyValue('--pri').trim()||'#6366f1';
+  let _priAlt=_gcs.getPropertyValue('--pri-alt').trim()||'#a78bfa';
+  let _warn=_gcs.getPropertyValue('--warn').trim()||'#f59e0b';
+  let _h2rgba=(hex,a)=>{let h=hex.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');let r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},${a})`;};
+  let facBarColor=f=>f.n==='Profitability'?_prof:(f.e??0)>=0?_pri:_priAlt;
+  let facShadowColor=f=>f.n==='Profitability'?_h2rgba(_prof,0.15):(f.e??0)>=0?_h2rgba(_pri,0.15):_h2rgba(_priAlt,0.15);
 
   if(mode==='te'){
     let hasDev=facMCR.some(f=>f.devPct!=null&&f.devPct>0);
@@ -3369,16 +3421,17 @@ function rRiskFacBarsMode(){
     layout.xaxis={...plotBg.xaxis,title:'Active Factor Exposure',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1.5};
   } else {
     // Both — dual x-axis: bottom = Active Exposure, top = % of TE
-    let styleFacs=facMCR.filter(f=>FAC_PRIMARY.has(f.n));
+    // Batch 7 fix: dropped FAC_PRIMARY filter (was silently hiding Secondary-group selections)
+    let styleFacs=facMCR;
     traces=[
       {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>f.e||0),type:'bar',orientation:'h',name:'Active Exposure',xaxis:'x',
-        marker:{color:'rgba(99,102,241,0.75)'},
+        marker:{color:_h2rgba(_pri,0.75)},
         text:styleFacs.map(f=>fp(f.e,2)),textposition:'outside',textfont:{size:9,color:THEME().tick},
         hovertemplate:'%{y}<br>Exposure: %{x:.2f}<extra></extra>'},
-      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'TE Contrib %',xaxis:'x2',
-        marker:{color:'rgba(245,158,11,0.75)'},
+      {y:styleFacs.map(f=>f.n),x:styleFacs.map(f=>Math.abs(f.c||0)),type:'bar',orientation:'h',name:'|TE Contrib %|',xaxis:'x2',
+        marker:{color:_h2rgba(_warn,0.75)},
         text:styleFacs.map(f=>f2(Math.abs(f.c||0),1)+'%'),textposition:'outside',textfont:{size:9,color:THEME().tick},
-        hovertemplate:'%{y}<br>TE Contrib: %{x:.1f}% of TE<extra></extra>'}
+        hovertemplate:'%{y}<br>|TE Contrib|: %{x:.1f}% of TE (magnitude)<extra></extra>'}
     ];
     layout.xaxis={...plotBg.xaxis,title:'Active Exposure',anchor:'y'};
     layout.xaxis2={...plotBg.xaxis,title:'% of Total TE',side:'top',overlaying:'x',zeroline:false,showgrid:false};
@@ -3387,9 +3440,12 @@ function rRiskFacBarsMode(){
     layout.margin={l:140,r:80,t:50,b:40};
   }
 
-  let nFacs=mode==='exp'||mode==='both'?facMCR.filter(f=>FAC_PRIMARY.has(f.n)).length:facMCR.length;
-  document.getElementById('riskFacBarDiv').style.height=Math.max(200,nFacs*40+20)+'px';
+  // Both mode now shows all selected factors (FAC_PRIMARY filter removed L3418); Exp mode still filters to primary
+  let nFacs=mode==='exp'?facMCR.filter(f=>FAC_PRIMARY.has(f.n)).length:facMCR.length;
+  let fcbEl=document.getElementById('riskFacBarDiv');
+  fcbEl.style.height=Math.max(200,nFacs*40+20)+'px';
   Plotly.newPlot('riskFacBarDiv',traces,layout,plotCfg);
+  if(fcbEl.on){fcbEl.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrFRisk==='function')oDrFRisk(n);});}
 
   // Profitability alert: check if active exposure decreased vs previous period
   let profAlert=document.getElementById('profAlert');
@@ -3415,8 +3471,11 @@ function setFacGroup(group,btn){
   document.querySelectorAll('.fgp').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   let grp=FAC_GROUPS[group];
+  let thresh=parseFloat(document.getElementById('facThreshSlider')?.value||'0');
   document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
-    chk.checked=grp===null||grp.some(g=>chk.value.toLowerCase().includes(g.toLowerCase())||g.toLowerCase().includes(chk.value.toLowerCase()));
+    let inGroup=grp===null||grp.some(g=>chk.value.toLowerCase().includes(g.toLowerCase())||g.toLowerCase().includes(chk.value.toLowerCase()));
+    let meetsThresh=parseFloat(chk.dataset.c||'0')>=thresh;
+    chk.checked=inGroup&&meetsThresh;
   });
   rRiskFacBarsMode();
 }
@@ -3429,7 +3488,11 @@ function setFacThresh(){
   rRiskFacBarsMode();
 }
 function setFacBarAll(v){
-  document.querySelectorAll('.fac-bar-chk').forEach(chk=>chk.checked=v);
+  // When checking All, respect current threshold so the slider isn't silently overridden
+  let thresh=v?parseFloat(document.getElementById('facThreshSlider')?.value||'0'):0;
+  document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
+    chk.checked=v?parseFloat(chk.dataset.c||'0')>=thresh:false;
+  });
   rRiskFacBarsMode();
 }
 

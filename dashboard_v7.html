@@ -371,10 +371,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 </div>
 <!-- Right: minimal tools -->
 <div class="hdr-r" style="min-width:130px;justify-content:flex-end;flex-shrink:0">
-  <!-- B109: global Impact-period selector — applies to every tile that shows factor Impact (cardFacDetail, cardAttrib, cardAttribWaterfall, drill modals) -->
+  <!-- B109: global Impact-period selector — applies to every tile that shows factor Impact -->
   <div id="impactPeriodWrap" title="Sets the time window used by every Impact column across the dashboard. Period applies globally; tile labels update inline." style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 8px">
     <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Impact</span>
     <select id="impactPeriodSel" onchange="setImpactPeriod(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px"></select>
+  </div>
+  <!-- Global aggregation-mode pill — toggles every grouping tile between portfolio holdings vs benchmark constituents -->
+  <div id="aggModeWrap" title="Switches every grouping tile (Spotlight, Sectors, Country, Region, Group, Industry) to aggregate over portfolio-owned holdings vs benchmark constituents. Affects sums, averages, and stats globally." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Agg</span>
+    <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" style="font-size:10px;padding:2px 7px">Port</button>
+    <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" style="font-size:10px;padding:2px 7px">Bench</button>
+    <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" style="font-size:10px;padding:2px 7px">Both</button>
   </div>
   <div id="weekSelWrap" style="display:none;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
     <button onclick="stepWeek(-1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Previous week">&#8249;</button>
@@ -1438,7 +1445,7 @@ function rExp(){
   <!-- Row 6: Quant Ranks + Characteristics -->
   <div class="grid g2">
     <div class="card" id="cardRanks">
-      <div class="flex-between" style="flex-wrap:wrap;gap:8px"><div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch between Overall, Revisions, Value, Quality rank with the pill toggle. Per-quintile factor contribution columns sum from holdings (Σ h.factor_contr). Click a rank to filter Holdings tab. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Quant Ranks <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px"><div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). The 3 columns to the right of TE Contrib are average rank of the OTHER 3 categories per bucket. Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio vs Benchmark with the global Agg pill in the header to compare what's owned vs what's in the universe. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Rank</span>
         <button class="pill" id="rnk-pill-over" onclick="setRanksBy('over')">Overall</button>
@@ -2045,22 +2052,33 @@ function rFacTable(factors){
 
 // ===== B102-pattern: reusable holdings-aggregation helper =====
 // Used by cardRanks (groupKey = h.over/h.rev/h.val/h.qual quintile)
-// Will be reused by cardSectors, cardCountry, cardRegions, cardGroups, cardIndustries
-// per user direction "the aggregation from the security level will apply to many of these grouping tile tables".
+// Will be reused by cardSectors, cardCountry, cardRegions, cardGroups, cardIndustries.
 //
 // holds: array of cs.hold[] entries
-// groupKeyFn: (h) => string|number — the bucket key for this holding (returns null/undefined to skip)
+// groupKeyFn: (h) => string|number — bucket key (null/undef to skip)
 // factorList: array of factor names to aggregate (read from h.factor_contr[fname])
-// Returns: { byKey: { keyVal: { count, p, a, tr, mcr, factor: {fname: sum, ...} } }, totalKeys: [...] }
-function aggregateHoldingsBy(holds, groupKeyFn, factorList){
+// opts: {
+//   mode: 'portfolio' | 'benchmark' | 'both' — filter h.p>0 (port) or h.b>0 (bench) or no filter (both)
+//   avgFields: array of field names from h to compute average over (e.g., ['rev','val','qual'])
+// }
+// Returns dict keyed by bucket: { count, p, a, tr, mcr, factor:{fname: sum}, avg:{field: avgVal} }
+function aggregateHoldingsBy(holds, groupKeyFn, factorList, opts){
+  opts=opts||{};
+  const mode=opts.mode||'portfolio';
+  const avgFields=opts.avgFields||[];
   const byKey={};
   (holds||[]).forEach(h=>{
     if(isCash(h))return;
+    // Mode filter
+    if(mode==='portfolio'&&!((+h.p)>0))return;
+    if(mode==='benchmark'&&!((+h.b)>0))return;
+    // 'both' = no filter
     const k=groupKeyFn(h);
     if(k==null||k==='')return;
     if(!byKey[k]){
-      byKey[k]={count:0,p:0,a:0,tr:0,mcr:0,factor:{}};
+      byKey[k]={count:0,p:0,a:0,tr:0,mcr:0,factor:{},_avg_acc:{}};
       factorList.forEach(f=>byKey[k].factor[f]=0);
+      avgFields.forEach(f=>byKey[k]._avg_acc[f]={sum:0,n:0});
     }
     const b=byKey[k];
     b.count++;
@@ -2074,13 +2092,43 @@ function aggregateHoldingsBy(holds, groupKeyFn, factorList){
         if(v!=null&&isFinite(v))b.factor[f]+=v;
       });
     }
+    avgFields.forEach(f=>{
+      const v=+h[f];
+      if(v!=null&&isFinite(v)){
+        b._avg_acc[f].sum+=v;
+        b._avg_acc[f].n+=1;
+      }
+    });
   });
-  // Round
+  // Finalize — compute avg, round
   Object.values(byKey).forEach(b=>{
     b.p=+b.p.toFixed(2);b.a=+b.a.toFixed(2);b.tr=+b.tr.toFixed(2);b.mcr=+b.mcr.toFixed(2);
     factorList.forEach(f=>{b.factor[f]=+b.factor[f].toFixed(2);});
+    b.avg={};
+    avgFields.forEach(f=>{
+      const acc=b._avg_acc[f];
+      b.avg[f]=acc.n>0?+(acc.sum/acc.n).toFixed(2):null;
+    });
+    delete b._avg_acc;
   });
   return byKey;
+}
+
+// Global aggregation mode — toggles whether grouping tiles aggregate over portfolio holdings or benchmark constituents.
+// User direction: "every table needs the functionality of portfolio vs BM that would toggle numbers, averages, stats etc."
+let _aggMode=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.aggMode'))||'portfolio';
+function setAggMode(m){
+  if(m!=='portfolio'&&m!=='benchmark'&&m!=='both')return;
+  _aggMode=m;
+  try{localStorage.setItem('rr.aggMode',m);}catch(e){}
+  // Trigger re-render of any tile that consumes the toggle. For now: cardRanks only.
+  // As the pattern rolls out to other tiles, add their re-render calls here.
+  if(typeof renderRanksTable==='function')renderRanksTable();
+  // Update toolbar pill state
+  ['portfolio','benchmark','both'].forEach(x=>{
+    const p=document.getElementById('agg-pill-'+x);
+    if(p)p.classList.toggle('active',x===_aggMode);
+  });
 }
 
 // Quant Ranks state — toggleable rank category (Overall / Rev / Val / Qual)
@@ -2094,41 +2142,51 @@ function setRanksBy(by){
   // Re-render the table in place
   renderRanksTable();
 }
+const RNK_ALL=['over','rev','val','qual'];   // all 4 rank fields
 function renderRanksTable(){
   const wrap=document.getElementById('rnkTableWrap');
   if(!wrap||!cs)return;
-  // Update active pill state
-  ['over','rev','val','qual'].forEach(b=>{
+  // Update active pill states
+  RNK_ALL.forEach(b=>{
     const p=document.getElementById('rnk-pill-'+b);
     if(p)p.classList.toggle('active',b===_rnkBy);
   });
+  ['portfolio','benchmark','both'].forEach(x=>{
+    const p=document.getElementById('agg-pill-'+x);
+    if(p)p.classList.toggle('active',x===_aggMode);
+  });
   // Update card-title sub-label
   const lbl=document.getElementById('rnkByLabel');
-  if(lbl)lbl.textContent='by '+RNK_BY_LABELS[_rnkBy];
-  // Aggregate holdings by the selected rank field's quintile (1..5)
+  if(lbl)lbl.textContent='by '+RNK_BY_LABELS[_rnkBy]+' · '+(_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both');
+  // Group fn — bucket by the active rank field's quintile (1..5)
   const groupFn=h=>{
     const v=+h[_rnkBy];
     if(!v||v<1||v>5)return null;
     return Math.round(v);
   };
-  const agg=aggregateHoldingsBy(cs.hold,groupFn,RNK_FACTOR_COLS);
-  // Build ordered rows for quintiles 1..5 (insert empty rows for missing buckets)
+  // Avg fields = the 3 rank categories OTHER than the active grouping
+  const avgFields=RNK_ALL.filter(f=>f!==_rnkBy);
+  const agg=aggregateHoldingsBy(cs.hold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields});
+  // Build ordered rows for quintiles 1..5
   const rows=[];
   for(let q=1;q<=5;q++){
-    const b=agg[q]||{count:0,p:0,a:0,tr:0,mcr:0,factor:Object.fromEntries(RNK_FACTOR_COLS.map(f=>[f,0]))};
+    const b=agg[q]||{count:0,p:0,a:0,tr:0,mcr:0,factor:Object.fromEntries(RNK_FACTOR_COLS.map(f=>[f,0])),avg:Object.fromEntries(avgFields.map(f=>[f,null]))};
     rows.push({q,...b});
   }
-  // Render
+  // Headers
+  const avgHeads=avgFields.map((f,i)=>`<th class="r tip" data-col="avg_${f}" data-tip="Average ${RNK_BY_LABELS[f]} rank across the holdings in this bucket. ${_aggMode==='portfolio'?'Portfolio-owned':_aggMode==='benchmark'?'Benchmark constituents':'Both'} only — toggle Agg pill in header to flip universe." onclick="sortTbl('tbl-rnk',${6+i})">Avg ${RNK_BY_LABELS[f]}</th>`).join('');
   const headFactors=RNK_FACTOR_COLS.map((f,i)=>{
     const short=f==='Medium-Term Momentum'?'Momentum':f;
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] for holdings in this quintile. Source: per-security factor contributions × group filter." onclick="sortTbl('tbl-rnk',${5+i})">${short}</th>`;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across holdings in this bucket. Source: per-security factor contributions × group filter × ${_aggMode} mode." onclick="sortTbl('tbl-rnk',${6+avgFields.length+i})">${short}</th>`;
   }).join('');
   const thead=`<thead><tr>
     <th class="tip" data-col="rank" data-tip="Quintile bucket (1=best per ${RNK_BY_LABELS[_rnkBy]} rank, 5=worst)." onclick="sortTbl('tbl-rnk',0)">Rank</th>
-    <th class="r tip" data-col="count" data-tip="Number of portfolio holdings in this quintile." onclick="sortTbl('tbl-rnk',1)">Count</th>
+    <th class="r tip" data-col="count" data-tip="Number of ${_aggMode} securities in this quintile." onclick="sortTbl('tbl-rnk',1)">Count</th>
     <th class="r tip" data-col="port" data-tip="Σ port weight of holdings in this quintile." onclick="sortTbl('tbl-rnk',2)">Port%</th>
     <th class="r tip" data-col="active" data-tip="Σ active weight (port − bench) of holdings in this quintile." onclick="sortTbl('tbl-rnk',3)">Active%</th>
-    <th class="r tip" data-col="tr" data-tip="Σ TE contribution (%T) of holdings in this quintile. Sourced from CSV Security %T column." onclick="sortTbl('tbl-rnk',4)">TE Contrib%</th>
+    <th class="r tip" data-col="tr" data-tip="Σ TE contribution (%T) of holdings in this quintile. Source: CSV Security %T column." onclick="sortTbl('tbl-rnk',4)">TE Contrib%</th>
+    <th class="r tip" data-col="idio" data-tip="Σ stock-specific TE (%S) — idiosyncratic risk contribution from holdings in this quintile. Source: CSV Security %S column." onclick="sortTbl('tbl-rnk',5)">Idio TE%</th>
+    ${avgHeads}
     ${headFactors}
   </tr></thead>`;
   const body=rows.map(r=>{
@@ -2136,15 +2194,23 @@ function renderRanksTable(){
     const portTxt=empty?'—':f2(r.p)+'%';
     const actTxt=empty?'—':f2(r.a)+'%';
     const trTxt=empty?'—':f2(r.tr)+'%';
+    const idioTxt=empty?'—':f2(r.mcr)+'%';
     const actCls=!empty&&r.a>0.01?'pos':!empty&&r.a<-0.01?'neg':'';
-    const trCls=!empty&&r.tr>0.01?'neg':!empty&&r.tr<-0.01?'pos':'';   // sign-coloring: positive TE = adds risk = red
+    const trCls=!empty&&r.tr>0.01?'neg':!empty&&r.tr<-0.01?'pos':'';
+    const idioCls=!empty&&r.mcr>0.01?'neg':!empty&&r.mcr<-0.01?'pos':'';
+    const avgCells=avgFields.map((f,i)=>{
+      const v=r.avg[f];
+      const txt=v==null?'—':v.toFixed(2);
+      const color=v==null?'':v<=2?'color:var(--pos)':v>=4?'color:var(--neg)':'color:var(--warn)';
+      return`<td class="r" data-col="avg_${f}" data-sv="${v??''}" style="${color}">${txt}</td>`;
+    }).join('');
     const facCells=RNK_FACTOR_COLS.map((f,i)=>{
       const v=r.factor[f];
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
       const txt=empty||Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}">${txt}</td>`;
     }).join('');
-    return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${RNK_BY_LABELS[_rnkBy]} rank ${r.q}" onclick="filterByRank(${r.q})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.q});}"><td data-col="rank" data-sv="${r.q}"><span style="color:${rc(r.q)};font-weight:600">${r.q}</span></td><td class="r" data-col="count" data-sv="${r.count}">${r.count}</td><td class="r" data-col="port" data-sv="${r.p}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a}">${actTxt}</td><td class="r ${trCls}" data-col="tr" data-sv="${r.tr}">${trTxt}</td>${facCells}</tr>`;
+    return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${RNK_BY_LABELS[_rnkBy]} rank ${r.q}" onclick="filterByRank(${r.q})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.q});}"><td data-col="rank" data-sv="${r.q}"><span style="color:${rc(r.q)};font-weight:600">${r.q}</span></td><td class="r" data-col="count" data-sv="${r.count}">${r.count}</td><td class="r" data-col="port" data-sv="${r.p}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a}">${actTxt}</td><td class="r ${trCls}" data-col="tr" data-sv="${r.tr}">${trTxt}</td><td class="r ${idioCls}" data-col="idio" data-sv="${r.mcr}">${idioTxt}</td>${avgCells}${facCells}</tr>`;
   }).join('');
   wrap.innerHTML=`<table id="tbl-rnk">${thead}<tbody>${body}</tbody></table>`;
 }

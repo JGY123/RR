@@ -1439,7 +1439,7 @@ function rExp(){
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
     </div></div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
-    <div id="grpTable" style="display:none">${rGroupTable(s.groups,s.hold)}</div>
+    <div id="grpTable" style="display:none;overflow-x:auto">${rGroupTable(s.groups,s.hold)}</div>
   </div>
 
   <!-- Row 6: Quant Ranks + Characteristics -->
@@ -2127,31 +2127,36 @@ function aggregateHoldingsBy(holds, groupKeyFn, factorList, opts){
     if(mode==='portfolio'&&!((+h.p)>0))return;
     if(mode==='benchmark'&&!((+h.b)>0))return;
     // 'both' = no filter
-    const k=groupKeyFn(h);
-    if(k==null||k==='')return;
-    if(!byKey[k]){
-      byKey[k]={count:0,p:0,a:0,tr:0,mcr:0,factor:{},_avg_acc:{}};
-      factorList.forEach(f=>byKey[k].factor[f]=0);
-      avgFields.forEach(f=>byKey[k]._avg_acc[f]={sum:0,n:0});
-    }
-    const b=byKey[k];
-    b.count++;
-    b.p+=(+h.p||0);
-    b.a+=(+h.a||0);
-    b.tr+=(+h.tr||0);
-    b.mcr+=(+h.mcr||0);
-    if(h.factor_contr){
-      factorList.forEach(f=>{
-        const v=h.factor_contr[f];
-        if(v!=null&&isFinite(v))b.factor[f]+=v;
-      });
-    }
-    avgFields.forEach(f=>{
-      const v=+h[f];
-      if(v!=null&&isFinite(v)){
-        b._avg_acc[f].sum+=v;
-        b._avg_acc[f].n+=1;
+    const raw=groupKeyFn(h);
+    if(raw==null||raw==='')return;
+    // groupKeyFn may return a single key (string/number) OR an array of keys (multi-bucket membership, e.g. groups).
+    const keys=Array.isArray(raw)?raw:[raw];
+    keys.forEach(k=>{
+      if(k==null||k==='')return;
+      if(!byKey[k]){
+        byKey[k]={count:0,p:0,a:0,tr:0,mcr:0,factor:{},_avg_acc:{}};
+        factorList.forEach(f=>byKey[k].factor[f]=0);
+        avgFields.forEach(f=>byKey[k]._avg_acc[f]={sum:0,n:0});
       }
+      const b=byKey[k];
+      b.count++;
+      b.p+=(+h.p||0);
+      b.a+=(+h.a||0);
+      b.tr+=(+h.tr||0);
+      b.mcr+=(+h.mcr||0);
+      if(h.factor_contr){
+        factorList.forEach(f=>{
+          const v=h.factor_contr[f];
+          if(v!=null&&isFinite(v))b.factor[f]+=v;
+        });
+      }
+      avgFields.forEach(f=>{
+        const v=+h[f];
+        if(v!=null&&isFinite(v)){
+          b._avg_acc[f].sum+=v;
+          b._avg_acc[f].n+=1;
+        }
+      });
     });
   });
   // Finalize — compute avg, round
@@ -2410,21 +2415,58 @@ function rGroupTable(groups,hold){
     return`<td data-col="${col}" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
   };
   let hasRanks=hold&&Object.keys(grpOC).length>0;
+  // Factor-contrib + TE aggregation — same multi-bucket sector→subgroup mapping as ORVQ above.
+  // Uses array-key form of aggregateHoldingsBy (a holding can land in multiple subgroups).
+  const SEC_ALIAS2={'Info Technology':'Information Technology','Comm Services':'Communication Services','Consumer Disc.':'Consumer Discretionary'};
+  let secToSg2={};
+  GROUPS_DEF.forEach(gd=>{gd.secs.forEach(sec=>{let full=SEC_ALIAS2[sec]||sec;if(!secToSg2[full])secToSg2[full]=[];secToSg2[full].push(gd.sg);});});
+  let factorAgg={};
+  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>secToSg2[h.sec]||null,RNK_FACTOR_COLS,{mode:_aggMode});}
+  const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
+  const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
+  const hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
+  const maxTE=hasTE?Math.max(...displayGroups.map(g=>Math.abs(aggTr(g.n))),0.01):1;
   let rows=displayGroups.map(g=>{
     let cls=activeStyle(g.a);
     let gn=g.n;
     let threshCls=Math.abs(g.a||0)>5?'thresh-alert':Math.abs(g.a||0)>3?'thresh-warn':'';
+    let teTotal=hasTE?aggTr(gn):null;
+    let teMCR=hasTE?aggMcr(gn):null;
+    let teFactor=hasTE?+(teTotal-teMCR).toFixed(1):null;
+    let tePct=hasTE?Math.min((Math.abs(teTotal)/maxTE)*100,100).toFixed(1):'0';
+    let teCells=hasTE?(
+      `<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
+      `<td class="r" data-col="stock_te" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
+      `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
+    ):'';
     let rvq=hasRanks?(
       rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0,grpOBW[gn]||0,grpOBPW[gn]||0),'o')+
       rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0,grpRBW[gn]||0,grpRBPW[gn]||0),'r')+
       rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0,grpVBW[gn]||0,grpVBPW[gn]||0),'v')+
       rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0,grpQBW[gn]||0,grpQBPW[gn]||0),'q')
     ):'';
-    return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td><td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${rvq}</tr>`;
+    let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
+      const v=factorAgg[gn]?.factor?.[f]??0;
+      const cls=v>0.01?'neg':v<-0.01?'pos':'';
+      const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
+    }).join(''):'';
+    return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td><td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
-  let rvqTh=hasRanks?'<th data-col="o" style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',4)" class="tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',5)" class="tip" data-tip="Avg Revision MFR rank">R</th><th data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',6)" class="tip" data-tip="Avg Value MFR rank">V</th><th data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl(\'tbl-grp\',7)" class="tip" data-tip="Avg Quality MFR rank">Q</th>':'';
-  let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="4" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
-  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" data-col="port" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',3)">Active</th>${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  const teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total group TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this subgroup). Holdings can belong to multiple subgroups." onclick="sortTbl('tbl-grp',4)">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-grp',5)">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (Total − Stock)" onclick="sortTbl('tbl-grp',6)">Factor TE</th>`:'';
+  const rBase=hasTE?7:4;
+  const rvqTh=hasRanks?`<th data-col="o" style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase})" class="r tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+1})" class="r tip" data-tip="Avg Revision MFR rank">R</th><th data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+2})" class="r tip" data-tip="Avg Value MFR rank">V</th><th data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+3})" class="r tip" data-tip="Avg Quality MFR rank">Q</th>`:'';
+  const facBase=rBase+(hasRanks?4:0);
+  const facContribTh=hold?RNK_FACTOR_COLS.map((f,i)=>{
+    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this subgroup's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings (sector→subgroup mapping). Toggle Agg pill in header." onclick="sortTbl('tbl-grp',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+  }).join(''):'';
+  const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
+  const subPad=4+(hasTE?3:0);
+  const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th>`:'';
+  const subFac=hold?`<th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:'';
+  const spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
+  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" data-col="port" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 

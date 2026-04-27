@@ -35,6 +35,18 @@ echo ""
 
 python3 "$PARSER" "$CSV" "$OUTPUT"
 
+# Run the FactSet test-pull verifier against the parsed JSON.
+# Produces a structured pass/fail report against every call-deck ask.
+# Captures output to a log so we can re-read; non-fatal so the dashboard still opens.
+echo ""
+echo "Running FactSet verifier (verify_factset.py)..."
+VERIFY_LOG="$SCRIPT_DIR/last_verify_report.log"
+if python3 "$SCRIPT_DIR/verify_factset.py" "$OUTPUT" "$CSV" 2>&1 | tee "$VERIFY_LOG"; then
+  echo "  ✓ Verifier passed — see $VERIFY_LOG for full report"
+else
+  echo "  ⚠ Verifier flagged issues — see $VERIFY_LOG"
+fi
+
 echo ""
 echo "Starting local http server (so fetch() can auto-load the JSON)..."
 # B115 (2026-04-27): serve via http://localhost so fetch() works for auto-load.

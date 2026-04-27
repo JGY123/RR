@@ -1786,10 +1786,21 @@ function rankToggleHtml3(inlineStyle){
   let sty=inlineStyle||'';
   return`<button class="toggle-btn${m==='wtd'?' active':''}" onclick="event.stopPropagation();setSecRankMode('wtd')" style="padding:1px 6px;font-size:9px${sty}">Wtd</button><button class="toggle-btn${m==='avg'?' active':''}" onclick="event.stopPropagation();setSecRankMode('avg')" style="padding:1px 6px;font-size:9px${sty}">Avg</button><button class="toggle-btn${m==='bm'?' active':''}" onclick="event.stopPropagation();setSecRankMode('bm')" style="padding:1px 6px;font-size:9px${sty}" title="Benchmark-weighted average (uses bench holdings and weights)">BM</button>`;
 }
+// Unified column-visibility config for cardSectors. Three sections:
+// CORE (always-on Sector + togglable count/weights/TE), SPOTLIGHT (ORVQ ranks),
+// FACTOR (12 style/risk factors via _facCols). Trend is always-on.
 const SEC_COLS=[
-  {id:'port',label:'Port%'},{id:'bench',label:'Bench%'},{id:'active',label:'Active'},
-  {id:'te_contrib',label:'TE Contrib'},{id:'stock_te',label:'Stock TE%'},{id:'factor_te',label:'Factor TE%'},
-  {id:'o',label:'O (Overall)'},{id:'r',label:'R (Revision)'},{id:'v',label:'V (Value)'},{id:'q',label:'Q (Quality)'}
+  {id:'count',label:'# (Holdings count)',section:'core'},
+  {id:'port',label:'Port%',section:'core'},
+  {id:'bench',label:'Bench%',section:'core'},
+  {id:'active',label:'Active',section:'core'},
+  {id:'te_contrib',label:'TE Contrib',section:'core'},
+  {id:'stock_te',label:'Stock TE%',section:'core'},
+  {id:'factor_te',label:'Factor TE%',section:'core'},
+  {id:'o',label:'O (Overall)',section:'spotlight'},
+  {id:'r',label:'R (Revision)',section:'spotlight'},
+  {id:'v',label:'V (Value)',section:'spotlight'},
+  {id:'q',label:'Q (Quality)',section:'spotlight'}
 ];
 let _secColVis=(function(){
   let d={};SEC_COLS.forEach(c=>d[c.id]=true);
@@ -1820,9 +1831,22 @@ function setSecRankMode(mode){
 function secRankToggleHtml(){
   return`<div class="toggle-wrap" style="margin:0" title="Rank averaging: Wtd (port-weighted), Avg (simple), BM (bench-weighted using benchmark holdings)">${rankToggleHtml3()}</div>`;
 }
+// Unified column picker — single popover covering Core + Spotlight + Factor TE Breakdown.
+// User direction (cardSectors review round 3): "every column should be selectable, not just factors".
 function secColDropHtml(){
-  let chk=SEC_COLS.map(c=>`<div><label style="display:flex;align-items:center;gap:7px;padding:5px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${_secColVis[c.id]!==false?'checked':''} onchange="toggleSecCol('${c.id}',this.checked)" style="accent-color:var(--pri);cursor:pointer"><span style="font-size:11px;color:var(--txth)">${c.label}</span></label></div>`).join('');
-  return`<div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Column visibility" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')">⚙ Cols</button><div class="dl-drop" style="min-width:155px;max-height:300px;overflow-y:auto">${chk}</div></div>`;
+  const sectionItems=(label,items,accentVar)=>{
+    if(!items.length)return'';
+    return`<div style="padding:6px 10px 2px 10px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--textDim);font-weight:600;border-top:1px solid rgba(148,163,184,0.1);margin-top:2px">${label}</div>`+items.join('');
+  };
+  const checkboxRow=(checked,onchange,label,accent)=>`<div><label style="display:flex;align-items:center;gap:7px;padding:4px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${checked?'checked':''} onchange="${onchange}" style="accent-color:${accent};cursor:pointer"><span style="font-size:11px;color:var(--txth)">${label}</span></label></div>`;
+  const coreItems=SEC_COLS.filter(c=>c.section==='core').map(c=>checkboxRow(_secColVis[c.id]!==false,`toggleSecCol('${c.id}',this.checked)`,c.label,'var(--pri)'));
+  const spotItems=SEC_COLS.filter(c=>c.section==='spotlight').map(c=>checkboxRow(_secColVis[c.id]!==false,`toggleSecCol('${c.id}',this.checked)`,c.label,'#6366f1'));
+  const facItems=FAC_ALL_COLS.map(f=>{const sh=f==='Medium-Term Momentum'?'Mom (Med-Term)':f;return checkboxRow(_facCols.includes(f),`toggleFacCol('${f}',this.checked)`,sh,'#a855f7');});
+  const body=
+    sectionItems('Core',coreItems,'var(--pri)')+
+    sectionItems('Spotlight (Ranks)',spotItems,'#6366f1')+
+    sectionItems('Factor TE Breakdown',facItems,'#a855f7');
+  return`<div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Toggle visible columns — Core / Spotlight / Factor TE Breakdown" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')">⚙ Cols</button><div class="dl-drop" style="min-width:200px;max-height:480px;overflow-y:auto">${body}</div></div>`;
 }
 
 // ===== TABLE RENDERERS =====
@@ -1977,8 +2001,7 @@ function rWt(data,type,hold){
       <th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px">
         <span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span>
         <span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>
-        ${facColPickerHtml()}
-      </th>
+              </th>
       <th style="background:var(--card);border-bottom:none"></th>
     </tr>
     <tr>

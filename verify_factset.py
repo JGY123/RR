@@ -73,8 +73,112 @@ def load_json(path):
 
 
 def find_default_csv():
-    csvs = sorted(glob.glob(os.path.expanduser("~/Downloads/*.csv")), key=os.path.getmtime, reverse=True)
-    return csvs[0] if csvs else None
+    """Find the most recent FactSet pull in ~/Downloads. Filters out small/non-FactSet CSVs."""
+    candidates = sorted(glob.glob(os.path.expanduser("~/Downloads/*.csv")), key=os.path.getmtime, reverse=True)
+    for c in candidates:
+        # FactSet pulls are typically 15–60 MB; tiny CSVs are usually unrelated
+        # (industry tables, scratch files). Use 5 MB as a defensive floor.
+        if os.path.getsize(c) > 5 * 1024 * 1024:
+            return c
+    return candidates[0] if candidates else None
+
+
+def schema_fingerprint(csv_path, baseline_path):
+    """
+    Read the raw CSV header structure, build a fingerprint of what sections
+    exist + their column counts. Compare against the stored baseline; flag
+    silent drift before the parser even runs.
+
+    Born from the April 2026 wacky-numbers crisis: 4 different parser code paths
+    each interpreted column 15 differently after FactSet shipped a format change
+    nobody flagged. This catch runs upfront and refuses to proceed without
+    explicit user acknowledgement when the schema changes.
+    """
+    if not csv_path or not os.path.exists(csv_path):
+        return None, None
+
+    sections = {}      # section_label -> {col_count, first_line}
+    current = None
+    line_count = 0
+    with open(csv_path, "r", encoding="utf-8", errors="replace") as f:
+        for i, line in enumerate(f):
+            line_count = i + 1
+            cols = line.rstrip("\n\r").split(",")
+            n = len(cols)
+            # Section header detection: row where cols[0] matches a known label
+            # OR the row literally repeats "ACCT" as a delimiter (legacy format).
+            label = cols[0].strip() if cols else ""
+            if label and label not in ("",) and (label.startswith("Section=") or label in (
+                "RiskM", "Security", "Sector Weights", "Country", "Region",
+                "Group", "Industry", "PortChars", "FacAttrib", "FacExp",
+                "Snap_Attrib", "18 Style Snapshot", "ACCT"
+            )):
+                current = label
+                if current not in sections:
+                    sections[current] = {"col_count": n, "first_line": i + 1, "rows": 0}
+            if current and n > 1:
+                sections[current]["rows"] = sections[current].get("rows", 0) + 1
+
+            # Cap at first ~50k lines for speed (we only need structure, not content)
+            if i > 50000:
+                break
+
+    fingerprint = {
+        "total_lines": line_count,
+        "sections_found": sorted(sections.keys()),
+        "section_col_counts": {s: d["col_count"] for s, d in sections.items()},
+    }
+
+    # Compare against baseline if it exists
+    drift = []
+    if os.path.exists(baseline_path):
+        with open(baseline_path) as bf:
+            baseline = json.load(bf)
+        bs = set(baseline.get("sections_found", []))
+        ns = set(fingerprint["sections_found"])
+        added = ns - bs
+        removed = bs - ns
+        if added:
+            drift.append(("ADDED sections", sorted(added)))
+        if removed:
+            drift.append(("REMOVED sections", sorted(removed)))
+        # Column-count drift
+        for s in bs & ns:
+            old_c = baseline["section_col_counts"].get(s)
+            new_c = fingerprint["section_col_counts"].get(s)
+            if old_c != new_c:
+                drift.append((f"COLUMN COUNT changed in '{s}'", f"{old_c} → {new_c}"))
+    else:
+        # First time — save baseline
+        with open(baseline_path, "w") as bf:
+            json.dump(fingerprint, bf, indent=2)
+        drift.append(("BASELINE", "no prior fingerprint — saved current as baseline"))
+
+    return fingerprint, drift
+
+
+def render_fingerprint(fingerprint, drift):
+    sub("Schema fingerprint")
+    if not fingerprint:
+        print(f"  {DIM}—  (no CSV provided){RESET}")
+        return False
+    print(f"  Total lines: {DIM}{fingerprint['total_lines']}{RESET}")
+    print(f"  Sections found: {DIM}{len(fingerprint['sections_found'])}{RESET} ({', '.join(fingerprint['sections_found'][:8])}{'…' if len(fingerprint['sections_found'])>8 else ''})")
+    has_drift = False
+    for kind, info in drift or []:
+        if kind == "BASELINE":
+            print(f"  {WARN} {kind}: {info}")
+        else:
+            has_drift = True
+            print(f"  {RED}{BOLD}DRIFT — {kind}{RESET}: {info}")
+    if has_drift:
+        print(f"\n  {RED}{BOLD}⚠ Schema drift detected.{RESET} The parser may produce wrong output silently.")
+        print(f"  {RED}Investigate before trusting any tile values.{RESET}")
+    elif drift:
+        pass  # Just baseline notice
+    else:
+        print(f"  {GREEN}✓ Schema unchanged from baseline.{RESET}")
+    return has_drift
 
 
 # ============== checks ==============
@@ -412,6 +516,11 @@ def main():
     header(f"FactSet test-pull verification — {json_path}")
     print(f"{DIM}CSV source: {csv_path or 'not provided'}{RESET}")
 
+    # Schema fingerprint — catches silent CSV format drift BEFORE we trust the parsed JSON
+    baseline_path = os.path.expanduser("~/RR/.schema_fingerprint.json")
+    fingerprint, drift = schema_fingerprint(csv_path, baseline_path) if csv_path else (None, None)
+    schema_drifted = render_fingerprint(fingerprint, drift)
+
     data = load_json(json_path)
 
     # Format detection — RR JSON is `[strategies_dict, [], date_str, metadata_dict]`
@@ -466,6 +575,13 @@ def main():
             print(f"  {FAIL} {name}  {DIM}({len(strats)} strateg{'y' if len(strats)==1 else 'ies'}){RESET}")
 
     print()
+    if schema_drifted:
+        print(f"{BOLD}{RED}🔴 SCHEMA DRIFT — refuse to green-light{RESET}")
+        print(f"   The CSV section structure changed from the baseline. The parser may produce")
+        print(f"   wrong output silently (this is exactly what caused the April 2026 crisis).")
+        print(f"   Action: review the drift list above; if intentional, delete")
+        print(f"   ~/RR/.schema_fingerprint.json and re-run to update the baseline.")
+        return 2
     if all_counts[FAIL] == 0 and all_counts[PART] <= 2:
         print(f"{BOLD}{GREEN}🟢 GREEN-LIGHT — all critical checks pass{RESET}")
         print(f"   Massive run can proceed.")

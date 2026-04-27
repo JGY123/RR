@@ -36,14 +36,28 @@ echo ""
 python3 "$PARSER" "$CSV" "$OUTPUT"
 
 echo ""
+echo "Starting local http server (so fetch() can auto-load the JSON)..."
+# B115 (2026-04-27): serve via http://localhost so fetch() works for auto-load.
+# file:// protocol blocks fetch() for security — page falls through to upload zone.
+PORT=3099
+
+# Check if port is already serving the RR directory; reuse if so, else start
+if lsof -i ":${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "  Reusing existing http server on port ${PORT}"
+else
+  # Start in the RR directory so latest_data.json is at the root
+  (cd "$SCRIPT_DIR" && nohup python3 -m http.server "$PORT" >/tmp/rr_http.log 2>&1 &)
+  sleep 1
+  echo "  Started http server (PID $!) — log: /tmp/rr_http.log"
+fi
+
+echo ""
 echo "Opening dashboard in a fresh Chrome window..."
-# B115 (2026-04-27): force a fresh Chrome window with cache-bust + close stale tabs.
-# Plain `open dashboard.html` reuses any existing tab, leaving stale state.
 TIMESTAMP=$(date +%s)
-DASHBOARD_URL="file://${DASHBOARD}?t=${TIMESTAMP}"
+DASHBOARD_URL="http://localhost:${PORT}/dashboard_v7.html?t=${TIMESTAMP}"
 
 if [ -d "/Applications/Google Chrome.app" ]; then
-  # Close any existing tabs pointing at this dashboard file
+  # Close any existing tabs pointing at the dashboard
   osascript <<EOF 2>/dev/null || true
 tell application "Google Chrome"
   set windowList to every window
@@ -57,10 +71,10 @@ tell application "Google Chrome"
   end repeat
 end tell
 EOF
-  # Open in a new Chrome window with the cache-bust query string
   open -na "Google Chrome" --args --new-window "${DASHBOARD_URL}"
 else
   open "${DASHBOARD_URL}"
 fi
 echo "✓ Opened ${DASHBOARD_URL}"
-echo "If anything looks off, hard-refresh with Cmd+Shift+R."
+echo "  Auto-loads latest_data.json — wait ~1s, check DevTools console for ✓ B115 integrity check."
+echo "  If anything looks off, hard-refresh with Cmd+Shift+R."

@@ -1360,7 +1360,7 @@ function rExp(){
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
     </div></div>
     <div id="secTable" style="overflow-x:auto">${rWt(s.sectors,'sec',s.hold)}</div>
-    <div id="secChart" style="display:none"><div id="secChartDiv" style="height:320px"></div></div>
+    <div id="secChart" style="display:none"><div id="secChartDiv" style="height:380px"></div><div id="secChartCaption" style="text-align:center;padding:6px 8px"></div></div>
   </div>
 
   ${benchOnlySecHtml(s)}
@@ -2209,6 +2209,9 @@ function _rerenderAggTiles(){
     if(cs.countries&&$('countryTableWrap')){$('countryTableWrap').innerHTML=rCountryTable(cs.countries,cs.hold);}
     if(cs.groups&&$('grpTable')){$('grpTable').innerHTML=rGroupTable(cs.groups,cs.hold);}
     if(cs.regions&&$('regTable')){$('regTable').innerHTML=rWt(cs.regions,'reg',cs.hold);}
+    // Re-render the sector quadrant chart if the user is currently looking at it.
+    const sc=document.getElementById('secChart');
+    if(sc&&sc.style.display!=='none'&&typeof rSecChart==='function')rSecChart(cs);
   }
 }
 function setAvgMode(m){
@@ -2961,50 +2964,90 @@ const plotCfg={displayModeBar:false,responsive:true};
 const modalPlotCfg={displayModeBar:false,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
-  // TRUE butterfly: portfolio bars extend LEFT (negative x), benchmark RIGHT (positive x)
-  // No textposition:'outside' — conflicts with barmode:'overlay' and causes empty render
-  let d=[...s.sectors]
-    .filter(x=>x.n&&!/cash/i.test(x.n))
-    .sort((a,b)=>b.a-a.a);
-  if(!d.length)return;
-  let names=d.map(x=>x.n);
-  let pvals=d.map(x=>+(x.p||0).toFixed(2));
-  let bvals=d.map(x=>+(x.b||0).toFixed(2));
-  let h=Math.max(280,d.length*36+80);
+  // 4D quadrant scatter (per viz-specs/cardSectors-spec.md, 2026-04-27).
+  // x = Active weight, y = TE Contrib, marker size = Port wt, marker color = Avg Overall MFR rank.
+  // Quadrants: top-right = overweight + adding risk; bottom-left = underweight + diversifying.
+  // Reads from current global pills (_aggMode, _avgMode) so the chart re-renders in lockstep with the table.
   let el=$('secChartDiv');
-  if(el)el.style.height=h+'px';
-  let maxW=Math.max(...pvals,...bvals,5);
-  let xmax=Math.ceil((maxW+5)/5)*5;
-  let tvStep=xmax>=20?5:2;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
-  Plotly.newPlot('secChartDiv',[
-    {
-      name:'Portfolio',type:'bar',orientation:'h',
-      y:names,x:pvals.map(v=>-v),
-      marker:{color:'rgba(99,102,241,0.85)'},
-      customdata:pvals,
-      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'
-    },
-    {
-      name:'Benchmark',type:'bar',orientation:'h',
-      y:names,x:bvals,
-      marker:{color:'rgba(75,85,99,0.85)'},
-      hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'
-    }
-  ],{
+  if(!el)return;
+  const data=[...(s.sectors||[])].filter(x=>x.n&&!/cash/i.test(x.n));
+  if(!data.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No sector data</p>';return;}
+  // Pre-compute factor agg with current Universe + avg mode
+  const fa=s.hold?aggregateHoldingsBy(s.hold,h=>h.sec,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over']}):{};
+  const xs=data.map(d=>d.a||0);
+  const ys=data.map(d=>fa[d.n]?.tr??0);
+  const portW=data.map(d=>d.p||0);
+  const sizes=portW.map(p=>Math.max(10,Math.min(60,Math.sqrt(Math.max(p,0.5))*7)));
+  const ranks=data.map(d=>fa[d.n]?.avg?.over);
+  // rc() returns CSS-var refs (e.g. "var(--r1)") which Plotly can't resolve. Resolve to literal hex.
+  const _bodyStyle=getComputedStyle(document.body);
+  const _rankHex=[null,_bodyStyle.getPropertyValue('--r1').trim()||'#10b981',_bodyStyle.getPropertyValue('--r2').trim()||'#22c55e',_bodyStyle.getPropertyValue('--r3').trim()||'#eab308',_bodyStyle.getPropertyValue('--r4').trim()||'#f97316',_bodyStyle.getPropertyValue('--r5').trim()||'#ef4444'];
+  const colors=ranks.map(r=>r==null?'rgba(148,163,184,0.55)':(_rankHex[Math.round(r)]||'rgba(148,163,184,0.55)'));
+  const labels=data.map(d=>{const w=d.n.split(/\s+/);return w.length>1?w.map(x=>x[0]).join('').slice(0,4):d.n.slice(0,5);});
+  const customdata=data.map(d=>{
+    const b=fa[d.n]||{};
+    return[d.n,d.p||0,d.b||0,d.a||0,b.tr??0,b.mcr??0,b.avg?.over==null?null:+b.avg.over.toFixed(2),b.count??0];
+  });
+  // Buffer the axis ranges so the largest marker (which can be 60px diameter ≈ ~5% of plot area)
+  // doesn't clip at the edges — biggest sectors are exactly the ones we most need to read.
+  const xmax=Math.max(1,...xs.map(Math.abs))*1.30;
+  const ymax=Math.max(1,...ys.map(Math.abs))*1.35;
+  const trace={
+    type:'scatter',mode:'markers+text',
+    x:xs,y:ys,text:labels,textposition:'top center',
+    textfont:{size:10,color:'#cbd5e1',family:'DM Sans'},
+    marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(255,255,255,0.18)',width:0.5},opacity:0.88},
+    customdata:customdata,
+    hovertemplate:'<b>%{customdata[0]}</b>'+
+      '<br>Port: %{customdata[1]:.1f}%  ·  Bench: %{customdata[2]:.1f}%  ·  Active: %{customdata[3]:+.1f}%'+
+      '<br>TE Contrib: %{customdata[4]:.2f}%  (Stock: %{customdata[5]:.2f}%)'+
+      '<br>Avg Overall Rank: %{customdata[6]}  ·  Holdings: %{customdata[7]}'+
+      '<extra></extra>',
+    showlegend:false
+  };
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  const layout={
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:THEME().tick,size:11},
-    height:h,
-    barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:THEME().grid,zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:THEME().tickH},automargin:true},
-    xaxis:{gridcolor:THEME().grid,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:THEME().tick,size:10}},
-    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
-  },plotCfg);
+    font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},
+    height:380,
+    xaxis:{title:{text:`Active Weight (% port − % bench)  ·  ${aggLbl} universe`,font:{size:10,color:'#94a3b8'}},
+      zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,
+      gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',
+      range:[-xmax,xmax]},
+    yaxis:{title:{text:'TE Contribution (%)',font:{size:10,color:'#94a3b8'}},
+      zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,
+      gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',
+      range:[-ymax,ymax]},
+    margin:{l:60,r:18,t:28,b:54},
+    annotations:[
+      {x:1,y:1,xref:'paper',yref:'paper',text:'overweight + adding risk',showarrow:false,
+        font:{size:9,color:'rgba(239,68,68,0.55)'},xanchor:'right',yanchor:'top'},
+      {x:0,y:1,xref:'paper',yref:'paper',text:'underweight + adding risk',showarrow:false,
+        font:{size:9,color:'rgba(245,158,11,0.55)'},xanchor:'left',yanchor:'top'},
+      {x:1,y:0,xref:'paper',yref:'paper',text:'overweight + diversifying',showarrow:false,
+        font:{size:9,color:'rgba(168,85,247,0.55)'},xanchor:'right',yanchor:'bottom'},
+      {x:0,y:0,xref:'paper',yref:'paper',text:'underweight + diversifying',showarrow:false,
+        font:{size:9,color:'rgba(16,185,129,0.55)'},xanchor:'left',yanchor:'bottom'}
+    ],
+    shapes:[
+      // Subtle quadrant tint — risk-adding tinted faint red, diversifying faint green
+      {type:'rect',xref:'x',yref:'y',x0:0,x1:xmax,y0:0,y1:ymax,fillcolor:'rgba(239,68,68,0.025)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:-xmax,x1:0,y0:-ymax,y1:0,fillcolor:'rgba(16,185,129,0.025)',line:{width:0},layer:'below'}
+    ]
+  };
+  el.style.height='380px';
+  Plotly.newPlot('secChartDiv',[trace],layout,{displayModeBar:false,responsive:true});
+  // Click → drill modal
+  el.removeAllListeners&&el.removeAllListeners('plotly_click');
+  el.on('plotly_click',function(e){
+    const cd=e.points&&e.points[0]&&e.points[0].customdata;
+    if(cd&&cd[0])oDr('sec',cd[0]);
+  });
+  // Caption explaining the encoding (since the chart packs 4 dims)
+  const cap=document.getElementById('secChartCaption');
+  if(cap){
+    cap.innerHTML=`<span style="color:#94a3b8;font-size:10px">x = Active wt  ·  y = TE Contrib  ·  size = Port wt  ·  color = Avg Overall rank (1=green/best, 5=red/worst).  Click any sector to drill.</span>`;
+  }
 }
 
 function rRegChart(s){

@@ -85,6 +85,20 @@ Same column shape as cardSectors. Sourced from their respective CSV sections (Co
 | Watchlist tickers | 🟢 sourced | localStorage `rr_flags_${strategyId}` |
 | Per-ticker p / a | 🟢 sourced | Joined to `cs.hold[]` at render time. EXITED chip when ticker no longer in `cs.hold[]`. |
 
+## cardRiskByDim — TE Contribution by Country / Currency / Industry (NEW B102, 2026-04-27)
+
+| Cell | Source class | Path |
+|---|---|---|
+| Bar chart bars | 🟢 sourced + 🟡 derived (aggregation) | Per-bucket value = sum of `h.tr` for holdings where `h[dim] === bucketName`. `h.tr` is sourced from CSV's Security section `%T` column. The aggregation by dim (country/currency/industry) is a derived sum. |
+| Bucket labels | 🟡 derived (security_ref enrichment) | `h.country` / `h.currency` / `h.industry` come from `data/security_ref.json` lookup keyed by SEDOL (97% coverage; 3-15% fall through to "Unmapped" bucket). The mapping is hardcoded from FactSet's static reference Excel. |
+| "Unmapped" bucket | 🟡 derived (catch-all) | Holdings where `h[dim]` is null or empty after enrichment. Counted in footer with `⚠` chip. |
+| Footer "X bucket" count | 🟡 derived | `Object.keys(buckets).length` |
+| Footer "total |TE| coverage" | 🟡 derived | `Σ |bucket.total_tr|` — sums absolute magnitudes (so >100% if any buckets are diversifying). |
+| Drill modal stat cards | 🟢 sourced | `h.tr` / `h.p` / `h.b` summed across holdings in the clicked bucket. |
+| Drill modal table | 🟢 sourced | Direct read of `cs.hold[]` filtered by `h[dim]`. |
+| Threshold slider | UI state | `_rbdThresh` localStorage `rr.cardRiskByDim.thresh`, default 0.5% |
+| Active dimension | UI state | `_rbdDim` localStorage `rr.cardRiskByDim.dim`, default 'country' |
+
 ## Risk tab tiles
 
 (See cardRiskHistTrends, cardTEStacked, cardRiskFacTbl, cardFacContribBars sections in `tile-specs/*.md`. Most read directly from `cs.factors[]` / `cs.hist.sum` / `cs.snap_attrib` — sourced. cardTEStacked has a known math issue per B96 where `pct_specific`/`pct_factor` are interpreted as TE-shares but per CSV spec they're "% of Total Risk".)

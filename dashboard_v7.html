@@ -3430,6 +3430,28 @@ function rRisk(){
     </tbody></table>
   </div>
 
+  <!-- B102: cardRiskByDim — TE contribution decomposed by Country/Currency/Industry -->
+  <!-- User's literal ask: "when security has 2% contribution to risk from country, see which countries" -->
+  <!-- Data source: cs.hold[].tr aggregated by h.country / h.currency / h.industry (security_ref enrichment) -->
+  <div class="card" id="cardRiskByDim" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Dim</span>
+        <button class="pill" id="rbd-pill-country" onclick="setRiskByDim('country')">Country</button>
+        <button class="pill" id="rbd-pill-currency" onclick="setRiskByDim('currency')">Currency</button>
+        <button class="pill" id="rbd-pill-industry" onclick="setRiskByDim('industry')">Industry</button>
+        <span style="width:1px;height:16px;background:var(--grid);margin:0 4px"></span>
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Min</span>
+        <input type="range" id="rbd-thresh" min="0" max="3" step="0.1" value="0.5" oninput="setRiskByDimThresh(this.value)" style="width:80px;accent-color:var(--accent)">
+        <span id="rbd-thresh-val" style="font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace;min-width:32px">0.5%</span>
+        <button class="export-btn" onclick="exportRiskByDimCsv()" title="Download CSV">CSV</button>
+      </div>
+    </div>
+    <div id="rbdChartDiv" style="height:480px;min-height:200px"></div>
+    <div id="rbdFooter" style="margin-top:6px;font-size:10px;color:var(--textDim);text-align:right"></div>
+  </div>
+
   <!-- Factor Exposure Time Series with toggles -->
   <div class="card" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
@@ -3465,15 +3487,22 @@ function rRisk(){
   </div>`;
 
   $('tab-risk').innerHTML=html;
+  // B115 (2026-04-27): each chart wrapped in try/catch — same defense added to rExp.
+  // Stops one bad render from cascading into N silent blanks. Lesson from B102 ship.
   setTimeout(()=>{
-    rRiskHistMinis(s);
-    rTEStackedArea(s,factorRisk,idioRisk);
-    rMultiBeta(s);
-    window._rfbMode='te';
-    window._rfbData=facMCR;
-    rRiskFacBarsMode();
-    updateFacExpChart();
-    rUpdateCorr();
+    const riskFns=[
+      ['rRiskHistMinis',()=>rRiskHistMinis(s)],
+      ['rTEStackedArea',()=>rTEStackedArea(s,factorRisk,idioRisk)],
+      ['rMultiBeta',()=>rMultiBeta(s)],
+      ['rRiskFacBarsMode',()=>{window._rfbMode='te';window._rfbData=facMCR;rRiskFacBarsMode();}],
+      ['updateFacExpChart',()=>updateFacExpChart()],
+      ['rUpdateCorr',()=>rUpdateCorr()],
+      ['rRiskByDim',()=>rRiskByDim(s)],   // B102
+    ];
+    for(const [name,fn] of riskFns){
+      try{fn();}
+      catch(e){console.error('🔥 risk-tab render failed: '+name+' — '+e.message,e);}
+    }
   },50);
 }
 
@@ -3826,6 +3855,205 @@ function mkSparkline(vals,w,h,color){
     <polyline points="${pts}" fill="none" stroke="${color||trend}" stroke-width="1.5" stroke-linejoin="round"/>
     <circle cx="${(filtered.length-1)/(filtered.length-1)*w}" cy="${(h-((lastV-mn)/range)*(h-2)-1).toFixed(1)}" r="2" fill="${color||trend}"/>
   </svg>`;
+}
+
+// ===== B102: cardRiskByDim — TE contribution decomposed by Country/Currency/Industry =====
+// Data source: cs.hold[].tr (TE contribution from CSV, sourced) aggregated by
+// h.country / h.currency / h.industry (security_ref enrichment, derived but documented).
+// Provenance: SOURCES.md "cardRiskByDim" section.
+
+let _rbdDim=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.cardRiskByDim.dim'))||'country';
+let _rbdThresh=(typeof localStorage!=='undefined'&&parseFloat(localStorage.getItem('rr.cardRiskByDim.thresh')))||0.5;
+const RBD_DIM_LABELS={country:'Country',currency:'Currency',industry:'Industry'};
+
+function setRiskByDim(dim){
+  if(!RBD_DIM_LABELS[dim])return;
+  _rbdDim=dim;
+  try{localStorage.setItem('rr.cardRiskByDim.dim',dim);}catch(e){}
+  rRiskByDim(cs);
+}
+function setRiskByDimThresh(v){
+  _rbdThresh=parseFloat(v)||0;
+  try{localStorage.setItem('rr.cardRiskByDim.thresh',String(_rbdThresh));}catch(e){}
+  let lbl=document.getElementById('rbd-thresh-val');
+  if(lbl)lbl.textContent=_rbdThresh.toFixed(1)+'%';
+  rRiskByDim(cs);
+}
+
+// Aggregate cs.hold by the active dimension. Returns {buckets:[...], totalTr, unmappedCount}.
+function aggregateRiskByDim(s,dim){
+  if(!s||!s.hold)return{buckets:[],totalTr:0,unmappedCount:0};
+  const field=dim;   // 'country' / 'currency' / 'industry' — match h field names
+  const map={};
+  let totalTr=0,unmappedCount=0;
+  s.hold.forEach(h=>{
+    if(isCash(h))return;
+    const tr=+h.tr||0;
+    totalTr+=tr;
+    let key=h[field];
+    if(!key||key===''){
+      key='Unmapped';
+      unmappedCount++;
+    }
+    if(!map[key])map[key]={n:key,total_tr:0,count:0,unmapped:key==='Unmapped'};
+    map[key].total_tr+=tr;
+    map[key].count+=1;
+  });
+  let buckets=Object.values(map).map(b=>({...b,total_tr:+b.total_tr.toFixed(2),abs_tr:Math.abs(b.total_tr)}));
+  buckets.sort((a,b)=>b.abs_tr-a.abs_tr);
+  return{buckets,totalTr:+totalTr.toFixed(2),unmappedCount};
+}
+
+function rRiskByDim(s){
+  if(!s||!s.hold||!s.hold.length){
+    let el=document.getElementById('rbdChartDiv');
+    if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings data</p>';
+    return;
+  }
+  // Update toolbar pill state
+  ['country','currency','industry'].forEach(d=>{
+    let p=document.getElementById('rbd-pill-'+d);
+    if(p)p.classList.toggle('active',d===_rbdDim);
+  });
+  // Update card-title sub-label
+  let lbl=document.getElementById('riskByDimLabel');
+  if(lbl)lbl.textContent='by '+RBD_DIM_LABELS[_rbdDim];
+  let threshLbl=document.getElementById('rbd-thresh-val');
+  if(threshLbl)threshLbl.textContent=_rbdThresh.toFixed(1)+'%';
+  // Aggregate
+  const agg=aggregateRiskByDim(s,_rbdDim);
+  const visible=agg.buckets.filter(b=>b.abs_tr>=_rbdThresh);
+  const hidden=agg.buckets.length-visible.length;
+  const hiddenSum=agg.buckets.filter(b=>b.abs_tr<_rbdThresh).reduce((a,b)=>a+b.abs_tr,0);
+  // Footer summary
+  let footer=document.getElementById('rbdFooter');
+  if(footer){
+    let parts=[
+      `${agg.buckets.length} ${RBD_DIM_LABELS[_rbdDim].toLowerCase()} buckets`,
+      `total |TE| coverage = ${agg.buckets.reduce((a,b)=>a+b.abs_tr,0).toFixed(1)}%`,
+    ];
+    if(hidden)parts.push(`${hidden} hidden below ${_rbdThresh.toFixed(1)}% (${hiddenSum.toFixed(1)}% combined)`);
+    if(agg.unmappedCount)parts.push(`<span style="color:var(--warn)">⚠ ${agg.unmappedCount} unmapped holdings</span>`);
+    footer.innerHTML=parts.join(' · ');
+  }
+  // Empty state
+  if(!visible.length){
+    let el=document.getElementById('rbdChartDiv');
+    if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No buckets above '+_rbdThresh.toFixed(1)+'% threshold — try lowering the slider</p>';
+    return;
+  }
+  // Plotly horizontal bar chart, sorted asc so largest is at top (Plotly y-axis is inverted by default)
+  const reverse=visible.slice().reverse();
+  const names=reverse.map(b=>b.unmapped?b.n+' ⚠':b.n);
+  const vals=reverse.map(b=>b.total_tr);
+  const counts=reverse.map(b=>b.count);
+  const posC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';   // adds risk = red
+  const negC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';   // diversifies = green
+  const grayC=getComputedStyle(document.body).getPropertyValue('--textDim').trim()||'#6b7280';
+  const colors=vals.map(v=>Math.abs(v)<0.05?grayC:(v>0?posC:negC));
+  const T=THEME();
+  const dimNoun=RBD_DIM_LABELS[_rbdDim];
+  const heightPx=Math.max(220,visible.length*22+80);
+  const el=document.getElementById('rbdChartDiv');
+  if(el)el.style.height=heightPx+'px';
+  Plotly.newPlot('rbdChartDiv',[{
+    type:'bar',orientation:'h',y:names,x:vals,
+    marker:{color:colors},
+    customdata:counts,
+    text:vals.map(v=>(v>0?'+':'')+v.toFixed(1)+'%'),
+    textposition:'outside',
+    textfont:{size:10,color:T.tick},
+    hovertemplate:'<b>%{y}</b><br>TE Contribution: %{x:.2f}%<br>Holdings: %{customdata}<extra></extra>',
+  }],{
+    margin:{l:Math.max(120,Math.min(220,Math.max(...names.map(n=>n.length))*7+10)),r:50,t:20,b:40},
+    xaxis:{title:'TE Contribution (%)',zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,gridcolor:T.grid,tickfont:{size:10,color:T.tick}},
+    yaxis:{automargin:true,tickfont:{size:11,color:T.tick}},
+    paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
+    height:heightPx,bargap:0.25,
+  },{displayModeBar:false,responsive:true});
+  // Wire click-to-drill
+  let plotEl=document.getElementById('rbdChartDiv');
+  if(plotEl&&plotEl.on){
+    plotEl.on('plotly_click',d=>{
+      let pt=d&&d.points&&d.points[0];
+      if(pt&&pt.y){
+        let bucketName=String(pt.y).replace(/\s*⚠\s*$/,'');   // strip warn chip
+        oDrRiskByDim(_rbdDim,bucketName);
+      }
+    });
+  }
+}
+
+// Drill modal — list contributing securities for a given dimension/value
+// Reuses metricModal+metricContent (same DOM as oDrMetric) so .show class and content always match
+function oDrRiskByDim(dim,bucketName){
+  let m=$('metricModal');
+  if(!m)return;
+  // Filter holdings whose <dim> matches bucketName (or both null/empty when bucket is "Unmapped")
+  let holds=(cs.hold||[]).filter(h=>{
+    if(isCash(h))return false;
+    let v=h[dim];
+    if(bucketName==='Unmapped')return !v||v==='';
+    return v===bucketName;
+  }).slice();
+  holds.sort((a,b)=>Math.abs(+b.tr||0)-Math.abs(+a.tr||0));
+  let totalTr=holds.reduce((a,h)=>a+(+h.tr||0),0);
+  let totalP=holds.reduce((a,h)=>a+(+h.p||0),0);
+  let totalB=holds.reduce((a,h)=>a+(+h.b||0),0);
+  let dimLabel=RBD_DIM_LABELS[dim]||dim;
+  let body=$('metricContent');
+  if(!body)return;
+  // Stat cards
+  let statHtml=`<div class="sum-cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
+    <div class="sum-card"><div class="label">Total TE Contrib</div><div class="value" style="color:${totalTr>0?'var(--neg)':totalTr<0?'var(--pos)':'var(--txth)'}">${totalTr>0?'+':''}${totalTr.toFixed(2)}%</div><div class="sub">% of portfolio TE</div></div>
+    <div class="sum-card"><div class="label">Holdings</div><div class="value" style="color:var(--accent)">${holds.length}</div><div class="sub">securities in bucket</div></div>
+    <div class="sum-card"><div class="label">Port Weight</div><div class="value" style="color:var(--txth)">${totalP.toFixed(1)}%</div><div class="sub">cumulative portfolio weight</div></div>
+    <div class="sum-card"><div class="label">Bench Weight</div><div class="value" style="color:var(--txth)">${totalB.toFixed(1)}%</div><div class="sub">cumulative benchmark weight</div></div>
+  </div>`;
+  // Securities table
+  let rows=holds.map(h=>{
+    let trClass=h.tr>0?'color:var(--neg)':h.tr<0?'color:var(--pos)':'';
+    let aClass=h.a>0?'color:var(--neg)':h.a<0?'color:var(--pos)':'';
+    let tEsc=(h.t||'').replace(/'/g,"\\'");
+    return`<tr class="clickable" style="cursor:pointer" onclick="$('metricModal').classList.remove('show');oSt('${tEsc}')">
+      <td data-col="t" data-sv="${h.t||''}" style="color:var(--txth);font-weight:500">${h.t||''}</td>
+      <td data-col="n" data-sv="${(h.n||'').toLowerCase()}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(h.n||'').replace(/"/g,'&quot;')}">${h.n||''}</td>
+      <td data-col="sec" data-sv="${h.sec||''}" style="color:var(--txt);font-size:10px">${h.sec||'—'}</td>
+      <td class="r" data-col="p" data-sv="${h.p??''}">${h.p!=null?h.p.toFixed(1):'—'}%</td>
+      <td class="r" data-col="b" data-sv="${h.b??''}">${h.b!=null?h.b.toFixed(1):'—'}%</td>
+      <td class="r" data-col="a" data-sv="${h.a??''}" style="${aClass};font-weight:600">${h.a!=null?(h.a>0?'+':'')+h.a.toFixed(1):'—'}%</td>
+      <td class="r" data-col="tr" data-sv="${h.tr??''}" style="${trClass};font-weight:600">${h.tr!=null?(h.tr>0?'+':'')+h.tr.toFixed(2):'—'}%</td>
+      ${rORVQCells(h)}
+    </tr>`;
+  }).join('');
+  body.innerHTML=`
+    <h2>${bucketName} — ${dimLabel} Risk Breakdown<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+    <p style="font-size:11px;color:var(--txt);margin-bottom:8px">Securities in this ${dimLabel.toLowerCase()} bucket, sorted by absolute TE contribution. Click a row to drill into the holding.</p>
+    ${statHtml}
+    <div style="overflow-x:auto"><table id="tbl-rbd-drill"><thead><tr>
+      <th data-col="t" onclick="sortTbl('tbl-rbd-drill',0)">Ticker</th>
+      <th data-col="n" onclick="sortTbl('tbl-rbd-drill',1)">Name</th>
+      <th data-col="sec" onclick="sortTbl('tbl-rbd-drill',2)">Sector</th>
+      <th class="r" data-col="p" onclick="sortTbl('tbl-rbd-drill',3)">Port %</th>
+      <th class="r" data-col="b" onclick="sortTbl('tbl-rbd-drill',4)">Bench %</th>
+      <th class="r" data-col="a" onclick="sortTbl('tbl-rbd-drill',5)">Active %</th>
+      <th class="r tip" data-col="tr" data-tip="Tracking-error contribution: positive adds risk, negative diversifies." onclick="sortTbl('tbl-rbd-drill',6)">TE Contrib %</th>
+      ${ORVQ_TH_PLAIN}
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  m.classList.add('show');
+}
+
+// CSV export — current dimension's bucket aggregation
+function exportRiskByDimCsv(){
+  if(!cs)return;
+  const agg=aggregateRiskByDim(cs,_rbdDim);
+  const rows=[[RBD_DIM_LABELS[_rbdDim],'Holdings count','Total TE contrib %','Unmapped']];
+  agg.buckets.forEach(b=>rows.push([b.n,b.count,b.total_tr.toFixed(2),b.unmapped?'true':'false']));
+  rows.push(['—','—','—','—']);
+  rows.push(['Total',cs.hold.length,agg.totalTr.toFixed(2),'']);
+  let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  let blob=new Blob([csv],{type:'text/csv'});
+  let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='risk_by_'+_rbdDim+'_'+(cs.id||'strategy')+'.csv';a.click();
 }
 
 // Factor drill from Risk tab - shows time series chart

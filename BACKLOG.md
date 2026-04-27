@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-24 (SurpriseEdge deep-study done — B105/B106/B107 registered as 3-phase ambition ladder; Tier 2 tile queue preserved)
+last_updated: 2026-04-27 (marathon in flight — B109–B113 surfaced from cardFacDetail review; B103 subsumed into B111)
 ---
 
 # RR Backlog
@@ -13,6 +13,58 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## 🔭 Marathon-surfaced (B108–B113) — from cardFacDetail review
+
+These items came directly out of user feedback during the live tile review on 2026-04-27.
+
+### B108 · — *(reserved, unused — keeping numbering aligned with marathon-surfaced bucket)*
+
+### B109 · Impact-period unified convention (cross-tile, HIGH priority)
+- **Origin:** marathon review of cardFacDetail, 2026-04-27. User feedback: "Impact is shown but is meaningless without a time period — recurring issue across many tiles."
+- **Scope:** every column showing factor-attribution Impact (Exposure × Return) gets explicit period qualifier in header. Add a global period selector near top-bar (next to strategy/week selectors). Default: latest snapshot. Periods available come from parser's 31-col attribution schema (5 periods/row).
+- **Affected tiles:** cardFacDetail (Impact col), cardAttrib (Impact rows), cardAttribWaterfall (return-impact bars), drill modals (Impact stat row), cardThisWeek (where impact is mentioned in narrative bullets).
+- **Why cross-tile:** apply once to convention, propagate everywhere. Don't fix piecemeal.
+- **Sequence:** ships as ONE commit after marathon closes — all affected tiles touched together. Must ship before B111 (drill modal rebuild) since drill displays Impact too.
+- **Data probe needed:** confirm exact period labels parser ships in 31-col attribution section (1Y / 6M / 3M / 1M / latest?).
+
+### B110 · Sub-factor drill on Country / Currency / Industry (NEW feature)
+- **Origin:** marathon review of cardFacDetail, 2026-04-27. User: "click into Country/Currency/Industry should drill to per-country/currency/industry contribution."
+- **Scope:** when user clicks one of those 3 factor rows in cardFacDetail (or anywhere a factor row is clickable), open a nested drill showing the per-component decomposition. Data lives in CSV but in a different section (user offered to point at exact location).
+- **Blockers:** confirm exact CSV section name + parser exposure path. User said "if you need help i can point you exactly to where" — flag for follow-up before implementation.
+- **Pairs with:** B111 (drill modal rebuild) — natural place to nest sub-drill.
+- **Size:** M.
+
+### B111 · `oDrF` factor drill modal — full rebuild (replaces B103)
+- **Origin:** marathon review, 2026-04-27. User feedback consolidates many issues into one rebuild.
+- **B103 NOTE:** earlier-planned standalone tile "per-security raw factor drill" is now SUBSUMED into B111 as the `[Raw Exposure | TE Contribution]` toggle on the Top-5/Bot-5 panel. B103 closed as duplicate.
+- **Scope:**
+  - **NEW: Time series of active exposure** (from `hist.fac[name]` — already populated by parser, currently just rendered as KPI snapshot).
+  - **NEW: Time series of TE contribution** (per-week `f.c` if available; else compute from `f.a × f.dev`).
+  - **Resolve redundancy:** stats currently include "Contribution" (`f.c`) AND "% of Total Risk" (`f.risk_contr`). DATA PROBE confirms they are DIFFERENT metrics (different denominators) but `f.c` is null on most factors in current data. Decision: keep both, label clearly, OR drop the null one until parser populates. PM call.
+  - **Top-5 / Bot-5 securities:** default to **portfolio holdings only**. Add `[Portfolio | Benchmark | Both]` toggle. Add `[Raw Factor Exposure | TE Contribution]` toggle — Raw Exp uses `cs.raw_fac[sedol].e[i]` per-security data shipped in `data-foundation-v1`. Each security row needs a real ticker (see B113).
+  - **Resolve zero-stats issue:** root cause is `f.c` null. Show `—` instead of `0` when null.
+  - **NEW: factor correlation panel** (was empty placeholder). See B112.
+- **Size:** L (~2–3 hours, includes new chart components, toggles, and per-security wiring through `raw_fac`).
+- **Sequence:** after B109 (so Impact column carries period correctly) and ideally after B113 (so security tickers are clean).
+
+### B112 · Factor correlation matrix in `oDrF` drill (was empty)
+- **Origin:** marathon review, 2026-04-27. Currently empty card-slot in the drill modal.
+- **Scope:** rolling pearson correlation between this factor's returns and every other factor's returns (or this factor's TE contribution and others — PM decides denominator). Window: 52 weeks default, configurable.
+- **Data:** `hist.fac[name][].e` × `hist.fac[other][].e` rolling correlation. Pure computation; ~30 LOC.
+- **Sequence:** ships as part of B111 modal rebuild.
+
+### B113 · Parser pass-through of clean ticker (`tkr`) on every holding
+- **Origin:** marathon review, 2026-04-27. User: "the security 5's table on that card will need to have the actual ticker and not the cusip [SEDOL]".
+- **Scope:** today `h.t` is a mixed identifier (Level2 from CSV — Japan 4-digit ticker, US ticker, EM SEDOL, etc.). The clean user-facing ticker (e.g., `2330-TW` for TSMC, `0700-HK` for Tencent) lives in `data/security_ref.json` under the `tkr` field. `_enrich_holding()` in `factset_parser.py` already loads from `security_ref.json` for `country/currency/industry` — extend to also pass through `tkr`.
+- **Blockers:** USER PLANNED to add more identifier columns (SEDOL, CUSIP, ISIN, Ticker-Region) to the source CSV in next iteration — that will make this even cleaner. Until then, `data/security_ref.json` lookup gives ~97% coverage.
+- **Affects:** every tile that displays a security identifier — cardHoldings, drill modals, Top-N tables. Once `h.tkr` exists, tile renders can prefer it over `h.t` with a fallback chain.
+- **Size:** S parser change + S sweep across ~6 tiles to use new field.
+- **Sequence:** ship parser change first (~10 LOC), then refactor display tiles in one pass.
+
+### B108 — *(unused; preserves the numbering visible in older docs)*
 
 ---
 

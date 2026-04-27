@@ -16,6 +16,16 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 
 ---
 
+## B114 · History persistence — append-only architecture
+- **Origin:** user direction during marathon, 2026-04-27. "We are building everything to be ready to ingest and show the full history which is long. Many would have 15 years of data. Once the massive run lands and is confirmed parsed, history doesn't change. Future uploads are appends."
+- **Full design:** `HISTORY_PERSISTENCE.md` at repo root.
+- **Recommended path:** Option D (cumulative `data/cumulative_history.json.gz` committed to repo) + Option B (IndexedDB for in-session preview before promoting).
+- **Critical sequencing:** must land BEFORE the production massive-run CSV ingest. Otherwise the first ingest is a one-shot replace and the append-only model never starts.
+- **Size:** L (~6–10 hours, parser merge logic + dashboard fetch path + IndexedDB cache + cumulative-save UI button + new test suite).
+- **Open questions for user:** see `HISTORY_PERSISTENCE.md` Section "Open questions for the user".
+
+---
+
 ## 🔭 Marathon-surfaced (B108–B113) — from cardFacDetail review
 
 These items came directly out of user feedback during the live tile review on 2026-04-27.

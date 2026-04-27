@@ -144,10 +144,10 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 
 /* Tooltips */
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
-.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#1e293b;color:var(--txth);padding:6px 10px;border-radius:6px;font-size:10px;font-weight:400;white-space:normal;max-width:300px;word-wrap:break-word;opacity:0;pointer-events:none;transition:opacity .2s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0;box-shadow:0 4px 12px rgba(0,0,0,.3)}
-.tip:hover::after{opacity:1}
-.tip::before{content:'';position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1e293b;opacity:0;pointer-events:none;transition:opacity .2s;z-index:301}
-.tip:hover::before{opacity:1}
+.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;width:max-content;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;hyphens:auto;opacity:0;pointer-events:none;transition:opacity .15s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left}
+.tip:hover::after{opacity:1;transition-delay:.25s}
+.tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0f1623;opacity:0;pointer-events:none;transition:opacity .15s;z-index:301}
+.tip:hover::before{opacity:1;transition-delay:.25s}
 
 /* Clickable rows */
 tr.clickable{cursor:pointer;transition:background .15s}
@@ -358,6 +358,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 </div>
 <!-- Right: minimal tools -->
 <div class="hdr-r" style="min-width:130px;justify-content:flex-end;flex-shrink:0">
+  <!-- B109: global Impact-period selector — applies to every tile that shows factor Impact (cardFacDetail, cardAttrib, cardAttribWaterfall, drill modals) -->
+  <div id="impactPeriodWrap" title="Sets the time window used by every Impact column across the dashboard. Period applies globally; tile labels update inline." style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 8px">
+    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Impact</span>
+    <select id="impactPeriodSel" onchange="setImpactPeriod(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px"></select>
+  </div>
   <div id="weekSelWrap" style="display:none;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
     <button onclick="stepWeek(-1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Previous week">&#8249;</button>
     <select id="weekSel" onchange="changeWeek(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px;max-width:120px"></select>
@@ -513,6 +518,51 @@ const GROUPS_DEF=[
 let A={},cs=null,ah=[],fh=[],hp=1,PPG=20,activeTab='exposures',sortCol=null,sortDir=1;
 let _selectedWeek=null;   // null = latest; else a date string from available_dates
 let _availDates=[];       // cached sorted available dates for current strategy
+// B109 Impact-period selector — global state, applies to every tile that displays factor Impact
+// Choices: 'latest' (most recent weekly snapshot — default), '1m' (last 4 weekly snaps),
+// '3m' (last 13), '6m' (last 26), '1y' (last 52), 'all' (full sample period via cimp)
+let _impactPeriod=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.impactPeriod'))||'latest';
+const IMPACT_PERIOD_LABELS={latest:'Latest',m1:'1M',m3:'3M',m6:'6M',y1:'1Y',all:'Full Period'};
+const IMPACT_PERIOD_WEEKS={latest:1,m1:4,m3:13,m6:26,y1:52,all:null};
+function getImpactPeriodLabel(){return IMPACT_PERIOD_LABELS[_impactPeriod]||'Latest';}
+function setImpactPeriod(p){
+  if(!IMPACT_PERIOD_LABELS[p])return;
+  _impactPeriod=p;
+  try{localStorage.setItem('rr.impactPeriod',p);}catch(e){}
+  if(typeof upd==='function')upd();
+}
+// Compute factor Impact for the given period from snap_attrib history.
+// Returns { v, note } where note is a human-readable date range for the cell title attribute.
+function getImpactForPeriod(factorName,period){
+  if(!cs||!cs.snap_attrib)return{v:null,note:''};
+  const sa=cs.snap_attrib[factorName];
+  if(!sa)return{v:null,note:''};
+  const hist=sa.hist||[];
+  if(period==='latest'||!period){
+    const last=hist[hist.length-1];
+    if(!last)return{v:sa.imp,note:''};
+    return{v:last.imp,note:`Period: ${last.d_start||last.d}→${last.d_end||last.d}`};
+  }
+  if(period==='all'){
+    // Full-period compounded impact when available
+    if(sa.full_period_imp!=null){
+      const first=hist[0],last=hist[hist.length-1];
+      return{v:sa.full_period_imp,note:`Full period: ${first?.d_start||''}→${last?.d_end||''}`};
+    }
+    // Fallback: sum every period's imp
+    const total=hist.reduce((s,p)=>s+(+p.imp||0),0);
+    const first=hist[0],last=hist[hist.length-1];
+    return{v:+total.toFixed(3),note:`Sum of ${hist.length} periods: ${first?.d_start||''}→${last?.d_end||''}`};
+  }
+  // Trailing N weeks
+  const n=IMPACT_PERIOD_WEEKS[period];
+  if(!n)return{v:null,note:''};
+  const slice=hist.slice(-n);
+  if(!slice.length)return{v:null,note:''};
+  const total=slice.reduce((s,p)=>s+(+p.imp||0),0);
+  const first=slice[0],last=slice[slice.length-1];
+  return{v:+total.toFixed(3),note:`Trailing ${slice.length} weeks: ${first?.d_start||first?.d||''}→${last?.d_end||last?.d||''}`};
+}
 
 // ===== HELPERS =====
 const $=id=>document.getElementById(id);
@@ -814,6 +864,28 @@ function initWeekSelector(){
     return`<option value="${d}"${d===(_selectedWeek||_availDates[_availDates.length-1])?' selected':''}>${label}</option>`;
   }).join('');
   $('latestBtn').style.display=(_selectedWeek&&_selectedWeek!==_availDates[_availDates.length-1])?'inline':'none';
+  initImpactPeriodSelector();
+}
+// B109: populate the global Impact-period dropdown on each upd cycle so it stays in sync
+function initImpactPeriodSelector(){
+  const sel=$('impactPeriodSel');
+  if(!sel)return;
+  // Discover available periods from the snap_attrib hist depth (so we don't show 1Y on a 3-week sample)
+  let nWeeks=0;
+  if(cs&&cs.snap_attrib){
+    Object.values(cs.snap_attrib).forEach(item=>{if(item&&item.hist)nWeeks=Math.max(nWeeks,item.hist.length);});
+  }
+  const opts=[
+    {key:'latest',label:'Latest week',min:1},
+    {key:'m1',label:'1 month (4w)',min:4},
+    {key:'m3',label:'3 months (13w)',min:13},
+    {key:'m6',label:'6 months (26w)',min:26},
+    {key:'y1',label:'1 year (52w)',min:52},
+    {key:'all',label:'Full period',min:1},
+  ];
+  // Filter out periods that exceed available data (avoid misleading partial rollups)
+  const visible=opts.filter(o=>nWeeks>=o.min);
+  sel.innerHTML=visible.map(o=>`<option value="${o.key}"${o.key===_impactPeriod?' selected':''}>${o.label}</option>`).join('');
 }
 
 function changeWeek(date){
@@ -1816,26 +1888,26 @@ function rFacTable(factors){
     }
     let profTip=isProfitability?' class="tip" data-tip="Intentional exposure — higher profitability is desired. Green=increasing (good), Red=decreasing (risk)."':'';
     let nm=f.n.replace(/'/g,"\\'");
+    let impData=getImpactForPeriod(f.n,_impactPeriod);
+    let impVal=impData.v;
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
       <td data-col="name"${profTip}>${isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n}</td>
       <td class="r" data-col="exp_active" data-sv="${f.a??''}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
-      <td class="r" data-col="exp_port" data-sv="${f.e??''}" style="color:var(--textDim)">${f.e!=null?fp(f.e,2):'—'}</td>
       <td class="r" data-col="te" data-sv="${f.c??''}">${f2(f.c,1)}%</td>
       <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-      <td class="r" data-col="imp" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+      <td class="r" data-col="imp" data-sv="${impVal??''}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}" title="${impData.note}">${fp(impVal,2)}</td>
     </tr>`;
   };
 
   let thead=`<thead><tr>
     <th data-col="name" onclick="sortTbl('tbl-fac',0)">Factor</th>
-    <th class="r tip" data-col="exp_active" data-tip="ACTIVE exposure (portfolio − benchmark, in &sigma; units). Positive = portfolio overweight that factor; negative = underweight." onclick="sortTbl('tbl-fac',1)">Active Exp</th>
-    <th class="r tip" data-col="exp_port" data-tip="ABSOLUTE portfolio exposure (raw, in &sigma; units). Subtract Active to derive benchmark tilt. Currently shows &mdash; until parser populates raw exposure (B73)." onclick="sortTbl('tbl-fac',2)">Port Exp</th>
-    <th class="r tip" data-col="te" data-tip="Contribution to total tracking error (% of TE). Currently null on most factors in the new format — pending parser fix." onclick="sortTbl('tbl-fac',3)">TE%</th>
-    <th class="r tip" data-col="ret" data-tip="Factor return for the latest period." onclick="sortTbl('tbl-fac',4)">Return</th>
-    <th class="r tip" data-col="imp" data-tip="Exposure × Return = P&L attribution. PERIOD: latest snapshot. Multi-period selector planned (B109 cross-tile)." onclick="sortTbl('tbl-fac',5)">Impact (Latest)</th>
+    <th class="r tip" data-col="exp_active" data-tip="ACTIVE exposure = portfolio − benchmark (in &sigma; units). Positive = portfolio overweight; negative = underweight. Source: Axioma factor model (already orthogonalized). Absolute portfolio &amp; benchmark exposures are not shipped in the current CSV format — to derive them you'd need the per-factor &lsquo;% of Variance&rsquo; columns FactSet used to provide. Synthesis tile (B104) will derive approximate absolute exposures from per-security raw factor data." onclick="sortTbl('tbl-fac',1)">Active Exp</th>
+    <th class="r tip" data-col="te" data-tip="Contribution to total tracking error (% of TE). Currently null on most factors in the new format pending parser fix (B73)." onclick="sortTbl('tbl-fac',2)">TE%</th>
+    <th class="r tip" data-col="ret" data-tip="Factor return for the period selected in the header (default: latest weekly snapshot)." onclick="sortTbl('tbl-fac',3)">Return</th>
+    <th class="r tip" data-col="imp" data-tip="P&amp;L attribution = Exposure × Return. Period is set by the global selector in the header. Hover the cell for the actual date range used." onclick="sortTbl('tbl-fac',4)">Impact <span style="opacity:0.6;font-weight:400">(${getImpactPeriodLabel()})</span></th>
   </tr></thead>`;
 
-  return`<table id="tbl-fac"><colgroup><col style="min-width:140px"><col style="width:90px"><col style="width:90px"><col style="width:60px"><col style="width:70px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
+  return`<table id="tbl-fac"><colgroup><col style="min-width:140px"><col style="width:100px"><col style="width:60px"><col style="width:70px"><col style="width:100px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
 }
 
 function rRnk(ranks){

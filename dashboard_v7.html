@@ -1353,7 +1353,7 @@ function rExp(){
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
   <div class="card" id="cardSectors" style="margin-bottom:16px">
-    <div class="flex-between"><div class="card-title">Sector Active Weights</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Sector Active Weights</div><span id="secFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       ${secColDropHtml()}
       <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
@@ -1582,6 +1582,7 @@ function rExp(){
     }
     try{applySectColVis();}catch(e){console.error('applySectColVis failed:',e);}
     try{applyFacColVis();}catch(e){console.error('applyFacColVis failed:',e);}
+    try{if(typeof applySectFilters==='function'){applySectFilters();_renderSecFilterChip();}}catch(e){console.error('applySectFilters failed:',e);}
   },50);
 }
 
@@ -1818,6 +1819,104 @@ function toggleSecCol(id,checked){
   try{localStorage.setItem('rr_sec_cols',JSON.stringify(_secColVis));}catch(e){}
   applySectColVis();
 }
+
+// ===== PER-COLUMN ROW FILTERING (cardSectors) =====
+// User direction: "the header of the columns should also have filtering functionality".
+// Each filterable header gets a small ▾ icon → click opens a popover with
+// "≥ min" + "≤ max" inputs for numeric cols, or "contains" for the Sector name col.
+// State persists to localStorage; a chip in the toolbar shows "Filtered: N hidden (clear)".
+let _secFilters=(function(){try{return JSON.parse(localStorage.getItem('rr.secFilters')||'{}')||{};}catch(e){return{};}})();
+const SEC_FILTER_TYPES={
+  'sector':{kind:'text'},
+  'count':{kind:'num'},'port':{kind:'num'},'bench':{kind:'num'},'active':{kind:'num'},
+  'te_contrib':{kind:'num'},'stock_te':{kind:'num'},'factor_te':{kind:'num'},
+  'o':{kind:'num'},'r':{kind:'num'},'v':{kind:'num'},'q':{kind:'num'}
+};
+// Factor cols (f_0..f_N) are added dynamically below — all numeric.
+function _saveSecFilters(){try{localStorage.setItem('rr.secFilters',JSON.stringify(_secFilters));}catch(e){}}
+function setSecFilter(col,filt){
+  if(!filt||(filt.min==null&&filt.max==null&&!filt.contains))delete _secFilters[col];
+  else _secFilters[col]=filt;
+  _saveSecFilters();
+  applySectFilters();
+  _renderSecFilterChip();
+}
+function clearAllSecFilters(){_secFilters={};_saveSecFilters();applySectFilters();_renderSecFilterChip();
+  // Re-render headers so the active-filter highlights drop
+  if(cs&&cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);applySectColVis();applySectFilters();}
+}
+function applySectFilters(){
+  const tb=document.querySelector('#tbl-sec tbody');
+  if(!tb)return;
+  let hidden=0;
+  Array.from(tb.querySelectorAll('tr')).forEach(tr=>{
+    let show=true;
+    Object.keys(_secFilters).forEach(col=>{
+      if(!show)return;
+      const filt=_secFilters[col];
+      if(col==='sector'){
+        const val=(tr.children[0]?.textContent||'').toLowerCase();
+        if(filt.contains&&!val.includes(filt.contains.toLowerCase()))show=false;
+      }else{
+        const cell=tr.querySelector('[data-col="'+col+'"]');
+        if(!cell){show=false;return;}
+        const sv=parseFloat(cell.getAttribute('data-sv'));
+        if(!isFinite(sv)){show=false;return;}
+        if(filt.min!=null&&sv<filt.min)show=false;
+        if(filt.max!=null&&sv>filt.max)show=false;
+      }
+    });
+    tr.style.display=show?'':'none';
+    if(!show)hidden++;
+  });
+  return hidden;
+}
+function _renderSecFilterChip(){
+  const wrap=document.getElementById('secFilterChip');
+  if(!wrap)return;
+  const active=Object.keys(_secFilters).length;
+  if(!active){wrap.innerHTML='';return;}
+  const tb=document.querySelector('#tbl-sec tbody');
+  const hidden=tb?Array.from(tb.querySelectorAll('tr')).filter(r=>r.style.display==='none').length:0;
+  wrap.innerHTML=`<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.12);color:var(--warn);font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(245,158,11,0.3)">⚏ ${active} filter${active>1?'s':''} active · ${hidden} row${hidden!==1?'s':''} hidden <button onclick="clearAllSecFilters()" style="background:none;border:none;color:var(--warn);font-size:10px;cursor:pointer;font-weight:600;padding:0">Clear</button></span>`;
+}
+// Filter-popover toggle. Builds a small panel near the header cell with min/max inputs.
+function openSecFilter(col,btnEl){
+  document.querySelectorAll('.sec-filter-pop').forEach(p=>p.remove());
+  const cur=_secFilters[col]||{};
+  const kind=col==='sector'?'text':'num';
+  const pop=document.createElement('div');
+  pop.className='sec-filter-pop';
+  pop.style.cssText='position:absolute;background:var(--surf);border:1px solid var(--grid);border-radius:6px;padding:8px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-size:11px;min-width:180px';
+  const rect=btnEl.getBoundingClientRect();
+  pop.style.top=(rect.bottom+window.scrollY+4)+'px';
+  pop.style.left=(rect.left+window.scrollX-60)+'px';
+  if(kind==='num'){
+    pop.innerHTML=`
+      <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Filter ${col}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="width:14px;color:var(--txth)">≥</span><input id="sf-min" type="number" step="any" placeholder="min" value="${cur.min??''}" style="background:var(--surf);border:1px solid var(--grid);border-radius:4px;padding:3px 6px;color:var(--txth);font-size:11px;width:100%;font-family:inherit"/></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="width:14px;color:var(--txth)">≤</span><input id="sf-max" type="number" step="any" placeholder="max" value="${cur.max??''}" style="background:var(--surf);border:1px solid var(--grid);border-radius:4px;padding:3px 6px;color:var(--txth);font-size:11px;width:100%;font-family:inherit"/></div>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button onclick="setSecFilter('${col}',null);document.querySelector('.sec-filter-pop')?.remove()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Clear</button>
+        <button onclick="(()=>{const mn=document.getElementById('sf-min').value;const mx=document.getElementById('sf-max').value;setSecFilter('${col}',{min:mn===''?null:+mn,max:mx===''?null:+mx});document.querySelector('.sec-filter-pop')?.remove();})()" style="background:var(--pri);border:none;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;font-family:inherit">Apply</button>
+      </div>`;
+  }else{
+    pop.innerHTML=`
+      <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Filter ${col}</div>
+      <input id="sf-txt" type="text" placeholder="contains..." value="${cur.contains||''}" style="background:var(--surf);border:1px solid var(--grid);border-radius:4px;padding:3px 6px;color:var(--txth);font-size:11px;width:100%;font-family:inherit;margin-bottom:8px"/>
+      <div style="display:flex;gap:6px;justify-content:flex-end">
+        <button onclick="setSecFilter('${col}',null);document.querySelector('.sec-filter-pop')?.remove()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Clear</button>
+        <button onclick="(()=>{const t=document.getElementById('sf-txt').value.trim();setSecFilter('${col}',t?{contains:t}:null);document.querySelector('.sec-filter-pop')?.remove();})()" style="background:var(--pri);border:none;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;font-family:inherit">Apply</button>
+      </div>`;
+  }
+  document.body.appendChild(pop);
+  // Click-outside to close
+  setTimeout(()=>{const close=(e)=>{if(!pop.contains(e.target)){pop.remove();document.removeEventListener('click',close);}};document.addEventListener('click',close);},10);
+}
+function secFilterIcon(col){
+  const has=col in _secFilters;
+  return`<button class="sec-filter-icon" onclick="event.stopPropagation();openSecFilter('${col}',this)" title="Filter rows by this column" style="background:none;border:none;color:${has?'var(--warn)':'var(--textDim)'};opacity:${has?'1':'0.5'};cursor:pointer;font-size:10px;padding:0 2px;margin-left:2px;line-height:1;font-family:inherit">▾</button>`;
+}
 function setSecRankMode(mode){
   if(mode!=='wtd'&&mode!=='avg'&&mode!=='bm')return;
   _secRankMode=mode;
@@ -1987,7 +2086,8 @@ function rWt(data,type,hold){
   const facContribHeads=RNK_FACTOR_COLS.map((f,i)=>{
     const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
     const colIdx=(hold?12:11)+i;
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this sector's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Source: per-security factor contributions × Universe pill mode (header)." onclick="sortTbl('tbl-sec',${colIdx})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+    SEC_FILTER_TYPES['f_'+i]={kind:'num'};
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this sector's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Source: per-security factor contributions × Universe pill mode (header)." onclick="sortTbl('tbl-sec',${colIdx})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short} ${secFilterIcon('f_'+i)}</th>`;
   }).join('');
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   // Count column adds one column before Port; subhead leading-pad expands by 1.
@@ -2005,18 +2105,18 @@ function rWt(data,type,hold){
       <th style="background:var(--card);border-bottom:none"></th>
     </tr>
     <tr>
-      <th onclick="sortTbl('tbl-sec',0)">Sector</th>
-      ${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this sector. Flips with the Universe pill — useful sanity check that you're in the mode you think you are." onclick="sortTbl('tbl-sec',1)">#</th>`:''}
-      <th class="r tip" data-col="port" data-tip="Portfolio weight" onclick="sortTbl('tbl-sec',${hold?2:1})">Port%</th>
-      <th class="r tip" data-col="bench" data-tip="Benchmark weight" onclick="sortTbl('tbl-sec',${hold?3:2})">Bench%</th>
-      <th class="r tip" data-col="active" data-tip="Active weight (port minus bench)" onclick="sortTbl('tbl-sec',${hold?4:3})">Active</th>
-      <th class="r tip" data-col="te_contrib" data-tip="Total sector TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Bar shows signed magnitude — positive (right of center) adds risk, negative (left of center) diversifies." onclick="sortTbl('tbl-sec',${hold?5:4})">TE Contrib</th>
-      <th class="r tip" data-col="stock_te" data-tip="Stock-specific TE (Σ h.mcr — idiosyncratic component)" onclick="sortTbl('tbl-sec',${hold?6:5})">Stock TE%</th>
-      <th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-sec',${hold?7:6})">Factor TE%</th>
-      <th class="r tip" data-col="o" data-tip="Avg Overall MFR rank — see Universe + Ranks pills in toolbar (1=best, 5=worst)" onclick="sortTbl('tbl-sec',${hold?8:7})" style="background:rgba(99,102,241,0.07);border-left:1px solid rgba(99,102,241,0.2)">O</th>
-      <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',${hold?9:8})" style="background:rgba(99,102,241,0.07)">R</th>
-      <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',${hold?10:9})" style="background:rgba(99,102,241,0.07)">V</th>
-      <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',${hold?11:10})" style="background:rgba(99,102,241,0.07)">Q</th>
+      <th onclick="sortTbl('tbl-sec',0)">Sector ${secFilterIcon('sector')}</th>
+      ${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this sector. Flips with the Universe pill — useful sanity check that you're in the mode you think you are." onclick="sortTbl('tbl-sec',1)"># ${secFilterIcon('count')}</th>`:''}
+      <th class="r tip" data-col="port" data-tip="Portfolio weight" onclick="sortTbl('tbl-sec',${hold?2:1})">Port% ${secFilterIcon('port')}</th>
+      <th class="r tip" data-col="bench" data-tip="Benchmark weight" onclick="sortTbl('tbl-sec',${hold?3:2})">Bench% ${secFilterIcon('bench')}</th>
+      <th class="r tip" data-col="active" data-tip="Active weight (port minus bench)" onclick="sortTbl('tbl-sec',${hold?4:3})">Active ${secFilterIcon('active')}</th>
+      <th class="r tip" data-col="te_contrib" data-tip="Total sector TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Bar shows signed magnitude — positive (right of center) adds risk, negative (left of center) diversifies." onclick="sortTbl('tbl-sec',${hold?5:4})">TE Contrib ${secFilterIcon('te_contrib')}</th>
+      <th class="r tip" data-col="stock_te" data-tip="Stock-specific TE (Σ h.mcr — idiosyncratic component)" onclick="sortTbl('tbl-sec',${hold?6:5})">Stock TE% ${secFilterIcon('stock_te')}</th>
+      <th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-sec',${hold?7:6})">Factor TE% ${secFilterIcon('factor_te')}</th>
+      <th class="r tip" data-col="o" data-tip="Avg Overall MFR rank — see Universe + Ranks pills in toolbar (1=best, 5=worst)" onclick="sortTbl('tbl-sec',${hold?8:7})" style="background:rgba(99,102,241,0.07);border-left:1px solid rgba(99,102,241,0.2)">O ${secFilterIcon('o')}</th>
+      <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',${hold?9:8})" style="background:rgba(99,102,241,0.07)">R ${secFilterIcon('r')}</th>
+      <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',${hold?10:9})" style="background:rgba(99,102,241,0.07)">V ${secFilterIcon('v')}</th>
+      <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',${hold?11:10})" style="background:rgba(99,102,241,0.07)">Q ${secFilterIcon('q')}</th>
       ${facContribHeads}
       <th class="tip" data-col="trend" data-tip="Active weight trend over last N periods (inline sparkline). Toggle window above." style="width:72px;padding:4px 8px;vertical-align:bottom">
         <div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div>
@@ -2294,7 +2394,7 @@ let _avgMode=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.avgMod
 function _rerenderAggTiles(){
   if(typeof renderRanksTable==='function')renderRanksTable();
   if(cs){
-    if(cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);if(typeof applySectColVis==='function')applySectColVis();}
+    if(cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);if(typeof applySectColVis==='function')applySectColVis();if(typeof applySectFilters==='function'){applySectFilters();_renderSecFilterChip();}}
     if(cs.countries&&$('countryTableWrap')){$('countryTableWrap').innerHTML=rCountryTable(cs.countries,cs.hold);}
     if(cs.groups&&$('grpTable')){$('grpTable').innerHTML=rGroupTable(cs.groups,cs.hold);}
     if(cs.regions&&$('regTable')){$('regTable').innerHTML=rWt(cs.regions,'reg',cs.hold);}

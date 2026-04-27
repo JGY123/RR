@@ -103,6 +103,20 @@ Same column shape as cardSectors. Sourced from their respective CSV sections (Co
 
 (See cardRiskHistTrends, cardTEStacked, cardRiskFacTbl, cardFacContribBars sections in `tile-specs/*.md`. Most read directly from `cs.factors[]` / `cs.hist.sum` / `cs.snap_attrib` — sourced. cardTEStacked has a known math issue per B96 where `pct_specific`/`pct_factor` are interpreted as TE-shares but per CSV spec they're "% of Total Risk".)
 
+## Typography conventions (design-polish-v1 / B105.5, 2026-04-24)
+
+Global CSS rules establish visual provenance for every numeric cell. These are NOT per-tile choices — if a number "looks different" between tiles, it should not be a font/typography difference, since the rules below are global.
+
+| Treatment | Rule (global, in `<style>` block) | Where applied |
+|---|---|---|
+| Monospace numbers | `td.r { font-family: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace }` | Every right-aligned table cell — auto-inherited by all 24 tile tables. |
+| Tabular numerals | `td.r { font-variant-numeric: tabular-nums }` | Same. Numbers align column-wise even when values differ in width. |
+| Body font | `body { font-family: 'DM Sans', system-ui, … }` | Whole dashboard. |
+| Card-title typography | `.card-title { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--textDim); margin-bottom: 8px }` | Every tile title via class — applied uniformly. |
+| Reusable `.mono` helper | `.mono { font-family: 'JetBrains Mono', …; font-variant-numeric: tabular-nums }` | Add to any element rendering numbers OUTSIDE a `td.r` cell. |
+
+**Provenance implication:** if a tile renders a numeric value somewhere other than a right-aligned table cell (e.g., a `<span>` in a hero KPI block), add `class="mono"` to it explicitly. Otherwise it falls back to DM Sans body font, which mixes oldstyle and lining figures depending on glyph and is NOT column-aligning.
+
 ---
 
 ## How to verify a number on the dashboard

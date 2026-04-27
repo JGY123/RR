@@ -1893,9 +1893,10 @@ function rWt(data,type,hold){
       <th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px">
         <span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span>
       </th>
-      <th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px">
+      <th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px">
         <span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span>
         <span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>
+        ${facColPickerHtml()}
       </th>
       <th style="background:var(--card);border-bottom:none"></th>
     </tr>
@@ -1934,9 +1935,9 @@ function rWt(data,type,hold){
     }).join(''):'';
     // Subheader with Spotlight + Factor-TE-Breakdown bands
     const subSpotCols=hasRegRanks?4:0;
-    const subFacCols=hold?6:0;
+    const subFacCols=hold?RNK_FACTOR_COLS.length:0;
     const subPad=4+(regHasTE?3:0); // Name + Port + Bench + Active (+TE/Stock/Factor)
-    const subhead=(subSpotCols+subFacCols>0)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpotCols>0?`<th colspan="${subSpotCols}" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:''}${subFacCols>0?`<th colspan="${subFacCols}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:''}<th style="background:var(--card);border-bottom:none"></th></tr>`:'';
+    const subhead=(subSpotCols+subFacCols>0)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpotCols>0?`<th colspan="${subSpotCols}" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:''}${subFacCols>0?`<th colspan="${subFacCols}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:''}<th style="background:var(--card);border-bottom:none"></th></tr>`:'';
     table=`<table id="${tblId}"><thead>${subhead}<tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${teHeads}${rvqHeads}${regFacContribHeads}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
@@ -2224,7 +2225,48 @@ function setAggMode(m){
 // Quant Ranks state — toggleable rank category (Overall / Rev / Val / Qual)
 let _rnkBy=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.cardRanks.by'))||'over';
 const RNK_BY_LABELS={over:'Overall',rev:'Rev',val:'Val',qual:'Qual'};
-const RNK_FACTOR_COLS=['Medium-Term Momentum','Value','Growth','Profitability','Size','Volatility'];   // 6 most-used style factors
+// Full set of style/macro factors available from FactSet per-security factor_contr dict.
+// User-visible columns are a configurable subset persisted as `rr.facCols`.
+const FAC_ALL_COLS=['Medium-Term Momentum','Value','Growth','Profitability','Size','Volatility','Dividend Yield','Earnings Yield','Leverage','Liquidity','Market Sensitivity','Exchange Rate Sensitivity'];
+const FAC_DEFAULT_COLS=['Medium-Term Momentum','Value','Growth','Profitability','Size','Volatility'];
+function _loadFacCols(){
+  try{
+    const raw=localStorage.getItem('rr.facCols');
+    if(!raw)return FAC_DEFAULT_COLS.slice();
+    const arr=JSON.parse(raw);
+    if(!Array.isArray(arr)||!arr.length)return FAC_DEFAULT_COLS.slice();
+    return arr.filter(f=>FAC_ALL_COLS.includes(f));
+  }catch(e){return FAC_DEFAULT_COLS.slice();}
+}
+let _facCols=_loadFacCols();
+// RNK_FACTOR_COLS kept as a `let` (was const) so the existing call sites — which read it as
+// the "currently visible" factor list — automatically pick up changes when the user toggles
+// columns. The aggregator only sums the visible set, which keeps the agg call cheap.
+let RNK_FACTOR_COLS=_facCols.slice();
+function setFacCols(cols){
+  if(!Array.isArray(cols))return;
+  cols=cols.filter(f=>FAC_ALL_COLS.includes(f));
+  if(!cols.length)cols=FAC_DEFAULT_COLS.slice();
+  _facCols=cols;
+  RNK_FACTOR_COLS=cols.slice();
+  try{localStorage.setItem('rr.facCols',JSON.stringify(cols));}catch(e){}
+  _rerenderAggTiles();
+}
+function toggleFacCol(name,checked){
+  const cur=new Set(_facCols);
+  if(checked)cur.add(name);else cur.delete(name);
+  // Keep order stable: preserve FAC_ALL_COLS ordering for newly-added cols.
+  const ordered=FAC_ALL_COLS.filter(f=>cur.has(f));
+  setFacCols(ordered);
+}
+function facColPickerHtml(){
+  const items=FAC_ALL_COLS.map(f=>{
+    const checked=_facCols.includes(f);
+    const short=f==='Medium-Term Momentum'?'Mom (Med-Term)':f;
+    return`<label style="display:flex;align-items:center;gap:7px;padding:5px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${checked?'checked':''} onchange="toggleFacCol('${f}',this.checked)" style="accent-color:#a855f7;cursor:pointer"><span style="font-size:11px;color:var(--txth)">${short}</span></label>`;
+  }).join('');
+  return`<div class="dl-wrap" onclick="event.stopPropagation()" style="display:inline-block;margin-left:6px;vertical-align:middle"><button class="export-btn" title="Pick which style factors are visible across all aggregation tiles" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:1px 6px;font-size:9px;color:#a855f7;border:1px solid rgba(168,85,247,0.35);background:rgba(168,85,247,0.08);font-weight:600">⚙ Cols</button><div class="dl-drop" style="min-width:180px;max-height:320px;overflow-y:auto">${items}</div></div>`;
+}
 function setRanksBy(by){
   if(!RNK_BY_LABELS[by])return;
   _rnkBy=by;
@@ -2403,7 +2445,7 @@ function rCountryTable(countries,hold){
   let leftCol=4+(hasTE?3:0);
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
-  const subFac=hold?`<th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:'';
+  const subFac=hold?`<th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:'';
   let spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
   return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
@@ -2492,7 +2534,7 @@ function rGroupTable(groups,hold){
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   const subPad=4+(hasTE?3:0);
   const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
-  const subFac=hold?`<th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:'';
+  const subFac=hold?`<th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:'';
   const spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
   return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" data-col="port" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }

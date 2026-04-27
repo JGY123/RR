@@ -3342,9 +3342,9 @@ function rRisk(){
   </div>
 
   <!-- Beta History (adjacent to TE chart) -->
-  <div class="card" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
+  <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
-      <div class="card-title" style="margin:0">Beta History — Predicted</div>
+      <div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div>
       <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
     </div>
     <div id="riskBetaMultiDiv" style="height:180px"></div>
@@ -3453,9 +3453,9 @@ function rRisk(){
   </div>
 
   <!-- Factor Exposure Time Series with toggles -->
-  <div class="card" style="margin-bottom:16px">
+  <div class="card" id="cardFacHist" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title" style="margin:0">Factor Exposure History</div>
+      <div class="card-title tip" data-tip="Active exposure (e − bm) time series for selected factors. Use Select/Clear All or click factor toggles. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacHist');return false" style="margin:0">Factor Exposure History</div>
       <div style="display:flex;gap:6px">
         <button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button>
         <button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>

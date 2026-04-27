@@ -1536,12 +1536,31 @@ function rExp(){
   </div>`;
 
   $('tab-exposures').innerHTML=html;
-  // Render charts after DOM update
+  // Render charts after DOM update.
+  // B115 (2026-04-27): each chart wrapped in try/catch so one bad render doesn't kill the
+  // whole batch. Previously, when rFacButt threw on a null factor.a, every subsequent
+  // chart (rCountryMap → rAttribTable) silently went unrendered, leaving 9 tiles blank.
   setTimeout(()=>{
-    rSecChart(s);rRegChart(s);rFacButt(s);rCountryMap(s);rCountryChart(s);rGroupChart(s);
-    rScat(s);rTree(s);rMCR(s);rFRB(s);rFacWaterfall(s);rAttribTable();
-    applySectColVis();
-    applyFacColVis();
+    const chartFns=[
+      ['rSecChart',()=>rSecChart(s)],
+      ['rRegChart',()=>rRegChart(s)],
+      ['rFacButt',()=>rFacButt(s)],
+      ['rCountryMap',()=>rCountryMap(s)],
+      ['rCountryChart',()=>rCountryChart(s)],
+      ['rGroupChart',()=>rGroupChart(s)],
+      ['rScat',()=>rScat(s)],
+      ['rTree',()=>rTree(s)],
+      ['rMCR',()=>rMCR(s)],
+      ['rFRB',()=>rFRB(s)],
+      ['rFacWaterfall',()=>rFacWaterfall(s)],
+      ['rAttribTable',()=>rAttribTable()],
+    ];
+    for(const [name,fn] of chartFns){
+      try{fn();}
+      catch(e){console.error('🔥 chart render failed: '+name+' — '+e.message,e);}
+    }
+    try{applySectColVis();}catch(e){console.error('applySectColVis failed:',e);}
+    try{applyFacColVis();}catch(e){console.error('applyFacColVis failed:',e);}
   },50);
 }
 
@@ -2637,7 +2656,10 @@ function rFacButt(s){
   rFacTopTeStrip(s);
   // Single-trace diverging bar: f.a (active exposure) only
   // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
-  let facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a));
+  // B115 (2026-04-27): explicit null check before isFinite — isFinite(null) returns true
+  // due to type coercion, which previously let null-active factors through and threw on
+  // .toFixed(). The throw aborted the parent setTimeout, leaving 9+ downstream charts blank.
+  let facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a));
   if(!facs.length){let el=document.getElementById('facButtDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
   let names=facs.map(f=>f.n);
   let vals=facs.map(f=>+(f.a).toFixed(3));

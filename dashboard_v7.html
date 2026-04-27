@@ -499,6 +499,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="modal-overlay" id="groupModal"><div class="modal modal-lg" id="groupContent"></div></div>
 <div class="modal-overlay" id="charModal"><div class="modal" id="charContent"></div></div>
 <div class="modal-overlay" id="unownedModal"><div class="modal" id="unownedContent"></div></div>
+<!-- Full-screen sectors view (chart + full table + side panel of top holdings) -->
+<div class="modal-overlay" id="secFsModal" style="z-index:998"><div id="secFsContent" style="background:var(--card);border-radius:10px;width:96vw;height:94vh;max-width:none;max-height:none;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,0.6)"></div></div>
 <div class="modal-overlay" id="riskBudgetModal"><div class="modal modal-lg" id="riskBudgetContent"></div></div>
 <div class="fs-modal" id="fsModal">
   <button class="fs-close" onclick="closeFsModal()" title="Close">&times;</button>
@@ -1358,6 +1360,7 @@ function rExp(){
       ${secColDropHtml()}
       <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
+      <button class="export-btn" title="Open full-screen view (chart + full table + side panel of top holdings)" onclick="openSecFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
     </div></div>
     <div id="secTable" style="overflow-x:auto">${rWt(s.sectors,'sec',s.hold)}</div>
     <div id="secChart" style="display:none"><div id="secChartDiv" style="height:380px"></div><div id="secChartCaption" style="text-align:center;padding:6px 8px"></div></div>
@@ -1916,6 +1919,171 @@ function openSecFilter(col,btnEl){
 function secFilterIcon(col){
   const has=col in _secFilters;
   return`<button class="sec-filter-icon" onclick="event.stopPropagation();openSecFilter('${col}',this)" title="Filter rows by this column" style="background:none;border:none;color:${has?'var(--warn)':'var(--textDim)'};opacity:${has?'1':'0.5'};cursor:pointer;font-size:10px;padding:0 2px;margin-left:2px;line-height:1;font-family:inherit">▾</button>`;
+}
+
+// ===== FULL-SCREEN SECTORS VIEW =====
+// User direction (cardSectors review round 4): "there need to be a full-screen button that
+// ideally would have even more info or functionality."
+// Layout: top stat-strip (universe-aware portfolio totals + top driver) →
+//         left = quadrant chart, right = top-N holdings of focused sector  →
+//         bottom = full table with ALL columns visible by default + filter panel.
+let _secFsFocusedSector=null;     // when a row/marker is clicked, top-holdings panel pivots
+let _secFsAllColsForced=false;     // when entering, snapshot user's _secColVis and force all-on
+let _secFsColVisSnapshot=null;
+function openSecFullscreen(){
+  if(!cs||!cs.sectors)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  // Snapshot + force-all visible cols (user wants MORE info in full-screen)
+  _secFsColVisSnapshot=Object.assign({},_secColVis);
+  SEC_COLS.forEach(col=>{_secColVis[col.id]=true;});
+  _secFsAllColsForced=true;
+  // Default focused sector = top TE contributor under current universe
+  if(cs.hold){
+    const fa=aggregateHoldingsBy(cs.hold,h=>h.sec,RNK_FACTOR_COLS,{mode:_aggMode});
+    let top=null,topV=-Infinity;
+    Object.keys(fa).forEach(k=>{const t=Math.abs(fa[k]?.tr||0);if(t>topV){topV=t;top=k;}});
+    _secFsFocusedSector=top;
+  }
+  c.innerHTML=_renderSecFsContent();
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  // Render Plotly into the fs chart container
+  setTimeout(()=>{
+    if(typeof Plotly!=='undefined'&&document.getElementById('secFsChartDiv')){
+      _renderSecFsChart();
+    }
+    _wireSecFsRowClicks();
+    if(typeof applySectFilters==='function')applySectFilters();
+  },50);
+  // Esc to close
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+function closeSecFullscreen(){
+  const m=document.getElementById('secFsModal');
+  if(!m)return;
+  m.classList.remove('show');
+  document.body.style.overflow='';
+  // Restore col visibility
+  if(_secFsAllColsForced&&_secFsColVisSnapshot){
+    _secColVis=_secFsColVisSnapshot;
+    _secFsColVisSnapshot=null;_secFsAllColsForced=false;
+    if(typeof applySectColVis==='function')applySectColVis();
+  }
+}
+function _secFsTotals(){
+  // Compute universe-aware aggregate stats for the stat-strip
+  if(!cs||!cs.hold)return null;
+  const fa=aggregateHoldingsBy(cs.hold,h=>h.sec,RNK_FACTOR_COLS,{mode:_aggMode});
+  let totalTR=0,totalMCR=0,totalP=0,totalB=0,totalCount=0,topName=null,topV=-Infinity,divName=null,divV=Infinity;
+  Object.keys(fa).forEach(k=>{
+    const b=fa[k];
+    totalTR+=b.tr;totalMCR+=b.mcr;totalP+=b.p;totalB+=b.b||0;totalCount+=b.count;
+    if(b.tr>topV){topV=b.tr;topName=k;}
+    if(b.tr<divV){divV=b.tr;divName=k;}
+  });
+  return{totalTR,totalMCR,totalFactor:totalTR-totalMCR,totalP,totalCount,topName,topV,divName,divV};
+}
+function _renderSecFsContent(){
+  const t=_secFsTotals();
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  const wtdLbl=_avgMode==='wtd'?'Wtd':'Avg';
+  const stat=(label,val,sub,color)=>`<div style="background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;padding:8px 12px;min-width:120px"><div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:3px">${label}</div><div style="font-size:18px;color:${color||'var(--txth)'};font-weight:600;font-family:'JetBrains Mono',monospace">${val}</div>${sub?`<div style="font-size:10px;color:var(--textDim);margin-top:2px">${sub}</div>`:''}</div>`;
+  const stats=t?(
+    stat('Universe',`${aggLbl}`,`${t.totalCount} securities · Ranks ${wtdLbl}`)+
+    stat('Σ TE Contrib',f2(t.totalTR,2)+'%',`Stock ${f2(t.totalMCR,2)}% · Factor ${f2(t.totalFactor,2)}%`,'var(--pri)')+
+    stat('Top Risk Driver',t.topName?t.topName.slice(0,18):'—',t.topName?`+${f2(t.topV,2)}% TE`:'','var(--neg)')+
+    stat('Top Diversifier',t.divName&&t.divV<-0.01?t.divName.slice(0,18):'—',t.divName&&t.divV<-0.01?`${f2(t.divV,2)}% TE`:'','var(--pos)')+
+    stat('Σ Port Wt',f2(t.totalP,1)+'%','of ' + (t.totalCount?'allocated':''))
+  ):'';
+  return`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
+      <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600;letter-spacing:0.3px">Sector Active Weights · Full View</h2><span id="secFsFilterChip"></span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit" title="Close (Esc)">✕</button>
+    </div>
+    <div style="display:flex;gap:10px;padding:10px 18px;flex-wrap:wrap;border-bottom:1px solid var(--grid)">${stats}</div>
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden">
+      <div style="flex:1.4;display:flex;flex-direction:column;border-right:1px solid var(--grid);min-width:0">
+        <div id="secFsChartDiv" style="flex:1;min-height:300px"></div>
+        <div style="padding:6px 12px;color:var(--textDim);font-size:10px;text-align:center;border-top:1px solid var(--grid)">x = Active wt · y = TE Contrib · size = Port wt · color = Avg Overall rank · click any sector to drill or focus</div>
+      </div>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;background:rgba(99,102,241,0.02);overflow-y:auto">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--grid);position:sticky;top:0;background:var(--card);z-index:1">
+          <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:3px">Top holdings · <span id="secFsFocusName" style="color:var(--pri)">${_secFsFocusedSector||'—'}</span></div>
+          <div style="font-size:10px;color:var(--textDim)" id="secFsFocusSub">Click a sector in the chart or table to refocus.</div>
+        </div>
+        <div id="secFsHoldingsBody" style="padding:6px 0;flex:1">${_renderSecFsHoldings(_secFsFocusedSector)}</div>
+      </div>
+    </div>
+    <div style="flex:1;min-height:240px;border-top:1px solid var(--grid);overflow:auto;padding:0 6px"><div id="secFsTableWrap">${rWt(cs.sectors,'sec',cs.hold)}</div></div>`;
+}
+function _renderSecFsChart(){
+  const div=document.getElementById('secFsChartDiv');
+  if(!div||!cs)return;
+  // Save the current secChartDiv id, swap temporarily so rSecChart writes to fs container.
+  // Easier: rebuild trace inline matching rSecChart logic.
+  const data=[...(cs.sectors||[])].filter(x=>x.n&&!/cash/i.test(x.n));
+  if(!data.length)return;
+  const fa=cs.hold?aggregateHoldingsBy(cs.hold,h=>h.sec,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over']}):{};
+  const xs=data.map(d=>d.a||0),ys=data.map(d=>fa[d.n]?.tr??0);
+  const portW=data.map(d=>d.p||0);
+  const sizes=portW.map(p=>Math.max(12,Math.min(70,Math.sqrt(Math.max(p,0.5))*8)));
+  const _bs=getComputedStyle(document.body);
+  const _rankHex=[null,_bs.getPropertyValue('--r1').trim()||'#10b981',_bs.getPropertyValue('--r2').trim()||'#22c55e',_bs.getPropertyValue('--r3').trim()||'#eab308',_bs.getPropertyValue('--r4').trim()||'#f97316',_bs.getPropertyValue('--r5').trim()||'#ef4444'];
+  const ranks=data.map(d=>fa[d.n]?.avg?.over);
+  const colors=ranks.map(r=>r==null?'rgba(148,163,184,0.55)':(_rankHex[Math.round(r)]||'rgba(148,163,184,0.55)'));
+  const labels=data.map(d=>d.n);
+  const customdata=data.map(d=>{const b=fa[d.n]||{};return[d.n,d.p||0,d.b||0,d.a||0,b.tr??0,b.mcr??0,b.avg?.over==null?null:+b.avg.over.toFixed(2),b.count??0];});
+  const xmax=Math.max(1,...xs.map(Math.abs))*1.30;
+  const ymax=Math.max(1,...ys.map(Math.abs))*1.35;
+  const trace={type:'scatter',mode:'markers+text',x:xs,y:ys,text:labels,textposition:'top center',textfont:{size:10,color:'#cbd5e1',family:'DM Sans'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(255,255,255,0.18)',width:0.5},opacity:0.88},customdata:customdata,hovertemplate:'<b>%{customdata[0]}</b><br>Port: %{customdata[1]:.1f}% · Bench: %{customdata[2]:.1f}% · Active: %{customdata[3]:+.1f}%<br>TE: %{customdata[4]:.2f}% · Stock: %{customdata[5]:.2f}%<br>Avg Rank: %{customdata[6]} · Holdings: %{customdata[7]}<extra></extra>',showlegend:false};
+  const layout={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},xaxis:{title:{text:'Active Weight (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',range:[-xmax,xmax]},yaxis:{title:{text:'TE Contribution (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',range:[-ymax,ymax]},margin:{l:60,r:18,t:18,b:54},shapes:[{type:'rect',xref:'x',yref:'y',x0:0,x1:xmax,y0:0,y1:ymax,fillcolor:'rgba(239,68,68,0.025)',line:{width:0},layer:'below'},{type:'rect',xref:'x',yref:'y',x0:-xmax,x1:0,y0:-ymax,y1:0,fillcolor:'rgba(16,185,129,0.025)',line:{width:0},layer:'below'}]};
+  Plotly.newPlot('secFsChartDiv',[trace],layout,{displayModeBar:false,responsive:true});
+  div.on('plotly_click',function(e){const cd=e.points&&e.points[0]&&e.points[0].customdata;if(cd&&cd[0]){_secFsFocusOn(cd[0]);}});
+}
+function _secFsFocusOn(name){
+  _secFsFocusedSector=name;
+  const lbl=document.getElementById('secFsFocusName');if(lbl)lbl.textContent=name;
+  const body=document.getElementById('secFsHoldingsBody');if(body)body.innerHTML=_renderSecFsHoldings(name);
+}
+function _renderSecFsHoldings(sectorName){
+  if(!sectorName||!cs||!cs.hold)return`<div style="padding:14px;color:var(--textDim);font-size:11px">No sector focused.</div>`;
+  // Filter holdings to this sector under current universe
+  const filt=cs.hold.filter(h=>{
+    if(isCash(h)||h.sec!==sectorName)return false;
+    if(_aggMode==='portfolio'&&!((+h.p)>0))return false;
+    if(_aggMode==='benchmark'&&!((+h.b)>0))return false;
+    return true;
+  });
+  if(!filt.length)return`<div style="padding:14px;color:var(--textDim);font-size:11px">No ${_aggMode} holdings in ${sectorName}.</div>`;
+  // Sort by |tr| desc — top TE drivers first
+  const sorted=[...filt].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
+  const top=sorted.slice(0,30);
+  const rows=top.map(h=>{
+    const trCls=(h.tr||0)>0.01?'neg':(h.tr||0)<-0.01?'pos':'';
+    const aSign=(h.a||0)>0?'+':'';
+    const ticker=h.t||h.tkr||'—';
+    const overC=h.over?rc(Math.round(h.over)):'#334155';
+    const tEsc=(h.t||'').replace(/'/g,'&apos;');
+    const nEsc=(h.n||'').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+    const aCls=(h.a||0)>0?'pos':(h.a||0)<0?'neg':'';
+    return`<tr class="clickable" onclick="typeof oSt==='function'&&oSt('${tEsc}')"><td style="padding:5px 10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--txth)">${ticker}</td><td style="padding:5px 10px;font-size:11px;color:var(--txth);overflow:hidden;text-overflow:ellipsis;max-width:160px;white-space:nowrap" title="${nEsc}">${(h.n||'').slice(0,28)}</td><td class="r" style="padding:5px 10px;font-size:11px;font-family:'JetBrains Mono',monospace">${f2(h.p,2)}</td><td class="r ${aCls}" style="padding:5px 10px;font-size:11px;font-family:'JetBrains Mono',monospace">${aSign}${f2(h.a,2)}</td><td class="r ${trCls}" style="padding:5px 10px;font-size:11px;font-family:'JetBrains Mono',monospace">${f2(h.tr,2)}</td><td class="r" style="padding:5px 10px;font-size:11px;font-weight:600;color:${overC};font-family:'JetBrains Mono',monospace">${h.over?Math.round(h.over):'—'}</td></tr>`;
+  }).join('');
+  const total=filt.length;
+  const more=total>top.length?`<tr><td colspan="6" style="padding:8px 10px;text-align:center;color:var(--textDim);font-size:10px;font-style:italic">+${total-top.length} more not shown</td></tr>`:'';
+  return`<table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:5px 10px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--grid)">Ticker</th><th style="text-align:left;padding:5px 10px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--grid)">Name</th><th class="r" style="padding:5px 10px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--grid)">Port%</th><th class="r" style="padding:5px 10px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--grid)">Active</th><th class="r" style="padding:5px 10px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--grid)">%T</th><th class="r" style="padding:5px 10px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid var(--grid)">O</th></tr></thead><tbody>${rows}${more}</tbody></table>`;
+}
+function _wireSecFsRowClicks(){
+  // Hijack row clicks in the FS table to focus the side panel instead of opening the drill modal
+  const tbl=document.querySelector('#secFsTableWrap #tbl-sec');
+  if(!tbl)return;
+  tbl.querySelectorAll('tbody tr').forEach(tr=>{
+    const sectorName=tr.children[0]?.textContent?.trim();
+    if(!sectorName)return;
+    tr.onclick=function(e){_secFsFocusOn(sectorName);};
+  });
 }
 function setSecRankMode(mode){
   if(mode!=='wtd'&&mode!=='avg'&&mode!=='bm')return;

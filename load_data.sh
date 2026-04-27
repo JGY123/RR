@@ -36,5 +36,31 @@ echo ""
 python3 "$PARSER" "$CSV" "$OUTPUT"
 
 echo ""
-echo "Opening dashboard..."
-open "$DASHBOARD"
+echo "Opening dashboard in a fresh Chrome window..."
+# B115 (2026-04-27): force a fresh Chrome window with cache-bust + close stale tabs.
+# Plain `open dashboard.html` reuses any existing tab, leaving stale state.
+TIMESTAMP=$(date +%s)
+DASHBOARD_URL="file://${DASHBOARD}?t=${TIMESTAMP}"
+
+if [ -d "/Applications/Google Chrome.app" ]; then
+  # Close any existing tabs pointing at this dashboard file
+  osascript <<EOF 2>/dev/null || true
+tell application "Google Chrome"
+  set windowList to every window
+  repeat with w in windowList
+    set tabList to every tab of w
+    repeat with t in tabList
+      if URL of t contains "dashboard_v7.html" then
+        close t
+      end if
+    end repeat
+  end repeat
+end tell
+EOF
+  # Open in a new Chrome window with the cache-bust query string
+  open -na "Google Chrome" --args --new-window "${DASHBOARD_URL}"
+else
+  open "${DASHBOARD_URL}"
+fi
+echo "✓ Opened ${DASHBOARD_URL}"
+echo "If anything looks off, hard-refresh with Cmd+Shift+R."

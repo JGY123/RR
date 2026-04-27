@@ -1,5 +1,20 @@
 # B102 cardRiskByDim — questions for user (autonomous build, 2026-04-27)
 
+## ✅ ALL 5 RESOLVED post-flight
+
+User responses (2026-04-27 post-sleep):
+1. **Q1 sort = absolute** ✓ shipped
+2. **Q2 sign coloring = ok** ✓ shipped (red adds risk, green diversifies, gray ~zero)
+3. **Q3 Unmapped = visible** ✓ shipped (with ⚠ chip)
+4. **Q4 Threshold slider = visible by default** ✓ shipped
+5. **Q5 More stat cards** → **expanded from 4 → 8 cards in `4217584`+next**: Total TE / Stock-Factor TE split / Holdings (with diversifying count) / Top Contributor (clickable to drill stock) / Port Wt / Bench Wt / Active Wt / Avg Overall Rank (with top-5 concentration)
+
+Marathon resumed at tile #10 cardFRB on 2026-04-27 post-flight.
+
+---
+
+
+
 User said: "be independent, keep working, when you get to questions maintain a list."
 This is the list. None of these blocked the build — I picked a reasonable default for each and documented it. User can override at any point.
 

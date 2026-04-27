@@ -1825,9 +1825,19 @@ function rWt(data,type,hold){
     let teTotal=showTE?aggTr(d.n):null;
     let teMCR=showTE?aggMcr(d.n):null;
     let teFactor=showTE?+(teTotal-teMCR).toFixed(1):null;
-    // TE Contrib: number with proportional light-blue background fill
-    let tePct=showTE?Math.min((Math.abs(teTotal)/maxTE)*100,100).toFixed(1):'0';
-    let teBar=showTE?`<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`:'';
+    // TE Contrib: signed bar — center axis at 50%, positive (risk-adding, red) extends right, negative (diversifying, green) extends left.
+    let tePct=showTE?Math.min((Math.abs(teTotal)/maxTE)*50,50).toFixed(1):'0';
+    const teSign=teTotal>0?'pos':teTotal<0?'neg':'zero';
+    const teBarColor=teSign==='pos'?'rgba(239,68,68,0.22)':teSign==='neg'?'rgba(16,185,129,0.22)':'transparent';
+    // Layered backgrounds: (1) signed-fill bar (2) 1px center axis hairline.
+    const fillGradient=showTE&&teSign!=='zero'?(
+      teSign==='pos'
+        ?`linear-gradient(to right, transparent 50%, ${teBarColor} 50%, ${teBarColor} ${50+(+tePct)}%, transparent ${50+(+tePct)}%)`
+        :`linear-gradient(to right, transparent ${50-(+tePct)}%, ${teBarColor} ${50-(+tePct)}%, ${teBarColor} 50%, transparent 50%)`
+    ):'';
+    const axisGradient=showTE?'linear-gradient(to right, transparent calc(50% - 1px), rgba(148,163,184,0.35) calc(50% - 1px), rgba(148,163,184,0.35) 50%, transparent 50%)':'';
+    const teBarBg=showTE?(fillGradient?`${fillGradient}, ${axisGradient}`:axisGradient):'transparent';
+    let teBar=showTE?`<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:${teBarBg};position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`:'';
     let stockTeCell=showTE?`<td class="r" data-col="stock_te" data-sv="${+(teMCR).toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`:'';
     let factorTeCell=showTE?`<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`:'';
     // Factor-contribution breakdown — Σ h.factor_contr[fname] across this bucket's holdings under current _aggMode.
@@ -1869,8 +1879,11 @@ function rWt(data,type,hold){
     let sparkSeries=type==='sec'?(cs.hist&&cs.hist.sec&&cs.hist.sec[d.n]):(cs.hist&&cs.hist.reg&&cs.hist.reg[d.n]);
     let sparkWin=type==='sec'?_secSparkWin:_regSparkWin;
     let sparkCell=`<td class="r" data-col="trend" style="width:72px;padding:4px 8px">${inlineSparkSvg(sparkSeries,sparkWin)}</td>`;
+    const cnt=hold?(factorAgg[d.n]?.count ?? 0):null;
+    const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
       <td>${d.n}</td>
+      ${cntCell}
       <td class="r" data-col="port" data-sv="${d.p}">${f2(d.p,1)}</td>
       <td class="r" data-col="bench" data-sv="${d.b}">${f2(d.b,1)}</td>
       <td class="r ${cls}" data-col="active" data-sv="${d.a}">${fp(d.a,1)}</td>
@@ -1880,16 +1893,18 @@ function rWt(data,type,hold){
     </tr>`;
   }).join('');
   let tblId=type==='sec'?'tbl-sec':'tbl-reg';
-  // Factor-contrib column headers — 6 most-used style factors. Background tinted purple to differentiate from Spotlight (indigo).
+  // Factor-contrib column headers — variable count via picker. Index shifts by 1 when Count column present.
   const facContribHeads=RNK_FACTOR_COLS.map((f,i)=>{
-    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f;
-    const colIdx=11+i; // after Sector(0) Port(1) Bench(2) Active(3) TE(4) Stock(5) Factor(6) O(7) R(8) V(9) Q(10)
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this sector's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Source: per-security factor contributions × Agg pill mode (header)." onclick="sortTbl('tbl-sec',${colIdx})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
+    const colIdx=(hold?12:11)+i;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this sector's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Source: per-security factor contributions × Universe pill mode (header)." onclick="sortTbl('tbl-sec',${colIdx})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
   }).join('');
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
+  // Count column adds one column before Port; subhead leading-pad expands by 1.
+  const sLeftPad=hold?8:7;
   let secThead=`<thead>
     <tr style="font-size:9px">
-      <th colspan="7" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>
+      <th colspan="${sLeftPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>
       <th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px">
         <span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span>
       </th>
@@ -1902,16 +1917,17 @@ function rWt(data,type,hold){
     </tr>
     <tr>
       <th onclick="sortTbl('tbl-sec',0)">Sector</th>
-      <th class="r tip" data-col="port" data-tip="Portfolio weight" onclick="sortTbl('tbl-sec',1)">Port%</th>
-      <th class="r tip" data-col="bench" data-tip="Benchmark weight" onclick="sortTbl('tbl-sec',2)">Bench%</th>
-      <th class="r tip" data-col="active" data-tip="Active weight (port minus bench)" onclick="sortTbl('tbl-sec',3)">Active</th>
-      <th class="r tip" data-col="te_contrib" data-tip="Total sector TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Toggle Agg pill in header to flip universe." onclick="sortTbl('tbl-sec',4)">TE Contrib</th>
-      <th class="r tip" data-col="stock_te" data-tip="Stock-specific TE (Σ h.mcr — idiosyncratic component)" onclick="sortTbl('tbl-sec',5)">Stock TE%</th>
-      <th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-sec',6)">Factor TE%</th>
-      <th class="r tip" data-col="o" data-tip="Avg Overall MFR rank — weighted by port weight by default (1=best, 5=worst)" onclick="sortTbl('tbl-sec',7)" style="background:rgba(99,102,241,0.07);border-left:1px solid rgba(99,102,241,0.2)">O</th>
-      <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',8)" style="background:rgba(99,102,241,0.07)">R</th>
-      <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',9)" style="background:rgba(99,102,241,0.07)">V</th>
-      <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',10)" style="background:rgba(99,102,241,0.07)">Q</th>
+      ${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this sector. Flips with the Universe pill — useful sanity check that you're in the mode you think you are." onclick="sortTbl('tbl-sec',1)">#</th>`:''}
+      <th class="r tip" data-col="port" data-tip="Portfolio weight" onclick="sortTbl('tbl-sec',${hold?2:1})">Port%</th>
+      <th class="r tip" data-col="bench" data-tip="Benchmark weight" onclick="sortTbl('tbl-sec',${hold?3:2})">Bench%</th>
+      <th class="r tip" data-col="active" data-tip="Active weight (port minus bench)" onclick="sortTbl('tbl-sec',${hold?4:3})">Active</th>
+      <th class="r tip" data-col="te_contrib" data-tip="Total sector TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Bar shows signed magnitude — positive (right of center) adds risk, negative (left of center) diversifies." onclick="sortTbl('tbl-sec',${hold?5:4})">TE Contrib</th>
+      <th class="r tip" data-col="stock_te" data-tip="Stock-specific TE (Σ h.mcr — idiosyncratic component)" onclick="sortTbl('tbl-sec',${hold?6:5})">Stock TE%</th>
+      <th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-sec',${hold?7:6})">Factor TE%</th>
+      <th class="r tip" data-col="o" data-tip="Avg Overall MFR rank — see Universe + Ranks pills in toolbar (1=best, 5=worst)" onclick="sortTbl('tbl-sec',${hold?8:7})" style="background:rgba(99,102,241,0.07);border-left:1px solid rgba(99,102,241,0.2)">O</th>
+      <th class="r tip" data-col="r" data-tip="Avg Revision MFR rank" onclick="sortTbl('tbl-sec',${hold?9:8})" style="background:rgba(99,102,241,0.07)">R</th>
+      <th class="r tip" data-col="v" data-tip="Avg Value MFR rank" onclick="sortTbl('tbl-sec',${hold?10:9})" style="background:rgba(99,102,241,0.07)">V</th>
+      <th class="r tip" data-col="q" data-tip="Avg Quality MFR rank" onclick="sortTbl('tbl-sec',${hold?11:10})" style="background:rgba(99,102,241,0.07)">Q</th>
       ${facContribHeads}
       <th class="tip" data-col="trend" data-tip="Active weight trend over last N periods (inline sparkline). Toggle window above." style="width:72px;padding:4px 8px;vertical-align:bottom">
         <div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div>
@@ -1923,22 +1939,23 @@ function rWt(data,type,hold){
   if(type==='sec'){
     table=`<table id="${tblId}">${secThead}<tbody>${rows}</tbody></table>`;
   }else{
-    // Region thead — mirrors sec structure: Name | Port | Bench | Active | TE | Stock TE | Factor TE | (O R V Q if hasRegRanks) | (6 factor-contrib if hold) | Trend
+    // Region thead — mirrors sec structure: Name | [#] | Port | Bench | Active | TE | Stock TE | Factor TE | (O R V Q if hasRegRanks) | facContrib... | Trend
     const regHasTE=hold&&type==='reg';
-    const teHeads=regHasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total region TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this region)" onclick="sortTbl('tbl-reg',4)">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-reg',5)">Stock TE%</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-reg',6)">Factor TE%</th>`:'';
-    const rBase=regHasTE?7:4;
+    const regShift=hold?1:0;
+    const teHeads=regHasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total region TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this region). Bar shows signed magnitude." onclick="sortTbl('tbl-reg',${4+regShift})">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-reg',${5+regShift})">Stock TE%</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-reg',${6+regShift})">Factor TE%</th>`:'';
+    const rBase=(regHasTE?7:4)+regShift;
     const rvqHeads=hasRegRanks?`<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase})" class="r tip" data-col="o" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th class="r tip" data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+1})" data-tip="Avg Revision MFR rank">R</th><th class="r tip" data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+2})" data-tip="Avg Value MFR rank">V</th><th class="r tip" data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+3})" data-tip="Avg Quality MFR rank">Q</th>`:'';
     const facBase=rBase+(hasRegRanks?4:0);
     const regFacContribHeads=hold?RNK_FACTOR_COLS.map((f,i)=>{
-      const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f;
-      return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this region's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Agg pill in header." onclick="sortTbl('tbl-reg',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+      const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
+      return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this region's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Universe pill in header." onclick="sortTbl('tbl-reg',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
     }).join(''):'';
     // Subheader with Spotlight + Factor-TE-Breakdown bands
     const subSpotCols=hasRegRanks?4:0;
     const subFacCols=hold?RNK_FACTOR_COLS.length:0;
-    const subPad=4+(regHasTE?3:0); // Name + Port + Bench + Active (+TE/Stock/Factor)
+    const subPad=4+regShift+(regHasTE?3:0); // Name + (#) + Port + Bench + Active (+TE/Stock/Factor)
     const subhead=(subSpotCols+subFacCols>0)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpotCols>0?`<th colspan="${subSpotCols}" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:''}${subFacCols>0?`<th colspan="${subFacCols}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:''}<th style="background:var(--card);border-bottom:none"></th></tr>`:'';
-    table=`<table id="${tblId}"><thead>${subhead}<tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${teHeads}${rvqHeads}${regFacContribHeads}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
+    table=`<table id="${tblId}"><thead>${subhead}<tr><th onclick="sortTbl('${tblId}',0)">Name</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this region. Flips with Universe pill." onclick="sortTbl('${tblId}',1)">#</th>`:''}<th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',${1+regShift})">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',${2+regShift})">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',${3+regShift})">Active</th>${teHeads}${rvqHeads}${regFacContribHeads}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
@@ -2413,9 +2430,18 @@ function rCountryTable(countries,hold){
     let teTotal=hasTE?aggTr(c.n):null;
     let teMCR=hasTE?aggMcr(c.n):null;
     let teFactor=hasTE?+(teTotal-teMCR).toFixed(1):null;
-    let tePct=hasTE?Math.min((Math.abs(teTotal)/maxTE)*100,100).toFixed(1):'0';
+    // Signed TE bar (center-axis)
+    const teCSign=teTotal>0?'pos':teTotal<0?'neg':'zero';
+    const teCBarColor=teCSign==='pos'?'rgba(239,68,68,0.22)':teCSign==='neg'?'rgba(16,185,129,0.22)':'transparent';
+    const teCPct=hasTE?Math.min((Math.abs(teTotal)/maxTE)*50,50).toFixed(1):'0';
+    const teCFill=hasTE&&teCSign!=='zero'?(
+      teCSign==='pos'?`linear-gradient(to right, transparent 50%, ${teCBarColor} 50%, ${teCBarColor} ${50+(+teCPct)}%, transparent ${50+(+teCPct)}%)`
+      :`linear-gradient(to right, transparent ${50-(+teCPct)}%, ${teCBarColor} ${50-(+teCPct)}%, ${teCBarColor} 50%, transparent 50%)`
+    ):'';
+    const teCAxis=hasTE?'linear-gradient(to right, transparent calc(50% - 1px), rgba(148,163,184,0.35) calc(50% - 1px), rgba(148,163,184,0.35) 50%, transparent 50%)':'';
+    const teCBg=hasTE?(teCFill?`${teCFill}, ${teCAxis}`:teCAxis):'transparent';
     let teCells=hasTE?(
-      `<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
+      `<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:${teCBg};position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
       `<td class="r" data-col="stock_te" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
       `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
@@ -2432,22 +2458,26 @@ function rCountryTable(countries,hold){
       const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
     }).join(''):'';
-    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
+    const cnt=hold?(factorAgg[c.n]?.count ?? 0):null;
+    const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
+    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td>${cntCell}<td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
-  let teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total country TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Toggle Agg pill in header." onclick="sortTbl('tbl-ctry',4)">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific tracking error component" onclick="sortTbl('tbl-ctry',5)">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl('tbl-ctry',6)">Factor TE</th>`:'';
-  let rBase=hasTE?7:4;
+  // Column index baseline: Country=0, [Count=1 if hold], Port, Bench, Active, [TE,Stock,Factor if hasTE], [O,R,V,Q if hasRanks], facContrib...
+  const ctryShift=hold?1:0;
+  let teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total country TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Bar shows signed magnitude — positive (right of center) adds risk, negative (left) diversifies." onclick="sortTbl('tbl-ctry',${4+ctryShift})">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific tracking error component" onclick="sortTbl('tbl-ctry',${5+ctryShift})">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl('tbl-ctry',${6+ctryShift})">Factor TE</th>`:'';
+  let rBase=(hasTE?7:4)+ctryShift;
   let rvqTh=hasRanks?`<th class="r tip" data-col="o" data-tip="Avg Overall MFR rank" style="border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase})">O</th><th class="r tip" data-col="r" data-tip="Avg Revision rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+1})">R</th><th class="r tip" data-col="v" data-tip="Avg Value rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+2})">V</th><th class="r tip" data-col="q" data-tip="Avg Quality rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+3})">Q</th>`:'';
   const facBase=rBase+(hasRanks?4:0);
   const facContribTh=hold?RNK_FACTOR_COLS.map((f,i)=>{
-    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f;
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this country's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Agg pill in header." onclick="sortTbl('tbl-ctry',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this country's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Universe pill in header." onclick="sortTbl('tbl-ctry',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
   }).join(''):'';
-  let leftCol=4+(hasTE?3:0);
+  let leftCol=4+ctryShift+(hasTE?3:0);
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
   const subFac=hold?`<th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:'';
   let spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
-  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this country. Flips with Universe pill." onclick="sortTbl('tbl-ctry',1)">#</th>`:''}<th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',${1+ctryShift})">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',${2+ctryShift})">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',${3+ctryShift})">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rGroupTable(groups,hold){
@@ -2502,9 +2532,18 @@ function rGroupTable(groups,hold){
     let teTotal=hasTE?aggTr(gn):null;
     let teMCR=hasTE?aggMcr(gn):null;
     let teFactor=hasTE?+(teTotal-teMCR).toFixed(1):null;
-    let tePct=hasTE?Math.min((Math.abs(teTotal)/maxTE)*100,100).toFixed(1):'0';
+    // Signed TE bar (center-axis)
+    const teGSign=teTotal>0?'pos':teTotal<0?'neg':'zero';
+    const teGBarColor=teGSign==='pos'?'rgba(239,68,68,0.22)':teGSign==='neg'?'rgba(16,185,129,0.22)':'transparent';
+    const teGPct=hasTE?Math.min((Math.abs(teTotal)/maxTE)*50,50).toFixed(1):'0';
+    const teGFill=hasTE&&teGSign!=='zero'?(
+      teGSign==='pos'?`linear-gradient(to right, transparent 50%, ${teGBarColor} 50%, ${teGBarColor} ${50+(+teGPct)}%, transparent ${50+(+teGPct)}%)`
+      :`linear-gradient(to right, transparent ${50-(+teGPct)}%, ${teGBarColor} ${50-(+teGPct)}%, ${teGBarColor} 50%, transparent 50%)`
+    ):'';
+    const teGAxis=hasTE?'linear-gradient(to right, transparent calc(50% - 1px), rgba(148,163,184,0.35) calc(50% - 1px), rgba(148,163,184,0.35) 50%, transparent 50%)':'';
+    const teGBg=hasTE?(teGFill?`${teGFill}, ${teGAxis}`:teGAxis):'transparent';
     let teCells=hasTE?(
-      `<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
+      `<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:${teGBg};position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
       `<td class="r" data-col="stock_te" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
       `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
@@ -2521,22 +2560,25 @@ function rGroupTable(groups,hold){
       const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
     }).join(''):'';
-    return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td><td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
+    const cnt=hold?(factorAgg[gn]?.count ?? 0):null;
+    const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
+    return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td>${cntCell}<td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
-  const teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total group TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this subgroup). Holdings can belong to multiple subgroups." onclick="sortTbl('tbl-grp',4)">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-grp',5)">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (Total − Stock)" onclick="sortTbl('tbl-grp',6)">Factor TE</th>`:'';
-  const rBase=hasTE?7:4;
+  const grpShift=hold?1:0;
+  const teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total group TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this subgroup). Holdings can belong to multiple subgroups. Bar shows signed magnitude." onclick="sortTbl('tbl-grp',${4+grpShift})">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-grp',${5+grpShift})">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (Total − Stock)" onclick="sortTbl('tbl-grp',${6+grpShift})">Factor TE</th>`:'';
+  const rBase=(hasTE?7:4)+grpShift;
   const rvqTh=hasRanks?`<th data-col="o" style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase})" class="r tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+1})" class="r tip" data-tip="Avg Revision MFR rank">R</th><th data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+2})" class="r tip" data-tip="Avg Value MFR rank">V</th><th data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+3})" class="r tip" data-tip="Avg Quality MFR rank">Q</th>`:'';
   const facBase=rBase+(hasRanks?4:0);
   const facContribTh=hold?RNK_FACTOR_COLS.map((f,i)=>{
-    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f;
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this subgroup's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings (sector→subgroup mapping). Toggle Agg pill in header." onclick="sortTbl('tbl-grp',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this subgroup's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings (sector→subgroup mapping). Toggle Universe pill in header." onclick="sortTbl('tbl-grp',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
   }).join(''):'';
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
-  const subPad=4+(hasTE?3:0);
+  const subPad=4+grpShift+(hasTE?3:0);
   const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
   const subFac=hold?`<th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:'';
   const spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
-  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" data-col="port" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities mapped to this subgroup. Flips with Universe pill." onclick="sortTbl('tbl-grp',1)">#</th>`:''}<th class="r" data-col="port" onclick="sortTbl('tbl-grp',${1+grpShift})">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',${2+grpShift})">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',${3+grpShift})">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 

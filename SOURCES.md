@@ -78,6 +78,23 @@
 
 Same column shape as cardSectors. Sourced from their respective CSV sections (Country / Region / Group / Industry).
 
+### Spotlight pattern rollout (B106, 2026-04-27) — applies to cardSectors, cardCountry, cardRegions, cardGroups
+
+Each of the 4 sibling aggregation tiles received a uniform column set, all driven by the global `_aggMode` (Port / Bench / Both pill in header):
+
+| Cell | Source class | Path |
+|---|---|---|
+| TE Contrib | 🟢 sourced + 🟡 derived (filter) | `Σ h.tr` across this bucket's holdings filtered by `_aggMode`. `h.tr` is sourced from CSV Security `%T`. The bucket-sum + universe filter is derived. |
+| Stock TE% | 🟢 sourced + 🟡 derived (filter) | `Σ h.mcr` across this bucket's holdings filtered by `_aggMode`. `h.mcr` is sourced from CSV Security `%S` column. |
+| Factor TE% | 🟡 derived | `TE Contrib − Stock TE%` (math identity from the two above). |
+| Avg O / R / V / Q | 🟡 derived (per-tile) | Weighted/simple/bench-weighted averages of `h.over` / `h.rev` / `h.val` / `h.qual` per bucket. Driven by `_secRankMode` (Wtd/Avg/BM toggle) — separate from `_aggMode`. Wtd & BM apply port-weight or bench-weight independent of the Agg pill; Avg is universe-agnostic. |
+| Mom · Val · Gro · Prof · Size · Vol | 🟢 sourced + 🟡 derived (filter + sum) | `Σ h.factor_contr[fname]` per bucket, filtered by `_aggMode`. `h.factor_contr` is sourced from CSV Security factor-attribution section (per-holding × per-factor contribution). Bucket-sum is derived. The column header tooltip names the exact factor it sums. |
+| `Factor TE Breakdown` band header | UI affordance | Visual sub-header with current `_aggMode` label so users know which universe drives the 6 sums below. |
+
+Aggregation helper: `aggregateHoldingsBy(holds, groupKeyFn, factorList, opts)` (line ~2065). `groupKeyFn` accepts string-key (sector/country/region) or array-key (groups, since holdings can belong to multiple subgroups via GROUPS_DEF mapping). `opts.mode` is `'portfolio' | 'benchmark' | 'both'` and filters by `h.p>0` / `h.b>0` / no-filter respectively before aggregating.
+
+`setAggMode(mode)` re-renders all 4 sibling tiles in lockstep so the universe pill flips them together. cardIndustries deferred (more nuance — multi-industry membership semantics).
+
 ## cardWatchlist
 
 | Field | Source class | Path |

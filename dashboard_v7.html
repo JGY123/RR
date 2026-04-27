@@ -1780,13 +1780,17 @@ function rFacTable(factors){
   // Max absolute exposure for diverging bar scaling
   let maxExp=Math.max(...facsFinite.map(f=>Math.abs(f.a||0)),0.01);
 
-  // Prior-period exposure map for Profitability warning
+  // Prior-period exposure map for Profitability warning (uses active a directly, falls back to e if needed)
   let priorExpMap={};
   if(cs.hist&&cs.hist.fac){
     Object.entries(cs.hist.fac).forEach(([name,arr])=>{
       if(arr&&arr.length>=2){
         let cur=arr[arr.length-1];let prev=arr[arr.length-2];
-        if(cur&&prev)priorExpMap[name]=(cur.bm!=null?cur.e-cur.bm:cur.e||0)-(prev.bm!=null?prev.e-prev.bm:prev.e||0);
+        if(cur&&prev){
+          let curA=cur.a!=null?cur.a:(cur.bm!=null?cur.e-cur.bm:cur.e);
+          let prevA=prev.a!=null?prev.a:(prev.bm!=null?prev.e-prev.bm:prev.e);
+          if(curA!=null&&prevA!=null)priorExpMap[name]=curA-prevA;
+        }
       }
     });
   }
@@ -1805,22 +1809,18 @@ function rFacTable(factors){
       ?(expVal>0.1?'var(--pos)':expVal<-0.1?'var(--neg)':'var(--txth)')
       :(expVal>0?'var(--pos)':'var(--neg)');
     let rowBase=isProfitability?'background:rgba(251,146,60,0.06);border-left:4px solid var(--prof);':'border-left:4px solid transparent;';
-    // Profitability amber warning: exposure decreased vs prior week
+    // Profitability amber warning: active exposure decreased vs prior week
     let profWarn='';
     if(isProfitability&&priorExpMap['Profitability']!=null&&priorExpMap['Profitability']<-0.05){
-      profWarn=' <span class="tip" data-tip="Profitability exposure decreased vs prior week" style="color:var(--prof);font-size:10px">⚠</span>';
+      profWarn=' <span class="tip" data-tip="Profitability active exposure decreased vs prior week" style="color:var(--prof);font-size:10px">⚠</span>';
     }
     let profTip=isProfitability?' class="tip" data-tip="Intentional exposure — higher profitability is desired. Green=increasing (good), Red=decreasing (risk)."':'';
-    let facHist=(cs.hist&&cs.hist.fac)?cs.hist.fac[f.n]:null;
-    let sparkVals=facHist?facHist.slice(-12).map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
-    let profColor=getComputedStyle(document.body).getPropertyValue('--prof').trim()||'#fb923c';
-    let spark=sparkVals.length>=2?mkSparkline(sparkVals,48,18,isProfitability?profColor:null):'';
     let nm=f.n.replace(/'/g,"\\'");
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
       <td data-col="name"${profTip}>${isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n}</td>
-      <td class="r" data-col="exp" data-sv="${expVal}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
+      <td class="r" data-col="exp_active" data-sv="${f.a??''}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
+      <td class="r" data-col="exp_port" data-sv="${f.e??''}" style="color:var(--textDim)">${f.e!=null?fp(f.e,2):'—'}</td>
       <td class="r" data-col="te" data-sv="${f.c??''}">${f2(f.c,1)}%</td>
-      <td class="r" data-col="spark">${spark}</td>
       <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
       <td class="r" data-col="imp" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
     </tr>`;
@@ -1828,14 +1828,14 @@ function rFacTable(factors){
 
   let thead=`<thead><tr>
     <th data-col="name" onclick="sortTbl('tbl-fac',0)">Factor</th>
-    <th class="r tip" data-col="exp" data-tip="Active exposure vs benchmark" onclick="sortTbl('tbl-fac',1)">Exposure</th>
-    <th class="r tip" data-col="te" data-tip="Contribution to tracking error" onclick="sortTbl('tbl-fac',2)">TE%</th>
-    <th class="r" data-col="spark">12wk</th>
-    <th class="r tip" data-col="ret" data-tip="Factor return for the period" onclick="sortTbl('tbl-fac',4)">Return</th>
-    <th class="r tip" data-col="imp" data-tip="Exposure × Return impact" onclick="sortTbl('tbl-fac',5)">Impact</th>
+    <th class="r tip" data-col="exp_active" data-tip="ACTIVE exposure (portfolio − benchmark, in &sigma; units). Positive = portfolio overweight that factor; negative = underweight." onclick="sortTbl('tbl-fac',1)">Active Exp</th>
+    <th class="r tip" data-col="exp_port" data-tip="ABSOLUTE portfolio exposure (raw, in &sigma; units). Subtract Active to derive benchmark tilt. Currently shows &mdash; until parser populates raw exposure (B73)." onclick="sortTbl('tbl-fac',2)">Port Exp</th>
+    <th class="r tip" data-col="te" data-tip="Contribution to total tracking error (% of TE). Currently null on most factors in the new format — pending parser fix." onclick="sortTbl('tbl-fac',3)">TE%</th>
+    <th class="r tip" data-col="ret" data-tip="Factor return for the latest period." onclick="sortTbl('tbl-fac',4)">Return</th>
+    <th class="r tip" data-col="imp" data-tip="Exposure × Return = P&L attribution. PERIOD: latest snapshot. Multi-period selector planned (B109 cross-tile)." onclick="sortTbl('tbl-fac',5)">Impact (Latest)</th>
   </tr></thead>`;
 
-  return`<table id="tbl-fac"><colgroup><col style="min-width:140px"><col style="width:90px"><col style="width:60px"><col style="width:60px"><col style="width:70px"><col style="width:70px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
+  return`<table id="tbl-fac"><colgroup><col style="min-width:140px"><col style="width:90px"><col style="width:90px"><col style="width:60px"><col style="width:70px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
 }
 
 function rRnk(ranks){

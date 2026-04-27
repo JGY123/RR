@@ -134,6 +134,28 @@ This project has a **full-time virtual specialist**: `~/projects/apps/ai-talent-
 - Include the agent file as context at the start of any RR session for maximum accuracy
 - After significant RR work, update the agent file with new learnings
 
+## Data Integrity Specialist (cross-project, born from RR crisis 2026-04-27)
+**MANDATORY** invocation before any change that touches the data layer (parser, normalize, render of numeric values, localStorage, cache):
+`~/projects/apps/ai-talent-agency/agents/data-integrity-specialist.md`
+- Audits for fabrication, drift, silent corruption — the patterns that produced the April 2026 crisis
+- 8 RED anti-patterns auto-flagged: hardcoded column positions, multiple parsers for the same input, normalize() synthesis without markers, hardcoded numeric fallbacks, localStorage-as-data, missing integrity assertion, fabricated dates, tooltips without source paths
+- Always invoke when user reports "wacky number"
+
+## Critical Lessons (READ BEFORE TOUCHING DATA LAYER)
+- `~/RR/LESSONS_LEARNED.md` — the story of the April 2026 data-integrity crisis + the patterns that prevent it
+- `~/RR/SOURCES.md` — per-cell provenance index; UPDATE when render code changes
+- `~/RR/FACTSET_FEEDBACK.md` — CSV-side issues to relay to FactSet; never silently work around via fabrication
+- `~/RR/HISTORY_PERSISTENCE.md` — append-only history architecture (B114 backlog)
+- `~/RR/MARATHON_PROTOCOL.md` — per-tile review protocol with data-first ordering
+
+## Hard rules (anti-fabrication policy, established 2026-04-27)
+1. **CSV in browser = error.** `parseFactSetCSV()` throws. User runs `./load_data.sh`. Single-source-of-truth pipeline only.
+2. **`normalize()` is rename-only.** Any new "if X is null, compute Y" patch must instead: (a) leave it null, OR (b) compute it AND add a `_X_synth=true` marker AND add a render-side ᵉ badge AND document in SOURCES.md.
+3. **localStorage is for preferences only.** Never cache data. Every page load wipes `rr_*` except `PREFS_KEY`.
+4. **Every numeric cell has provenance.** SOURCES.md is the index.
+5. **Integrity assertion runs on every load.** `_b115AssertIntegrity()` catches drift in console.
+6. **CSV format shift = audit every parser path.** Python parser is header-driven (adapts); ALL JS-side paths get re-audited or deleted.
+
 ## Cross-Project Reference
 - Shared patterns: ~/orginize/knowledge/patterns.md
 - Master registry: ~/orginize/CLAUDE.md

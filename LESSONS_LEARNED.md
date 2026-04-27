@@ -190,3 +190,104 @@ One canonical path to get from raw CSV to live dashboard. No drag-drop CSV. No b
 ---
 
 **The hope this doc represents:** a "new slate." Not in the sense that everything is perfect — in the sense that the foundation is sound, the failure modes are documented, and future work builds on something verifiable.
+
+---
+
+# Addendum — 2026-04-27 (post-FactSet finalization call)
+
+The previous sections cover the April crisis. The day after that crisis (4/27), three things happened in parallel: a deep marathon-style rebuild of cardSectors and the 4 sibling aggregation tiles; a 3-hour FactSet call to finalize the data-extraction spec; and protective infrastructure to make the next crisis preventable. This addendum captures what was learned during that day so future sessions inherit it.
+
+## Patterns that proved out (keep doing)
+
+### 1. Marathon-style review with concrete questions per tile
+
+cardSectors was reviewed across 4 rounds of focused gut-check questions (5 max per round). User answered with one-character answers ("1 a b") or short fragments because the questions were narrow. Each round produced 3–7 commits of incremental shipping. Total: ~25 commits of cardSectors evolution in a single session, every commit verified in browser before moving on.
+
+The pattern is documented in `MARATHON_PROTOCOL.md` but the execution detail that matters: **never ask more than 5 questions per round**, and **wait for the user's reply before assuming the answer**. The first instinct of "let me preempt by also implementing the obvious next step" produces churn the user has to undo.
+
+### 2. Pattern-replication after one tile lands
+
+cardSectors got the unified Universe + Wtd/Avg pills, the column picker, the per-column filtering, the layered sparkline, the signed TE bar — and then the SAME state structure rolled to cardCountry / cardRegions / cardGroups via a `TILE_REG` registry + generic `setTileFilter` / `applyTileFilters` / `tileFilterIcon` helpers. Back-compat shims (`setSecFilter` → `setTileFilter('sec', …)`) preserved the cardSectors integration while opening the door for siblings.
+
+Lesson: **build the prototype tile-specific, then refactor to a generic registry once the second tile asks for the same thing.** Don't try to design the generic version up-front — the first tile is the spec.
+
+### 3. Anti-fabrication policy held under pressure
+
+When `f.c` (per-factor TE %) was null on most factors, the dashboard previously silently synthesized a value. User banned that mid-session. Instead of panicking, the existing 4 tiles using the synthesized value were marked with `ᵉ` and SOURCES.md was updated, leaving the data visible but flagged. This pattern caught silent corruption AGAIN during this session: the verifier baseline reports `_c_synth=true` count = 7 — surfaced cleanly in the report instead of hidden.
+
+**Rule:** show `—` rather than substitute a plausible-looking number. Failing-to-display is more useful than failing-silently.
+
+### 4. Per-cell provenance in `SOURCES.md` continues to pay back
+
+The discipline of documenting every numeric cell as 🟢 sourced / 🟡 derived / ⚫ empty made the FactSet call agenda writing trivial — every gap was already named with its derivation path. The call deck wrote itself in <2 hours instead of needing investigation.
+
+### 5. Verification harness as the green-light gatekeeper
+
+After the call, the test pull is verified via `verify_factset.py` which runs 22+ checks per strategy and produces a 🟢/🟡/🔴 verdict. The user doesn't have to scan rows of JSON — they get one line. **This pattern (structured pass/fail per ask, single verdict at the bottom) is generally applicable to any "is the new data complete?" question.**
+
+## New protective infrastructure shipped this day
+
+### A. Schema fingerprint on every parse
+
+`verify_factset.py` now writes/compares `~/RR/.schema_fingerprint.json` on every run. If the section anchors or column counts in the source CSV drift from the baseline, the verifier refuses to green-light — the exact prevention for the April crisis where 4 different parser paths silently misinterpreted column 15.
+
+The user must explicitly delete the baseline file to acknowledge a schema change. This is intentional friction.
+
+### B. Auto-run verifier in `load_data.sh`
+
+Every parse now writes the verifier output to `last_verify_report.log`. The dashboard still opens (so the user can browse), but the report is one command away (`cat last_verify_report.log`). Future sessions inherit this — they don't need to know about verify_factset.py to benefit from it.
+
+### C. Identifier flexibility added to A2 check
+
+The verifier expects 16 factor keys in `factor_contr` per holding, but doesn't fail if a strategy has 15 with a specific named missing factor. Partials are surfaced; outright failures are isolated. This was an explicit design choice after observing in the baseline run that ACWI shows 15/16 (missing Currency) — a model-vs-universe issue likely, not a parser bug.
+
+## Anti-patterns that emerged this day (don't repeat)
+
+### 1. Backslash-escape bombs in template literals
+
+`'${(h.t||'').replace(/'/g,'\\\\\\'')}'` parsed wrong. The `\\\\\\''` looked like 6 backslashes then a single-quote, but JS interpreted it as `\\` `\\` `\\` `'` `'` — closing the first string and opening a second. Result: the entire script file failed to parse silently (no console error in the test code).
+
+**Rule:** when injecting a string into an HTML attribute, prefer entity escapes (`&apos;`, `&quot;`) over backslash escapes. The template literal context is its own escape-management problem; HTML's is more uniform.
+
+### 2. CSS variables passed to Plotly's `marker.color`
+
+`rc(rank)` returned `var(--r1)` — Plotly doesn't resolve CSS vars and rendered all dots black. Had to resolve to literal hex via `getComputedStyle` before passing.
+
+**Rule:** Plotly's `marker.color`, `line.color`, and `paper_bgcolor` need literal RGB / hex / rgba — never CSS vars. Resolve up-front.
+
+### 3. Stale subagent roster at session start
+
+After writing `.claude/agents/data-viz.md`, attempting to spawn it via Agent failed because the subagent roster is frozen at session start. This is a known limitation but easy to forget. The work-around was to read the agent definition and execute the framework inline.
+
+**Rule:** when writing a new subagent, plan to spawn it from a fresh session next time. For the current session, execute inline.
+
+### 4. `cs.hist.sec` is empty in current data
+
+The Trend column on the 4 aggregation tiles falls back to a static current-TE indicator because `hist.sec` (per-sector weekly history) is not yet populated by the parser. This is the B6 backlog item. The layered sparkline V2 was designed to handle the fallback gracefully — the lesson is **assume backlog gaps will surface; don't crash**, fall back with a useful degraded rendering.
+
+### 5. The `r` field on holdings has 735/1217 coverage but unknown semantics
+
+This is exactly the "named field, unclear meaning" problem the protective infrastructure exists to prevent. The current sample has it; we don't know if it's `period_return` (Brinson input), some other return measure, or noise. The verifier flags it as "verify what `r` represents." **Action item for the next FactSet conversation:** lock the schema doc.
+
+## Process improvements that compounded
+
+- **Commit per logical change.** 25+ commits in one day; every revert is fine-grained.
+- **Verify in browser before committing.** Every Edit was followed by `preview_eval` to confirm the change rendered. Caught the backslash-escape bomb (script wouldn't load) before committing.
+- **Status badges on the call deck.** The deck showed ✓/◐/● for each ask so the user could scan resolved vs partial vs open in 5 seconds. Same pattern in the verifier output. **Visual triage scales when the list of asks gets to 30+.**
+- **Always-include `data-col` attribute on cells.** Filtering relies on `[data-col=X]` selectors. Adding the attribute on every render helped column-vis AND filtering for free.
+
+## Specific things to check on the next FactSet pull
+
+When the test-pull file lands:
+1. Run `./load_data.sh ~/Downloads/<new>.csv` — verifier runs automatically
+2. Verdict at bottom: 🟢 / 🟡 / 🔴
+3. If 🔴 SCHEMA DRIFT → review drift list before doing anything else
+4. If 🟢 → green-light the massive 15+ account run
+5. If 🟡 → manual review of partials; user judgment on whether they're blockers
+
+## Patterns to roll out elsewhere when relevant
+
+- The full-screen modal pattern (cardSectors only today) — every tile that's "important enough" probably gets one
+- The 4D quadrant scatter pattern — only on cardSectors per user direction; "different tiles may need different visualizations"
+- The TILE_REG registry — could expand to include drill-modal config, export config, etc., once a second tile needs the same surface
+- The Universe + Wtd/Avg global pills — already global; if other parts of the dashboard need universe-aware rendering, they read from `_aggMode` / `_avgMode` directly

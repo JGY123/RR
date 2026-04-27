@@ -156,6 +156,23 @@ This project has a **full-time virtual specialist**: `~/projects/apps/ai-talent-
 5. **Integrity assertion runs on every load.** `_b115AssertIntegrity()` catches drift in console.
 6. **CSV format shift = audit every parser path.** Python parser is header-driven (adapts); ALL JS-side paths get re-audited or deleted.
 
+## Pre-flight checks before risky edits
+Two scripts protect against the categories of failures that escalated in past sessions:
+
+```bash
+./smoke_test.sh           # ~1.5s — script-syntax bombs, missing render fns, schema drift, JSON validity
+./smoke_test.sh --quick   # skip pytest (saves ~10s)
+python3 verify_factset.py # ~3s — 22+ pass/fail checks against every FactSet ask + schema fingerprint
+```
+
+`verify_factset.py` runs automatically inside `load_data.sh` and writes its output to `last_verify_report.log`. Schema fingerprint at `~/RR/.schema_fingerprint.json` — delete to acknowledge an intentional CSV format change.
+
+`smoke_test.sh` should be run before any risky multi-file edit. Catches:
+- Backslash-bomb-style template-literal parse failures (one such regression cost ~1h on 4/27)
+- Missing critical render functions (rWt, rCountryTable, etc.)
+- Schema fingerprint drift since the last good baseline
+- Missing strategies in latest_data.json
+
 ## Cross-Project Reference
 - Shared patterns: ~/orginize/knowledge/patterns.md
 - Master registry: ~/orginize/CLAUDE.md

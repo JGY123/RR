@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- B115 (2026-04-27): aggressive cache prevention. Browsers were serving stale HTML/JS even after hard refresh. These three directives force every load to fetch fresh: -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Redwood Risk Control Panel</title>
 <!-- Fonts: use system Inter or fallback -->
 <script src="plotly-2.27.0.min.js"></script>
@@ -775,8 +779,12 @@ function upload(e){
 }
 
 function clearDashboard(){
-  try{['rr_history','rr_config'].forEach(k=>localStorage.removeItem(k));Object.keys(localStorage).filter(k=>k.startsWith('rr_data_')).forEach(k=>localStorage.removeItem(k));}catch(e){}
-  A={};cs=null;
+  // B115 (2026-04-27): clear ALL rr_* localStorage on dashboard reset, plus session-only data state.
+  // Preserve only PREFS_KEY (user preferences) and rr.* tile-toolbar state which is harmless.
+  try{
+    Object.keys(localStorage).filter(k=>k.startsWith('rr_')).forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
+  A={};cs=null;window._lastRawJson=null;_selectedWeek=null;_holdFlags={};
   $('content').style.display='none';
   $('uploadZone').style.display='flex';
   $('clearBtn').style.display='none';
@@ -6906,17 +6914,22 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(state.s)window._sharedStrat=state.s;
     }catch(e){}
   }
-  // Clear session data but preserve user preferences
+  // B115 (2026-04-27): aggressive localStorage cleanup on every page load.
+  // Preserve only PREFS_KEY (user prefs) — wipe ALL other rr_* keys to prevent
+  // stale data from previous sessions polluting the current load.
   let _sp='';
   try{_sp=localStorage.getItem(PREFS_KEY)||'';}catch(e){}
-  try{localStorage.removeItem('rr_history');}catch(e){}
+  try{
+    Object.keys(localStorage).filter(k=>k.startsWith('rr_')).forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
   try{if(_sp)localStorage.setItem(PREFS_KEY,_sp);}catch(e){}
-  // Auto-load latest_data.json if available (for server deployment)
+  // Auto-load latest_data.json if available (cache-busted) — for server deployment
   // Falls back to upload zone if file not found
-  fetch('latest_data.json').then(r=>{
+  fetch('latest_data.json?b='+Date.now(),{cache:'no-store'}).then(r=>{
     if(!r.ok)throw new Error('No auto-load file');
     return r.json();
   }).then(data=>{
+    window._lastRawJson=data;
     A=normalize(data);
     let keys=Object.keys(A);
     if(keys.length){

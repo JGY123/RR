@@ -47,6 +47,17 @@
 **Context:** current sample has 3 weekly snap_attrib periods. Production massive-run will ship multi-year history. Once that lands, EVERY upload going forward should be APPEND-ONLY — historical data persists, new uploads add a new period.
 **See:** `HISTORY_PERSISTENCE.md` (architecture doc forthcoming).
 
+### F8 · ANTI-FABRICATION POLICY — never substitute a fabricated number for missing source data
+**Status:** USER MANDATE 2026-04-27 — applies to all dashboard development going forward.
+**Rule:** if a field is sourced from CSV, show the real number. If derived (sanity check from sourced fields), mark visibly with `ᵉ` badge + explanatory tooltip. **Never fabricate a plausible-looking value to fill a gap.** Surfacing missing data is more useful than hiding it.
+**Why:** "even the main box at the top that shows idiosyncratic risk in big somehow shows a wacky number — at least it surfaced the issues. If I had calculated as a substitute and came up with a reasonable number that wouldn't have got my attention." (user, 2026-04-27)
+**Fixes already shipped:**
+- L1235 idio risk box: removed synthesis → shows `—` for historical weeks where pct_specific isn't shipped (commit forthcoming)
+- L666-668 f.c synthesis (B99): kept (avoids breaking 4 dependent tiles) but marked `_c_synth=true` flag → cardFacDetail TE% now shows `ᵉ` superscript on derived cells
+**Remaining work:** propagate `ᵉ` marker to cardFacButt Top-TE-Contributors pills, cardFRB donut, cardRiskFacTbl when those tiles come up in marathon. SOURCES.md tracks every cell's source class.
+
+---
+
 ### F7 · Per-currency / per-industry / per-country attribution rows in 18 Style Snapshot
 **Status:** USER OBSERVATION — confirmed present.
 **What's there:** the snap_attrib dict already has 122+ keys including `BRL`, `Hungary`, `HUF`, `Semiconductors & Semiconductor Equipment`, `Oil, Gas & Consumable Fuels`, etc. These ARE granular per-currency/industry/country attribution rows.

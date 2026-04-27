@@ -660,15 +660,24 @@ function normalize(raw){
       return hn;
     });
     // FINDING 3: Factor active exposure — merge from e or sum._fe if a is null
+    // ANTI-FABRICATION POLICY (2026-04-27): every synthesized field carries a parallel _<field>_synth=true marker
+    // so the UI can render it as estimated (e.g., trailing "ᵉ" + tooltip explaining derivation).
     st.factors=st.factors.map(f=>{
       let fn={...f};
-      fn.a=fn.a??fn.e??(sum._fe&&sum._fe[fn.n]!=null?sum._fe[fn.n]:null);
-      // Proxy TE contribution from |active exposure| × factor std dev when c is missing/zero
-      if((!fn.c||fn.c===0)&&fn.a!=null&&fn.dev!=null)
+      // f.a fallback: prefer source f.a, else f.e (raw), else sum._fe override. Mark when fallback used.
+      if(fn.a==null){
+        if(fn.e!=null){fn.a=fn.e;fn._a_synth='from_e';}
+        else if(sum._fe&&sum._fe[fn.n]!=null){fn.a=sum._fe[fn.n];fn._a_synth='from_sum_fe';}
+      }
+      // f.c synthesis (B99): when source TE-contribution missing, compute |active|×factor σ as a proxy.
+      // Numbers stay math-coherent and normalize to sum to pct_factor — but they are derived, not sourced.
+      if((!fn.c||fn.c===0)&&fn.a!=null&&fn.dev!=null){
         fn.c=+(Math.abs(fn.a)*(fn.dev||1)).toFixed(4);
+        fn._c_synth=true;   // marker propagates through normalize step
+      }
       return fn;
     });
-    // Normalize factor contributions to sum to pct_factor
+    // Normalize factor contributions to sum to pct_factor (preserve _c_synth marker through the scale step)
     {let facCSum=st.factors.reduce((t,f)=>t+Math.abs(f.c||0),0);
      if(facCSum>0&&sum.pct_factor>0){let scale=sum.pct_factor/facCSum;
        st.factors=st.factors.map(f=>({...f,c:+(f.c*scale).toFixed(4)}));}}
@@ -1228,15 +1237,18 @@ function rExp(){
     return`<span style="font-size:9px;color:var(--txt);margin-left:3px">${up?'↑':'↓'}${up?'+':''}${d}</span>`;
   }
 
-  // Idiosyncratic risk percent of TE
-  let eqHold=s.hold.filter(h=>!isCash(h)&&h.p>0);
-  let idioSum=+eqHold.reduce((a,h)=>a+(h.mcr||0),0).toFixed(1);
-  // Compute pct_specific / pct_factor (use parser values if available, else derive)
-  let rawSpec=ws.pct_specific!=null?ws.pct_specific:(ws.te>0?idioSum/ws.te*100:50);
-  let rawFac=ws.pct_factor!=null?ws.pct_factor:(100-rawSpec);
-  let pctTotal=rawSpec+rawFac||100;
-  let pctSpec=+(rawSpec/pctTotal*100).toFixed(0);
-  let pctFac=+(rawFac/pctTotal*100).toFixed(0);
+  // Idiosyncratic risk / Factor risk percent of TE — STRICTLY from CSV's pct_specific / pct_factor
+  // ANTI-FABRICATION POLICY (2026-04-27): when source value is null we show "—", we DO NOT synthesize
+  // a plausible-looking number. Surfacing missing data is more honest than hiding it.
+  // Source: parser RiskM section "% Asset Specific Risk" / "% Factor Risk" columns.
+  // Historical-week views: pct_specific lives in cs.sum (latest-only); hist.sum doesn't carry it →
+  // historical-week selection silently shows latest's value if available, otherwise "—".
+  let pctSpec=null,pctFac=null;
+  if(ws.pct_specific!=null&&ws.pct_factor!=null){
+    let pctTotal=ws.pct_specific+ws.pct_factor||100;
+    pctSpec=+(ws.pct_specific/pctTotal*100).toFixed(0);
+    pctFac=+(ws.pct_factor/pctTotal*100).toFixed(0);
+  }
 
   let html=`${weekBannerHtml()}
   ${thisWeekCardHtml(s)}
@@ -1248,12 +1260,14 @@ function rExp(){
       <div class="sub">${gt(s.hist.sum,'te')} ${s.hist.sum.length} wk trend</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Idiosyncratic risk breakdown">
-      <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error — click for top contributors">Idiosyncratic Risk</div>
-      <div class="value" style="color:var(--acc)">${pctSpec}%</div>
+      <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: RiskM section &lsquo;% Asset Specific Risk&rsquo; column for the current week. Shows &mdash; for historical weeks where the per-week value isn&rsquo;t shipped.">Idiosyncratic Risk</div>
+      <div class="value" style="color:var(--acc)">${pctSpec!=null?pctSpec+'%':'<span style="color:var(--textDim);font-size:20px;font-weight:600">—</span>'}</div>
+      ${pctSpec==null?'<div class="sub" style="color:var(--textDim);font-size:9px">no data for selected week</div>':''}
     </div>
     <div class="sum-card" onclick="oDrMetric('fac')" tabindex="0" role="button" aria-label="Factor risk breakdown">
-      <div class="label tip" data-tip="Factor-driven portion of tracking error — click for top factor contributors">Factor Risk</div>
-      <div class="value" style="color:var(--pri)">${pctFac}%</div>
+      <div class="label tip" data-tip="Factor-driven portion of tracking error. Source: RiskM section &lsquo;% Factor Risk&rsquo; column for the current week. Shows &mdash; for historical weeks where the per-week value isn&rsquo;t shipped.">Factor Risk</div>
+      <div class="value" style="color:var(--pri)">${pctFac!=null?pctFac+'%':'<span style="color:var(--textDim);font-size:20px;font-weight:600">—</span>'}</div>
+      ${pctFac==null?'<div class="sub" style="color:var(--textDim);font-size:9px">no data for selected week</div>':''}
     </div>
   </div>
   <!-- Cash + Benchmark indicator strip -->
@@ -1931,7 +1945,7 @@ function rFacTable(factors){
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
       <td data-col="name"${profTip} title="${nameEsc}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameDisplay}</td>
       <td class="r" data-col="exp_active" data-sv="${f.a??''}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
-      <td class="r" data-col="te" data-sv="${f.c??''}">${f2(f.c,1)}%</td>
+      <td class="r${f._c_synth?' tip-cell':''}" data-col="te" data-sv="${f.c??''}"${f._c_synth?` data-tip="DERIVED: TE contribution synthesized as |Active|×σ × scale-to-pct_factor. Source CSV doesn't ship this field today (FACTSET_FEEDBACK F5). For Size: |${f.a}|×${f.dev}×scale ≈ ${f2(f.c,2)}. This is a sanity-check estimate, not a real reported value."`:''}>${f2(f.c,1)}%${f._c_synth?'<span style="color:var(--warn);font-size:9px;margin-left:2px" title="Derived value — see tooltip">ᵉ</span>':''}</td>
       <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
       <td class="r tip-cell" data-col="imp" data-sv="${impVal??''}" data-tip="${impTipText}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(impVal,2)}</td>
     </tr>`;

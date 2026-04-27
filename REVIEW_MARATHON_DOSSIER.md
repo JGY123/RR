@@ -286,11 +286,11 @@ Verdict triplet = **T1 Data / T2 Functionality / T3 Design**.
 
 # Marathon close-out
 
-When all 24 tiles have a decision:
+When all 24 Tier-1 tiles + cardRiskByDim have a decision:
 
 ```bash
-# For each tile signed off:
-git tag tileaudit.{id}.signedoff <HEAD_SHA> -m "User reviewed in-browser and OK'd current state on 2026-04-24."
+# For each tile signed off (use date of actual decision):
+git tag tileaudit.{id}.signedoff <HEAD_SHA> -m "User reviewed in-browser and OK'd current state on 2026-04-DD."
 gh auth switch --user JGY123
 git push origin --tags
 
@@ -299,23 +299,31 @@ git tag tier1-review-signoff -m "All 24 Tier-1 tiles reviewed + signed off by us
 git push origin tier1-review-signoff
 ```
 
-Then I (advisor) will:
+Then advisor/executor will:
 1. Update `SESSION_STATE.md` checkpoint log: "Tier-1 review marathon closed — N signed off, M deferred."
 2. Move signed-off items to `BACKLOG.md` "Shipped" section (with signoff date + any pending-PM-gate note).
 3. Brief out the PM-gate queue organized by what's blocking what.
 
 ---
 
-# 🧩 After marathon — Tier 2 tile build queue (DO NOT FORGET)
+# 🧩 After marathon — Tier 2 tile build queue
 
-Three new tiles consume `data-foundation-v1`'s `raw_fac` + `security_ref` enrichment. **Registered in BACKLOG as B102–B104. SESSION_STATE "Next up" item #2. Listed here so they can't be missed at marathon close.**
+Tier 2 tiles consume `data-foundation-v1`'s `raw_fac` + `security_ref` enrichment.
 
-- **B102 · `cardRiskByDim`** — risk decomposed by Country / Currency / Industry. **USER'S LITERAL 2026-04-24 ASK.**
-- **B103 · Per-security raw factor drill** — inside `oSt()` modal, 12-factor z-score + sparklines.
-- **B104 · Portfolio raw-exposure aggregate** — synthesis hero reconciling security×factor → portfolio active tilt.
+- **B102 · `cardRiskByDim`** — ✅ **SHIPPED 2026-04-27** (`4217584`). Mini-marathon entry above (tile #25).
+- **B103 — CLOSED** (subsumed into B111 `oDrF` modal full rebuild as the `[Raw Exposure | TE Contribution]` toggle on the Top-5/Bot-5 panel).
+- **B104 · Portfolio raw-exposure aggregate** — synthesis hero reconciling security × factor → portfolio active tilt. **Not yet built.**
 
-After Tier 2 land, second mini-marathon to sign off those 3 = 27 tiles signed overall.
+Carried-forward cross-tile gates (from cardFacDetail re-audit + marathon surfacings):
+- **B109 · Impact-period unified convention** (HIGH priority, cross-tile)
+- **B110 · Sub-factor drill on Country/Currency/Industry** (pairs with B111)
+- **B111 · `oDrF` factor drill modal full rebuild**
+- **B112 · Factor correlation matrix in `oDrF`** (ships with B111)
+- **B113 · Parser pass-through of clean `tkr`**
+- **B114 · History persistence — append-only** (blocks production massive-run ingest)
+
+Post-Tier-1-marathon priority order (advisor's call): B109 → B111 (+B110/B112) → B113 → B114 → B104.
 
 ---
 
-**End of dossier.** When ready to start, open `dashboard_v7.html`, load `sample_data.json`, and tell me which tile you want to start with (or "go" for sequential from tile 1).
+**End of dossier.** When ready to resume, open `dashboard_v7.html`, load `sample_data.json`, and tell the advisor which tile to start with (next un-signed tile is **#10 cardFRB** — the YELLOW block resumes there). Or "go" for sequential.

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Redwood Risk · FactSet Data Extraction — Call Walkthrough</title>
+<style>
+:root{
+  --bg:#0b1120;--card:#0f172a;--surf:#1e293b;--grid:#334155;
+  --txt:#cbd5e1;--txth:#f1f5f9;--textDim:#94a3b8;
+  --pri:#6366f1;--pri-soft:rgba(99,102,241,0.12);
+  --warn:#f59e0b;--warn-soft:rgba(245,158,11,0.12);
+  --neg:#ef4444;--neg-soft:rgba(239,68,68,0.12);
+  --pos:#10b981;--pos-soft:rgba(16,185,129,0.12);
+  --nice:#a855f7;--nice-soft:rgba(168,85,247,0.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'DM Sans','Segoe UI',sans-serif;
+  background:var(--bg);color:var(--txt);
+  line-height:1.55;font-size:15px;
+}
+.layout{display:flex;min-height:100vh}
+nav.toc{
+  position:sticky;top:0;height:100vh;
+  width:280px;flex-shrink:0;
+  background:var(--card);border-right:1px solid var(--grid);
+  overflow-y:auto;padding:24px 18px;
+}
+nav.toc h2{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--textDim);margin-bottom:14px;font-weight:700}
+nav.toc .group{margin-bottom:18px}
+nav.toc .group-label{font-size:10px;text-transform:uppercase;letter-spacing:0.6px;color:var(--textDim);font-weight:700;margin:8px 0 6px 0;padding:0 4px}
+nav.toc a{
+  display:flex;align-items:flex-start;gap:8px;padding:6px 8px;border-radius:6px;
+  color:var(--txt);text-decoration:none;font-size:13px;line-height:1.35;margin-bottom:1px;
+}
+nav.toc a:hover{background:var(--surf);color:var(--txth)}
+nav.toc a.active{background:var(--pri-soft);color:var(--txth);font-weight:600}
+nav.toc a .num{flex-shrink:0;font-size:11px;color:var(--textDim);font-weight:700;font-family:'JetBrains Mono',ui-monospace,monospace;padding-top:1px}
+main{flex:1;padding:48px 56px;max-width:920px}
+.cover{
+  border-bottom:1px solid var(--grid);padding-bottom:36px;margin-bottom:48px;
+}
+.cover .eyebrow{color:var(--pri);font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px}
+.cover h1{font-size:32px;font-weight:700;color:var(--txth);letter-spacing:-0.5px;line-height:1.15;margin-bottom:14px}
+.cover .sub{color:var(--textDim);font-size:16px;max-width:720px;line-height:1.55}
+.cover .meta{margin-top:22px;display:flex;gap:24px;font-size:12px;color:var(--textDim);flex-wrap:wrap}
+.cover .meta b{color:var(--txth);font-weight:600}
+
+.section{margin-top:56px}
+.section-head{display:flex;align-items:baseline;gap:14px;border-bottom:2px solid var(--grid);padding-bottom:10px;margin-bottom:28px}
+.section-head .letter{font-size:22px;font-weight:700;color:var(--pri);font-family:'JetBrains Mono',ui-monospace,monospace}
+.section-head h2{font-size:22px;color:var(--txth);font-weight:700;letter-spacing:-0.3px}
+.section-head .desc{color:var(--textDim);font-size:13px;margin-left:auto;text-align:right}
+
+.ask{
+  background:var(--card);border:1px solid var(--grid);border-radius:10px;
+  padding:24px 28px;margin-bottom:18px;
+}
+.ask:target{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-soft)}
+.ask-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:14px}
+.ask-num{
+  flex-shrink:0;font-size:14px;font-weight:700;color:var(--pri);
+  font-family:'JetBrains Mono',ui-monospace,monospace;
+  background:var(--pri-soft);padding:4px 8px;border-radius:5px;line-height:1;
+  margin-top:3px;
+}
+.ask-title{flex:1;font-size:18px;font-weight:600;color:var(--txth);line-height:1.35}
+.priority{
+  flex-shrink:0;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;
+  padding:4px 9px;border-radius:5px;line-height:1;margin-top:3px;
+}
+.priority.critical{background:var(--neg-soft);color:var(--neg);border:1px solid rgba(239,68,68,0.3)}
+.priority.high{background:var(--warn-soft);color:var(--warn);border:1px solid rgba(245,158,11,0.3)}
+.priority.confirm{background:var(--pri-soft);color:var(--pri);border:1px solid rgba(99,102,241,0.3)}
+.priority.nice{background:var(--nice-soft);color:var(--nice);border:1px solid rgba(168,85,247,0.3)}
+
+.ask-body{display:grid;grid-template-columns:1fr;gap:14px}
+.row{
+  display:grid;grid-template-columns:130px 1fr;gap:18px;align-items:start;
+  padding:8px 0;border-top:1px solid rgba(51,65,85,0.5);
+}
+.row:first-child{border-top:none;padding-top:0}
+.row .label{
+  font-size:11px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.6px;font-weight:700;
+  padding-top:2px;
+}
+.row .body{color:var(--txt);font-size:14px;line-height:1.55}
+.row .body code{background:var(--surf);padding:1px 6px;border-radius:3px;font-size:12.5px;font-family:'JetBrains Mono',ui-monospace,monospace;color:var(--txth)}
+.row .body strong{color:var(--txth);font-weight:600}
+.row.what .body{color:var(--txth);font-size:14.5px;font-weight:500}
+.row.why .body{color:var(--txth)}
+.row.today .body{color:var(--textDim)}
+.row.accept{background:rgba(99,102,241,0.04)}
+.row.accept .body{color:var(--txth)}
+
+.callout{background:var(--pri-soft);border-left:3px solid var(--pri);padding:14px 18px;border-radius:6px;font-size:13.5px;color:var(--txth);margin:18px 0}
+.callout.warn{background:var(--warn-soft);border-left-color:var(--warn)}
+
+.confirmed{margin-top:20px;background:var(--pos-soft);border:1px solid rgba(16,185,129,0.3);border-radius:10px;padding:18px 22px}
+.confirmed h3{color:var(--pos);font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px;font-weight:700}
+.confirmed ul{list-style:none;padding-left:0}
+.confirmed li{padding:5px 0;color:var(--txt);font-size:13.5px}
+.confirmed li::before{content:"✓ ";color:var(--pos);font-weight:700;margin-right:6px}
+
+.opener{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:24px 28px;margin-top:32px}
+.opener h3{color:var(--txth);font-size:15px;margin-bottom:10px;font-weight:600}
+.opener blockquote{font-style:italic;color:var(--txt);border-left:3px solid var(--pri);padding:8px 18px;font-size:14.5px;line-height:1.6}
+
+.checklist{margin-top:48px;border-top:2px solid var(--grid);padding-top:32px}
+.checklist h2{font-size:18px;color:var(--txth);margin-bottom:16px;font-weight:700}
+.checklist ol{list-style:none;padding-left:0}
+.checklist li{padding:8px 0;color:var(--txt);font-size:14px;line-height:1.55;display:flex;gap:12px;align-items:flex-start}
+.checklist li::before{content:"";flex-shrink:0;width:14px;height:14px;border:1.5px solid var(--grid);border-radius:3px;margin-top:5px}
+
+footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--grid);color:var(--textDim);font-size:12px;text-align:center}
+
+@media print{
+  nav.toc{display:none}
+  body{background:#fff;color:#111}
+  main{max-width:none;padding:24px}
+  .ask,.callout,.confirmed,.opener,.checklist{background:#fff !important;color:#111;border-color:#ccc}
+  .ask-title,.row.what .body,.row.why .body,.row.accept .body,.cover h1,.section-head h2,.opener h3,.checklist h2{color:#111}
+  .row .body,.row.today .body,.cover .sub,.cover .meta,nav.toc{color:#444}
+  .priority.critical{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+  .priority.high{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+  .priority.confirm{background:#e0e7ff;color:#3730a3;border-color:#a5b4fc}
+  .priority.nice{background:#ede9fe;color:#5b21b6;border-color:#c4b5fd}
+  .layout{display:block}
+  .ask{break-inside:avoid;page-break-inside:avoid}
+  .section-head{break-after:avoid}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<nav class="toc">
+<h2>Walkthrough</h2>
+<a href="#cover"><span class="num">·</span> Cover & goal</a>
+
+<div class="group">
+<div class="group-label">A · Critical (must resolve)</div>
+<a href="#a1"><span class="num">A1</span> Ship every holding</a>
+<a href="#a2"><span class="num">A2</span> Per-stock factor data</a>
+<a href="#a3"><span class="num">A3</span> RiskM section header fix</a>
+<a href="#a4"><span class="num">A4</span> Per-factor TE % populated</a>
+<a href="#a5"><span class="num">A5</span> Group tables — all rows</a>
+<a href="#a6"><span class="num">A6</span> Overall rank grouping</a>
+<a href="#a7"><span class="num">A7</span> CSV quoting fix</a>
+</div>
+
+<div class="group">
+<div class="group-label">B · Confirmations (yes/no)</div>
+<a href="#b1"><span class="num">B1</span> 15+ accounts schema</a>
+<a href="#b2"><span class="num">B2</span> 20-year history naming</a>
+<a href="#b3"><span class="num">B3</span> Weekly delivery model</a>
+<a href="#b4"><span class="num">B4</span> Date convention</a>
+<a href="#b5"><span class="num">B5</span> ADR country/currency</a>
+<a href="#b6"><span class="num">B6</span> Section-anchor stability</a>
+<a href="#b7"><span class="num">B7</span> @NA / [Unassigned]</a>
+<a href="#b8"><span class="num">B8</span> Compounding method</a>
+<a href="#b9"><span class="num">B9</span> Missing-factor pattern</a>
+<a href="#b10"><span class="num">B10</span> New IPO / illiquid</a>
+<a href="#b11"><span class="num">B11</span> Decimal precision</a>
+</div>
+
+<div class="group">
+<div class="group-label">C · Additions (priority-tagged)</div>
+<a href="#c1"><span class="num">C1</span> Brinson attribution</a>
+<a href="#c2"><span class="num">C2</span> % of Variance per row</a>
+<a href="#c3"><span class="num">C3</span> Sector-history fields</a>
+<a href="#c4"><span class="num">C4</span> Top-10 fundamentals</a>
+<a href="#c5"><span class="num">C5</span> Hit rate</a>
+<a href="#c6"><span class="num">C6</span> Trailing returns</a>
+<a href="#c7"><span class="num">C7</span> Currency hedging</a>
+<a href="#c8"><span class="num">C8</span> Turnover</a>
+<a href="#c9"><span class="num">C9</span> Daily-data option</a>
+</div>
+
+<div class="group">
+<div class="group-label">D · Logistics</div>
+<a href="#d1"><span class="num">D1</span> Test pull first</a>
+<a href="#d2"><span class="num">D2</span> Delivery channel</a>
+<a href="#d3"><span class="num">D3</span> Schema doc</a>
+<a href="#d4"><span class="num">D4</span> Backwards compat</a>
+<a href="#d5"><span class="num">D5</span> New account mapping</a>
+</div>
+
+<div class="group">
+<div class="group-label">Wrap-up</div>
+<a href="#confirmed">Already shipped</a>
+<a href="#opener">Suggested opener</a>
+<a href="#post">Post-call steps</a>
+</div>
+</nav>
+
+<main>
+
+<section class="cover" id="cover">
+<div class="eyebrow">Redwood Risk · FactSet data-extraction call</div>
+<h1>Final spec walkthrough before the massive run</h1>
+<p class="sub">A go-through-one-by-one agenda. Goal: by end of call we have a yes/no on every Critical and Confirmation item, and FactSet sends a short test pull with the fixes applied. Once that test pull passes our integrity checks, you green-light the full extraction including the 15+ new accounts.</p>
+<div class="meta">
+<div><b>Drafted</b> 2026-04-27</div>
+<div><b>Open one item at a time</b> · sidebar links to each</div>
+<div><b>Print-to-PDF</b> works (Cmd+P)</div>
+</div>
+<div class="callout">
+<b>How to run the call:</b> open this in a browser, share screen, walk through Section A first (must-resolves), then B (confirmations), then C (additions if quick). Mark each resolved as you go. Anything not resolved becomes a follow-up item.
+</div>
+</section>
+
+<!-- ================== SECTION A ================== -->
+
+<section class="section">
+<div class="section-head"><span class="letter">A</span><h2>Critical — must resolve before the massive run</h2><div class="desc">If any of these aren't fixed, the dashboard ships with gaps the PMs will see immediately.</div></div>
+
+<div class="ask" id="a1">
+<div class="ask-head">
+<div class="ask-num">A1</div>
+<div class="ask-title">Every weekly file must contain ALL holdings, not just a partial sample</div>
+<div class="priority critical">Critical</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">Every week's data block needs to list every stock the portfolio owns AND every stock in the benchmark that's a meaningful risk contributor (a benchmark-only position above 0.5% weight, OR contributing more than 1% of tracking error).</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Today most strategies show only 19–50% of their actual holdings. Worst case: GSC has 9 of its 50 holdings — 81% missing. Every drill-down, every "which stock is driving Industrials' risk?" question hits a wall. Sector-table totals don't reconcile against summed-up holding totals (IDM Industrials: 8.3% from holdings, 25.6% in the sector table).</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">Coverage by strategy: IDM 47.7%, ACWI 33.3%, IOP 34.1%, EM 52.5%, GSC 18.7%, ISC 21.0%, SCG 40.1%.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">Counting Security rows for any strategy = portfolio-holding count + the benchmark-overlap holdings passing the materiality filter. Both numbers match the strategy's stated holdings count in its Summary section.</div></div>
+</div>
+</div>
+
+<div class="ask" id="a2">
+<div class="ask-head">
+<div class="ask-num">A2</div>
+<div class="ask-title">Add per-stock factor data on the Security rows</div>
+<div class="priority critical">Critical</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">For each holding, two new column blocks per weekly snapshot:<br><br><strong>1. Factor TE contribution per holding</strong> — how each stock's total tracking error (%T) splits across the 12 style factors plus Market, Industry, Country, Currency. Sums to the stock's %T.<br><br><strong>2. Raw factor exposures (Axioma z-scores) per holding</strong> — the loadings on those same factors.<br><br>If file size allows, the wide version is preferable: every individual industry, every individual country, every individual currency listed as separate columns. If not, the 12 styles + 4 aggregates is the floor.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">This is the single biggest unlock in the dashboard. Today we can see "TSMC contributes 6.9% to TE, 3.6% of which is stock-specific" — but we cannot say WHICH factors that other 3.3% flows through. With this data: "adding TSMC would raise our Volatility exposure by X" becomes answerable. Sector / country / region tables can show factor breakdowns rolled up from holdings without us needing to ask FactSet for parallel group-level fields.</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">Holdings have %T (total TE contribution) and %S (stock-specific share). The factor split is invisible. The dashboard's Factor TE Breakdown columns currently use a synthesis with a derivation marker — the user has banned synthesis going forward.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">Sample shows new factor columns on every Security row, populated for both portfolio and benchmark holdings. The 12 style + 4 aggregate factor TE columns sum (within rounding) to the holding's total %T.</div></div>
+</div>
+</div>
+
+<div class="ask" id="a3">
+<div class="ask-head">
+<div class="ask-num">A3</div>
+<div class="ask-title">RiskM section: column headers must match the data underneath them</div>
+<div class="priority critical">Critical</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">In the RiskM section of the new sample, several cells contain numeric values in column positions where the header label says something else (e.g., a date-label column position holding a TE value). Some factor-name columns are missing entirely. Headers and cell content need to align unambiguously.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Our parser uses the text of the header row to identify the per-factor "% of Variance" and "Active Exposure" blocks. When those anchors are missing, all factor exposures and all factor TE contributions in the parsed JSON come out null. We've worked around this, but it's fragile and the next format change could quietly break it again.</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">RiskM headers don't include the % of Variance / Active Exposure text we expect. Columns appear to be off-by-one in places. Earnings Yield, FX Sensitivity, Market Sensitivity, Momentum show empty Active Exposure for 6/7 strategies. Leverage, Liquidity, Profitability, Volatility show empty % of Variance for the same. We don't know if that's a model issue or a header-misalignment issue.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">Every factor row in RiskM has both columns populated, headers literally read "% of Variance" and "Active Exposure", and the values match what the 18 Style Snapshot says for the same factor.</div></div>
+</div>
+</div>
+
+<div class="ask" id="a4">
+<div class="ask-head">
+<div class="ask-num">A4</div>
+<div class="ask-title">Per-factor TE contribution — populated for every factor, not just some</div>
+<div class="priority critical">Critical</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">For every factor, ship the actual percentage of total tracking error attributable to it. Today this is null on Growth and most other factors; only a handful (Momentum, Volatility) have it populated.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">The dashboard previously synthesized this number where missing — multiplying active exposure × factor stdev and normalizing the result. The user banned that approach after a synthesized 15.1% Size contribution looked plausible but was actually fabricated. Hard rule going forward: every visible number traces to FactSet or shows as missing. So we need this field populated for real, not approximated.</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">f.c is null for most factors. Dashboard shows the synthesized value with an "ᵉ" marker. We need to remove the marker by sourcing the real number.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">Every factor in every weekly snapshot has a non-null TE-contribution cell. Across the factor set, contributions sum to roughly 100%.</div></div>
+</div>
+</div>
+
+<div class="ask" id="a5">
+<div class="ask-head">
+<div class="ask-num">A5</div>
+<div class="ask-title">Group tables (Sectors, Countries, Industries, Regions, Style Groups) — include every group, even when port weight is zero</div>
+<div class="priority critical">Critical</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">Today, group tables exclude rows where the portfolio owns nothing. That hides active underweights. If we're 0% in Energy and the benchmark is 3.8% Energy, we want to see a row showing W=0, BW=3.8, AW=−3.8 — not a missing row.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Active underweights are exactly what a risk dashboard exists to show. Hidden zero-weight rows mean the PM can't see "we're 7% underweight Industrials" if Industrials happens to also be a 0% portfolio position. Benchmark coverage today sums to 60–95% across strategies instead of 100% because of this hiding.</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">Sector benchmark sums by strategy: IDM 94.7%, ACWI 86.7%, IOP 95.3%, EM 89.2%, GSC 95.4%, ISC 71.2%, SCG 94.1%. Industry sums even lower. Same for the 8 RWOOD style groups (HARD CYCLICAL, SOFT CYCLICAL, BANKS, BOND PROXIES, etc.) — zero-weight rows excluded.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">All 11 GICS L1 sectors appear for every strategy. Benchmark weight sums to ≈100% in every group table. Same for Industry, Country, Region, and the 8 RWOOD groups.</div></div>
+</div>
+</div>
+
+<div class="ask" id="a6">
+<div class="ask-head">
+<div class="ask-num">A6</div>
+<div class="ask-title">"Overall" rank table — quintile groupings are mis-bucketed</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">In the rank tables, holdings should be bucketed by their quintile rank. Q1 should contain only stocks with rank=1, Q2 only rank=2, etc. The sub-rank tables (REV, VAL, QUAL) do this correctly — Q1 weighted-avg comes out exactly 1.00, Q2 exactly 2.00, and so on. The "Overall" table doesn't — it shows 1.78 for Q1, 2.43 for Q3, 2.91 for Q5. That means stocks with different Overall ranks are being mixed into the same group.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">The dashboard's Spotlight tile uses these quintile averages to highlight quality concentrations. When the buckets don't actually represent their named rank, the table reports nonsense — Q1 ("best stocks") shows an average rank of 1.78 which means it includes stocks ranked 2 and 3 too.</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">Ticker rows appear inside quintile groups in the Overall table (IDM has "2875" as a row alongside Q1-Q5; ACWI has AMZN, ALAB, BWXT, EXEL, NU; GSC has only 3 of 5 quintile rows). REV/VAL/QUAL tables are clean.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">Overall table shows 5 quintile rows only (no individual tickers), and OVER_WAvg = 1.00 in Q1, 2.00 in Q2, ... 5.00 in Q5 — exact integers, just like the sub-rank tables.</div></div>
+</div>
+</div>
+
+<div class="ask" id="a7">
+<div class="ask-head">
+<div class="ask-num">A7</div>
+<div class="ask-title">Quote all string fields — security names with commas are silently corrupting rows</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we need</div><div class="body">Every text field in the CSV (security names especially) wrapped in double quotes. So "ABC Corp., Ltd." stays in one column instead of splitting at the embedded comma.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Currently, names like "Pathward Financial, Inc." split into multiple columns. The weight columns shift by one, the position becomes effectively lost from the dataset, and dashboard totals quietly under-count. We caught one but there are likely others.</div></div>
+<div class="row today"><div class="label">Today</div><div class="body">Confirmed at least one name-comma case (CASH = Pathward Financial, Inc.) corrupts that row's columns.</div></div>
+<div class="row accept"><div class="label">Done when</div><div class="body">Searching the file for any text-field comma returns zero off-by-one column shifts. All security names are quoted.</div></div>
+</div>
+</div>
+
+</section>
+
+<!-- ================== SECTION B ================== -->
+
+<section class="section">
+<div class="section-head"><span class="letter">B</span><h2>Confirmations — yes/no questions that need answers in writing</h2><div class="desc">These don't necessarily change the file format; they confirm how things will behave so we can plan around them.</div></div>
+
+<div class="ask" id="b1">
+<div class="ask-head">
+<div class="ask-num">B1</div>
+<div class="ask-title">15+ new accounts coming in the massive run — same file structure?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Will all 15+ accounts ship in a single file with an ACCT column distinguishing them, OR each in a separate file with identical schema? Will the column structure be identical across all of them, including custom-blended-benchmark accounts and any fund-of-funds?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">Our parser is header-driven and adapts to column-count differences automatically — but only within known section types. If a fund-of-funds (sleeve-of-sleeves) needs a different column count, we want to know upfront so we don't assume it's a corrupted file.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"All 15+ ship in one concatenated file with consistent column structure. Custom blended benchmarks are flagged in the BENCHMARK column. No fund-of-fund schemas in this batch."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b2">
+<div class="ask-head">
+<div class="ask-num">B2</div>
+<div class="ask-title">20-year history — current factor names + current GICS classifications applied retroactively?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Going back 20 years (~2006), the Axioma model has shipped multiple versions and several factors have been renamed over time (e.g., "Medium-Term Momentum" used to be written differently). GICS has also reclassified — Retailing became Consumer Discretionary Distribution & Retail; Media became Media & Entertainment; Pharmaceuticals split. <br><br>For the long history pull, will FactSet apply the current names retroactively across the full series, OR will historical periods carry their period-correct names?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">The dashboard tracks each factor and each industry as a single time-series. If a factor renames mid-history, the chart breaks into two unrelated series. Same for an industry that splits. Retroactive consistent naming is what the dashboard needs.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Yes, current factor names and current GICS taxonomy applied retroactively across the full 20-year series. Pre-split categories already merged into their current equivalents."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b3">
+<div class="ask-head">
+<div class="ask-num">B3</div>
+<div class="ask-title">After the massive run, how do ongoing weekly updates land?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Once the 20-year baseline lands, future weekly pulls should APPEND to it. Two options:<br><br><strong>Option 1 — append-only:</strong> each new week is a small file containing just that week's data. We append to our local store.<br><br><strong>Option 2 — full re-pull:</strong> each weekly file contains the full history again. We replace our local store every week.<br><br>Which is the plan? And: SFTP / S3 / API / email? What day of week, what time?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">RR's storage architecture assumes append-only — full re-pulls would re-run the entire pipeline every week, defeating the purpose of historical snapshots. Also: for a confidence check that data isn't drifting, we need to know exactly what each weekly delivery contains.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Append-only weekly delivery via SFTP, posted Tuesday 7am ET, containing only the new week's data with identical schema to the historical baseline. Files are named [date]_[batch].csv."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b4">
+<div class="ask-head">
+<div class="ask-num">B4</div>
+<div class="ask-title">Date convention — what day does each weekly snapshot represent?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Each weekly snapshot — does the date column refer to Friday's close, Monday's open, T+1, end-of-day, intraday? Just confirming the convention so the dashboard's date labels mean what we think.</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">If we tell a PM "this is your 4/19 snapshot" and they pull a separate 4/19 trade-blotter that turns out to be Monday's pre-market state, those numbers won't reconcile. Better to confirm now.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Date column = Friday close, T+1 priced. We use last available close for any non-trading Friday."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b5">
+<div class="ask-head">
+<div class="ask-num">B5</div>
+<div class="ask-title">For ADRs and dual-listings, what does "Country" and "Currency" mean exactly?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">For an EM stock like a TSMC ADR listed on NYSE in USD: country-of-incorporation = Taiwan, country-of-listing = US, country-of-risk = Taiwan, currency-of-listing = USD, currency-of-risk = TWD. Today's Security section has Country and Currency columns — which of these conventions do they follow?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">For risk attribution, country-of-risk is what matters (TSMC's risk is tied to Taiwan even if it trades in USD on NYSE). For currency exposure, currency-of-risk is what hedging decisions reference. The wrong convention makes country and currency tiles useless for EM and ACWIxUS strategies.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Country column = country-of-risk (where the business operates). Currency column = currency-of-revenue / functional currency. Both fields independent of listing venue."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b6">
+<div class="ask-head">
+<div class="ask-num">B6</div>
+<div class="ask-title">Section anchors — text labels in the file that tell our parser where one section ends and the next begins — will those stay stable?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Our parser identifies sections by looking for known text patterns ("RiskM", "Security", "Sector Weights", "% of Variance", "Active Exposure"). If those exact strings change in any future export — even subtly (added space, different capitalization, renamed) — the parser will silently drop that section and fields will go null.<br><br>Will those anchor strings remain bit-identical across:<br>1. The 15+ new accounts<br>2. The 20-year history<br>3. Future weekly updates<br><br>If a section needs to rename, can FactSet give us a heads-up email so we can update the parser before the change ships?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">We've already had one parser-drift incident (April 2026) where 4 different parser code paths each interpreted column 15 differently after a format change, producing wacky on-screen numbers (like 60% idiosyncratic risk where the truth was 49%). Anchor stability is a guard against that happening again.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Anchor strings are stable across all three dimensions. We'll email you in advance if any section name needs to change."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b7">
+<div class="ask-head">
+<div class="ask-num">B7</div>
+<div class="ask-title">[Cash], @NA, [Unassigned] — what do these special row labels mean?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Confirm:<br>• [Cash] = portfolio's cash allocation (assumed)<br>• @NA = holdings that couldn't be classified into a grouping dimension (sector, country)?<br>• [Unassigned] = same as @NA, or different concept?<br>• Are @NA / [Unassigned] weights INCLUDED in the named-group totals (so a sector's W is final), or do they sit OUTSIDE all named groups (so totals don't sum to 100%)?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">If we double-count an @NA position (counting it once in [Unassigned] and once again in some sector), portfolio totals exceed 100%. If we leave it out, they undershoot. Need to know which.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"[Cash] = cash. @NA = could not classify the security; not included in named-group totals (so weights don't sum to exactly 100, the @NA bucket carries the residual). [Unassigned] is the same concept for groups that don't have a name yet (or for cash for purposes of style classification)."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b8">
+<div class="ask-head">
+<div class="ask-num">B8</div>
+<div class="ask-title">Cumulative Factor Impact — compounded daily or weekly?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">In the 18 Style Snapshot section, the Cumulative Factor Impact column — is it computed by chaining the underlying daily factor returns through every trading day from start, OR by chaining the weekly figures together (1+w1)(1+w2)...(1+wN) - 1?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">PMs sometimes want to see attribution for arbitrary sub-periods (e.g., 2020-2022 only). If cumulative is computed daily and we try to reconstruct the sub-period from weekly figures, we'll have small rounding drift — not a deal-breaker but worth knowing the magnitude over a 20-year window.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Cumulative is computed by daily compounding. You can reconstruct sub-periods from weekly figures with a typical drift of ~1bp over 5 years."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b9">
+<div class="ask-head">
+<div class="ask-num">B9</div>
+<div class="ask-title">Why are some Axioma factors blank for some strategies?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Across all strategies, certain factors have empty cells in RiskM. The pattern is systematic, not random:<br>• <strong>Empty Active Exposure:</strong> Earnings Yield, FX Sensitivity, Market Sensitivity, Momentum (6 of 7 strategies)<br>• <strong>Empty % of Variance:</strong> Leverage, Liquidity, Profitability, Volatility (same 6 strategies)<br><br>Is this a model-vs-universe phenomenon (some Axioma factors not estimated for certain regions, e.g., EM)? Or a report-config issue we can flip?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">If it's a model thing, the dashboard should show "—" with a tooltip explaining the factor isn't available for this universe. If it's a config switch, we want it flipped.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"It's the model — Axioma's medium-cap EM model omits Earnings Yield and Momentum because the historical fit was weak in EM. Other gaps are config; we can flip those on."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b10">
+<div class="ask-head">
+<div class="ask-num">B10</div>
+<div class="ask-title">For new IPOs and illiquid OTC names — what do empty factor cells mean?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">A stock that IPO'd a month ago, or an illiquid OTC name without enough trading history, won't have an Axioma exposure. When that happens, what does the cell show? Blank? Zero? Some sentinel value? Need to be able to distinguish "intentionally zero" from "data not available".</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">If "data not available" comes through as 0, the dashboard's risk math treats the position as risk-free, which is dangerous. If it comes through as blank, our parser knows to flag it and the dashboard shows a "—" instead.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"For securities without sufficient history, all factor exposure cells are left blank (empty string). The Spotlight ranks are populated separately and may still be present."</div></div>
+</div>
+</div>
+
+<div class="ask" id="b11">
+<div class="ask-head">
+<div class="ask-num">B11</div>
+<div class="ask-title">Decimal precision — how many digits, are values rounded?</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Question</div><div class="body">Weights, returns, and TE contributions — what decimal precision is exported? Are values rounded at write-time, or pass-through from the source?</div></div>
+<div class="row why"><div class="label">Why we ask</div><div class="body">For very small bench-only positions (a 0.04% TE contribution), we want to know if it's truly 0.04% or if it could be anything from 0.035 to 0.045 due to rounding. Affects how we sum many small contributions and reconcile against the portfolio total.</div></div>
+<div class="row accept"><div class="label">Good answer looks like</div><div class="body">"Weights to 2dp, returns and TE contributions to 4dp, both rounded at export. Source is higher precision but we don't expose it in CSV."</div></div>
+</div>
+</div>
+
+</section>
+
+<!-- ================== SECTION C ================== -->
+
+<section class="section">
+<div class="section-head"><span class="letter">C</span><h2>Additions — only if straightforward to include</h2><div class="desc">If easy to add, transformative. If not, can wait. Order = priority.</div></div>
+
+<div class="ask" id="c1">
+<div class="ask-head">
+<div class="ask-num">C1</div>
+<div class="ask-title">Brinson attribution inputs — sector-level returns</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">Per period (weekly), three new fields:<br>1. <code>sector_port_return</code> — total return contribution of the portfolio's holdings in each sector<br>2. <code>sector_bench_return</code> — same for the benchmark's holdings<br>3. <code>bench_total_return</code> — the benchmark's total period return (one number)<br><br><strong>Easier alternative:</strong> just add a single <code>PERIOD_RETURN</code> column on each holding row. We can aggregate up to sector / country / industry / group on our side.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Brinson is the standard PM-facing attribution view: "your alpha came from being right on Sector Allocation, Wrong on Stock Selection within Tech". The dashboard has a slot for it but no source data. Single biggest net-new analytical capability if shipped.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c2">
+<div class="ask-head">
+<div class="ask-num">C2</div>
+<div class="ask-title">18 Style Snapshot — add a "% of Variance" column</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">One new column on every row of the 18 Style Snapshot section: % of Variance (TE contribution).</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Today, "which specific industry contributes the most to risk?" requires breaking out RiskM into thousands of new rows (one per industry × period × strategy). Adding ONE extra column on the existing snapshot rows accomplishes the same thing with negligible file growth, and puts return attribution and risk contribution side by side.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c3">
+<div class="ask-head">
+<div class="ask-num">C3</div>
+<div class="ask-title">Sector / Country / Industry historical fields — %T, %S, W, BW per period</div>
+<div class="priority confirm">Medium</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">Per group, per weekly period: the same four fields the holding-level data has — total TE %, stock-specific TE %, portfolio weight, benchmark weight.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">The dashboard has a Trend column inside every group table that's supposed to show how each sector's risk contribution evolved over time. Today, sector-level historical %T isn't shipped, so the column shows a static current-state indicator only. With this data, the column lights up with full multi-week trends.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c4">
+<div class="ask-head">
+<div class="ask-num">C4</div>
+<div class="ask-title">Top-10 fundamental metrics — port + bench averages</div>
+<div class="priority confirm">Medium</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">Same vertical Portfolio Characteristics format as today's section. Adds 10 more rows:<br>1. Forward P/E (NTM)<br>2. EV/EBITDA<br>3. Price/Sales<br>4. Revenue Growth 1Y<br>5. ROIC<br>6. Net Debt/EBITDA<br>7. Total Return 1Y<br>8. Excess Return vs Benchmark 1Y<br>9. Gross Margin<br>10. EPS Growth NTM<br><br>Both portfolio and benchmark weighted-average values (same format as Market Cap, ROE, etc. today).</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Transforms the Characteristics tile from 8 metrics to 18 — covers forward valuation, capital efficiency, leverage quality, return-vs-bench. The next 36 metrics on our list are nice-to-have; these 10 are the ones every PM I've talked to expects.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c5">
+<div class="ask-head">
+<div class="ask-num">C5</div>
+<div class="ask-title">Hit rate / batting average</div>
+<div class="priority nice">Nice</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">A single number per period: percentage of active positions that contributed positively to relative return. Standard summary stat.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Common PM scorecard metric. We have a slot in the dashboard but no data behind it.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c6">
+<div class="ask-head">
+<div class="ask-num">C6</div>
+<div class="ask-title">Trailing returns at the strategy level — 1M / 3M / 6M / 1Y / 3Y / 5Y / since-inception</div>
+<div class="priority nice">Nice</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">Per strategy, per snapshot: 7 trailing-period total returns for portfolio, benchmark, and active. Standard performance grid.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Today we have weekly/cumulative factor impact, but no clean strategy-level trailing return numbers. Common ask from PMs reviewing the dashboard.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c7">
+<div class="ask-head">
+<div class="ask-num">C7</div>
+<div class="ask-title">Currency hedging exposure for hedged share-classes</div>
+<div class="priority nice">Nice</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">For any of the 15+ new accounts that run with currency hedging, expose the hedge ratio per currency or net hedged exposure. Simple summary fields would do.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Hedged-share-class strategies have a meaningful chunk of their risk profile in currency overlay. Today the dashboard has no view into that.</div></div>
+</div>
+</div>
+
+<div class="ask" id="c8">
+<div class="ask-head">
+<div class="ask-num">C8</div>
+<div class="ask-title">Holdings turnover per period</div>
+<div class="priority nice">Nice</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">Per strategy, per period: the percentage of portfolio NAV that traded that period. A direct turnover number.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Today, "how much did the portfolio change last week?" requires diffing two consecutive snapshots. Direct turnover would be cleaner and let us answer "was this past month's alpha mostly from new positions or maintained ones?"</div></div>
+</div>
+</div>
+
+<div class="ask" id="c9">
+<div class="ask-head">
+<div class="ask-num">C9</div>
+<div class="ask-title">Daily-frequency data option for the most recent month</div>
+<div class="priority nice">Nice</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">What we'd add</div><div class="body">For the last 30 days, an optional daily-frequency file alongside the weekly bulk. Doesn't need to be retroactive; just current.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Improves attribution accuracy on intra-week events — earnings days, tariff announcements, central-bank moves. PMs sometimes ask "what did Tuesday's tariff news do to my exposures by Wednesday?" — daily resolution answers that; weekly doesn't.</div></div>
+</div>
+</div>
+
+</section>
+
+<!-- ================== SECTION D ================== -->
+
+<section class="section">
+<div class="section-head"><span class="letter">D</span><h2>Logistics — confirm before signing off</h2></div>
+
+<div class="ask" id="d1">
+<div class="ask-head">
+<div class="ask-num">D1</div>
+<div class="ask-title">Test pull first, before the full massive run</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Ask</div><div class="body">Before committing to the full 15+ account, 20-year extraction, ship a SHORT verification file:<br>• 1–2 weeks of data only<br>• 2–3 representative strategies (one developed, one EM, one small-cap)<br>• All Section A fixes applied<br>• A schema document listing every section, column, units, and edge cases<br><br>We'll run our integrity-check pipeline against it (~5 minutes) and confirm everything is right before you commit compute to the bulk extraction.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Catches column-shift, anchor-drift, and rounding issues before they get baked into a multi-hour extraction. Saves both teams time on the back-end.</div></div>
+</div>
+</div>
+
+<div class="ask" id="d2">
+<div class="ask-head">
+<div class="ask-num">D2</div>
+<div class="ask-title">Delivery channel + schedule for ongoing weekly updates</div>
+<div class="priority confirm">Confirmation</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Ask</div><div class="body">Confirm delivery mechanism for: (a) the test pull, (b) the massive run, (c) ongoing weeklies. SFTP / S3 bucket / API endpoint / email / shared drive? Day-of-week and time-of-day for the recurring weekly?</div></div>
+</div>
+</div>
+
+<div class="ask" id="d3">
+<div class="ask-head">
+<div class="ask-num">D3</div>
+<div class="ask-title">Schema document alongside the test pull</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Ask</div><div class="body">When you ship the next sample, include a brief schema doc that lists every section, every column, the value type, units, and any edge-case behavior. Living doc both teams reference. Avoids "what does column 47 mean?" debates later.</div></div>
+<div class="row why"><div class="label">Why it matters</div><div class="body">Makes Section B confirmations re-checkable in the future and creates a single source of truth when the inevitable "did the format change?" question comes up months later.</div></div>
+</div>
+</div>
+
+<div class="ask" id="d4">
+<div class="ask-head">
+<div class="ask-num">D4</div>
+<div class="ask-title">Backwards-compatibility commitment</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Ask</div><div class="body">Once a column ships in a delivered file, it doesn't get removed or renamed in future pulls without 30 days' notice. We can absorb additions any time. Removals or renames break the parser silently and cost a day or two to diagnose.</div></div>
+</div>
+</div>
+
+<div class="ask" id="d5">
+<div class="ask-head">
+<div class="ask-num">D5</div>
+<div class="ask-title">Account code mapping for the 15+ new accounts</div>
+<div class="priority high">High</div>
+</div>
+<div class="ask-body">
+<div class="row what"><div class="label">Ask</div><div class="body">As soon as the new account list is finalized, share a mapping table: account code → strategy name → benchmark. We pre-register each in the dashboard's strategy-mapping config and update our reference data so they're recognized on day one.</div></div>
+</div>
+</div>
+
+</section>
+
+<!-- ================== ALREADY SHIPPED ================== -->
+
+<section class="confirmed" id="confirmed">
+<h3>Already confirmed shipped from prior calls — verify they survive</h3>
+<ul>
+<li>Benchmark P/E and P/B will be included</li>
+<li>Date columns added to each table</li>
+<li>Compounded Factor Return column populated (was blank before)</li>
+<li>Overall Rank extra column removed from holdings sections</li>
+<li>Section column with explicit labels (RiskM, Security, etc.)</li>
+<li>Per-holding Sector / Region / Country / Industry / Subgroup grouping columns on Security rows</li>
+</ul>
+<p style="margin-top:14px;color:var(--txt);font-size:13px;line-height:1.5">Any of these that didn't make it into the next sample → re-flag immediately so we don't lose ground.</p>
+</section>
+
+<!-- ================== OPENER ================== -->
+
+<section class="opener" id="opener">
+<h3>Suggested call opener</h3>
+<blockquote>
+"We've parsed and validated against the latest sample — most of it works, but a few specific things are blocking the dashboard from being PM-ready. I'd love to walk through the agenda I sent: Section A is must-resolve, Section B is yes/no confirmations, Section C is additions only if they're straightforward. The goal is to come out of this call aligned on a short test pull, then I verify on my side, then you green-light the full 15+ account run. Let's start at A1."
+</blockquote>
+</section>
+
+<!-- ================== POST-CALL ================== -->
+
+<section class="checklist" id="post">
+<h2>Post-call next steps (your side)</h2>
+<ol>
+<li>Receive the short verification sample from FactSet</li>
+<li>Run <code>./load_data.sh &lt;sample&gt;.csv</code> — confirm the integrity-check console message reads ✓</li>
+<li>Spot-check each Section A item against its Done-when criterion</li>
+<li>Verify Section B confirmations match what shipped in Section A</li>
+<li>Audit a representative sample of cardSectors / cardCountry / cardRiskByDim against the new fields</li>
+<li>Mark FACTSET_FEEDBACK.md F-items as Closed/Resolved with the sample-file SHA</li>
+<li>Green-light the massive 15+ account run</li>
+</ol>
+</section>
+
+<footer>
+Redwood Risk · drafted for FactSet finalization call · 2026-04-27 · open in browser, share screen, walk through one item at a time. Print to PDF via Cmd+P.
+</footer>
+
+</main>
+</div>
+
+<script>
+// Highlight the active TOC item as you scroll through asks.
+(function(){
+  const links=document.querySelectorAll('nav.toc a');
+  const targets=Array.from(links).map(a=>{
+    const id=a.getAttribute('href').slice(1);
+    const el=document.getElementById(id);
+    return{a,el};
+  }).filter(x=>x.el);
+  function update(){
+    let active=null;
+    const yMid=window.innerHeight*0.3;
+    for(const t of targets){
+      const r=t.el.getBoundingClientRect();
+      if(r.top<=yMid)active=t;
+    }
+    links.forEach(l=>l.classList.remove('active'));
+    if(active)active.a.classList.add('active');
+  }
+  window.addEventListener('scroll',update,{passive:true});
+  update();
+})();
+</script>
+</body>
+</html>

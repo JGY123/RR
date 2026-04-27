@@ -5,6 +5,8 @@
 **Date opened:** 2026-04-27
 **Owner:** RR product (user) drives what gets sent to FactSet; advisor adds technical context.
 
+> **2026-04-27 — Call-prep consolidation:** [FACTSET_CALL_PREP.md](FACTSET_CALL_PREP.md) is the single-page checklist for the upcoming finalization call. References every doc below. Use that as the call agenda; mark items resolved here as the call answers them.
+
 ---
 
 ## Open items

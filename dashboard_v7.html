@@ -1438,9 +1438,16 @@ function rExp(){
   <!-- Row 6: Quant Ranks + Characteristics -->
   <div class="grid g2">
     <div class="card" id="cardRanks">
-      <div class="flex-between"><div class="card-title tip" data-tip="Click a rank to filter the Holdings tab. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Quant Ranks</div>
-      <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks')" style="padding:3px 7px;font-size:13px">⬇ CSV</button></div>
-      ${rRnk(s.ranks)}
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px"><div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch between Overall, Revisions, Value, Quality rank with the pill toggle. Per-quintile factor contribution columns sum from holdings (Σ h.factor_contr). Click a rank to filter Holdings tab. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Quant Ranks <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Rank</span>
+        <button class="pill" id="rnk-pill-over" onclick="setRanksBy('over')">Overall</button>
+        <button class="pill" id="rnk-pill-rev" onclick="setRanksBy('rev')">Rev</button>
+        <button class="pill" id="rnk-pill-val" onclick="setRanksBy('val')">Val</button>
+        <button class="pill" id="rnk-pill-qual" onclick="setRanksBy('qual')">Qual</button>
+        <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks_by_'+_rnkBy)" style="padding:3px 7px;font-size:13px;margin-left:4px">⬇ CSV</button>
+      </div></div>
+      <div id="rnkTableWrap" style="overflow-x:auto"></div>
     </div>
     <div class="card" id="cardChars">
       <div class="flex-between"><div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals. Click a metric for details.">Portfolio Characteristics</div>
@@ -1554,6 +1561,7 @@ function rExp(){
       ['rFRB',()=>rFRB(s)],
       ['rFacWaterfall',()=>rFacWaterfall(s)],
       ['rAttribTable',()=>rAttribTable()],
+      ['renderRanksTable',()=>renderRanksTable()],   // cardRanks rebuild — populates #rnkTableWrap
     ];
     for(const [name,fn] of chartFns){
       try{fn();}
@@ -2035,16 +2043,116 @@ function rFacTable(factors){
   return`<table id="tbl-fac"><colgroup><col style="min-width:130px"><col style="width:80px"><col style="width:55px"><col style="width:65px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
 }
 
-function rRnk(ranks){
-  if(!ranks.length)return'<p style="color:var(--txt);font-size:12px">No rank data</p>';
-  let rows=ranks.map(r=>{
-    let empty=r.ct===0;
-    let portTxt=empty?'—':f2(r.p)+'%';
-    let actTxt=(r.a==null||empty)?'—':f2(r.a)+'%';
-    let actCls=(r.a!=null&&!empty&&r.a>0.01)?'pos':((r.a!=null&&!empty&&r.a<-0.01)?'neg':'');
-    return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${r.l}" onclick="filterByRank(${r.r})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.r});}"><td data-col="rank" data-sv="${r.r}"><span style="color:${rc(r.r)};font-weight:600">${r.l}</span></td><td class="r" data-col="count" data-sv="${r.ct}">${r.ct}</td><td class="r" data-col="port" data-sv="${r.p??''}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a??''}">${actTxt}</td></tr>`;
+// ===== B102-pattern: reusable holdings-aggregation helper =====
+// Used by cardRanks (groupKey = h.over/h.rev/h.val/h.qual quintile)
+// Will be reused by cardSectors, cardCountry, cardRegions, cardGroups, cardIndustries
+// per user direction "the aggregation from the security level will apply to many of these grouping tile tables".
+//
+// holds: array of cs.hold[] entries
+// groupKeyFn: (h) => string|number — the bucket key for this holding (returns null/undefined to skip)
+// factorList: array of factor names to aggregate (read from h.factor_contr[fname])
+// Returns: { byKey: { keyVal: { count, p, a, tr, mcr, factor: {fname: sum, ...} } }, totalKeys: [...] }
+function aggregateHoldingsBy(holds, groupKeyFn, factorList){
+  const byKey={};
+  (holds||[]).forEach(h=>{
+    if(isCash(h))return;
+    const k=groupKeyFn(h);
+    if(k==null||k==='')return;
+    if(!byKey[k]){
+      byKey[k]={count:0,p:0,a:0,tr:0,mcr:0,factor:{}};
+      factorList.forEach(f=>byKey[k].factor[f]=0);
+    }
+    const b=byKey[k];
+    b.count++;
+    b.p+=(+h.p||0);
+    b.a+=(+h.a||0);
+    b.tr+=(+h.tr||0);
+    b.mcr+=(+h.mcr||0);
+    if(h.factor_contr){
+      factorList.forEach(f=>{
+        const v=h.factor_contr[f];
+        if(v!=null&&isFinite(v))b.factor[f]+=v;
+      });
+    }
+  });
+  // Round
+  Object.values(byKey).forEach(b=>{
+    b.p=+b.p.toFixed(2);b.a=+b.a.toFixed(2);b.tr=+b.tr.toFixed(2);b.mcr=+b.mcr.toFixed(2);
+    factorList.forEach(f=>{b.factor[f]=+b.factor[f].toFixed(2);});
+  });
+  return byKey;
+}
+
+// Quant Ranks state — toggleable rank category (Overall / Rev / Val / Qual)
+let _rnkBy=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.cardRanks.by'))||'over';
+const RNK_BY_LABELS={over:'Overall',rev:'Rev',val:'Val',qual:'Qual'};
+const RNK_FACTOR_COLS=['Medium-Term Momentum','Value','Growth','Profitability','Size','Volatility'];   // 6 most-used style factors
+function setRanksBy(by){
+  if(!RNK_BY_LABELS[by])return;
+  _rnkBy=by;
+  try{localStorage.setItem('rr.cardRanks.by',by);}catch(e){}
+  // Re-render the table in place
+  renderRanksTable();
+}
+function renderRanksTable(){
+  const wrap=document.getElementById('rnkTableWrap');
+  if(!wrap||!cs)return;
+  // Update active pill state
+  ['over','rev','val','qual'].forEach(b=>{
+    const p=document.getElementById('rnk-pill-'+b);
+    if(p)p.classList.toggle('active',b===_rnkBy);
+  });
+  // Update card-title sub-label
+  const lbl=document.getElementById('rnkByLabel');
+  if(lbl)lbl.textContent='by '+RNK_BY_LABELS[_rnkBy];
+  // Aggregate holdings by the selected rank field's quintile (1..5)
+  const groupFn=h=>{
+    const v=+h[_rnkBy];
+    if(!v||v<1||v>5)return null;
+    return Math.round(v);
+  };
+  const agg=aggregateHoldingsBy(cs.hold,groupFn,RNK_FACTOR_COLS);
+  // Build ordered rows for quintiles 1..5 (insert empty rows for missing buckets)
+  const rows=[];
+  for(let q=1;q<=5;q++){
+    const b=agg[q]||{count:0,p:0,a:0,tr:0,mcr:0,factor:Object.fromEntries(RNK_FACTOR_COLS.map(f=>[f,0]))};
+    rows.push({q,...b});
+  }
+  // Render
+  const headFactors=RNK_FACTOR_COLS.map((f,i)=>{
+    const short=f==='Medium-Term Momentum'?'Momentum':f;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] for holdings in this quintile. Source: per-security factor contributions × group filter." onclick="sortTbl('tbl-rnk',${5+i})">${short}</th>`;
   }).join('');
-  return`<table id="tbl-rnk"><thead><tr><th class="tip" data-col="rank" data-tip="Quintile bucket. Q1 = best-ranked by overall quant score, Q5 = worst." onclick="sortTbl('tbl-rnk',0)">Rank</th><th class="r tip" data-col="count" data-tip="Number of portfolio holdings in this quintile." onclick="sortTbl('tbl-rnk',1)">Count</th><th class="r tip" data-col="port" data-tip="Sum of portfolio weights in this quintile." onclick="sortTbl('tbl-rnk',2)">Port%</th><th class="r tip" data-col="active" data-tip="Sum of active weights (portfolio − benchmark) in this quintile." onclick="sortTbl('tbl-rnk',3)">Active%</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const thead=`<thead><tr>
+    <th class="tip" data-col="rank" data-tip="Quintile bucket (1=best per ${RNK_BY_LABELS[_rnkBy]} rank, 5=worst)." onclick="sortTbl('tbl-rnk',0)">Rank</th>
+    <th class="r tip" data-col="count" data-tip="Number of portfolio holdings in this quintile." onclick="sortTbl('tbl-rnk',1)">Count</th>
+    <th class="r tip" data-col="port" data-tip="Σ port weight of holdings in this quintile." onclick="sortTbl('tbl-rnk',2)">Port%</th>
+    <th class="r tip" data-col="active" data-tip="Σ active weight (port − bench) of holdings in this quintile." onclick="sortTbl('tbl-rnk',3)">Active%</th>
+    <th class="r tip" data-col="tr" data-tip="Σ TE contribution (%T) of holdings in this quintile. Sourced from CSV Security %T column." onclick="sortTbl('tbl-rnk',4)">TE Contrib%</th>
+    ${headFactors}
+  </tr></thead>`;
+  const body=rows.map(r=>{
+    const empty=r.count===0;
+    const portTxt=empty?'—':f2(r.p)+'%';
+    const actTxt=empty?'—':f2(r.a)+'%';
+    const trTxt=empty?'—':f2(r.tr)+'%';
+    const actCls=!empty&&r.a>0.01?'pos':!empty&&r.a<-0.01?'neg':'';
+    const trCls=!empty&&r.tr>0.01?'neg':!empty&&r.tr<-0.01?'pos':'';   // sign-coloring: positive TE = adds risk = red
+    const facCells=RNK_FACTOR_COLS.map((f,i)=>{
+      const v=r.factor[f];
+      const cls=v>0.01?'neg':v<-0.01?'pos':'';
+      const txt=empty||Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}">${txt}</td>`;
+    }).join('');
+    return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${RNK_BY_LABELS[_rnkBy]} rank ${r.q}" onclick="filterByRank(${r.q})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.q});}"><td data-col="rank" data-sv="${r.q}"><span style="color:${rc(r.q)};font-weight:600">${r.q}</span></td><td class="r" data-col="count" data-sv="${r.count}">${r.count}</td><td class="r" data-col="port" data-sv="${r.p}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a}">${actTxt}</td><td class="r ${trCls}" data-col="tr" data-sv="${r.tr}">${trTxt}</td>${facCells}</tr>`;
+  }).join('');
+  wrap.innerHTML=`<table id="tbl-rnk">${thead}<tbody>${body}</tbody></table>`;
+}
+// Replace prior render-call to flow through renderRanksTable from upd cycle
+function rRnk(_unused){
+  // This is now a no-op stub for backward-compat; the actual render is renderRanksTable()
+  // called from rExp after innerHTML lands. Returning empty string preserves layout.
+  return'<div id="rnkTableInit"></div>';
 }
 function filterByRank(rank){
   activeTab='holdings';
@@ -2052,8 +2160,10 @@ function filterByRank(rank){
   document.querySelectorAll('.tab')[2].classList.add('active');
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   $('tab-holdings').classList.add('active');
-  ah=[...cs.hold];fh=ah.filter(h=>h.r===rank);hp=1;renderHoldTab();
-  // Set the rank filter dropdown
+  // Filter by the active rank category — h[_rnkBy] is the integer 1..5 quintile per the active toggle
+  ah=[...cs.hold];
+  fh=ah.filter(h=>{const v=+h[_rnkBy||'over'];return v&&Math.round(v)===rank;});
+  hp=1;renderHoldTab();
   setTimeout(()=>{let rf=$('rankFilter');if(rf)rf.value=rank},100);
 }
 

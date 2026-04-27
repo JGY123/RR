@@ -376,12 +376,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Impact</span>
     <select id="impactPeriodSel" onchange="setImpactPeriod(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px"></select>
   </div>
-  <!-- Global aggregation-mode pill — toggles every grouping tile between portfolio holdings vs benchmark constituents -->
-  <div id="aggModeWrap" title="Switches every grouping tile (Spotlight, Sectors, Country, Region, Group, Industry) to aggregate over portfolio-owned holdings vs benchmark constituents. Affects sums, averages, and stats globally." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Agg</span>
+  <!-- Global universe pill — drives every grouping tile: which holdings to sum (TE, factor-contrib) and average over (ORVQ ranks) -->
+  <div id="aggModeWrap" title="Universe: which holdings to count/sum/average across every grouping tile. Port = portfolio-owned (h.p>0), Bench = benchmark constituents (h.b>0), Both = union. Drives ORVQ averaging universe too — combines with the Wtd/Avg pill." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Universe</span>
     <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" style="font-size:10px;padding:2px 7px">Port</button>
     <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" style="font-size:10px;padding:2px 7px">Bench</button>
     <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" style="font-size:10px;padding:2px 7px">Both</button>
+  </div>
+  <!-- Global avg-method pill — controls ORVQ rank averaging method. Sums and counts use the Universe pill alone. -->
+  <div id="avgModeWrap" title="ORVQ rank averaging: Wtd = holding-weight-weighted (port-weight under Port/Both, bench-weight under Bench). Avg = simple mean across the active universe." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Ranks</span>
+    <button class="pill" id="avg-pill-wtd" onclick="setAvgMode('wtd')" style="font-size:10px;padding:2px 7px">Wtd</button>
+    <button class="pill" id="avg-pill-avg" onclick="setAvgMode('avg')" style="font-size:10px;padding:2px 7px">Avg</button>
   </div>
   <div id="weekSelWrap" style="display:none;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
     <button onclick="stepWeek(-1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Previous week">&#8249;</button>
@@ -1798,14 +1804,12 @@ function rWt(data,type,hold){
     });
   }
   let hasRegRanks=type==='reg'&&hold&&Object.keys(regOC).length>0;
-  function sAvg(sS,cS,sW,pW,bW,bPW){return rankAvg3(_secRankMode,sS,cS,sW,pW,bW||0,bPW||0);}
-  // Factor-contribution aggregation — agg-mode-aware (Port/Bench/Both via _aggMode).
-  // When mode != 'both' this also recomputes TE/MCR sums using the same filter,
-  // so TE Contrib / Stock TE / Factor TE flip universe when the global Agg pill is toggled.
+  // Factor-contribution aggregation — universe-aware via _aggMode. avgFields:
+  // ['over','rev','val','qual'] enables simple-avg ORVQ via factorAgg.avg under _avgMode==='avg'.
   let factorAgg={};
   if(hold&&(type==='sec'||type==='reg')){
     const groupFn=type==='sec'?(h=>h.sec):(h=>(h.co?CMAP[h.co]||'Other':null));
-    factorAgg=aggregateHoldingsBy(hold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode});
+    factorAgg=aggregateHoldingsBy(hold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});
   }
   const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
   const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
@@ -1844,20 +1848,22 @@ function rWt(data,type,hold){
         let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td class="r" data-col="${col}" data-sv="${avg!=null?+avg.toFixed(2):''}" style="font-size:11px;font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
-      rvqCells=rankCell(sAvg(secOS[d.n]||0,secOC[d.n]||0,secOW[d.n]||0,secOPW[d.n]||0,secOBW[d.n]||0,secOBPW[d.n]||0),'o')
-              +rankCell(sAvg(secRS[d.n]||0,secRC[d.n]||0,secRW[d.n]||0,secRPW[d.n]||0,secRBW[d.n]||0,secRBPW[d.n]||0),'r')
-              +rankCell(sAvg(secVS[d.n]||0,secVC[d.n]||0,secVW[d.n]||0,secVPW[d.n]||0,secVBW[d.n]||0,secVBPW[d.n]||0),'v')
-              +rankCell(sAvg(secQS[d.n]||0,secQC[d.n]||0,secQW[d.n]||0,secQPW[d.n]||0,secQBW[d.n]||0,secQBPW[d.n]||0),'q');
+      const fa=factorAgg[d.n];
+      rvqCells=rankCell(pickRankAvg(fa?.avg?.over,{S:secOS[d.n]||0,C:secOC[d.n]||0,W:secOW[d.n]||0,PW:secOPW[d.n]||0,BW:secOBW[d.n]||0,BPW:secOBPW[d.n]||0}),'o')
+              +rankCell(pickRankAvg(fa?.avg?.rev, {S:secRS[d.n]||0,C:secRC[d.n]||0,W:secRW[d.n]||0,PW:secRPW[d.n]||0,BW:secRBW[d.n]||0,BPW:secRBPW[d.n]||0}),'r')
+              +rankCell(pickRankAvg(fa?.avg?.val, {S:secVS[d.n]||0,C:secVC[d.n]||0,W:secVW[d.n]||0,PW:secVPW[d.n]||0,BW:secVBW[d.n]||0,BPW:secVBPW[d.n]||0}),'v')
+              +rankCell(pickRankAvg(fa?.avg?.qual,{S:secQS[d.n]||0,C:secQC[d.n]||0,W:secQW[d.n]||0,PW:secQPW[d.n]||0,BW:secQBW[d.n]||0,BPW:secQBPW[d.n]||0}),'q');
     }
     if(type==='reg'&&hasRegRanks){
       const rankCellR=(avg)=>{
         let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td data-sv="${avg!=null?+avg.toFixed(2):''}" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
-      rvqCells=rankCellR(sAvg(regOS[d.n]||0,regOC[d.n]||0,regOW[d.n]||0,regOPW[d.n]||0,regOBW[d.n]||0,regOBPW[d.n]||0))
-              +rankCellR(sAvg(regRS[d.n]||0,regRC[d.n]||0,regRW[d.n]||0,regRPW[d.n]||0,regRBW[d.n]||0,regRBPW[d.n]||0))
-              +rankCellR(sAvg(regVS[d.n]||0,regVC[d.n]||0,regVW[d.n]||0,regVPW[d.n]||0,regVBW[d.n]||0,regVBPW[d.n]||0))
-              +rankCellR(sAvg(regQS[d.n]||0,regQC[d.n]||0,regQW[d.n]||0,regQPW[d.n]||0,regQBW[d.n]||0,regQBPW[d.n]||0));
+      const fa=factorAgg[d.n];
+      rvqCells=rankCellR(pickRankAvg(fa?.avg?.over,{S:regOS[d.n]||0,C:regOC[d.n]||0,W:regOW[d.n]||0,PW:regOPW[d.n]||0,BW:regOBW[d.n]||0,BPW:regOBPW[d.n]||0}))
+              +rankCellR(pickRankAvg(fa?.avg?.rev, {S:regRS[d.n]||0,C:regRC[d.n]||0,W:regRW[d.n]||0,PW:regRPW[d.n]||0,BW:regRBW[d.n]||0,BPW:regRBPW[d.n]||0}))
+              +rankCellR(pickRankAvg(fa?.avg?.val, {S:regVS[d.n]||0,C:regVC[d.n]||0,W:regVW[d.n]||0,PW:regVPW[d.n]||0,BW:regVBW[d.n]||0,BPW:regVBPW[d.n]||0}))
+              +rankCellR(pickRankAvg(fa?.avg?.qual,{S:regQS[d.n]||0,C:regQC[d.n]||0,W:regQW[d.n]||0,PW:regQPW[d.n]||0,BW:regQBW[d.n]||0,BPW:regQBPW[d.n]||0}));
     }
     // Trend sparkline cell (inline SVG of .a over last N periods)
     let sparkSeries=type==='sec'?(cs.hist&&cs.hist.sec&&cs.hist.sec[d.n]):(cs.hist&&cs.hist.reg&&cs.hist.reg[d.n]);
@@ -1885,12 +1891,11 @@ function rWt(data,type,hold){
     <tr style="font-size:9px">
       <th colspan="7" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>
       <th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px">
-        <span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>
-        ${rankToggleHtml3()}
+        <span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span>
       </th>
       <th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px">
         <span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span>
-        <span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span>
+        <span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>
       </th>
       <th style="background:var(--card);border-bottom:none"></th>
     </tr>
@@ -1931,7 +1936,7 @@ function rWt(data,type,hold){
     const subSpotCols=hasRegRanks?4:0;
     const subFacCols=hold?6:0;
     const subPad=4+(regHasTE?3:0); // Name + Port + Bench + Active (+TE/Stock/Factor)
-    const subhead=(subSpotCols+subFacCols>0)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpotCols>0?`<th colspan="${subSpotCols}" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th>`:''}${subFacCols>0?`<th colspan="${subFacCols}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:''}<th style="background:var(--card);border-bottom:none"></th></tr>`:'';
+    const subhead=(subSpotCols+subFacCols>0)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpotCols>0?`<th colspan="${subSpotCols}" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:''}${subFacCols>0?`<th colspan="${subFacCols}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:''}<th style="background:var(--card);border-bottom:none"></th></tr>`:'';
     table=`<table id="${tblId}"><thead>${subhead}<tr><th onclick="sortTbl('${tblId}',0)">Name</th><th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',1)">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',2)">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',3)">Active</th>${teHeads}${rvqHeads}${regFacContribHeads}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
@@ -2173,14 +2178,13 @@ function aggregateHoldingsBy(holds, groupKeyFn, factorList, opts){
   return byKey;
 }
 
-// Global aggregation mode — toggles whether grouping tiles aggregate over portfolio holdings or benchmark constituents.
-// User direction: "every table needs the functionality of portfolio vs BM that would toggle numbers, averages, stats etc."
+// Global aggregation mode — drives which holdings every grouping tile counts/sums over.
+// User direction: "one universe toggle on all would be more clean and then another toggle between weighted avg and regular avg"
 let _aggMode=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.aggMode'))||'portfolio';
-function setAggMode(m){
-  if(m!=='portfolio'&&m!=='benchmark'&&m!=='both')return;
-  _aggMode=m;
-  try{localStorage.setItem('rr.aggMode',m);}catch(e){}
-  // Trigger re-render of every tile that consumes the toggle.
+// ORVQ rank averaging method — Wtd uses holding weights (port-weight under Port/Both, bench-weight under Bench), Avg is simple-mean across the universe.
+let _avgMode=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.avgMode'))||'wtd';
+// Re-render every tile that consumes the toggles. Single dispatcher used by both setAggMode and setAvgMode.
+function _rerenderAggTiles(){
   if(typeof renderRanksTable==='function')renderRanksTable();
   if(cs){
     if(cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);if(typeof applySectColVis==='function')applySectColVis();}
@@ -2188,6 +2192,28 @@ function setAggMode(m){
     if(cs.groups&&$('grpTable')){$('grpTable').innerHTML=rGroupTable(cs.groups,cs.hold);}
     if(cs.regions&&$('regTable')){$('regTable').innerHTML=rWt(cs.regions,'reg',cs.hold);}
   }
+}
+function setAvgMode(m){
+  if(m!=='wtd'&&m!=='avg')return;
+  _avgMode=m;
+  try{localStorage.setItem('rr.avgMode',m);}catch(e){}
+  _rerenderAggTiles();
+  ['wtd','avg'].forEach(x=>{const p=document.getElementById('avg-pill-'+x);if(p)p.classList.toggle('active',x===_avgMode);});
+}
+// Picks the right ORVQ rank average for a bucket given (_aggMode, _avgMode).
+// `simpleAvg` is factorAgg[name]?.avg?.[rankField] — already universe-filtered.
+// `wAccs` is {S, C, W, PW, BW, BPW} — the legacy unfiltered/weighted accumulators per bucket.
+function pickRankAvg(simpleAvg, wAccs){
+  if(_avgMode==='avg')return simpleAvg ?? null;
+  // weighted: under Bench universe use bench weights, otherwise port weights
+  const m=(_aggMode==='benchmark')?'bm':'wtd';
+  return rankAvg3(m, wAccs.S||0, wAccs.C||0, wAccs.W||0, wAccs.PW||0, wAccs.BW||0, wAccs.BPW||0);
+}
+function setAggMode(m){
+  if(m!=='portfolio'&&m!=='benchmark'&&m!=='both')return;
+  _aggMode=m;
+  try{localStorage.setItem('rr.aggMode',m);}catch(e){}
+  _rerenderAggTiles();
   // Update toolbar pill state
   ['portfolio','benchmark','both'].forEach(x=>{
     const p=document.getElementById('agg-pill-'+x);
@@ -2219,6 +2245,7 @@ function renderRanksTable(){
     const p=document.getElementById('agg-pill-'+x);
     if(p)p.classList.toggle('active',x===_aggMode);
   });
+  ['wtd','avg'].forEach(x=>{const p=document.getElementById('avg-pill-'+x);if(p)p.classList.toggle('active',x===_avgMode);});
   // Update card-title sub-label
   const lbl=document.getElementById('rnkByLabel');
   if(lbl)lbl.textContent='by '+RNK_BY_LABELS[_rnkBy]+' · '+(_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both');
@@ -2325,12 +2352,11 @@ function rCountryTable(countries,hold){
       if(h.qual!=null){coQS[h.co]=(coQS[h.co]||0)+h.qual;coQC[h.co]=(coQC[h.co]||0)+1;coQW[h.co]=(coQW[h.co]||0)+h.qual*w;coQPW[h.co]=(coQPW[h.co]||0)+w;coQBW[h.co]=(coQBW[h.co]||0)+h.qual*bw;coQBPW[h.co]=(coQBPW[h.co]||0)+bw;}
     });
   }
-  // Factor-contribution aggregation — agg-mode-aware. Same pattern as rWt for sectors.
+  // Factor-contribution aggregation — universe-aware via _aggMode. avgFields drive simple-avg ORVQ.
   let factorAgg={};
-  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode});}
+  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
   const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
   const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
-  function coWAvg(S,C,W,PW,BW,BPW){return rankAvg3(_secRankMode,S,C,W,PW,BW||0,BPW||0);}
   const rankCell=(avg)=>{
     let c=avg!=null?rc(Math.round(avg)):'#334155';
     return`<td class="r" style="font-size:11px;font-weight:600;color:${c}" data-sv="${avg!=null?+avg.toFixed(2):''}">${avg!=null?f2(avg,1):'—'}</td>`;
@@ -2351,11 +2377,12 @@ function rCountryTable(countries,hold){
       `<td class="r" data-col="stock_te" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
       `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
+    const fa=factorAgg[c.n];
     let rvq=hasRanks?(
-      rankCell(coWAvg(coOS[c.n]||0,coOC[c.n]||0,coOW[c.n]||0,coOPW[c.n]||0,coOBW[c.n]||0,coOBPW[c.n]||0))+
-      rankCell(coWAvg(coRS[c.n]||0,coRC[c.n]||0,coRW[c.n]||0,coRPW[c.n]||0,coRBW[c.n]||0,coRBPW[c.n]||0))+
-      rankCell(coWAvg(coVS[c.n]||0,coVC[c.n]||0,coVW[c.n]||0,coVPW[c.n]||0,coVBW[c.n]||0,coVBPW[c.n]||0))+
-      rankCell(coWAvg(coQS[c.n]||0,coQC[c.n]||0,coQW[c.n]||0,coQPW[c.n]||0,coQBW[c.n]||0,coQBPW[c.n]||0))
+      rankCell(pickRankAvg(fa?.avg?.over,{S:coOS[c.n]||0,C:coOC[c.n]||0,W:coOW[c.n]||0,PW:coOPW[c.n]||0,BW:coOBW[c.n]||0,BPW:coOBPW[c.n]||0}))+
+      rankCell(pickRankAvg(fa?.avg?.rev, {S:coRS[c.n]||0,C:coRC[c.n]||0,W:coRW[c.n]||0,PW:coRPW[c.n]||0,BW:coRBW[c.n]||0,BPW:coRBPW[c.n]||0}))+
+      rankCell(pickRankAvg(fa?.avg?.val, {S:coVS[c.n]||0,C:coVC[c.n]||0,W:coVW[c.n]||0,PW:coVPW[c.n]||0,BW:coVBW[c.n]||0,BPW:coVBPW[c.n]||0}))+
+      rankCell(pickRankAvg(fa?.avg?.qual,{S:coQS[c.n]||0,C:coQC[c.n]||0,W:coQW[c.n]||0,PW:coQPW[c.n]||0,BW:coQBW[c.n]||0,BPW:coQBPW[c.n]||0}))
     ):'';
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
       const v=factorAgg[c.n]?.factor?.[f]??0;
@@ -2375,7 +2402,7 @@ function rCountryTable(countries,hold){
   }).join(''):'';
   let leftCol=4+(hasTE?3:0);
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
-  const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th>`:'';
+  const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
   const subFac=hold?`<th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:'';
   let spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
   return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
@@ -2421,7 +2448,7 @@ function rGroupTable(groups,hold){
   let secToSg2={};
   GROUPS_DEF.forEach(gd=>{gd.secs.forEach(sec=>{let full=SEC_ALIAS2[sec]||sec;if(!secToSg2[full])secToSg2[full]=[];secToSg2[full].push(gd.sg);});});
   let factorAgg={};
-  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>secToSg2[h.sec]||null,RNK_FACTOR_COLS,{mode:_aggMode});}
+  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>secToSg2[h.sec]||null,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
   const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
   const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
   const hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
@@ -2439,11 +2466,12 @@ function rGroupTable(groups,hold){
       `<td class="r" data-col="stock_te" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
       `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
+    const fa=factorAgg[gn];
     let rvq=hasRanks?(
-      rankCell(grpWAvg(grpOS[gn]||0,grpOC[gn]||0,grpOW[gn]||0,grpOPW[gn]||0,grpOBW[gn]||0,grpOBPW[gn]||0),'o')+
-      rankCell(grpWAvg(grpRS[gn]||0,grpRC[gn]||0,grpRW[gn]||0,grpRPW[gn]||0,grpRBW[gn]||0,grpRBPW[gn]||0),'r')+
-      rankCell(grpWAvg(grpVS[gn]||0,grpVC[gn]||0,grpVW[gn]||0,grpVPW[gn]||0,grpVBW[gn]||0,grpVBPW[gn]||0),'v')+
-      rankCell(grpWAvg(grpQS[gn]||0,grpQC[gn]||0,grpQW[gn]||0,grpQPW[gn]||0,grpQBW[gn]||0,grpQBPW[gn]||0),'q')
+      rankCell(pickRankAvg(fa?.avg?.over,{S:grpOS[gn]||0,C:grpOC[gn]||0,W:grpOW[gn]||0,PW:grpOPW[gn]||0,BW:grpOBW[gn]||0,BPW:grpOBPW[gn]||0}),'o')+
+      rankCell(pickRankAvg(fa?.avg?.rev, {S:grpRS[gn]||0,C:grpRC[gn]||0,W:grpRW[gn]||0,PW:grpRPW[gn]||0,BW:grpRBW[gn]||0,BPW:grpRBPW[gn]||0}),'r')+
+      rankCell(pickRankAvg(fa?.avg?.val, {S:grpVS[gn]||0,C:grpVC[gn]||0,W:grpVW[gn]||0,PW:grpVPW[gn]||0,BW:grpVBW[gn]||0,BPW:grpVBPW[gn]||0}),'v')+
+      rankCell(pickRankAvg(fa?.avg?.qual,{S:grpQS[gn]||0,C:grpQC[gn]||0,W:grpQW[gn]||0,PW:grpQPW[gn]||0,BW:grpQBW[gn]||0,BPW:grpQBPW[gn]||0}),'q')
     ):'';
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
       const v=factorAgg[gn]?.factor?.[f]??0;
@@ -2463,7 +2491,7 @@ function rGroupTable(groups,hold){
   }).join(''):'';
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   const subPad=4+(hasTE?3:0);
-  const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th>`:'';
+  const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
   const subFac=hold?`<th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:'';
   const spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
   return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th><th class="r" data-col="port" onclick="sortTbl('tbl-grp',1)">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',2)">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;

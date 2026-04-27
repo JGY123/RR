@@ -1404,7 +1404,7 @@ function rExp(){
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
-      <div class="card-title">Country Exposure</div>
+      <div style="display:flex;align-items:center;gap:10px"><div class="card-title">Country Exposure</div><span id="ctryFilterChip"></span></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
@@ -1442,7 +1442,7 @@ function rExp(){
 
   <!-- Row 5: Redwood Groups -->
   <div class="card" id="cardGroups">
-    <div class="flex-between"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div><span id="grpFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
@@ -1549,7 +1549,7 @@ function rExp(){
 
   <!-- Row 13: Region Active Weights (de-prioritized, bottom of page) -->
   <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
-    <div class="flex-between"><div class="card-title">Region Active Weights</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div><span id="regFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
@@ -1585,7 +1585,11 @@ function rExp(){
     }
     try{applySectColVis();}catch(e){console.error('applySectColVis failed:',e);}
     try{applyFacColVis();}catch(e){console.error('applyFacColVis failed:',e);}
-    try{if(typeof applySectFilters==='function'){applySectFilters();_renderSecFilterChip();}}catch(e){console.error('applySectFilters failed:',e);}
+    try{
+      if(typeof applyTileFilters==='function'){
+        Object.keys(TILE_REG).forEach(t=>{applyTileFilters(t);_renderTileFilterChip(t);});
+      }
+    }catch(e){console.error('applyTileFilters failed:',e);}
   },50);
 }
 
@@ -1812,9 +1816,15 @@ let _secColVis=(function(){
   return d;
 })();
 function applySectColVis(){
+  // Apply the same Core + Spotlight visibility to all 4 aggregation tile tables.
+  // Their column IDs match (port, bench, active, te_contrib, stock_te, factor_te, o, r, v, q, count),
+  // so a single config drives all of them — toggle once, hides everywhere.
+  const tableIds=['#tbl-sec','#tbl-ctry','#tbl-grp','#tbl-reg'];
   SEC_COLS.forEach(c=>{
-    let show=_secColVis[c.id]!==false;
-    document.querySelectorAll('#tbl-sec [data-col="'+c.id+'"]').forEach(el=>el.style.display=show?'':'none');
+    const show=_secColVis[c.id]!==false;
+    tableIds.forEach(t=>{
+      document.querySelectorAll(t+' [data-col="'+c.id+'"]').forEach(el=>el.style.display=show?'':'none');
+    });
   });
 }
 function toggleSecCol(id,checked){
@@ -1823,41 +1833,65 @@ function toggleSecCol(id,checked){
   applySectColVis();
 }
 
-// ===== PER-COLUMN ROW FILTERING (cardSectors) =====
+// ===== PER-COLUMN ROW FILTERING (sibling-tile-aware) =====
 // User direction: "the header of the columns should also have filtering functionality".
 // Each filterable header gets a small ▾ icon → click opens a popover with
-// "≥ min" + "≤ max" inputs for numeric cols, or "contains" for the Sector name col.
-// State persists to localStorage; a chip in the toolbar shows "Filtered: N hidden (clear)".
-let _secFilters=(function(){try{return JSON.parse(localStorage.getItem('rr.secFilters')||'{}')||{};}catch(e){return{};}})();
+// "≥ min" + "≤ max" inputs for numeric cols, or "contains" for the name col.
+// State persists per-tile to localStorage; chip in toolbar shows "Filtered: N hidden (clear)".
+//
+// Tile registry: each entry holds the table id, the localStorage key, and the chip element id.
+// Filters are stored per-tile because thresholds differ across sectors / countries / groups / regions.
+const TILE_REG={
+  sec:{tableId:'tbl-sec',storageKey:'rr.secFilters',chipId:'secFilterChip',nameCol:'sector'},
+  ctry:{tableId:'tbl-ctry',storageKey:'rr.ctryFilters',chipId:'ctryFilterChip',nameCol:'country'},
+  grp:{tableId:'tbl-grp',storageKey:'rr.grpFilters',chipId:'grpFilterChip',nameCol:'group'},
+  reg:{tableId:'tbl-reg',storageKey:'rr.regFilters',chipId:'regFilterChip',nameCol:'region'}
+};
+const _tileFilters={};
+Object.keys(TILE_REG).forEach(t=>{
+  try{_tileFilters[t]=JSON.parse(localStorage.getItem(TILE_REG[t].storageKey)||'{}')||{};}catch(e){_tileFilters[t]={};}
+});
+// Back-compat alias (existing cardSectors code path still references _secFilters).
+let _secFilters=_tileFilters.sec;
 const SEC_FILTER_TYPES={
-  'sector':{kind:'text'},
+  'sector':{kind:'text'},'country':{kind:'text'},'group':{kind:'text'},'region':{kind:'text'},
   'count':{kind:'num'},'port':{kind:'num'},'bench':{kind:'num'},'active':{kind:'num'},
   'te_contrib':{kind:'num'},'stock_te':{kind:'num'},'factor_te':{kind:'num'},
   'o':{kind:'num'},'r':{kind:'num'},'v':{kind:'num'},'q':{kind:'num'}
 };
 // Factor cols (f_0..f_N) are added dynamically below — all numeric.
-function _saveSecFilters(){try{localStorage.setItem('rr.secFilters',JSON.stringify(_secFilters));}catch(e){}}
-function setSecFilter(col,filt){
-  if(!filt||(filt.min==null&&filt.max==null&&!filt.contains))delete _secFilters[col];
-  else _secFilters[col]=filt;
-  _saveSecFilters();
-  applySectFilters();
-  _renderSecFilterChip();
+function _saveTileFilters(tile){try{localStorage.setItem(TILE_REG[tile].storageKey,JSON.stringify(_tileFilters[tile]));}catch(e){}}
+function setTileFilter(tile,col,filt){
+  if(!_tileFilters[tile])_tileFilters[tile]={};
+  if(!filt||(filt.min==null&&filt.max==null&&!filt.contains))delete _tileFilters[tile][col];
+  else _tileFilters[tile][col]=filt;
+  _saveTileFilters(tile);
+  applyTileFilters(tile);
+  _renderTileFilterChip(tile);
 }
-function clearAllSecFilters(){_secFilters={};_saveSecFilters();applySectFilters();_renderSecFilterChip();
-  // Re-render headers so the active-filter highlights drop
-  if(cs&&cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);applySectColVis();applySectFilters();}
+function clearAllTileFilters(tile){
+  _tileFilters[tile]={};_saveTileFilters(tile);
+  // Re-render the tile to drop the active-filter chevron highlights
+  if(!cs)return;
+  if(tile==='sec'&&cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);applySectColVis();}
+  else if(tile==='ctry'&&cs.countries&&$('countryTableWrap')){$('countryTableWrap').innerHTML=rCountryTable(cs.countries,cs.hold);applySectColVis();}
+  else if(tile==='grp'&&cs.groups&&$('grpTable')){$('grpTable').innerHTML=rGroupTable(cs.groups,cs.hold);applySectColVis();}
+  else if(tile==='reg'&&cs.regions&&$('regTable')){$('regTable').innerHTML=rWt(cs.regions,'reg',cs.hold);applySectColVis();}
+  applyTileFilters(tile);_renderTileFilterChip(tile);
 }
-function applySectFilters(){
-  const tb=document.querySelector('#tbl-sec tbody');
+function applyTileFilters(tile){
+  const reg=TILE_REG[tile];if(!reg)return;
+  const tb=document.querySelector('#'+reg.tableId+' tbody');
   if(!tb)return;
+  const filters=_tileFilters[tile]||{};
+  const nameCol=reg.nameCol;
   let hidden=0;
   Array.from(tb.querySelectorAll('tr')).forEach(tr=>{
     let show=true;
-    Object.keys(_secFilters).forEach(col=>{
+    Object.keys(filters).forEach(col=>{
       if(!show)return;
-      const filt=_secFilters[col];
-      if(col==='sector'){
+      const filt=filters[col];
+      if(col===nameCol){
         const val=(tr.children[0]?.textContent||'').toLowerCase();
         if(filt.contains&&!val.includes(filt.contains.toLowerCase()))show=false;
       }else{
@@ -1874,22 +1908,30 @@ function applySectFilters(){
   });
   return hidden;
 }
-function _renderSecFilterChip(){
-  const wrap=document.getElementById('secFilterChip');
+function _renderTileFilterChip(tile){
+  const reg=TILE_REG[tile];if(!reg)return;
+  const wrap=document.getElementById(reg.chipId);
   if(!wrap)return;
-  const active=Object.keys(_secFilters).length;
+  const filters=_tileFilters[tile]||{};
+  const active=Object.keys(filters).length;
   if(!active){wrap.innerHTML='';return;}
-  const tb=document.querySelector('#tbl-sec tbody');
+  const tb=document.querySelector('#'+reg.tableId+' tbody');
   const hidden=tb?Array.from(tb.querySelectorAll('tr')).filter(r=>r.style.display==='none').length:0;
-  wrap.innerHTML=`<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.12);color:var(--warn);font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(245,158,11,0.3)">⚏ ${active} filter${active>1?'s':''} active · ${hidden} row${hidden!==1?'s':''} hidden <button onclick="clearAllSecFilters()" style="background:none;border:none;color:var(--warn);font-size:10px;cursor:pointer;font-weight:600;padding:0">Clear</button></span>`;
+  wrap.innerHTML=`<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(245,158,11,0.12);color:var(--warn);font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(245,158,11,0.3)">⚏ ${active} filter${active>1?'s':''} active · ${hidden} row${hidden!==1?'s':''} hidden <button onclick="clearAllTileFilters('${tile}')" style="background:none;border:none;color:var(--warn);font-size:10px;cursor:pointer;font-weight:600;padding:0">Clear</button></span>`;
 }
+// Back-compat shims for cardSectors callers (existing code paths)
+function setSecFilter(col,filt){return setTileFilter('sec',col,filt);}
+function clearAllSecFilters(){return clearAllTileFilters('sec');}
+function applySectFilters(){return applyTileFilters('sec');}
+function _renderSecFilterChip(){return _renderTileFilterChip('sec');}
 // Filter-popover toggle. Builds a small panel near the header cell with min/max inputs.
-function openSecFilter(col,btnEl){
-  document.querySelectorAll('.sec-filter-pop').forEach(p=>p.remove());
-  const cur=_secFilters[col]||{};
-  const kind=col==='sector'?'text':'num';
+function openTileFilter(tile,col,btnEl){
+  document.querySelectorAll('.tile-filter-pop').forEach(p=>p.remove());
+  const cur=(_tileFilters[tile]||{})[col]||{};
+  const reg=TILE_REG[tile]||TILE_REG.sec;
+  const kind=col===reg.nameCol?'text':'num';
   const pop=document.createElement('div');
-  pop.className='sec-filter-pop';
+  pop.className='tile-filter-pop';
   pop.style.cssText='position:absolute;background:var(--surf);border:1px solid var(--grid);border-radius:6px;padding:8px;z-index:1000;box-shadow:0 4px 12px rgba(0,0,0,0.4);font-size:11px;min-width:180px';
   const rect=btnEl.getBoundingClientRect();
   pop.style.top=(rect.bottom+window.scrollY+4)+'px';
@@ -1900,26 +1942,29 @@ function openSecFilter(col,btnEl){
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px"><span style="width:14px;color:var(--txth)">≥</span><input id="sf-min" type="number" step="any" placeholder="min" value="${cur.min??''}" style="background:var(--surf);border:1px solid var(--grid);border-radius:4px;padding:3px 6px;color:var(--txth);font-size:11px;width:100%;font-family:inherit"/></div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="width:14px;color:var(--txth)">≤</span><input id="sf-max" type="number" step="any" placeholder="max" value="${cur.max??''}" style="background:var(--surf);border:1px solid var(--grid);border-radius:4px;padding:3px 6px;color:var(--txth);font-size:11px;width:100%;font-family:inherit"/></div>
       <div style="display:flex;gap:6px;justify-content:flex-end">
-        <button onclick="setSecFilter('${col}',null);document.querySelector('.sec-filter-pop')?.remove()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Clear</button>
-        <button onclick="(()=>{const mn=document.getElementById('sf-min').value;const mx=document.getElementById('sf-max').value;setSecFilter('${col}',{min:mn===''?null:+mn,max:mx===''?null:+mx});document.querySelector('.sec-filter-pop')?.remove();})()" style="background:var(--pri);border:none;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;font-family:inherit">Apply</button>
+        <button onclick="setTileFilter('${tile}','${col}',null);document.querySelector('.tile-filter-pop')?.remove()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Clear</button>
+        <button onclick="(()=>{const mn=document.getElementById('sf-min').value;const mx=document.getElementById('sf-max').value;setTileFilter('${tile}','${col}',{min:mn===''?null:+mn,max:mx===''?null:+mx});document.querySelector('.tile-filter-pop')?.remove();})()" style="background:var(--pri);border:none;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;font-family:inherit">Apply</button>
       </div>`;
   }else{
     pop.innerHTML=`
       <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Filter ${col}</div>
       <input id="sf-txt" type="text" placeholder="contains..." value="${cur.contains||''}" style="background:var(--surf);border:1px solid var(--grid);border-radius:4px;padding:3px 6px;color:var(--txth);font-size:11px;width:100%;font-family:inherit;margin-bottom:8px"/>
       <div style="display:flex;gap:6px;justify-content:flex-end">
-        <button onclick="setSecFilter('${col}',null);document.querySelector('.sec-filter-pop')?.remove()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Clear</button>
-        <button onclick="(()=>{const t=document.getElementById('sf-txt').value.trim();setSecFilter('${col}',t?{contains:t}:null);document.querySelector('.sec-filter-pop')?.remove();})()" style="background:var(--pri);border:none;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;font-family:inherit">Apply</button>
+        <button onclick="setTileFilter('${tile}','${col}',null);document.querySelector('.tile-filter-pop')?.remove()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-family:inherit">Clear</button>
+        <button onclick="(()=>{const t=document.getElementById('sf-txt').value.trim();setTileFilter('${tile}','${col}',t?{contains:t}:null);document.querySelector('.tile-filter-pop')?.remove();})()" style="background:var(--pri);border:none;color:#fff;font-size:10px;padding:3px 8px;border-radius:4px;cursor:pointer;font-weight:600;font-family:inherit">Apply</button>
       </div>`;
   }
   document.body.appendChild(pop);
   // Click-outside to close
   setTimeout(()=>{const close=(e)=>{if(!pop.contains(e.target)){pop.remove();document.removeEventListener('click',close);}};document.addEventListener('click',close);},10);
 }
-function secFilterIcon(col){
-  const has=col in _secFilters;
-  return`<button class="sec-filter-icon" onclick="event.stopPropagation();openSecFilter('${col}',this)" title="Filter rows by this column" style="background:none;border:none;color:${has?'var(--warn)':'var(--textDim)'};opacity:${has?'1':'0.5'};cursor:pointer;font-size:10px;padding:0 2px;margin-left:2px;line-height:1;font-family:inherit">▾</button>`;
+function tileFilterIcon(tile,col){
+  const has=col in (_tileFilters[tile]||{});
+  return`<button class="tile-filter-icon" onclick="event.stopPropagation();openTileFilter('${tile}','${col}',this)" title="Filter rows by this column" style="background:none;border:none;color:${has?'var(--warn)':'var(--textDim)'};opacity:${has?'1':'0.5'};cursor:pointer;font-size:10px;padding:0 2px;margin-left:2px;line-height:1;font-family:inherit">▾</button>`;
 }
+// Back-compat shims for cardSectors's existing call sites
+function openSecFilter(col,btnEl){return openTileFilter('sec',col,btnEl);}
+function secFilterIcon(col){return tileFilterIcon('sec',col);}
 
 // ===== FULL-SCREEN SECTORS VIEW =====
 // User direction (cardSectors review round 4): "there need to be a full-screen button that
@@ -2299,20 +2344,20 @@ function rWt(data,type,hold){
     // Region thead — mirrors sec structure: Name | [#] | Port | Bench | Active | TE | Stock TE | Factor TE | (O R V Q if hasRegRanks) | facContrib... | Trend
     const regHasTE=hold&&type==='reg';
     const regShift=hold?1:0;
-    const teHeads=regHasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total region TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this region). Bar shows signed magnitude." onclick="sortTbl('tbl-reg',${4+regShift})">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-reg',${5+regShift})">Stock TE%</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-reg',${6+regShift})">Factor TE%</th>`:'';
+    const teHeads=regHasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total region TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this region). Bar shows signed magnitude." onclick="sortTbl('tbl-reg',${4+regShift})">TE Contrib ${tileFilterIcon('reg','te_contrib')}</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-reg',${5+regShift})">Stock TE% ${tileFilterIcon('reg','stock_te')}</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (TE Contrib minus Stock TE)" onclick="sortTbl('tbl-reg',${6+regShift})">Factor TE% ${tileFilterIcon('reg','factor_te')}</th>`:'';
     const rBase=(regHasTE?7:4)+regShift;
-    const rvqHeads=hasRegRanks?`<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase})" class="r tip" data-col="o" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th class="r tip" data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+1})" data-tip="Avg Revision MFR rank">R</th><th class="r tip" data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+2})" data-tip="Avg Value MFR rank">V</th><th class="r tip" data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+3})" data-tip="Avg Quality MFR rank">Q</th>`:'';
+    const rvqHeads=hasRegRanks?`<th style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase})" class="r tip" data-col="o" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O ${tileFilterIcon('reg','o')}</th><th class="r tip" data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+1})" data-tip="Avg Revision MFR rank">R ${tileFilterIcon('reg','r')}</th><th class="r tip" data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+2})" data-tip="Avg Value MFR rank">V ${tileFilterIcon('reg','v')}</th><th class="r tip" data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-reg',${rBase+3})" data-tip="Avg Quality MFR rank">Q ${tileFilterIcon('reg','q')}</th>`:'';
     const facBase=rBase+(hasRegRanks?4:0);
     const regFacContribHeads=hold?RNK_FACTOR_COLS.map((f,i)=>{
       const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
-      return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this region's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Universe pill in header." onclick="sortTbl('tbl-reg',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+      return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this region's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Universe pill in header." onclick="sortTbl('tbl-reg',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short} ${tileFilterIcon('reg','f_'+i)}</th>`;
     }).join(''):'';
     // Subheader with Spotlight + Factor-TE-Breakdown bands
     const subSpotCols=hasRegRanks?4:0;
     const subFacCols=hold?RNK_FACTOR_COLS.length:0;
     const subPad=4+regShift+(regHasTE?3:0); // Name + (#) + Port + Bench + Active (+TE/Stock/Factor)
     const subhead=(subSpotCols+subFacCols>0)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpotCols>0?`<th colspan="${subSpotCols}" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:''}${subFacCols>0?`<th colspan="${subFacCols}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:''}<th style="background:var(--card);border-bottom:none"></th></tr>`:'';
-    table=`<table id="${tblId}"><thead>${subhead}<tr><th onclick="sortTbl('${tblId}',0)">Name</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this region. Flips with Universe pill." onclick="sortTbl('${tblId}',1)">#</th>`:''}<th class="r tip" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',${1+regShift})">Port%</th><th class="r tip" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',${2+regShift})">Bench%</th><th class="r tip" data-tip="Portfolio minus benchmark weight" onclick="sortTbl('${tblId}',${3+regShift})">Active</th>${teHeads}${rvqHeads}${regFacContribHeads}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
+    table=`<table id="${tblId}"><thead>${subhead}<tr><th onclick="sortTbl('${tblId}',0)">Name ${tileFilterIcon('reg','region')}</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this region. Flips with Universe pill." onclick="sortTbl('${tblId}',1)"># ${tileFilterIcon('reg','count')}</th>`:''}<th class="r tip" data-col="port" data-tip="Portfolio weight" onclick="sortTbl('${tblId}',${1+regShift})">Port% ${tileFilterIcon('reg','port')}</th><th class="r tip" data-col="bench" data-tip="Benchmark weight" onclick="sortTbl('${tblId}',${2+regShift})">Bench% ${tileFilterIcon('reg','bench')}</th><th class="r tip" data-col="active" data-tip="Active weight = Port − Bench" onclick="sortTbl('${tblId}',${3+regShift})">Active ${tileFilterIcon('reg','active')}</th>${teHeads}${rvqHeads}${regFacContribHeads}<th class="tip" data-tip="Active weight trend over last N periods" style="width:72px;padding:4px 8px;vertical-align:bottom"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:2px">Trend</div><div class="toggle-wrap" style="margin:0;display:inline-flex" onclick="event.stopPropagation()">${sparkWinToggleHtml('reg')}</div></th></tr></thead><tbody>${rows}</tbody></table>`;
   }
   // Region disclaimer: warn when weight sum is low (e.g. US-only strategies)
   if(type==='reg'&&data.length){
@@ -2562,10 +2607,13 @@ let _avgMode=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.avgMod
 function _rerenderAggTiles(){
   if(typeof renderRanksTable==='function')renderRanksTable();
   if(cs){
-    if(cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);if(typeof applySectColVis==='function')applySectColVis();if(typeof applySectFilters==='function'){applySectFilters();_renderSecFilterChip();}}
+    if(cs.sectors&&$('secTable')){$('secTable').innerHTML=rWt(cs.sectors,'sec',cs.hold);}
     if(cs.countries&&$('countryTableWrap')){$('countryTableWrap').innerHTML=rCountryTable(cs.countries,cs.hold);}
     if(cs.groups&&$('grpTable')){$('grpTable').innerHTML=rGroupTable(cs.groups,cs.hold);}
     if(cs.regions&&$('regTable')){$('regTable').innerHTML=rWt(cs.regions,'reg',cs.hold);}
+    // After all 4 tables are rebuilt, apply column visibility (shared) + per-tile filters
+    if(typeof applySectColVis==='function')applySectColVis();
+    Object.keys(TILE_REG).forEach(t=>{applyTileFilters(t);_renderTileFilterChip(t);});
     // Re-render the sector quadrant chart if the user is currently looking at it.
     const sc=document.getElementById('secChart');
     if(sc&&sc.style.display!=='none'&&typeof rSecChart==='function')rSecChart(cs);
@@ -2776,9 +2824,9 @@ function rCountryTable(countries,hold){
   if(hold){factorAgg=aggregateHoldingsBy(hold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
   const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
   const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
-  const rankCell=(avg)=>{
+  const rankCell=(avg,col)=>{
     let c=avg!=null?rc(Math.round(avg)):'#334155';
-    return`<td class="r" style="font-size:11px;font-weight:600;color:${c}" data-sv="${avg!=null?+avg.toFixed(2):''}">${avg!=null?f2(avg,1):'—'}</td>`;
+    return`<td class="r" data-col="${col||''}" style="font-size:11px;font-weight:600;color:${c}" data-sv="${avg!=null?+avg.toFixed(2):''}">${avg!=null?f2(avg,1):'—'}</td>`;
   };
   let hasRanks=hold&&Object.keys(coOC).length>0;
   let hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
@@ -2807,10 +2855,10 @@ function rCountryTable(countries,hold){
     ):'';
     const fa=factorAgg[c.n];
     let rvq=hasRanks?(
-      rankCell(pickRankAvg(fa?.avg?.over,{S:coOS[c.n]||0,C:coOC[c.n]||0,W:coOW[c.n]||0,PW:coOPW[c.n]||0,BW:coOBW[c.n]||0,BPW:coOBPW[c.n]||0}))+
-      rankCell(pickRankAvg(fa?.avg?.rev, {S:coRS[c.n]||0,C:coRC[c.n]||0,W:coRW[c.n]||0,PW:coRPW[c.n]||0,BW:coRBW[c.n]||0,BPW:coRBPW[c.n]||0}))+
-      rankCell(pickRankAvg(fa?.avg?.val, {S:coVS[c.n]||0,C:coVC[c.n]||0,W:coVW[c.n]||0,PW:coVPW[c.n]||0,BW:coVBW[c.n]||0,BPW:coVBPW[c.n]||0}))+
-      rankCell(pickRankAvg(fa?.avg?.qual,{S:coQS[c.n]||0,C:coQC[c.n]||0,W:coQW[c.n]||0,PW:coQPW[c.n]||0,BW:coQBW[c.n]||0,BPW:coQBPW[c.n]||0}))
+      rankCell(pickRankAvg(fa?.avg?.over,{S:coOS[c.n]||0,C:coOC[c.n]||0,W:coOW[c.n]||0,PW:coOPW[c.n]||0,BW:coOBW[c.n]||0,BPW:coOBPW[c.n]||0}),'o')+
+      rankCell(pickRankAvg(fa?.avg?.rev, {S:coRS[c.n]||0,C:coRC[c.n]||0,W:coRW[c.n]||0,PW:coRPW[c.n]||0,BW:coRBW[c.n]||0,BPW:coRBPW[c.n]||0}),'r')+
+      rankCell(pickRankAvg(fa?.avg?.val, {S:coVS[c.n]||0,C:coVC[c.n]||0,W:coVW[c.n]||0,PW:coVPW[c.n]||0,BW:coVBW[c.n]||0,BPW:coVBPW[c.n]||0}),'v')+
+      rankCell(pickRankAvg(fa?.avg?.qual,{S:coQS[c.n]||0,C:coQC[c.n]||0,W:coQW[c.n]||0,PW:coQPW[c.n]||0,BW:coQBW[c.n]||0,BPW:coQBPW[c.n]||0}),'q')
     ):'';
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
       const v=factorAgg[c.n]?.factor?.[f]??0;
@@ -2820,24 +2868,25 @@ function rCountryTable(countries,hold){
     }).join(''):'';
     const cnt=hold?(factorAgg[c.n]?.count ?? 0):null;
     const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
-    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td>${cntCell}<td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
+    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td>${cntCell}<td class="r" data-col="port" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-col="bench" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-col="active" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
   // Column index baseline: Country=0, [Count=1 if hold], Port, Bench, Active, [TE,Stock,Factor if hasTE], [O,R,V,Q if hasRanks], facContrib...
   const ctryShift=hold?1:0;
-  let teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total country TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Bar shows signed magnitude — positive (right of center) adds risk, negative (left) diversifies." onclick="sortTbl('tbl-ctry',${4+ctryShift})">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific tracking error component" onclick="sortTbl('tbl-ctry',${5+ctryShift})">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl('tbl-ctry',${6+ctryShift})">Factor TE</th>`:'';
+  let teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total country TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Bar shows signed magnitude — positive (right of center) adds risk, negative (left) diversifies." onclick="sortTbl('tbl-ctry',${4+ctryShift})">TE Contrib ${tileFilterIcon('ctry','te_contrib')}</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific tracking error component" onclick="sortTbl('tbl-ctry',${5+ctryShift})">Stock TE ${tileFilterIcon('ctry','stock_te')}</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl('tbl-ctry',${6+ctryShift})">Factor TE ${tileFilterIcon('ctry','factor_te')}</th>`:'';
   let rBase=(hasTE?7:4)+ctryShift;
-  let rvqTh=hasRanks?`<th class="r tip" data-col="o" data-tip="Avg Overall MFR rank" style="border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase})">O</th><th class="r tip" data-col="r" data-tip="Avg Revision rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+1})">R</th><th class="r tip" data-col="v" data-tip="Avg Value rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+2})">V</th><th class="r tip" data-col="q" data-tip="Avg Quality rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+3})">Q</th>`:'';
+  let rvqTh=hasRanks?`<th class="r tip" data-col="o" data-tip="Avg Overall MFR rank" style="border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase})">O ${tileFilterIcon('ctry','o')}</th><th class="r tip" data-col="r" data-tip="Avg Revision rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+1})">R ${tileFilterIcon('ctry','r')}</th><th class="r tip" data-col="v" data-tip="Avg Value rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+2})">V ${tileFilterIcon('ctry','v')}</th><th class="r tip" data-col="q" data-tip="Avg Quality rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+3})">Q ${tileFilterIcon('ctry','q')}</th>`:'';
   const facBase=rBase+(hasRanks?4:0);
   const facContribTh=hold?RNK_FACTOR_COLS.map((f,i)=>{
     const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this country's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Universe pill in header." onclick="sortTbl('tbl-ctry',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+    SEC_FILTER_TYPES['f_'+i]={kind:'num'};
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this country's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Universe pill in header." onclick="sortTbl('tbl-ctry',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short} ${tileFilterIcon('ctry','f_'+i)}</th>`;
   }).join(''):'';
   let leftCol=4+ctryShift+(hasTE?3:0);
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
   const subFac=hold?`<th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:'';
   let spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
-  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this country. Flips with Universe pill." onclick="sortTbl('tbl-ctry',1)">#</th>`:''}<th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',${1+ctryShift})">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',${2+ctryShift})">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',${3+ctryShift})">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country ${tileFilterIcon('ctry','country')}</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities in this country. Flips with Universe pill." onclick="sortTbl('tbl-ctry',1)"># ${tileFilterIcon('ctry','count')}</th>`:''}<th class="r tip" data-col="port" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',${1+ctryShift})">Port% ${tileFilterIcon('ctry','port')}</th><th class="r tip" data-col="bench" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',${2+ctryShift})">Bench% ${tileFilterIcon('ctry','bench')}</th><th class="r tip" data-col="active" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',${3+ctryShift})">Active ${tileFilterIcon('ctry','active')}</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rGroupTable(groups,hold){
@@ -2925,20 +2974,20 @@ function rGroupTable(groups,hold){
     return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td>${cntCell}<td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
   const grpShift=hold?1:0;
-  const teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total group TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this subgroup). Holdings can belong to multiple subgroups. Bar shows signed magnitude." onclick="sortTbl('tbl-grp',${4+grpShift})">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-grp',${5+grpShift})">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (Total − Stock)" onclick="sortTbl('tbl-grp',${6+grpShift})">Factor TE</th>`:'';
+  const teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total group TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings in this subgroup). Holdings can belong to multiple subgroups. Bar shows signed magnitude." onclick="sortTbl('tbl-grp',${4+grpShift})">TE Contrib ${tileFilterIcon('grp','te_contrib')}</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific TE component" onclick="sortTbl('tbl-grp',${5+grpShift})">Stock TE ${tileFilterIcon('grp','stock_te')}</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven TE (Total − Stock)" onclick="sortTbl('tbl-grp',${6+grpShift})">Factor TE ${tileFilterIcon('grp','factor_te')}</th>`:'';
   const rBase=(hasTE?7:4)+grpShift;
-  const rvqTh=hasRanks?`<th data-col="o" style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase})" class="r tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O</th><th data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+1})" class="r tip" data-tip="Avg Revision MFR rank">R</th><th data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+2})" class="r tip" data-tip="Avg Value MFR rank">V</th><th data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+3})" class="r tip" data-tip="Avg Quality MFR rank">Q</th>`:'';
+  const rvqTh=hasRanks?`<th data-col="o" style="text-align:center;border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase})" class="r tip" data-tip="Avg Overall MFR rank (1=best, 5=worst)">O ${tileFilterIcon('grp','o')}</th><th data-col="r" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+1})" class="r tip" data-tip="Avg Revision MFR rank">R ${tileFilterIcon('grp','r')}</th><th data-col="v" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+2})" class="r tip" data-tip="Avg Value MFR rank">V ${tileFilterIcon('grp','v')}</th><th data-col="q" style="text-align:center;background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-grp',${rBase+3})" class="r tip" data-tip="Avg Quality MFR rank">Q ${tileFilterIcon('grp','q')}</th>`:'';
   const facBase=rBase+(hasRanks?4:0);
   const facContribTh=hold?RNK_FACTOR_COLS.map((f,i)=>{
     const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
-    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this subgroup's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings (sector→subgroup mapping). Toggle Universe pill in header." onclick="sortTbl('tbl-grp',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this subgroup's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings (sector→subgroup mapping). Toggle Universe pill in header." onclick="sortTbl('tbl-grp',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short} ${tileFilterIcon('grp','f_'+i)}</th>`;
   }).join(''):'';
   const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
   const subPad=4+grpShift+(hasTE?3:0);
   const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;font-size:9px">Spotlight · ${aggLabel} · ${_avgMode==='wtd'?'Wtd':'Avg'}</span></th>`:'';
   const subFac=hold?`<th colspan="${RNK_FACTOR_COLS.length}" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">· ${aggLabel}</span>${facColPickerHtml()}</th>`:'';
   const spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${subPad}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
-  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities mapped to this subgroup. Flips with Universe pill." onclick="sortTbl('tbl-grp',1)">#</th>`:''}<th class="r" data-col="port" onclick="sortTbl('tbl-grp',${1+grpShift})">Port%</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',${2+grpShift})">Bench%</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',${3+grpShift})">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-grp"><thead>${spotlightHdr}<tr><th data-col="group" onclick="sortTbl('tbl-grp',0)">Group ${tileFilterIcon('grp','group')}</th>${hold?`<th class="r tip" data-col="count" data-tip="Number of ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'union'} securities mapped to this subgroup. Flips with Universe pill." onclick="sortTbl('tbl-grp',1)"># ${tileFilterIcon('grp','count')}</th>`:''}<th class="r" data-col="port" onclick="sortTbl('tbl-grp',${1+grpShift})">Port% ${tileFilterIcon('grp','port')}</th><th class="r" data-col="bench" onclick="sortTbl('tbl-grp',${2+grpShift})">Bench% ${tileFilterIcon('grp','bench')}</th><th class="r" data-col="active" onclick="sortTbl('tbl-grp',${3+grpShift})">Active ${tileFilterIcon('grp','active')}</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 

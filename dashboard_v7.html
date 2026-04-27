@@ -6788,85 +6788,25 @@ function toggleValidPanel(){
 }
 
 // ===== FACTSET NORMALIZE EXTENSION =====
-function normalizeFactSet(fsResponse){
-  // Transform FactSet-style response into our internal format
-  // Supports: portfolioAnalytics, paEngine, spar responses
-  let out={};
-  let cfg={};
-  try{cfg=JSON.parse(localStorage.getItem('rr_config')||'{}')}catch(e){}
-  let stratMap={};
-  try{stratMap=JSON.parse(cfg.stratMap||'{}')}catch(e){}
+// ===== B115 (2026-04-27): normalizeFactSet() removed.
+// This function transformed an API-shape FactSet response (portfolioAnalytics /
+// paEngine / spar) into our internal format. It was wrapped by the L6863
+// normalize() reassignment which auto-detected API responses and routed them
+// here before falling through to the real normalize(). No production data flow
+// uses an API response — the project loads JSON produced by factset_parser.py.
+// Removing this function eliminates one of four parsing-path collisions that
+// caused field cross-wiring (TE drill rendering pct_specific values, etc.).
+// Forensic SHA: original code preserved at safety tag working.20260427.0638.pre-b115.
+// =====
 
-  // Reverse map: FactSet ID -> our strategy code
-  let reverseMap={};
-  Object.entries(stratMap).forEach(([k,v])=>reverseMap[v]=k);
-
-  // Handle array of portfolios
-  let portfolios=fsResponse.data||fsResponse.portfolios||fsResponse;
-  if(!Array.isArray(portfolios))portfolios=[portfolios];
-
-  portfolios.forEach(p=>{
-    let fsId=p.portfolioId||p.id||'UNKNOWN';
-    let stratId=reverseMap[fsId]||fsId;
-    let stratDef=STRATS.find(s=>s.id===stratId)||{id:stratId,name:p.name||stratId,bm:p.benchmarkId||''};
-
-    let s={
-      id:stratId,name:p.name||stratDef.name,benchmark:p.benchmarkName||p.benchmarkId||stratDef.bm,
-      sum:{
-        te:p.trackingError||p.te||0,
-        as:p.activeShare||p.as||0,
-        beta:p.beta||1,
-        h:p.holdingsCount||0,
-        bh:p.benchmarkHoldings||0,
-        sr:p.selectionRate||0,
-        cash:p.cashWeight||0
-      },
-      sectors:(p.sectors||p.sectorExposures||[]).map(x=>({
-        n:x.name||x.sector,p:x.portfolioWeight||x.p||0,b:x.benchmarkWeight||x.b||0,
-        a:x.activeWeight||x.a||(x.portfolioWeight-x.benchmarkWeight)||0,
-        s:x.stockSpecific||0,t:x.totalReturn||0
-      })),
-      regions:(p.regions||p.regionExposures||[]).map(x=>({
-        n:x.name||x.region,p:x.portfolioWeight||x.p||0,b:x.benchmarkWeight||x.b||0,
-        a:x.activeWeight||x.a||(x.portfolioWeight-x.benchmarkWeight)||0
-      })),
-      countries:(p.countries||p.countryExposures||[]).map(x=>({
-        n:x.name||x.country,p:x.portfolioWeight||x.p||0,b:x.benchmarkWeight||x.b||0,
-        a:x.activeWeight||x.a||(x.portfolioWeight-x.benchmarkWeight)||0
-      })),
-      factors:(p.factors||p.factorExposures||[]).map(x=>({
-        n:x.name||x.factor,e:x.exposure||x.e||0,a:x.activeExposure||x.exposure||0,bm:x.benchmarkExposure||0,
-        c:x.contribution||x.c||0,ret:x.factorReturn||0,imp:x.impact||0
-      })),
-      hold:(p.holdings||p.positions||[]).map(x=>({
-        t:x.ticker||x.symbol||x.id,n:x.name||x.securityName||'',
-        sec:x.sector||'',co:x.country||'',
-        p:x.portfolioWeight||x.weight||0,b:x.benchmarkWeight||0,
-        a:x.activeWeight||(x.portfolioWeight-x.benchmarkWeight)||0,
-        mcr:x.mcr||x.marginalContribution||0,tr:x.totalReturn||0,
-        r:x.rank||x.quantRank||3,
-        over:x.overallScore||3,rev:x.revenueScore||3,val:x.valueScore||3,
-        qual:x.qualityScore||3,mom:x.momentumScore||3,stab:x.stabilityScore||3
-      })),
-      ranks:p.ranks||[],chars:p.characteristics||[],groups:p.groups||[],
-      unowned:(p.unownedRisk||p.unowned||[]).map(x=>({
-        t:x.ticker||x.id,n:x.name||'',reg:x.region||'',b:x.benchmarkWeight||0,tr:x.teContribution||0
-      }))
-    };
-    out[stratId]=s;
-  });
-  return out;
-}
-
-// ===== ENHANCED NORMALIZE (accepts both formats) =====
-let _origNormalize=normalize;
-normalize=function(raw){
-  // Detect FactSet format
-  if(raw.data||raw.portfolios||(raw[Object.keys(raw)[0]]&&raw[Object.keys(raw)[0]].portfolioId)){
-    return _origNormalize(normalizeFactSet(raw));
-  }
-  return _origNormalize(raw);
-};
+// ===== B115 (2026-04-27): normalize() reassignment removed.
+// The wrapper at L6863 used to detect raw FactSet API-shape responses and route
+// them through normalizeFactSet() before the original normalize(). That was for
+// a never-shipped API path that polluted the JSON-load flow when the
+// normalizeFactSet code happened to fire on parser-output JSON whose field
+// names overlapped with the API shape.
+// JSON load path now uses the original normalize() at L609 directly.
+// =====
 
 // ===== LIVE REFRESH =====
 let refreshTimer=null;

@@ -4000,15 +4000,39 @@ function oDrRiskByDim(dim,bucketName){
   let totalTr=holds.reduce((a,h)=>a+(+h.tr||0),0);
   let totalP=holds.reduce((a,h)=>a+(+h.p||0),0);
   let totalB=holds.reduce((a,h)=>a+(+h.b||0),0);
+  let totalActive=+(totalP-totalB).toFixed(2);
+  let totalMcr=holds.reduce((a,h)=>a+(+h.mcr||0),0);   // stock-specific TE
+  let totalFactorTE=+(totalTr-totalMcr).toFixed(2);
+  // Diversifying count: how many holdings have negative TE contribution
+  let divCount=holds.filter(h=>(+h.tr||0)<-0.01).length;
+  // Average overall rank (1=best, 5=worst per CLAUDE.md). Skip null ranks.
+  let rankedHolds=holds.filter(h=>h.over!=null);
+  let avgRank=rankedHolds.length?+(rankedHolds.reduce((a,h)=>a+(+h.over||0),0)/rankedHolds.length).toFixed(2):null;
+  let rankColor=avgRank==null?'var(--txth)':avgRank<=2?'var(--pos)':avgRank>=4?'var(--neg)':'var(--warn)';
+  // Top contributor — single security with the largest |tr|
+  let topH=holds[0];
+  let topShare=topH&&Math.abs(totalTr)>0.01?+(Math.abs(topH.tr||0)/Math.abs(totalTr)*100).toFixed(0):null;
+  // Concentration: top-5 share of bucket's total |TE|
+  let top5Sum=holds.slice(0,5).reduce((a,h)=>a+Math.abs(+h.tr||0),0);
+  let totalAbsTr=holds.reduce((a,h)=>a+Math.abs(+h.tr||0),0);
+  let conc5=totalAbsTr>0.01?+(top5Sum/totalAbsTr*100).toFixed(0):null;
   let dimLabel=RBD_DIM_LABELS[dim]||dim;
   let body=$('metricContent');
   if(!body)return;
-  // Stat cards
-  let statHtml=`<div class="sum-cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px">
-    <div class="sum-card"><div class="label">Total TE Contrib</div><div class="value" style="color:${totalTr>0?'var(--neg)':totalTr<0?'var(--pos)':'var(--txth)'}">${totalTr>0?'+':''}${totalTr.toFixed(2)}%</div><div class="sub">% of portfolio TE</div></div>
-    <div class="sum-card"><div class="label">Holdings</div><div class="value" style="color:var(--accent)">${holds.length}</div><div class="sub">securities in bucket</div></div>
+  // 8 stat cards — 4x2 grid
+  let activeColor=totalActive>0?'var(--pos)':totalActive<0?'var(--neg)':'var(--txth)';
+  let teColor=totalTr>0?'var(--neg)':totalTr<0?'var(--pos)':'var(--txth)';
+  let topTicker=topH?(topH.t||'—'):'—';
+  let topTrEsc=(topH?.t||'').replace(/'/g,"\\'");
+  let statHtml=`<div class="sum-cards" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px;gap:8px">
+    <div class="sum-card"><div class="label">Total TE Contrib</div><div class="value" style="color:${teColor}">${totalTr>0?'+':''}${totalTr.toFixed(2)}%</div><div class="sub">% of portfolio TE</div></div>
+    <div class="sum-card"><div class="label">Stock / Factor TE</div><div class="value" style="color:var(--txth);font-size:18px">${totalMcr.toFixed(1)}%<span style="color:var(--textDim);font-size:14px;margin:0 4px">·</span>${totalFactorTE.toFixed(1)}%</div><div class="sub">stock-specific (%S) · factor-driven (%T−%S)</div></div>
+    <div class="sum-card"><div class="label">Holdings</div><div class="value" style="color:var(--accent)">${holds.length}${divCount?'<span style="color:var(--pos);font-size:13px;margin-left:8px">−'+divCount+' div</span>':''}</div><div class="sub">securities · "div" = TE-reducers</div></div>
+    <div class="sum-card" ${topH?'onclick="$(\'metricModal\').classList.remove(\'show\');oSt(\''+topTrEsc+'\')" style="cursor:pointer"':''}><div class="label">Top Contributor</div><div class="value" style="color:var(--txth);font-size:14px;font-family:'JetBrains Mono',monospace">${topTicker}</div><div class="sub">${topH?(topH.tr>0?'+':'')+(topH.tr||0).toFixed(2)+'% TE'+(topShare!=null?' · '+topShare+'% of bucket':''):'no holdings'}</div></div>
     <div class="sum-card"><div class="label">Port Weight</div><div class="value" style="color:var(--txth)">${totalP.toFixed(1)}%</div><div class="sub">cumulative portfolio weight</div></div>
     <div class="sum-card"><div class="label">Bench Weight</div><div class="value" style="color:var(--txth)">${totalB.toFixed(1)}%</div><div class="sub">cumulative benchmark weight</div></div>
+    <div class="sum-card"><div class="label">Active Weight</div><div class="value" style="color:${activeColor}">${totalActive>0?'+':''}${totalActive.toFixed(1)}%</div><div class="sub">port − bench · overweight if &gt;0</div></div>
+    <div class="sum-card"><div class="label">Avg Overall Rank</div><div class="value" style="color:${rankColor}">${avgRank!=null?avgRank.toFixed(2):'—'}<span style="color:var(--textDim);font-size:12px;margin-left:6px">/ 5</span></div><div class="sub">${rankedHolds.length} ranked${conc5!=null?' · top5 = '+conc5+'%':''}</div></div>
   </div>`;
   // Securities table
   let rows=holds.map(h=>{

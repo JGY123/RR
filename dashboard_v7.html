@@ -144,6 +144,12 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 
 /* Tooltips */
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
+/* F2: styled-tooltip variant for table cells — same hover popover as .tip but no dotted underline (cleaner on numeric data cells) */
+td.tip-cell{position:relative;cursor:help}
+td.tip-cell::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;width:max-content;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;opacity:0;pointer-events:none;transition:opacity .15s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left}
+td.tip-cell:hover::after{opacity:1;transition-delay:.25s}
+td.tip-cell::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0f1623;opacity:0;pointer-events:none;transition:opacity .15s;z-index:301}
+td.tip-cell:hover::before{opacity:1;transition-delay:.25s}
 .tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;width:max-content;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;hyphens:auto;opacity:0;pointer-events:none;transition:opacity .15s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left}
 .tip:hover::after{opacity:1;transition-delay:.25s}
 .tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0f1623;opacity:0;pointer-events:none;transition:opacity .15s;z-index:301}
@@ -189,8 +195,11 @@ tr.clickable:active td{background:rgba(99,102,241,.12)}
 .heatmap-cell{padding:4px 8px;text-align:center;font-size:10px;font-weight:600;border-radius:3px}
 /* Table sort indicators */
 th[onclick]{cursor:pointer;user-select:none}
-th.sa::after{content:' ▲';font-size:9px;opacity:0.7}
-th.sd::after{content:' ▼';font-size:9px;opacity:0.7}
+/* F3 fix: explicit override of every .tip::after property the sort indicator inherits when a <th> has BOTH .tip + .sa/.sd. Without this, sorting a tooltipped header renders the giant tooltip card with only ▲ as content. */
+th.sa::after,th.sd::after{position:static!important;background:none!important;padding:0!important;box-shadow:none!important;border:none!important;min-width:0!important;max-width:none!important;width:auto!important;opacity:0.7!important;transition:none!important;transform:none!important;left:auto!important;color:var(--accent)}
+th.sa::after{content:' ▲';font-size:9px}
+th.sd::after{content:' ▼';font-size:9px}
+th.sa::before,th.sd::before{display:none!important}
 /* Sticky thead + alternating stripes */
 thead th{background:var(--card);position:sticky;top:0;z-index:1}
 tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(15,23,42,0.5)}
@@ -864,17 +873,20 @@ function initWeekSelector(){
     return`<option value="${d}"${d===(_selectedWeek||_availDates[_availDates.length-1])?' selected':''}>${label}</option>`;
   }).join('');
   $('latestBtn').style.display=(_selectedWeek&&_selectedWeek!==_availDates[_availDates.length-1])?'inline':'none';
-  initImpactPeriodSelector();
 }
-// B109: populate the global Impact-period dropdown on each upd cycle so it stays in sync
+// B109: populate the global Impact-period dropdown — runs INDEPENDENTLY of week-selector gating (F1 fix).
+// Always runs from upd() so a) single-week strategies still get the selector, b) the persisted choice
+// is re-validated on every data load, c) selector visibility tracks snap_attrib presence directly.
 function initImpactPeriodSelector(){
-  const sel=$('impactPeriodSel');
-  if(!sel)return;
-  // Discover available periods from the snap_attrib hist depth (so we don't show 1Y on a 3-week sample)
-  let nWeeks=0;
-  if(cs&&cs.snap_attrib){
-    Object.values(cs.snap_attrib).forEach(item=>{if(item&&item.hist)nWeeks=Math.max(nWeeks,item.hist.length);});
+  const sel=$('impactPeriodSel'),wrap=$('impactPeriodWrap');
+  if(!sel||!wrap)return;
+  if(!cs||!cs.snap_attrib||!Object.keys(cs.snap_attrib).length){
+    wrap.style.display='none';
+    return;
   }
+  wrap.style.display='flex';
+  let nWeeks=0;
+  Object.values(cs.snap_attrib).forEach(item=>{if(item&&item.hist)nWeeks=Math.max(nWeeks,item.hist.length);});
   const opts=[
     {key:'latest',label:'Latest week',min:1},
     {key:'m1',label:'1 month (4w)',min:4},
@@ -883,9 +895,27 @@ function initImpactPeriodSelector(){
     {key:'y1',label:'1 year (52w)',min:52},
     {key:'all',label:'Full period',min:1},
   ];
-  // Filter out periods that exceed available data (avoid misleading partial rollups)
-  const visible=opts.filter(o=>nWeeks>=o.min);
-  sel.innerHTML=visible.map(o=>`<option value="${o.key}"${o.key===_impactPeriod?' selected':''}>${o.label}</option>`).join('');
+  let visible=opts.filter(o=>nWeeks>=o.min);
+  if(!visible.length)visible=[opts[0]];   // safety: always at least 'Latest'
+  // If persisted choice no longer fits the data, fall back to 'latest' and re-persist
+  if(!visible.find(o=>o.key===_impactPeriod)){
+    _impactPeriod='latest';
+    try{localStorage.setItem('rr.impactPeriod','latest');}catch(e){}
+  }
+  // Append the actual latest-week date to the 'Latest' label so user knows what date range it covers (F6)
+  let latestDateLabel='';
+  const sampleSnap=Object.values(cs.snap_attrib).find(s=>s&&s.hist&&s.hist.length);
+  if(sampleSnap){
+    const last=sampleSnap.hist[sampleSnap.hist.length-1];
+    if(last&&last.d_end){
+      const dt=parseDate(last.d_end);
+      if(dt)latestDateLabel=' (→'+dt.toLocaleDateString('en-US',{month:'short',day:'numeric'})+')';
+    }
+  }
+  sel.innerHTML=visible.map(o=>{
+    const lbl=o.key==='latest'?o.label+latestDateLabel:o.label;
+    return`<option value="${o.key}"${o.key===_impactPeriod?' selected':''}>${lbl}</option>`;
+  }).join('');
 }
 
 function changeWeek(date){
@@ -939,6 +969,7 @@ function updateTabBadges(){
 function upd(){
   _holdFlags=loadHoldFlags();
   _holdFlaggedOnly=false;
+  initImpactPeriodSelector();    // F1 fix: always re-init the global Impact period selector
   updateTabBadges();
   rExp();
   rRisk();
@@ -1769,9 +1800,13 @@ const FAC_GROUP_DEFS=[
   {id:'pf',label:'Profitability',get color(){return getComputedStyle(document.body).getPropertyValue('--prof').trim()||'#fb923c'},factors:['Profitability']},
   {id:'sec',label:'Secondary',get color(){return THEME().tick},factors:null}  // null = all non-primary
 ];
+// F7: synced to the new data-col schema (was {exp, spark} — now {exp_active}; spark dropped, Port Exp dropped)
 const FAC_COLS=[
-  {id:'name',label:'Factor'},{id:'exp',label:'Exposure'},{id:'te',label:'TE%'},
-  {id:'spark',label:'12wk'},{id:'ret',label:'Return'},{id:'imp',label:'Impact'}
+  {id:'name',label:'Factor'},
+  {id:'exp_active',label:'Active Exp'},
+  {id:'te',label:'TE%'},
+  {id:'ret',label:'Return'},
+  {id:'imp',label:'Impact'}
 ];
 let _facView='primary';  // 'primary' | 'all'
 let _facHighlight=null;  // group id or null
@@ -1890,12 +1925,15 @@ function rFacTable(factors){
     let nm=f.n.replace(/'/g,"\\'");
     let impData=getImpactForPeriod(f.n,_impactPeriod);
     let impVal=impData.v;
+    let impTipText=(impData.note||'').replace(/"/g,'&quot;');
+    let nameEsc=f.n.replace(/"/g,'&quot;');
+    let nameDisplay=isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n;
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
-      <td data-col="name"${profTip}>${isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n}</td>
+      <td data-col="name"${profTip} title="${nameEsc}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameDisplay}</td>
       <td class="r" data-col="exp_active" data-sv="${f.a??''}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
       <td class="r" data-col="te" data-sv="${f.c??''}">${f2(f.c,1)}%</td>
       <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-      <td class="r" data-col="imp" data-sv="${impVal??''}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}" title="${impData.note}">${fp(impVal,2)}</td>
+      <td class="r tip-cell" data-col="imp" data-sv="${impVal??''}" data-tip="${impTipText}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(impVal,2)}</td>
     </tr>`;
   };
 
@@ -1907,7 +1945,8 @@ function rFacTable(factors){
     <th class="r tip" data-col="imp" data-tip="P&amp;L attribution = Exposure × Return. Period is set by the global selector in the header. Hover the cell for the actual date range used." onclick="sortTbl('tbl-fac',4)">Impact <span style="opacity:0.6;font-weight:400">(${getImpactPeriodLabel()})</span></th>
   </tr></thead>`;
 
-  return`<table id="tbl-fac"><colgroup><col style="min-width:140px"><col style="width:100px"><col style="width:60px"><col style="width:70px"><col style="width:100px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
+  // F4 fix: tighter colgroup + ellipsis on Factor name (set on td, see facRow). Total min-width 420px fits 1024-viewport card.
+  return`<table id="tbl-fac"><colgroup><col style="min-width:130px"><col style="width:80px"><col style="width:55px"><col style="width:65px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
 }
 
 function rRnk(ranks){
@@ -2428,7 +2467,7 @@ function buildPlotBg(){
 }
 let plotBg=buildPlotBg();
 const plotCfg={displayModeBar:false,responsive:true};
-const modalPlotCfg={displayModeBar:true,responsive:true,scrollZoom:true};
+const modalPlotCfg={displayModeBar:false,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
   // TRUE butterfly: portfolio bars extend LEFT (negative x), benchmark RIGHT (positive x)

@@ -1428,7 +1428,7 @@ function rExp(){
     </div>
     <div id="countryMapDiv" style="height:320px"></div>
     <div id="countryChartDiv" style="height:280px;display:none"></div>
-    <div id="countryTableWrap" style="max-height:320px;overflow-y:auto;display:none">${rCountryTable(s.countries,s.hold)}</div>
+    <div id="countryTableWrap" style="max-height:320px;overflow:auto;display:none">${rCountryTable(s.countries,s.hold)}</div>
   </div>
 
   <!-- Row 5: Redwood Groups -->
@@ -2309,20 +2309,22 @@ function rCountryTable(countries,hold){
   let coRS={},coRC={},coRW={},coRPW={},coRBW={},coRBPW={};
   let coVS={},coVC={},coVW={},coVPW={},coVBW={},coVBPW={};
   let coQS={},coQC={},coQW={},coQPW={},coQBW={},coQBPW={};
-  let coTR={},coMCR={};
   if(hold){
     hold.forEach(h=>{
       if(!h.co||isCash(h))return;
       let w=h.p>0?h.p:0;
       let bw=h.b>0?h.b:0;
-      coTR[h.co]=(coTR[h.co]||0)+(h.tr||0);
-      coMCR[h.co]=(coMCR[h.co]||0)+(h.mcr||0);
       if(h.over!=null){coOS[h.co]=(coOS[h.co]||0)+h.over;coOC[h.co]=(coOC[h.co]||0)+1;coOW[h.co]=(coOW[h.co]||0)+h.over*w;coOPW[h.co]=(coOPW[h.co]||0)+w;coOBW[h.co]=(coOBW[h.co]||0)+h.over*bw;coOBPW[h.co]=(coOBPW[h.co]||0)+bw;}
       if(h.rev!=null){coRS[h.co]=(coRS[h.co]||0)+h.rev;coRC[h.co]=(coRC[h.co]||0)+1;coRW[h.co]=(coRW[h.co]||0)+h.rev*w;coRPW[h.co]=(coRPW[h.co]||0)+w;coRBW[h.co]=(coRBW[h.co]||0)+h.rev*bw;coRBPW[h.co]=(coRBPW[h.co]||0)+bw;}
       if(h.val!=null){coVS[h.co]=(coVS[h.co]||0)+h.val;coVC[h.co]=(coVC[h.co]||0)+1;coVW[h.co]=(coVW[h.co]||0)+h.val*w;coVPW[h.co]=(coVPW[h.co]||0)+w;coVBW[h.co]=(coVBW[h.co]||0)+h.val*bw;coVBPW[h.co]=(coVBPW[h.co]||0)+bw;}
       if(h.qual!=null){coQS[h.co]=(coQS[h.co]||0)+h.qual;coQC[h.co]=(coQC[h.co]||0)+1;coQW[h.co]=(coQW[h.co]||0)+h.qual*w;coQPW[h.co]=(coQPW[h.co]||0)+w;coQBW[h.co]=(coQBW[h.co]||0)+h.qual*bw;coQBPW[h.co]=(coQBPW[h.co]||0)+bw;}
     });
   }
+  // Factor-contribution aggregation — agg-mode-aware. Same pattern as rWt for sectors.
+  let factorAgg={};
+  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode});}
+  const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
+  const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
   function coWAvg(S,C,W,PW,BW,BPW){return rankAvg3(_secRankMode,S,C,W,PW,BW||0,BPW||0);}
   const rankCell=(avg)=>{
     let c=avg!=null?rc(Math.round(avg)):'#334155';
@@ -2331,18 +2333,18 @@ function rCountryTable(countries,hold){
   let hasRanks=hold&&Object.keys(coOC).length>0;
   let hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
   let sorted=[...countries].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
-  let maxTE=hasTE?Math.max(...sorted.map(c=>coTR[c.n]||0),0.01):1;
+  let maxTE=hasTE?Math.max(...sorted.map(c=>Math.abs(aggTr(c.n))),0.01):1;
   let rows=sorted.map(c=>{
     let cls=activeStyle(c.a);
     let threshCls=Math.abs(c.a)>5?'thresh-alert':Math.abs(c.a)>3?'thresh-warn':'';
-    let teTotal=hasTE?(coTR[c.n]||0):null;
-    let teMCR=hasTE?(coMCR[c.n]||0):null;
+    let teTotal=hasTE?aggTr(c.n):null;
+    let teMCR=hasTE?aggMcr(c.n):null;
     let teFactor=hasTE?+(teTotal-teMCR).toFixed(1):null;
-    let tePct=hasTE?Math.min((teTotal/maxTE)*100,100).toFixed(1):'0';
+    let tePct=hasTE?Math.min((Math.abs(teTotal)/maxTE)*100,100).toFixed(1):'0';
     let teCells=hasTE?(
-      `<td class="r" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
-      `<td class="r" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
-      `<td class="r" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
+      `<td class="r" data-col="te_contrib" data-sv="${teTotal}" style="white-space:nowrap;background:linear-gradient(to right,rgba(99,102,241,0.18) ${tePct}%,transparent ${tePct}%);position:relative"><span style="position:relative;z-index:1;font-size:11px">${f2(teTotal,1)}%</span></td>`+
+      `<td class="r" data-col="stock_te" data-sv="${+teMCR.toFixed(1)}" style="font-size:11px;color:var(--acc)">${f2(teMCR,1)}</td>`+
+      `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
     let rvq=hasRanks?(
       rankCell(coWAvg(coOS[c.n]||0,coOC[c.n]||0,coOW[c.n]||0,coOPW[c.n]||0,coOBW[c.n]||0,coOBPW[c.n]||0))+
@@ -2350,14 +2352,28 @@ function rCountryTable(countries,hold){
       rankCell(coWAvg(coVS[c.n]||0,coVC[c.n]||0,coVW[c.n]||0,coVPW[c.n]||0,coVBW[c.n]||0,coVBPW[c.n]||0))+
       rankCell(coWAvg(coQS[c.n]||0,coQC[c.n]||0,coQW[c.n]||0,coQPW[c.n]||0,coQBW[c.n]||0,coQBPW[c.n]||0))
     ):'';
-    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}</tr>`;
+    let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
+      const v=factorAgg[c.n]?.factor?.[f]??0;
+      const cls=v>0.01?'neg':v<-0.01?'pos':'';
+      const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
+    }).join(''):'';
+    return`<tr class="clickable ${threshCls}" onclick="oDrCountry('${c.n}')"><td>${c.n}</td><td class="r" data-sv="${c.p}">${f2(c.p)}</td><td class="r" data-sv="${c.b}">${f2(c.b)}</td><td class="r ${cls}" data-sv="${c.a}">${fp(c.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
-  let teTh=hasTE?'<th class="r tip" data-tip="% of total tracking error contributed by this country" onclick="sortTbl(\'tbl-ctry\',4)">TE Contrib</th><th class="r tip" data-tip="Stock-specific tracking error component" onclick="sortTbl(\'tbl-ctry\',5)">Stock TE</th><th class="r tip" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl(\'tbl-ctry\',6)">Factor TE</th>':'';
+  let teTh=hasTE?`<th class="r tip" data-col="te_contrib" data-tip="Total country TE contribution (Σ h.tr across ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings). Toggle Agg pill in header." onclick="sortTbl('tbl-ctry',4)">TE Contrib</th><th class="r tip" data-col="stock_te" data-tip="Stock-specific tracking error component" onclick="sortTbl('tbl-ctry',5)">Stock TE</th><th class="r tip" data-col="factor_te" data-tip="Factor-driven tracking error (Total − Stock)" onclick="sortTbl('tbl-ctry',6)">Factor TE</th>`:'';
   let rBase=hasTE?7:4;
-  let rvqTh=hasRanks?`<th class="r tip" data-tip="Avg Overall MFR rank" style="border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase})">O</th><th class="r tip" data-tip="Avg Revision rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+1})">R</th><th class="r tip" data-tip="Avg Value rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+2})">V</th><th class="r tip" data-tip="Avg Quality rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+3})">Q</th>`:'';
+  let rvqTh=hasRanks?`<th class="r tip" data-col="o" data-tip="Avg Overall MFR rank" style="border-left:1px solid rgba(99,102,241,0.25);background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase})">O</th><th class="r tip" data-col="r" data-tip="Avg Revision rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+1})">R</th><th class="r tip" data-col="v" data-tip="Avg Value rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+2})">V</th><th class="r tip" data-col="q" data-tip="Avg Quality rank" style="background:rgba(99,102,241,0.07)" onclick="sortTbl('tbl-ctry',${rBase+3})">Q</th>`:'';
+  const facBase=rBase+(hasRanks?4:0);
+  const facContribTh=hold?RNK_FACTOR_COLS.map((f,i)=>{
+    const short=f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f;
+    return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across this country's ${_aggMode==='portfolio'?'portfolio-owned':_aggMode==='benchmark'?'benchmark':'all'} holdings. Toggle Agg pill in header." onclick="sortTbl('tbl-ctry',${facBase+i})" style="background:rgba(168,85,247,0.07);border-left:${i===0?'1px solid rgba(168,85,247,0.25)':'none'}">${short}</th>`;
+  }).join(''):'';
   let leftCol=4+(hasTE?3:0);
-  let spotlightHdr=hasRanks?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th><th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th></tr>`:'';
-  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',3)">Active</th>${teTh}${rvqTh}</tr></thead><tbody>${rows}</tbody></table>`;
+  const aggLabel=_aggMode==='portfolio'?'Port':_aggMode==='benchmark'?'Bench':'Both';
+  const subSpot=hasRanks?`<th colspan="4" style="text-align:center;background:rgba(99,102,241,0.09);border-left:1px solid rgba(99,102,241,0.25);border-bottom:1px solid rgba(99,102,241,0.25);padding:2px 6px"><span style="color:var(--pri);font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Spotlight</span>${rankToggleHtml3()}</th>`:'';
+  const subFac=hold?`<th colspan="6" style="text-align:center;background:rgba(168,85,247,0.09);border-left:1px solid rgba(168,85,247,0.25);border-bottom:1px solid rgba(168,85,247,0.25);padding:2px 6px"><span style="color:#a855f7;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;margin-right:5px;font-size:9px">Factor TE Breakdown</span><span style="color:var(--textDim);font-size:9px">·  ${aggLabel} agg</span></th>`:'';
+  let spotlightHdr=(hasRanks||hold)?`<tr style="font-size:9px"><th colspan="${leftCol}" style="padding:1px 0;border-bottom:none;background:var(--card)"></th>${subSpot}${subFac}</tr>`:'';
+  return`<table id="tbl-ctry"><thead>${spotlightHdr}<tr><th onclick="sortTbl('tbl-ctry',0)">Country</th><th class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('tbl-ctry',1)">Port%</th><th class="r tip" data-tip="Benchmark weight %" onclick="sortTbl('tbl-ctry',2)">Bench%</th><th class="r tip" data-tip="Active weight = Port − Bench" onclick="sortTbl('tbl-ctry',3)">Active</th>${teTh}${rvqTh}${facContribTh}</tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function rGroupTable(groups,hold){

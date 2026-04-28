@@ -3926,10 +3926,19 @@ function rCountryChart(s){
     margin:{l:130,r:60,t:50,b:10},
     annotations:[{x:0.5,xref:'paper',y:1.08,yref:'paper',text:`Country × Factor TE Breakdown · ${aggLbl} universe · click any cell to drill`,showarrow:false,font:{size:10,color:T.tickH||T.tick},xanchor:'center'}]
   },{displayModeBar:false,responsive:true});
-  // Click → drill into that country (TODO: optionally pre-filter by clicked factor)
+  // 2026-04-29: per-cell drill carries factor context. customdata[1] is the
+  // (already-shortened) factor label; we resolve it back to the full name so
+  // the drill modal can read h.factor_contr[fullName] correctly.
+  const shortToFull={};
+  factorCols.forEach(f=>shortToFull[shortFactor(f)]=f);
   const el=document.getElementById('countryChartDiv');
   if(el)el.on('plotly_click',function(e){
-    if(e.points&&e.points[0]){const cn=e.points[0].customdata[0];if(cn)oDrCountry(cn);}
+    if(!e.points||!e.points[0])return;
+    const cd=e.points[0].customdata;
+    const cn=cd[0];
+    const factorShort=cd[1];
+    const factorFull=shortToFull[factorShort]||factorShort;
+    if(cn)oDrCountry(cn,factorFull);
   });
 }
 
@@ -7062,14 +7071,31 @@ function toggleBetaOverlay(key){
 }
 
 // ===== COUNTRY DRILL =====
-function oDrCountry(name){
+function oDrCountry(name,factorContext){
+  // 2026-04-29: factorContext (optional) — when provided, the holdings table
+  // is sorted by Σ h.factor_contr[factorContext] instead of by total %T, and
+  // a dedicated column shows that factor's per-holding contribution. Triggered
+  // when user clicks a specific cell in the cardCountry heatmap (e.g.,
+  // "China × Volatility" → drill into China sorted by Volatility).
   let m=$('countryModal');
   let holdings=cs.hold.filter(h=>h.co===name);
   let country=cs.countries.find(c=>c.n===name);
   let region=CMAP[name]||'Other';
   let regData=cs.regions.find(r=>r.n===region);
 
-  let holdRows=holdings.sort((a,b)=>(b.tr||0)-(a.tr||0)).map(h=>`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
+  const hasFactorCtx=!!factorContext;
+  const factorVal=h=>(h.factor_contr&&h.factor_contr[factorContext]!=null)?+h.factor_contr[factorContext]:0;
+  const sortFn=hasFactorCtx?((a,b)=>Math.abs(factorVal(b))-Math.abs(factorVal(a))):((a,b)=>(b.tr||0)-(a.tr||0));
+  const sortedHoldings=[...holdings].sort(sortFn);
+
+  let holdRows=sortedHoldings.map(h=>{
+    const factorCell=hasFactorCtx?(()=>{
+      const v=factorVal(h);
+      const cls=v>0.005?'neg':v<-0.005?'pos':'';
+      const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      return `<td class="r ${cls}" style="background:rgba(168,85,247,0.06);font-weight:600">${txt}</td>`;
+    })():'';
+    return`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
     <td style="color:var(--txth);font-weight:600">${h.t}</td>
     <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
     <td><span class="chip">${h.sec||'—'}</span></td>
@@ -7077,11 +7103,15 @@ function oDrCountry(name){
     <td class="r ${activeStyle(h.a)}">${fp(h.a,1)}</td>
     <td class="r">${f2(h.mcr,2)}</td>
     <td class="r" style="color:var(--pos);font-weight:600">${fp(h.tr,1)}</td>
+    ${factorCell}
     ${rORVQCells(h)}
-  </tr>`).join('');
+  </tr>`;}).join('');
+
+  const factorBadge=hasFactorCtx?`<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(168,85,247,0.12);color:#a855f7;font-size:10px;padding:4px 10px;border-radius:6px;border:1px solid rgba(168,85,247,0.3);margin-left:10px;font-weight:600">★ Sorted by ${factorContext} factor TE  ·  <button onclick="$('countryModal').classList.remove('show');oDrCountry('${name.replace(/'/g,"\\'")}')" style="background:none;border:none;color:#a855f7;font-size:10px;cursor:pointer;font-weight:600;text-decoration:underline;padding:0">clear</button></div>`:'';
+  const factorTh=hasFactorCtx?`<th class="r tip" data-tip="Σ contribution to ${factorContext} factor TE — clicked from the heatmap" style="background:rgba(168,85,247,0.08);color:#a855f7">${factorContext}</th>`:'';
 
   $('countryContent').innerHTML=`
-    <h2>${name}<button class="close" onclick="$('countryModal').classList.remove('show')">&times;</button></h2>
+    <h2>${name}${factorBadge}<button class="close" onclick="$('countryModal').classList.remove('show')">&times;</button></h2>
     <div class="grid g3" style="margin-bottom:16px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Port Weight</div><div style="font-size:18px;font-weight:700;color:var(--txth)">${country?f2(country.p):'—'}%</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Active Weight</div><div style="font-size:18px;font-weight:700;color:${country&&country.a>=0?'var(--pos)':'var(--neg)'}">${country?fp(country.a):'—'}%</div></div>
@@ -7089,7 +7119,7 @@ function oDrCountry(name){
     </div>
     ${renderCountryAttribSection(name)}
     <div class="card-title">Holdings in ${name} (${holdings.length})</div>
-    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th><th class="r tip" data-tip="Stock-specific TE component">%S</th><th class="r tip" data-tip="% of total portfolio tracking error">Total TE%</th>${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
+    ${holdings.length?`<table><thead><tr><th>Ticker</th><th>Name</th><th>Sector</th><th class="r">Port%</th><th class="r">Active</th><th class="r tip" data-tip="Stock-specific TE component">%S</th><th class="r tip" data-tip="% of total portfolio tracking error">Total TE%</th>${factorTh}${ORVQ_TH_PLAIN}</tr></thead><tbody>${holdRows}</tbody></table>`:'<p style="color:var(--txt);font-size:12px">No holdings in this country</p>'}`;
   m.classList.add('show');
   setTimeout(()=>renderCountryAttribChart(name),0);
 }

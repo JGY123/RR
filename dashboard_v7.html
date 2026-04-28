@@ -1410,7 +1410,7 @@ function rExp(){
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:10px"><div class="card-title">Country Exposure</div><span id="ctryFilterChip"></span></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div><span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
@@ -1596,6 +1596,7 @@ function rExp(){
         Object.keys(TILE_REG).forEach(t=>{applyTileFilters(t);_renderTileFilterChip(t);});
       }
     }catch(e){console.error('applyTileFilters failed:',e);}
+    try{if(typeof setCtryTopN==='function')setCtryTopN(_ctryTopN);}catch(e){console.error('setCtryTopN failed:',e);}
   },50);
 }
 
@@ -1971,6 +1972,36 @@ function tileFilterIcon(tile,col){
 // Back-compat shims for cardSectors's existing call sites
 function openSecFilter(col,btnEl){return openTileFilter('sec',col,btnEl);}
 function secFilterIcon(col){return tileFilterIcon('sec',col);}
+
+// 2026-04-28: Top-N quick toggle for cardCountry. Hides rows beyond the N
+// countries with the largest absolute TE contribution. State persists.
+let _ctryTopN=parseInt(localStorage.getItem('rr.ctryTopN')||'0',10);
+function setCtryTopN(n){
+  _ctryTopN=+n||0;
+  try{localStorage.setItem('rr.ctryTopN',String(_ctryTopN));}catch(e){}
+  ['all','10','20','30'].forEach(k=>{
+    const btn=document.getElementById('ctry-topn-'+k);
+    if(btn)btn.classList.toggle('active', _ctryTopN===(k==='all'?0:+k));
+  });
+  applyCtryTopN();
+}
+function applyCtryTopN(){
+  const tb=document.querySelector('#tbl-ctry tbody');
+  if(!tb)return;
+  // First restore baseline visibility (from tile filters). This clears any prior
+  // top-N hides so transitioning from N=10 to N=0 unhides rows correctly.
+  if(typeof applyTileFilters==='function')applyTileFilters('ctry');
+  if(_ctryTopN<=0)return;
+  // Now reduce to top N, intersecting with the just-filtered visibility
+  const visible=Array.from(tb.querySelectorAll('tr')).filter(tr=>tr.style.display!=='none');
+  const ranked=visible.map(tr=>{
+    const cell=tr.querySelector('[data-col="te_contrib"]');
+    const sv=cell?parseFloat(cell.getAttribute('data-sv')):0;
+    return{tr,abs:isFinite(sv)?Math.abs(sv):0};
+  }).sort((a,b)=>b.abs-a.abs);
+  const keep=new Set(ranked.slice(0,_ctryTopN).map(r=>r.tr));
+  visible.forEach(tr=>{if(!keep.has(tr))tr.style.display='none';});
+}
 
 // ===== FULL-SCREEN SECTORS VIEW =====
 // User direction (cardSectors review round 4): "there need to be a full-screen button that
@@ -2623,6 +2654,8 @@ function _rerenderAggTiles(){
     // After all 4 tables are rebuilt, apply column visibility (shared) + per-tile filters
     if(typeof applySectColVis==='function')applySectColVis();
     Object.keys(TILE_REG).forEach(t=>{applyTileFilters(t);_renderTileFilterChip(t);});
+    // Top-N quick filter for cardCountry runs after tile filters (intersects with visibility)
+    if(typeof applyCtryTopN==='function')applyCtryTopN();
     // Re-render the sector quadrant chart if the user is currently looking at it.
     const sc=document.getElementById('secChart');
     if(sc&&sc.style.display!=='none'&&typeof rSecChart==='function')rSecChart(cs);

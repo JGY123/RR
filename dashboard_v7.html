@@ -2726,6 +2726,9 @@ function _rerenderAggTiles(){
     // Re-render the country heatmap chart if currently visible (chart toggle on).
     const ccd=document.getElementById('countryChartDiv');
     if(ccd&&ccd.offsetParent!==null&&typeof rCountryChart==='function')rCountryChart(cs);
+    // Risk-tab country×factor heatmap if visible
+    const rch=document.getElementById('riskCtryHeatDiv');
+    if(rch&&rch.offsetParent!==null&&typeof rCountryChart==='function')rCountryChart(cs,'riskCtryHeatDiv');
   }
 }
 function setAvgMode(m){
@@ -3870,12 +3873,16 @@ function toggleCountryView(v,btn){
   if(v==='map'&&cs)rCountryMap(cs);
 }
 
-function rCountryChart(s){
+function rCountryChart(s,divId){
   // 2026-04-28 rebuild — Country × Factor TE heatmap.
   // Per viz-specs/cardCountry-chart-spec.md. Replaces the old top-5/bottom-5
   // active-weight bar (which duplicated info already in the map + table).
   // The heatmap shows which countries drive which factor exposures — answers
   // "where is my Value tilt coming from?" at a glance.
+  // 2026-04-29: divId param so the same renderer powers both cardCountry's
+  // chart-view AND a Risk-tab tile (cardRiskCtryFactor). Defaults to the
+  // cardCountry chart-view div.
+  divId=divId||'countryChartDiv';
   if(!s.countries||!s.countries.length||!s.hold)return;
   const T=THEME();
   const factorCols=RNK_FACTOR_COLS;  // user-picked via global ⚙ Cols picker
@@ -3902,11 +3909,12 @@ function rCountryChart(s){
   const absMax=Math.max(0.5,...z.flat().map(Math.abs));
   const customdata=countries.map(c=>factorCols.map(f=>[c,f,(fa[c]?.factor?.[f]??0).toFixed(2)]));
   const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
-  const div=document.getElementById('countryChartDiv');
+  const div=document.getElementById(divId);
+  if(!div)return;
   // Adaptive height: ~22px per row, capped at 600
   const h=Math.min(600,Math.max(280,countries.length*22+80));
-  if(div)div.style.height=h+'px';
-  Plotly.newPlot('countryChartDiv',[{
+  div.style.height=h+'px';
+  Plotly.newPlot(divId,[{
     type:'heatmap',
     x:factorCols.map(shortFactor),
     y:countries,
@@ -3931,7 +3939,7 @@ function rCountryChart(s){
   // the drill modal can read h.factor_contr[fullName] correctly.
   const shortToFull={};
   factorCols.forEach(f=>shortToFull[shortFactor(f)]=f);
-  const el=document.getElementById('countryChartDiv');
+  const el=document.getElementById(divId);
   if(el)el.on('plotly_click',function(e){
     if(!e.points||!e.points[0])return;
     const cd=e.points[0].customdata;
@@ -4536,6 +4544,17 @@ function rRisk(){
     <div id="rbdFooter" style="margin-top:6px;font-size:10px;color:var(--textDim);text-align:right"></div>
   </div>
 
+  <!-- 2026-04-29: Country × Factor TE heatmap on Risk tab. Same renderer as
+       cardCountry's chart-view, retargeted to a separate div. Honors Universe
+       pill, ⚙ Cols picker, and country picker (chart-only). -->
+  <div class="card" id="cardRiskCtryFactor" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <div class="card-title tip" data-tip="Country × Factor TE heatmap. Cell color = signed factor TE contribution (red=adds risk, green=diversifies). Click any cell to drill into that country's holdings, sorted by the clicked factor. Same data source as cardCountry's chart view." oncontextmenu="showNotePopup(event,'cardRiskCtryFactor');return false" style="margin:0">Country × Factor TE Heatmap</div>
+      <div id="riskCtryHeatPickerSlot" style="display:flex;gap:6px;align-items:center"></div>
+    </div>
+    <div id="riskCtryHeatDiv" style="min-height:280px"></div>
+  </div>
+
   <!-- Factor Exposure Time Series with toggles -->
   <div class="card" id="cardFacHist" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
@@ -4582,6 +4601,7 @@ function rRisk(){
       ['updateFacExpChart',()=>updateFacExpChart()],
       ['rUpdateCorr',()=>rUpdateCorr()],
       ['rRiskByDim',()=>rRiskByDim(s)],   // B102
+      ['rRiskCtryFactorHeatmap',()=>rCountryChart(s,'riskCtryHeatDiv')],   // 2026-04-29
     ];
     for(const [name,fn] of riskFns){
       try{fn();}

@@ -1419,7 +1419,7 @@ function rExp(){
           </button>
           <div id="mapColorPicker" style="display:none;position:absolute;top:100%;left:0;z-index:99;margin-top:4px;background:var(--card);border:1px solid var(--pri);border-radius:8px;padding:6px 0;min-width:220px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
         </div>
-        <button onclick="openFullScreen('country')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
+        <button onclick="openCtryFullscreen()" title="Full screen — opens different view based on current Map / Chart / Table mode" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardCountry');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#countryTableWrap table','countries');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
         <div id="mapRegionBtns" class="toggle-wrap" style="margin:0">
           <button class="toggle-btn active" data-region-btn="world" onclick="setMapRegion('world')" title="Zoom: World">World</button>
@@ -3852,6 +3852,80 @@ function setMapFacParam(param){
     $('mapColorLabel').textContent=facName+(param==='contr'?' Contr':' Exp');
   }
   if(cs)rCountryMap(cs);
+}
+
+// 2026-04-29: view-aware full-screen for cardCountry. Detects which sub-view
+// is currently active (map / chart / table) and opens the FS layout that
+// enriches THAT view rather than a one-size-fits-all modal.
+// Cross-tile insight (per user): every multi-view tile in RR should expose
+// the same pattern — ⛶ button opens a context-specific FS, not a generic one.
+function openCtryFullscreen(){
+  const map=document.getElementById('countryMapDiv');
+  const chart=document.getElementById('countryChartDiv');
+  const table=document.getElementById('countryTableWrap');
+  const isMap   = map   && map.style.display   !== 'none';
+  const isChart = chart && chart.style.display !== 'none';
+  const isTable = table && table.style.display !== 'none';
+  if(isChart){return openCtryChartFullscreen();}
+  if(isTable){return openCtryTableFullscreen();}
+  // Default / map view → existing rich-map FS
+  return openFullScreen('country');
+}
+
+// Chart-FS: max the heatmap, with a focus panel on the right showing
+// per-country breakdown when a row/cell is hovered or clicked.
+function openCtryChartFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  // Reuse the secFs modal shell — it's a generic 96vw × 94vh container.
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(168,85,247,0.04),transparent)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Country × Factor TE Heatmap · ${cs.id} · ${aggLbl}</h2>
+        <span style="font-size:10px;color:var(--textDim)">Click any cell to drill into that country sorted by the clicked factor</span>
+      </div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="display:flex;flex:1;min-height:0;overflow:hidden">
+      <div id="ctryFsHeatWrap" style="flex:1;min-width:0;padding:12px 18px;overflow:auto"><div id="ctryFsHeatDiv" style="min-height:600px"></div></div>
+    </div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{rCountryChart(cs,'ctryFsHeatDiv');},80);
+  // Esc-to-close (reuse secFs's existing escHandler isn't trivially shareable; add our own)
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+
+// Table-FS: full-width table at maximum density, with chart on top + top-holdings panel.
+// First-pass implementation — mirrors cardSectors's table-FS layout.
+function openCtryTableFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Country Table · ${cs.id} · ${aggLbl}</h2>
+        <span style="font-size:10px;color:var(--textDim)">Click any country row to drill</span>
+      </div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="ctryFsTableWrap">${rCountryTable(cs.countries,cs.hold)}</div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{
+    if(typeof applySectColVis==='function')applySectColVis();
+    if(typeof applyTileFilters==='function'){applyTileFilters('ctry');_renderTileFilterChip('ctry');}
+    if(typeof applyCtryTopN==='function')applyCtryTopN();
+  },80);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
 }
 
 function toggleCountryView(v,btn){

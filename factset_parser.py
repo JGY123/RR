@@ -87,6 +87,18 @@ ALIASES = {
     "Factor Standard Deviation":  "SNAP_DEV",
     "Cumulative_Factor_Impact":   "SNAP_CIMP",
     "% Factor Contr. to Tot. Risk": "SNAP_RISK_CONTR",
+    # 18 Style Snapshot — NEW fields shipped 2026-04-28 (FactSet folded RiskM into 18 Style):
+    "Axioma- Benchmark Exposure": "SNAP_BENCH_EXP",
+    "% Specific Risk":            "SNAP_PCT_SPEC",
+    "% Factor Risk":              "SNAP_PCT_FAC",
+    # Period delimiter inside each group
+    "Period End Date":            "PERIOD_END",
+    # Security section — NEW fields shipped 2026-04-28
+    "Market Capitalization":      "SEC_MCAP",
+    "Price Volatility":           "SEC_PRICE_VOL",
+    "Vol 30D Avg":                "SEC_VOL_30D",
+    # Raw Factors — NEW SEDOLCHK identifier shipped 2026-04-28
+    "SEDOLCHK":                   "SEDOLCHK",
     # Fixed prefix (outside repeating group)
     "Section": "SECTION",
     "ACCT":    "ACCT",
@@ -619,6 +631,10 @@ class FactSetParserV3:
             "QUAL_WAVG": "qual",
             "MOM_WAVG":  "mom",
             "STAB_WAVG": "stab",
+            # NEW 2026-04-28 — Security section additions
+            "SEC_MCAP":      "mcap",        # Market Capitalization
+            "SEC_PRICE_VOL": "price_vol",   # Price Volatility
+            "SEC_VOL_30D":   "vol_30d",     # Vol 30D Avg
         }
 
         # Build per-offset dispatch once (group layout is the same for every group)
@@ -709,6 +725,50 @@ class FactSetParserV3:
 
         return holdings, unowned
 
+    # ---- 18 Style Snapshot — factor-list helper
+
+    # Standard Axioma factor set we expose as cs.factors. The 18 Style Snapshot ships
+    # 100+ items (currencies, individual industries, individual countries) — those
+    # stay in snap_attrib (granular data). cs.factors only holds the 16 model factors
+    # so existing dashboard tiles keep their familiar shape.
+    STD_FACTORS_16 = [
+        "Medium-Term Momentum", "Volatility", "Growth", "Value",
+        "Dividend Yield", "Earnings Yield", "Profitability", "Size",
+        "Leverage", "Liquidity", "Market Sensitivity", "Exchange Rate Sensitivity",
+        "Market", "Industry", "Country", "Currency",
+    ]
+
+    def _derive_factor_names_from_snap(self, snap):
+        """Pick the 16 standard factor names that are also present in snap_attrib."""
+        return [f for f in self.STD_FACTORS_16 if f in snap]
+
+    def _build_factors_from_snap(self, snap, factor_names):
+        """Build cs.factors[] entries from 18 Style Snapshot data, in the same shape
+        the dashboard expects post-normalize:
+          { n, a (active exp), bm (bench exp), c (TE %), e (alias for a), dev, ret, imp }.
+        Returns [] if snap is empty.
+        """
+        if not snap:
+            return []
+        out = []
+        for name in factor_names:
+            entry = snap.get(name)
+            if not entry:
+                continue
+            # Latest period values (already extracted by _extract_snapshot)
+            out.append({
+                "n":   name,
+                "a":   entry.get("exp"),       # avg active exposure (latest period)
+                "bm":  entry.get("bench_exp"), # NEW 2026-04-28
+                "e":   entry.get("exp"),       # alias for a (legacy field name)
+                "c":   entry.get("risk_contr"),# % factor contr to total risk
+                "dev": entry.get("dev"),
+                "ret": entry.get("ret"),
+                "imp": entry.get("imp"),
+                "cimp":entry.get("cimp"),
+            })
+        return out
+
     # ---- 18 Style Snapshot
 
     def _extract_snapshot(self, acct_code):
@@ -743,6 +803,9 @@ class FactSetParserV3:
                     "dev":     gv("SNAP_DEV"),
                     "cimp":    gv("SNAP_CIMP"),
                     "risk_contr": gv("SNAP_RISK_CONTR"),
+                    "bench_exp":  gv("SNAP_BENCH_EXP"),  # NEW 2026-04-28: bench abs exposure per factor
+                    "pct_spec":   gv("SNAP_PCT_SPEC"),
+                    "pct_fac":    gv("SNAP_PCT_FAC"),
                 })
 
             # Detect a full-period summary row (last entry spans inception → current)
@@ -764,6 +827,10 @@ class FactSetParserV3:
                 "dev":  latest.get("dev"),
                 "cimp": latest.get("cimp"),
                 "risk_contr":       latest.get("risk_contr"),
+                # NEW 2026-04-28 — bench abs exposure + risk-split per period (latest)
+                "bench_exp":        latest.get("bench_exp"),
+                "pct_spec":         latest.get("pct_spec"),
+                "pct_fac":          latest.get("pct_fac"),
                 "full_period_imp":  summary.get("imp")  if summary else latest.get("cimp"),
                 "full_period_cimp": summary.get("cimp") if summary else latest.get("cimp"),
                 "hist": weekly,
@@ -775,22 +842,40 @@ class FactSetParserV3:
     def _extract_raw_factors(self, acct_code):
         """Extract per-security raw factor exposures from the "Raw Factors" section.
 
-        Shape: 13-col period block = [Period Start Date, v0..v11]. The 12 value
-        columns share an identical header ("Raw Factor Exposure") so column
-        names can't identify each factor — we use RAW_FACTOR_ORDER positionally.
-        If a future file ships 12 distinct header labels, we detect that and
-        emit the distinct labels instead (see `labels` branch below)."""
+        Shape (2026-04-28 update — group_size=14):
+          Per period block = [SEDOLCHK, Period Start Date, v0..v11]. SEDOLCHK
+          repeats at the start of every period (same value across periods).
+        Older files shipped group_size=13: [Period Start Date, v0..v11]. We
+        support both layouts.
+
+        The 12 value columns share an identical header ("Raw Factor Exposure"),
+        so column names can't identify each factor — we use RAW_FACTOR_ORDER
+        positionally. If a future file ships 12 distinct header labels, we
+        detect that and emit the distinct labels instead.
+
+        Output: dict keyed by `Level2` (which is the ticker-region for the
+        new file format, e.g. "III-GB"). Each entry has {n, e, hist, sedol}.
+        """
         schema = self.schemas.get("Raw Factors")
         rows = self.section_rows.get("Raw Factors", [])
         if not schema or not rows or schema.num_groups == 0:
             return {}, RAW_FACTOR_ORDER
-        if schema.group_size != 13:
+
+        # Two-layout support:
+        #   group_size=13 (legacy): [Period Start Date, v0..v11]
+        #   group_size=14 (2026-04-28): [Period Start Date, v0..v11, SEDOLCHK_of_next]
+        # In the 14-col layout, the FIRST SEDOLCHK is at fixed col 7 (outside the group).
+        # Each period block ends with the NEXT period's SEDOLCHK; the last block's
+        # trailing SEDOLCHK is unused. The date is always at offset 0, values at 1..12.
+        if schema.group_size in (13, 14):
+            date_offset  = 0
+            value_offset = 1
+        else:
             return {}, RAW_FACTOR_ORDER
 
         # Detect distinct per-column header labels (future-proof path).
-        # Slice the 12 value cols from the first group: cols [group_start+1 .. group_start+13).
         g0 = schema.group_start
-        header_slice = schema.raw_cols[g0 + 1:g0 + 13]
+        header_slice = schema.raw_cols[g0 + value_offset:g0 + value_offset + 12]
         distinct_headers = [h for h in header_slice if h and h != "Raw Factor Exposure"]
         if len(distinct_headers) == 12 and len(set(distinct_headers)) == 12:
             labels = distinct_headers
@@ -801,22 +886,24 @@ class FactSetParserV3:
         for row in rows:
             if len(row) < 7 or row[1].strip() != acct_code:
                 continue
-            ident = row[5].strip() if len(row) > 5 else ""
+            ident = row[5].strip() if len(row) > 5 else ""  # Level2 = ticker-region
             if not ident or ident in ("Data", "@NA", "[Unassigned]", "[Cash]"):
                 continue
             if ident.startswith("CASH_"):
                 continue
             name = row[6].strip() if len(row) > 6 else ""
+            # SEDOLCHK is at fixed col 7 (outside the group).
+            sedol = row[7].strip() if len(row) > 7 else None
 
             periods = []
             for gi in range(schema.num_groups):
                 base = schema.group_start + gi * schema.group_size
-                if base + 12 >= len(row):
+                if base + value_offset + 11 >= len(row):
                     continue
-                d = parse_date(row[base])
+                d = parse_date(row[base + date_offset])
                 if not d:
                     continue
-                exps = [safe_float(row[base + 1 + i]) for i in range(12)]
+                exps = [safe_float(row[base + value_offset + i]) for i in range(12)]
                 periods.append({"d": d, "e": exps})
 
             if not periods:
@@ -826,6 +913,7 @@ class FactSetParserV3:
                 "n": name,
                 "e": periods[-1]["e"],
                 "hist": periods,
+                "sedol": sedol,
             }
         return out, labels
 
@@ -873,6 +961,33 @@ class FactSetParserV3:
             holdings, unowned_hold = self._extract_security(acct)
             snap       = self._extract_snapshot(acct)
             raw_fac, raw_fac_labels = self._extract_raw_factors(acct)
+            # Fallback: 2026-04-28 — FactSet folded RiskM into 18 Style Snapshot.
+            # If RiskM is empty, derive factor list + per-factor metrics from snap.
+            if not factor_names and snap:
+                factor_names = self._derive_factor_names_from_snap(snap)
+            # Cross-table linkage: 2026-04-28 — Raw Factors keys by ticker-region (Level2)
+            # and exposes SEDOLCHK at col 7. Security keys by SEDOL (Level2). Match by
+            # SEDOL to add tkr_region (display label) AND raw_exp (z-score loadings) to
+            # each holding. Holdings without a Raw Factors match keep tkr_region=null.
+            if raw_fac and holdings:
+                sedol_to_tkr = {}
+                sedol_to_exp = {}
+                for tkr_region, info in raw_fac.items():
+                    sedol = info.get("sedol")
+                    if sedol:
+                        sedol_to_tkr[sedol] = tkr_region
+                        sedol_to_exp[sedol] = info.get("e")
+                matched = 0
+                for h in holdings + unowned_hold:
+                    sedol = (h.get("t") or "").strip()
+                    if not sedol:
+                        continue
+                    if sedol in sedol_to_tkr:
+                        h["tkr_region"] = sedol_to_tkr[sedol]
+                        h["raw_exp"]    = sedol_to_exp[sedol]   # 12-element list of z-scores
+                        matched += 1
+                if matched:
+                    print(f"  {dash_id}: SEDOL→tkr_region matched {matched}/{len(holdings)} port holdings")
 
             if _SECURITY_REF:
                 enriched = sum(1 for h in holdings if h.get("country"))
@@ -980,17 +1095,27 @@ class FactSetParserV3:
         return strategies, issues
 
     def _build_factor_list(self, current_rm, snap, factor_names):
+        """Build cs.factors[]. Prefers RiskM-section values when available;
+        falls back to 18 Style Snapshot values when RiskM is missing.
+        2026-04-28 update: FactSet folded RiskM into 18 Style Snapshot, so the
+        snap fallback path is now the primary source for new files.
+        """
         out = []
         exposures = current_rm.get("exposures", {}) if current_rm else {}
         for fname in factor_names:
             exp = exposures.get(fname, {})
             snap_item = snap.get(fname, {})
+            # Prefer RiskM `a` (active exposure) and `c` (% TE), fall back to snap.
+            a_val   = exp.get("a")    if exp.get("a")    is not None else snap_item.get("exp")
+            bm_val  = exp.get("bm")   if exp.get("bm")   is not None else snap_item.get("bench_exp")
+            e_val   = exp.get("e")    if exp.get("e")    is not None else snap_item.get("exp")
+            c_val   = exp.get("c")    if exp.get("c")    is not None else snap_item.get("risk_contr")
             out.append({
                 "n":    fname,
-                "e":    exp.get("e"),
-                "bm":   exp.get("bm"),
-                "a":    exp.get("a"),
-                "c":    exp.get("c"),
+                "e":    e_val,
+                "bm":   bm_val,
+                "a":    a_val,
+                "c":    c_val,
                 "ret":  snap_item.get("ret"),
                 "imp":  snap_item.get("imp"),
                 "dev":  snap_item.get("dev"),

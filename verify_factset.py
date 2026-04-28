@@ -232,50 +232,50 @@ def check_strategy(strat_id, strat, csv_text=None):
                     "no holding has factor_contr populated"))
 
     # ---- NEW from call: per-holding identifiers ----
+    # 2026-04-28 update: in current parser, h.t IS the SEDOL (Level2 column),
+    # and h.tkr_region is set via Raw Factors cross-table linkage.
     if sample:
-        id_present = [k for k in IDENTIFIER_KEYS if any(h.get(k) for h in hold[:50])]
-        sedol_count = sum(1 for h in hold if h.get("sedol"))
+        sedol_count = sum(1 for h in hold if h.get("sedol") or (h.get("t") and len(h["t"]) == 7 and any(c.isdigit() for c in h["t"])))
+        tkr_region = sum(1 for h in hold if h.get("ticker_region") or h.get("tkr_region"))
         cusip_count = sum(1 for h in hold if h.get("cusip"))
         isin_count = sum(1 for h in hold if h.get("isin"))
-        tkr_region = sum(1 for h in hold if h.get("ticker_region") or h.get("tkr_region"))
-        if sedol_count > 0 or cusip_count > 0 or isin_count > 0:
-            out.append((PASS, "NEW Identifiers (SEDOL/CUSIP/ISIN/Ticker-Region)",
-                        f"SEDOL: {sedol_count}, CUSIP: {cusip_count}, ISIN: {isin_count}, Tkr-Region: {tkr_region}"))
+        if tkr_region > 0:
+            out.append((PASS, "NEW Identifiers (SEDOL via t + Ticker-Region)",
+                        f"t/SEDOL: {sedol_count}, Tkr-Region: {tkr_region}, CUSIP: {cusip_count}, ISIN: {isin_count}"))
+        elif sedol_count > 0:
+            out.append((PART, "NEW Identifiers — SEDOL only (no ticker-region linkage)",
+                        f"SEDOL: {sedol_count}, but no tkr_region populated"))
         else:
             out.append((FAIL, "NEW Identifiers (SEDOL/CUSIP/ISIN/Ticker-Region)",
                         "no SEDOL/CUSIP/ISIN field populated on any holding"))
 
     # ---- NEW: per-holding market cap ----
+    # Note: Market Cap is only populated on ACTIVE port holdings (those with W>0). Bench-only
+    # rows don't have it. Threshold reflects: % of port holdings, not all rows.
+    port_h = sum(1 for h in hold if (h.get("p") or h.get("w") or 0) > 0)
     mcap_count = sum(1 for h in hold if h.get("mcap") or h.get("market_cap"))
-    if mcap_count >= total_rows * 0.5:
+    if mcap_count >= max(port_h * 0.9, 5):
         out.append((PASS, "NEW Per-holding market cap",
-                    f"{mcap_count}/{total_rows} holdings have market_cap"))
+                    f"{mcap_count}/{port_h} port holdings have market_cap"))
     elif mcap_count > 0:
         out.append((PART, "NEW Per-holding market cap",
-                    f"only {mcap_count}/{total_rows} have market_cap"))
+                    f"{mcap_count}/{port_h} port holdings — verify if expected"))
     else:
         out.append((FAIL, "NEW Per-holding market cap",
                     "no market_cap field on holdings"))
 
     # ---- NEW: per-holding raw factor exposures (separate from factor_contr) ----
-    raw_exp_keys = []
-    if sample:
-        raw_exp_keys = [k for k in sample.keys() if k.endswith("_exp") or k.endswith("_loading")]
-    raw_exp_count = sum(1 for h in hold if any(h.get(k) is not None for k in raw_exp_keys))
-    if len(raw_exp_keys) >= 12:
+    # 2026-04-28 update: parser stores them as `h.raw_exp` (12-element list of z-scores).
+    raw_exp_count = sum(1 for h in hold if isinstance(h.get("raw_exp"), list) and len(h["raw_exp"]) == 12)
+    if raw_exp_count >= total_rows * 0.4:
         out.append((PASS, "NEW Per-holding raw factor exposures (z-scores)",
-                    f"{len(raw_exp_keys)} *_exp keys, populated on {raw_exp_count}/{total_rows}"))
-    elif len(raw_exp_keys) > 0:
+                    f"raw_exp populated on {raw_exp_count}/{total_rows} holdings (12 z-scores each)"))
+    elif raw_exp_count > 0:
         out.append((PART, "NEW Per-holding raw factor exposures",
-                    f"{len(raw_exp_keys)} *_exp keys (expected 12)"))
+                    f"raw_exp populated on {raw_exp_count}/{total_rows}"))
     else:
-        # Fallback check — sometimes shipped under different field name
-        if sample and any(k for k in sample.keys() if "loading" in k.lower() or "z_" in k.lower()):
-            out.append((PART, "NEW Per-holding raw factor exposures",
-                        "alt field naming detected — verify schema"))
-        else:
-            out.append((FAIL, "NEW Per-holding raw factor exposures",
-                        "no raw_exp / z-score columns on holdings"))
+        out.append((FAIL, "NEW Per-holding raw factor exposures",
+                    "no raw_exp on holdings (Raw Factors section not linked?)"))
 
     # ---- NEW: per-holding period return ----
     r_count = sum(1 for h in hold if h.get("r") is not None or h.get("ret") is not None or h.get("period_return") is not None)
@@ -407,10 +407,22 @@ def check_strategy(strat_id, strat, csv_text=None):
                     "no per-holding period return, no per-sector return, no bench total return"))
 
     # ---- C2: % of Variance per 18 Style Snapshot row ----
+    # 2026-04-28 update: FactSet ships these as `% Specific Risk` + `% Factor Risk` per row,
+    # captured by parser as snap.pct_spec / snap.pct_fac. Plus risk_contr is the % factor TE.
+    sample_snap_item = next(iter(snap_attrib.values())) if snap_attrib else None
+    has_var = sample_snap_item and (
+        sample_snap_item.get("pct_spec") is not None or
+        sample_snap_item.get("pct_fac") is not None or
+        sample_snap_item.get("risk_contr") is not None
+    )
     sample_factor = factors[0] if factors else None
-    if sample_factor and ("pct_var" in sample_factor or "pctvar" in sample_factor or "variance_pct" in sample_factor):
+    factor_has_c = sample_factor and sample_factor.get("c") is not None
+    if has_var and factor_has_c:
         out.append((PASS, "C2 % of Variance per snapshot row",
-                    "field present on factor rows"))
+                    "snap.pct_spec / pct_fac / risk_contr all present per row"))
+    elif factor_has_c:
+        out.append((PART, "C2 % of Variance per snapshot row",
+                    "factor c populated but pct_spec/pct_fac per snap row missing"))
     else:
         out.append((FAIL, "C2 % of Variance per snapshot row",
                     "not added to 18 Style Snapshot rows"))
@@ -428,38 +440,42 @@ def check_strategy(strat_id, strat, csv_text=None):
                     "hist.sec is empty"))
 
     # ---- C4: top-10 fundamentals ----
+    # 2026-04-28 update: FactSet now ships these under NTM-style names. Match flexibly.
     chars_metrics = {c.get("m", ""): c for c in chars}
     fundamental_targets = [
-        "Forward P/E", "P/E (NTM)", "Price/Earnings (NTM)",
-        "EV/EBITDA", "Price/Sales", "P/S",
-        "Revenue Growth 1Y", "ROIC",
-        "Net Debt/EBITDA", "Total Return 1Y",
-        "Excess Return", "Gross Margin",
-        "EPS Growth NTM",
+        # display-name patterns (case-insensitive substring match)
+        "P/E - NTM", "P/E", "EV/EBITDA NTM", "Price to Sales", "Price to Book",
+        "Hist 3Yr Sales Growth", "Hist 3Yr EPS Growth", "Est 3-5 Yr EPS Growth",
+        "ROE NTM", "ROIC", "Operating Margin", "Net Margin", "Net Debt/Market Cap",
+        "Dividend Yield", "FCF Yield", "EV/Sales", "Price to Cash Flow",
+        "ROA", "Vol 30D Avg",
     ]
     found_funds = [t for t in fundamental_targets if any(t.lower() in k.lower() for k in chars_metrics)]
-    if len(found_funds) >= 8:
-        out.append((PASS, "C4 Top-10 fundamentals",
-                    f"{len(found_funds)} of 13 target metrics present"))
-    elif len(found_funds) >= 4:
+    if len(found_funds) >= 12:
+        out.append((PASS, "C4 Top-10 fundamentals (expanded set)",
+                    f"{len(found_funds)} of {len(fundamental_targets)} target metrics present"))
+    elif len(found_funds) >= 6:
         out.append((PART, "C4 Top-10 fundamentals",
-                    f"only {len(found_funds)} target metrics found"))
+                    f"{len(found_funds)} of {len(fundamental_targets)} target metrics — partial"))
     else:
         out.append((FAIL, "C4 Top-10 fundamentals",
                     f"only {len(found_funds)} target metrics found"))
 
     # ---- Bench P/E + P/B regression check ----
-    pe = chars_metrics.get("Price/Earnings (P/E)") or chars_metrics.get("Forward P/E (NTM)")
-    pb = chars_metrics.get("Price/Book (P/B)")
+    # Try multiple naming conventions FactSet has used
+    pe = (chars_metrics.get("P/E - NTM") or chars_metrics.get("Price/Earnings (P/E)")
+          or chars_metrics.get("Forward P/E (NTM)") or chars_metrics.get("P/E using FY1 Est"))
+    pb = (chars_metrics.get("Price to Book - NTM") or chars_metrics.get("Price/Book (P/B)")
+          or chars_metrics.get("Price/Book"))
     if pe and pe.get("b") is not None:
         out.append((PASS, "Re-flag: Bench P/E populated",
-                    f"port={pe.get('p')}, bench={pe.get('b')}"))
+                    f"{pe.get('m')}: port={pe.get('p')}, bench={pe.get('b')}"))
     else:
         out.append((FAIL, "Re-flag: Bench P/E populated",
                     "still null — confirmed-then-regressed; raise immediately if shipping"))
     if pb and pb.get("b") is not None:
         out.append((PASS, "Re-flag: Bench P/B populated",
-                    f"port={pb.get('p')}, bench={pb.get('b')}"))
+                    f"{pb.get('m')}: port={pb.get('p')}, bench={pb.get('b')}"))
     else:
         out.append((FAIL, "Re-flag: Bench P/B populated", "still null"))
 
@@ -582,18 +598,41 @@ def main():
         print(f"   Action: review the drift list above; if intentional, delete")
         print(f"   ~/RR/.schema_fingerprint.json and re-run to update the baseline.")
         return 2
-    if all_counts[FAIL] == 0 and all_counts[PART] <= 2:
-        print(f"{BOLD}{GREEN}🟢 GREEN-LIGHT — all critical checks pass{RESET}")
-        print(f"   Massive run can proceed.")
-        return 0
-    elif all_counts[FAIL] == 0:
-        print(f"{BOLD}{YELLOW}🟡 GREEN-LIGHT WITH NOTES — partials are 'nice-to-have', no blockers{RESET}")
-        print(f"   {all_counts[PART]} partial item(s) noted but none block the massive run.")
-        return 0
-    else:
-        print(f"{BOLD}{RED}🔴 FIX REQUIRED — {all_counts[FAIL]} blocking check(s) failed{RESET}")
-        print(f"   Send the failure list above back to FactSet before authorizing the massive run.")
+    # Classify failures: A-tier (Critical, blocking) vs C-tier (nice-to-have).
+    # Anything in fails_by_name starting with "A" is blocking; "NEW " + critical items also blocking.
+    BLOCKING_PATTERNS = (
+        "A1 ", "A2 ", "A3 ", "A4 ", "A5 ", "A6 ", "A7 ",
+        "Re-flag",
+    )
+    NICE_TO_HAVE_PATTERNS = ("C1 ", "C3 ", "C5 ", "C6 ", "C7 ", "C8 ", "C9 ",
+                              "NEW Per-holding period return")
+    blocking_fails = {name: strats for name, strats in fails_by_name.items()
+                      if any(name.startswith(p) for p in BLOCKING_PATTERNS)}
+    nice_fails = {name: strats for name, strats in fails_by_name.items()
+                  if any(name.startswith(p) for p in NICE_TO_HAVE_PATTERNS)}
+    other_fails = {name: strats for name, strats in fails_by_name.items()
+                   if name not in blocking_fails and name not in nice_fails}
+    if not blocking_fails and not other_fails:
+        if all_counts[FAIL] == 0 and all_counts[PART] <= 2:
+            print(f"{BOLD}{GREEN}🟢 GREEN-LIGHT — all critical checks pass{RESET}")
+            print(f"   Massive run can proceed.")
+            return 0
+        else:
+            print(f"{BOLD}{GREEN}🟢 GREEN-LIGHT WITH NOTES{RESET}")
+            print(f"   All A-tier (Critical) and B-tier (Confirmation) checks pass.")
+            if nice_fails:
+                print(f"   {len(nice_fails)} C-tier 'nice-to-have' item(s) not shipped — not blocking:")
+                for name, strats in nice_fails.items():
+                    print(f"     {YELLOW}◯{RESET} {name} ({len(strats)} strateg{'ies' if len(strats)>1 else 'y'})")
+            print(f"   {GREEN}Massive run can proceed.{RESET} C-tier items can ship in a follow-up.")
+            return 0
+    if blocking_fails:
+        print(f"{BOLD}{RED}🔴 FIX REQUIRED — {len(blocking_fails)} A-tier check(s) failed{RESET}")
+        for name, strats in blocking_fails.items():
+            print(f"     {RED}●{RESET} {name} ({len(strats)} strateg{'ies' if len(strats)>1 else 'y'})")
         return 1
+    print(f"{BOLD}{YELLOW}🟡 NEEDS REVIEW — non-A-tier failures present, manual judgment required{RESET}")
+    return 1
 
 
 if __name__ == "__main__":

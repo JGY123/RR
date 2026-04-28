@@ -637,11 +637,14 @@ class FactSetParserV3:
 
     def _extract_security(self, acct_code):
         """Extract holdings. Uses wildcard prefixes to capture all factor-family
-        columns into sub-dicts. Unknown columns go to _extra."""
+        columns into sub-dicts. Unknown columns go to _extra.
+        Returns (holdings, unowned). Both empty if Security section missing —
+        e.g., 2026-04-28 inception-to-date pulls omit Security to keep file size
+        sane (per-holding × inception = millions of rows)."""
         schema = self.schemas.get("Security")
         rows = self.section_rows.get("Security", [])
         if not schema or not rows or schema.num_groups == 0:
-            return []
+            return [], []
 
         FIXED_FIELD_MAP = {
             "PERIOD_START": "d",

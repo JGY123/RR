@@ -1442,7 +1442,10 @@ function rExp(){
       </div>
     </div>
     <div id="countryMapDiv" style="height:320px"></div>
-    <div id="countryChartDiv" style="height:280px;display:none"></div>
+    <div id="countryChartWrap" style="display:none">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 4px 8px 4px"><span id="ctryChartPickerSlot">${ctryChartCountryPickerHtml()}</span><span style="font-size:10px;color:var(--textDim)">x = factors (use ⚙ Cols above)  ·  y = countries (pick above)  ·  click any cell to drill</span></div>
+      <div id="countryChartDiv" style="height:280px"></div>
+    </div>
     <div id="countryTableWrap" style="max-height:320px;overflow:auto;display:none">${rCountryTable(s.countries,s.hold)}</div>
   </div>
 
@@ -1972,6 +1975,67 @@ function tileFilterIcon(tile,col){
 // Back-compat shims for cardSectors's existing call sites
 function openSecFilter(col,btnEl){return openTileFilter('sec',col,btnEl);}
 function secFilterIcon(col){return tileFilterIcon('sec',col);}
+
+// 2026-04-29: Country picker — drives which countries show as rows in the
+// cardCountry chart-view heatmap. Empty Set = "all" (default). Persists.
+// Pattern note: applies CHART-ONLY by design. Table has its own per-column
+// filters + top-N pill. Keeps the two views independently controllable.
+let _ctryChartCountries=(function(){
+  try{const arr=JSON.parse(localStorage.getItem('rr.ctryChartCountries')||'[]');return new Set(Array.isArray(arr)?arr:[]);}catch(e){return new Set();}
+})();
+function setCtryChartCountries(arr){
+  _ctryChartCountries=new Set(arr||[]);
+  try{localStorage.setItem('rr.ctryChartCountries',JSON.stringify([..._ctryChartCountries]));}catch(e){}
+  if(typeof rCountryChart==='function'&&cs)rCountryChart(cs);
+  _renderCtryChartPickerLabel();
+}
+function toggleCtryChartCountry(name,checked){
+  const cur=new Set(_ctryChartCountries);
+  if(checked)cur.add(name);else cur.delete(name);
+  setCtryChartCountries([...cur]);
+}
+function _renderCtryChartPickerLabel(){
+  const lbl=document.getElementById('ctryChartPickerLabel');
+  if(!lbl)return;
+  const n=_ctryChartCountries.size;
+  lbl.textContent=n===0?'All':String(n);
+}
+function ctryChartCountryPickerHtml(){
+  // Built lazily — closure'd over `cs` would go stale on strategy switch.
+  // Renders all countries from cs.countries with current checkbox state.
+  if(!cs||!cs.countries)return'';
+  const allNames=cs.countries.map(c=>c.n).filter(Boolean).sort();
+  const items=allNames.map(n=>{
+    const checked=_ctryChartCountries.size===0||_ctryChartCountries.has(n);
+    return`<label style="display:flex;align-items:center;gap:7px;padding:4px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${checked?'checked':''} onchange="toggleCtryChartCountry('${n.replace(/'/g,"&#39;")}',this.checked)" style="accent-color:var(--pri);cursor:pointer"><span style="font-size:11px;color:var(--txth)">${n}</span></label>`;
+  }).join('');
+  // Quick-presets at top
+  const presets=`
+    <div style="display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--grid)">
+      <button class="pill" onclick="setCtryChartCountries([])" title="Show all countries" style="font-size:9px;padding:2px 6px">All</button>
+      <button class="pill" onclick="(()=>{const owned=(cs.hold||[]).filter(h=>(h.p||0)>0&&h.co).reduce((s,h)=>s.add(h.co),new Set());setCtryChartCountries([...owned]);})()" title="Only countries we own" style="font-size:9px;padding:2px 6px">Owned</button>
+      <button class="pill" onclick="(()=>{const fa=aggregateHoldingsBy(cs.hold||[],h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode});const top=Object.entries(fa).map(([k,v])=>[k,Math.abs(v.tr||0)]).sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0]);setCtryChartCountries(top);})()" title="Top 10 by |TE|" style="font-size:9px;padding:2px 6px">Top 10</button>
+      <button class="pill" onclick="(()=>{const fa=aggregateHoldingsBy(cs.hold||[],h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode});const top=Object.entries(fa).map(([k,v])=>[k,Math.abs(v.tr||0)]).sort((a,b)=>b[1]-a[1]).slice(0,20).map(x=>x[0]);setCtryChartCountries(top);})()" title="Top 20 by |TE|" style="font-size:9px;padding:2px 6px">Top 20</button>
+    </div>`;
+  return`<div class="dl-wrap" onclick="event.stopPropagation()" style="display:inline-block;vertical-align:middle"><button class="export-btn" id="ctryChartPickerBtn" title="Pick which countries appear as heatmap rows" onclick="(function(b){const dr=b.nextElementSibling;const was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was){dr.innerHTML=ctryChartCountryPickerBody();dr.classList.add('open');}})(this)" style="font-size:10px;padding:2px 7px"><span style="color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;margin-right:3px;font-size:9px">Countries</span><span id="ctryChartPickerLabel" style="font-weight:700">${_ctryChartCountries.size===0?'All':String(_ctryChartCountries.size)}</span> ▾</button><div class="dl-drop" style="min-width:240px;max-height:380px;overflow-y:auto"></div></div>`;
+}
+// Lazy body so checkbox states reflect latest state at open time
+function ctryChartCountryPickerBody(){
+  if(!cs||!cs.countries)return'';
+  const allNames=cs.countries.map(c=>c.n).filter(Boolean).sort();
+  const presets=`<div style="display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--grid);position:sticky;top:0;background:var(--card);z-index:1">
+    <button class="pill" onclick="setCtryChartCountries([])" style="font-size:9px;padding:2px 6px">All</button>
+    <button class="pill" onclick="(()=>{const owned=(cs.hold||[]).filter(h=>(h.p||0)>0&&h.co).reduce((s,h)=>s.add(h.co),new Set());setCtryChartCountries([...owned]);})()" style="font-size:9px;padding:2px 6px">Owned</button>
+    <button class="pill" onclick="(()=>{const fa=aggregateHoldingsBy(cs.hold||[],h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode});const top=Object.entries(fa).map(([k,v])=>[k,Math.abs(v.tr||0)]).sort((a,b)=>b[1]-a[1]).slice(0,10).map(x=>x[0]);setCtryChartCountries(top);})()" style="font-size:9px;padding:2px 6px">Top 10</button>
+    <button class="pill" onclick="(()=>{const fa=aggregateHoldingsBy(cs.hold||[],h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode});const top=Object.entries(fa).map(([k,v])=>[k,Math.abs(v.tr||0)]).sort((a,b)=>b[1]-a[1]).slice(0,20).map(x=>x[0]);setCtryChartCountries(top);})()" style="font-size:9px;padding:2px 6px">Top 20</button>
+  </div>`;
+  const items=allNames.map(n=>{
+    const checked=_ctryChartCountries.size===0||_ctryChartCountries.has(n);
+    const safe=n.replace(/'/g,"&#39;").replace(/"/g,'&quot;');
+    return`<label style="display:flex;align-items:center;gap:7px;padding:4px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${checked?'checked':''} onchange="toggleCtryChartCountry('${safe}',this.checked)" style="accent-color:var(--pri);cursor:pointer"><span style="font-size:11px;color:var(--txth)">${n}</span></label>`;
+  }).join('');
+  return presets+items;
+}
 
 // 2026-04-28: Top-N quick toggle for cardCountry. Hides rows beyond the N
 // countries with the largest absolute TE contribution. State persists.
@@ -3789,13 +3853,20 @@ function setMapFacParam(param){
 
 function toggleCountryView(v,btn){
   $('countryMapDiv').style.display=v==='map'?'block':'none';
+  // 2026-04-29: chart view now wrapped with country-picker toolbar above it
+  const cw=$('countryChartWrap');if(cw)cw.style.display=v==='chart'?'block':'none';
   $('countryChartDiv').style.display=v==='chart'?'block':'none';
   $('countryTableWrap').style.display=v==='table'?'block':'none';
   let regBtns=$('mapRegionBtns');if(regBtns)regBtns.style.display=v==='map'?'inline-flex':'none';
   let colorBtn=$('mapColorBtn');if(colorBtn)colorBtn.style.display=v==='map'?'flex':'none';
   document.querySelectorAll('#cardCountry .toggle-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
-  if(v==='chart'&&cs)rCountryChart(cs);
+  if(v==='chart'&&cs){
+    // Refresh the picker slot in case strategy changed since last render
+    const slot=document.getElementById('ctryChartPickerSlot');
+    if(slot&&typeof ctryChartCountryPickerHtml==='function')slot.innerHTML=ctryChartCountryPickerHtml();
+    rCountryChart(cs);
+  }
   if(v==='map'&&cs)rCountryMap(cs);
 }
 
@@ -3811,7 +3882,12 @@ function rCountryChart(s){
   // Aggregate factor_contr per country under current Universe mode
   const fa=aggregateHoldingsBy(s.hold,h=>h.co,factorCols,{mode:_aggMode});
   // Total |TE| per country (for sorting + top-N)
-  const totals=s.countries.map(c=>({n:c.n,abs:Math.abs(fa[c.n]?.tr||0)}));
+  let pool=s.countries;
+  // 2026-04-29: optional country picker — when non-empty, restricts heatmap rows
+  if(_ctryChartCountries&&_ctryChartCountries.size>0){
+    pool=pool.filter(c=>_ctryChartCountries.has(c.n));
+  }
+  const totals=pool.map(c=>({n:c.n,abs:Math.abs(fa[c.n]?.tr||0)}));
   totals.sort((a,b)=>b.abs-a.abs);
   // Honor the existing _ctryTopN pill (0=all)
   const limit=_ctryTopN>0?Math.min(_ctryTopN,totals.length):totals.length;

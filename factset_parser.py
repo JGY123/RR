@@ -1063,8 +1063,25 @@ class FactSetParserV3:
                     "bpb":   current_rm.get("bpb"),
                     "total_risk":   current_rm.get("total_risk"),
                     "bm_risk":      current_rm.get("bm_risk"),
-                    "pct_specific": current_rm.get("pct_specific"),
-                    "pct_factor":   current_rm.get("pct_factor"),
+                    # pct_specific / pct_factor: sourced from RiskM when present.
+                    # 2026-04-28: FactSet folded RiskM → 18 Style Snapshot, but did NOT
+                    # carry % Stock Specific / % Factor Risk forward at portfolio level.
+                    # Per user direction: derive pct_specific = Σ(sector mcr) since no
+                    # sectors are hidden anymore (Σ sector %T = 100 confirms invariant).
+                    # Then pct_factor = 100 - pct_specific. Marked _derived to preserve
+                    # provenance.
+                    "pct_specific": (
+                        current_rm.get("pct_specific")
+                        if current_rm.get("pct_specific") is not None
+                        else (round(sum((s.get("mcr") or 0) for s in sectors), 2) if sectors else None)
+                    ),
+                    "pct_factor": (
+                        current_rm.get("pct_factor")
+                        if current_rm.get("pct_factor") is not None
+                        else (round(100 - sum((s.get("mcr") or 0) for s in sectors), 2) if sectors else None)
+                    ),
+                    "_pct_specific_source": "riskm" if current_rm.get("pct_specific") is not None else "sum_sector_mcr",
+                    "_pct_factor_source":   "riskm" if current_rm.get("pct_factor")   is not None else "100_minus_pct_specific",
                     "cash": cash,
                     "sr": round(h_cnt / bh_cnt * 100, 2) if h_cnt and bh_cnt else None,
                 },

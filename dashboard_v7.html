@@ -3612,6 +3612,18 @@ function rCountryMap(s){
       title=facName+' Exp';
     }
     scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
+  }else if(mode.startsWith('rk:')){
+    // 2026-04-28: Spotlight rank modes — 1=best (green) → 5=worst (red).
+    // Forced zmin=1, zmax=5 so the full 5-quintile color band is visible
+    // even when only mid-range ranks appear in this strategy.
+    const rankKey={'rk:over':'over','rk:rev':'rev','rk:val':'val','rk:qual':'qual'}[mode];
+    const rankLabel={'rk:over':'Avg Overall Rank','rk:rev':'Avg Revision Rank','rk:val':'Avg Value Rank','rk:qual':'Avg Quality Rank'}[mode];
+    getVal=c=>c[rankKey];
+    title=rankLabel;
+    diverge=false;
+    scale=[[0,'#10b981'],[0.5,'#f59e0b'],[1,'#ef4444']];
+    // Mark fixed bounds so render block uses 1..5 instead of 0..absMax
+    var rankFixed={zmin:1,zmax:5};
   }else{
     getVal=c=>c.a||0;title='Active %';
     scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
@@ -3619,18 +3631,22 @@ function rCountryMap(s){
   let vals=mapped.map(getVal);
   let absMax=Math.max(...vals.map(Math.abs),0.01);
   let reg=MAP_REGIONS[_mapRegion]||MAP_REGIONS.world;
+  // 2026-04-28: rank modes use fixed 1..5 bounds + drop the % suffix
+  const isRankMode=mode.startsWith('rk:');
+  const _zmin=isRankMode?1:(diverge?-absMax:undefined);
+  const _zmax=isRankMode?5:(diverge?absMax:undefined);
   Plotly.newPlot('countryMapDiv',[{
     type:'choropleth',
     locations:mapped.map(c=>COUNTRY_ISO3[c.n]),
     z:vals,text:mapped.map(c=>c.n),
     colorscale:scale,
     zmid:diverge?0:undefined,
-    zmin:diverge?-absMax:undefined,
-    zmax:diverge?absMax:undefined,
-    colorbar:{title:title,ticksuffix:'%',len:0.6,thickness:12,
+    zmin:_zmin,
+    zmax:_zmax,
+    colorbar:{title:title,ticksuffix:isRankMode?'':'%',len:0.6,thickness:12,
       tickfont:{color:T.tick,size:10},titlefont:{color:T.tick,size:10}},
     marker:{line:{color:T.grid,width:0.5}},
-    hovertemplate:'%{text}<br>'+title+': %{z:.2f}%<extra></extra>'
+    hovertemplate:'%{text}<br>'+title+': %{z:.2f}'+(isRankMode?'':'%')+'<extra></extra>'
   }],{
     geo:{
       bgcolor:'transparent',showframe:false,
@@ -7056,6 +7072,14 @@ function getMapColorGroups(s){
       {id:'te',label:'TE Contribution'},
       {id:'specific',label:'Stock-Specific Risk'},
       {id:'factor_te',label:'Factor Risk'}
+    ]},
+    // 2026-04-28: Spotlight ranks — average MFR rank per country (1=best/green, 5=worst/red).
+    // Diverging-color scale flagged separately on the map render side so high-rank reads as red.
+    {label:'Spotlight',items:[
+      {id:'rk:over',label:'Avg Overall MFR Rank'},
+      {id:'rk:rev', label:'Avg Revision Rank'},
+      {id:'rk:val', label:'Avg Value Rank'},
+      {id:'rk:qual',label:'Avg Quality Rank'}
     ]}
   ];
   if(s&&s.factors&&s.factors.length){
@@ -7340,6 +7364,14 @@ function _fsCtryGetVal(mode,param,s){
     return{get:c=>{let r=agg[c.n];if(!r)return 0;let fc=r.facContr[facName];if(fc==null)return 0;return r.p>0?fc/r.p:0;},
       title:facName+' Exp',diverge:true,scale:[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']]};
   }
+  if(mode.startsWith('rk:')){
+    // 2026-04-28: Spotlight rank modes — 1=best (green) → 5=worst (red), fixed bounds.
+    const rankKey={'rk:over':'over','rk:rev':'rev','rk:val':'val','rk:qual':'qual'}[mode];
+    const rankLabel={'rk:over':'Avg Overall Rank','rk:rev':'Avg Revision Rank','rk:val':'Avg Value Rank','rk:qual':'Avg Quality Rank'}[mode];
+    return{get:c=>c[rankKey],title:rankLabel,diverge:false,
+      scale:[[0,'#10b981'],[0.5,'#f59e0b'],[1,'#ef4444']],
+      zmin:1,zmax:5,suffix:''};
+  }
   return{get:c=>c.a||0,title:'Active %',diverge:true,scale:[[0,'#ef4444'],[0.5,T.heatMid],[1,'#10b981']]};
 }
 
@@ -7353,17 +7385,21 @@ function _renderFsCtryMap(s){
   let absMax=Math.max.apply(null,vals.map(Math.abs).concat([0.01]));
   let iso3=countries.map(function(c){return COUNTRY_ISO3[c.n]||c.iso3||c.co||c.n||'';});
   let reg=MAP_REGIONS[_mapRegion]||MAP_REGIONS.world;
+  // 2026-04-28: rank modes provide explicit zmin/zmax + a non-% suffix
+  const cfgZmin = cfg.zmin !== undefined ? cfg.zmin : (cfg.diverge?-absMax:0);
+  const cfgZmax = cfg.zmax !== undefined ? cfg.zmax : (cfg.diverge?absMax:undefined);
+  const cfgSuffix = cfg.suffix !== undefined ? cfg.suffix : '%';
   Plotly.newPlot('fsChartDiv',[{
     type:'choropleth',
     locations:iso3,locationmode:'ISO-3',
     z:vals,
     colorscale:cfg.scale,
     zmid:cfg.diverge?0:undefined,
-    zmin:cfg.diverge?-absMax:0,
-    zmax:cfg.diverge?absMax:undefined,
+    zmin:cfgZmin,
+    zmax:cfgZmax,
     text:countries.map(function(c){return c.n||c.co;}),
     customdata:countries.map(function(c){return[c.n||c.co,c.p,c.b,c.a];}),
-    hovertemplate:'<b>%{customdata[0]}</b><br>'+cfg.title+': %{z:.2f}%<br>Port: %{customdata[1]:.1f}%<br>Active: %{customdata[3]:+.1f}%<extra></extra>',
+    hovertemplate:'<b>%{customdata[0]}</b><br>'+cfg.title+': %{z:.2f}'+cfgSuffix+'<br>Port: %{customdata[1]:.1f}%<br>Active: %{customdata[3]:+.1f}%<extra></extra>',
     colorbar:{x:1,len:0.7,thickness:10,bgcolor:'rgba(0,0,0,0)',tickfont:{color:THEME().tick,size:9},title:{text:cfg.title,side:'right',font:{color:THEME().tick,size:9}}}
   }],Object.assign({},plotBg,{
     geo:{

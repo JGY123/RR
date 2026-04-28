@@ -291,3 +291,70 @@ When the test-pull file lands:
 - The 4D quadrant scatter pattern — only on cardSectors per user direction; "different tiles may need different visualizations"
 - The TILE_REG registry — could expand to include drill-modal config, export config, etc., once a second tile needs the same surface
 - The Universe + Wtd/Avg global pills — already global; if other parts of the dashboard need universe-aware rendering, they read from `_aggMode` / `_avgMode` directly
+
+---
+
+# Addendum — 2026-04-29 (cardCountry round 2)
+
+User direction at the start of round 2 included "again as usual take insights and keep them in mind to use on other tiles." Several patterns surfaced that should propagate to the rest of the marathon.
+
+## 1. View-aware full-screen — single ⛶ button, multiple FS layouts
+
+**The pattern:** when a tile has multiple sub-views (Map / Chart / Table on cardCountry; Table / Chart on cardSectors), the ⛶ button should detect which sub-view is currently active and open a FS layout *tailored to that view* — not a one-size-fits-all modal.
+
+**On cardCountry today:**
+- Map active → rich map full-screen (existing `openFullScreen('country')`)
+- Chart active → heatmap-centric FS (`openCtryChartFullscreen`) — large heatmap, click-to-drill preserved
+- Table active → table-centric FS (`openCtryTableFullscreen`) — full table with all columns, filters, top-N pill applied
+
+**Implementation shape:** a small dispatcher function (`openCtryFullscreen()`) that reads the current view-state by checking which `display: block` is set, then routes to one of N implementation functions. All implementation functions reuse the same shared modal shell (`secFsModal`) for visual consistency.
+
+**Where to apply next:** every tile with multiple views should expose the same pattern. cardSectors today only routes to a table-centric FS regardless of whether the user is in Chart view — that's the tile to retrofit next once the user signs off on cardCountry.
+
+**Architectural note:** the user explicitly framed this as "enriching the existing view with more" — not replacing it. The FS view should always be a *deeper version of what the user was already looking at*, never a different mental model.
+
+## 2. Per-cell drill carries context — clicking China×Volatility ≠ clicking China
+
+**The pattern:** when a viz cell encodes 2+ dimensions (country × factor in this heatmap), the click handler should pass *both* dimensions through to the drill modal so it can pre-filter / re-sort accordingly.
+
+**Implementation on cardCountry:** `oDrCountry(name, factorContext?)` — the second optional argument changes:
+- Holdings sort: `|factor_contr[factor]|` desc instead of `|tr|` desc
+- New column in holdings table showing per-stock contribution to that factor
+- "★ Sorted by {factor} factor TE · clear" badge near the country name (clicking "clear" re-opens without the factor)
+
+**Backwards compatibility:** `oDrCountry('China')` with no second arg works exactly as before. New behavior is opt-in.
+
+**Where to apply next:** any heatmap or 2D-encoded viz. When cardSectors / cardGroups gain heatmap variants, the same `oDrSec(sectorName, factorContext?)` pattern should be applied. The drill UX (column + sort + badge) is reusable.
+
+## 3. Picker UI for high-cardinality dimensions
+
+**The pattern:** when a viz can show many of something (countries, holdings, factors), give the user a multi-select picker with quick-presets. Don't force them to use existing top-N filters when they want a specific set.
+
+**On cardCountry chart-view today:**
+- Picker button shows current count ("All" or N)
+- Dropdown opens with sticky-header presets (All / Owned / Top 10 / Top 20) + alphabetical checkbox list of every country
+- State persists per-tile to localStorage
+
+**Why this complements top-N:** top-N answers "show me the biggest"; picker answers "show me these specific ones I care about." Both have value — they don't conflict; the picker filters the universe and top-N picks from the filtered set.
+
+**Cross-tile:** any tile that lists items where the user might want a curated set should expose the same picker. cardCountry's chart-view is the prototype.
+
+## 4. Re-renderer parametrized by target div
+
+**The pattern:** when the same chart needs to render in multiple places (e.g., cardCountry's chart view AND a Risk-tab tile), parametrize the renderer over the target div ID rather than hardcoding it.
+
+**Implementation:** `rCountryChart(s, divId='countryChartDiv')` — same logic, different target. Both copies stay in lockstep automatically because they consume the same global state (`_aggMode`, `_avgMode`, `_facCols`, `_ctryChartCountries`, `_ctryTopN`).
+
+**Cross-tile:** the same approach unlocks future "factor map on Holdings tab", "sector chart in cardThisWeek", etc. without duplicating render code.
+
+## 5. Adding to existing pickers vs. building new ones
+
+**Insight:** the map color picker on cardCountry already had Weight / Risk / Style Factors. User wanted Spotlight ranks added. The right move was to expand the EXISTING picker (add a new section), not add a separate Spotlight-rank picker. Reuse familiar UI.
+
+**Cross-tile:** when adding a new variable to a tile that already has a picker for similar variables, extend the picker rather than adding a separate control. Keeps the surface area predictable.
+
+## Process notes (this session)
+
+- All four round-2 items (picker, factor-context drill, Risk-tab heatmap, view-aware FS) shipped in <90 min total. The marathon round format scales when the patterns are well-defined upfront and the questions are tight (5 max per round).
+- Each item committed individually so a regression on one doesn't block the others.
+- Verified each in browser before committing — caught zero parse-bombs or rendering issues this round (the smoke test patterns from the April crisis are paying back).

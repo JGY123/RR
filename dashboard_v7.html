@@ -3668,6 +3668,43 @@ function rCountryMap(s){
   const isRankMode=mode.startsWith('rk:');
   const _zmin=isRankMode?1:(diverge?-absMax:undefined);
   const _zmax=isRankMode?5:(diverge?absMax:undefined);
+  // Rich hover tooltip — full metric block + top-3 holdings per country.
+  // Built once per render; lives in customdata so Plotly natively renders the card.
+  const _holdByCo={};
+  (s.hold||[]).forEach(h=>{if(h.co&&!isCash(h)){(_holdByCo[h.co]=_holdByCo[h.co]||[]).push(h);}});
+  const _formatTop=(co)=>{
+    const arr=_holdByCo[co]||[];
+    const top=[...arr].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0)).slice(0,3);
+    if(!top.length)return '<i>(no holdings detail)</i>';
+    return top.map(h=>{
+      const nm=(h.n||h.t||'?').slice(0,28);
+      const wt=(h.p||0).toFixed(1);
+      const tr=(h.tr||0).toFixed(2);
+      return `&nbsp;&nbsp;${nm} · ${wt}% port · ${tr}% TE`;
+    }).join('<br>');
+  };
+  const customdata=mapped.map(c=>{
+    const a=agg[c.n]||{};
+    const factor_te=(a.tr||0)-(a.mcr||0);
+    const cnt=(_holdByCo[c.n]||[]).length;
+    const overR=c.over!=null?c.over.toFixed(2):'—';
+    return[
+      c.n,
+      c.p||0, c.b||0, c.a||0,
+      a.tr||0, a.mcr||0, factor_te,
+      cnt, overR,
+      _formatTop(c.n)
+    ];
+  });
+  const richHover='<b>%{customdata[0]}</b>  '+
+    '<span style="color:#94a3b8">· %{customdata[7]} holdings</span><br>'+
+    '<span style="color:#94a3b8">━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>'+
+    'Port %{customdata[1]:.1f}%  ·  Bench %{customdata[2]:.1f}%  ·  Active %{customdata[3]:+.1f}%<br>'+
+    'TE Contrib %{customdata[4]:.2f}%  ·  Stock %{customdata[5]:.2f}%  ·  Factor %{customdata[6]:.2f}%<br>'+
+    'Avg Overall Rank: %{customdata[8]}<br>'+
+    '<span style="color:#94a3b8">━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>'+
+    '<b>Top holdings by %T:</b><br>%{customdata[9]}'+
+    '<extra></extra>';
   Plotly.newPlot('countryMapDiv',[{
     type:'choropleth',
     locations:mapped.map(c=>COUNTRY_ISO3[c.n]),
@@ -3679,7 +3716,9 @@ function rCountryMap(s){
     colorbar:{title:title,ticksuffix:isRankMode?'':'%',len:0.6,thickness:12,
       tickfont:{color:T.tick,size:10},titlefont:{color:T.tick,size:10}},
     marker:{line:{color:T.grid,width:0.5}},
-    hovertemplate:'%{text}<br>'+title+': %{z:.2f}'+(isRankMode?'':'%')+'<extra></extra>'
+    customdata:customdata,
+    hovertemplate:richHover,
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11},align:'left'}
   }],{
     geo:{
       bgcolor:'transparent',showframe:false,

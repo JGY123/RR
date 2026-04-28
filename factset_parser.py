@@ -552,6 +552,12 @@ class FactSetParserV3:
     # ---- Generic horizontal group-table extractor (19-col/group sections)
 
     def _extract_group_table(self, section_name, acct_code):
+        """Extract group-level data (Sector / Country / Industry / Region / Group).
+        Returns latest-period rollup PLUS per-period history. The 19-col-per-period
+        layout includes %T and %S which CHANGE per period — historical extraction
+        unlocks risk-contribution time series at the group level (cardSectors etc.
+        Trend column shows real risk history, not just active weight).
+        2026-04-28: parser previously only extracted last period; now keeps `hist`."""
         schema = self.schemas.get(section_name)
         rows = self.section_rows.get(section_name, [])
         if not schema or not rows or schema.num_groups == 0:
@@ -566,10 +572,13 @@ class FactSetParserV3:
             if level2 in ("Data", "@NA", "[Unassigned]", "[Cash]", ""):
                 continue
 
-            def g(canonical):
-                return safe_float(schema.get_group_value(row, canonical, last_g))
+            def g(canonical, gi=last_g):
+                return safe_float(schema.get_group_value(row, canonical, gi))
+            def gd(canonical, gi=last_g):
+                return parse_date(schema.get_group_value(row, canonical, gi))
 
             name = GICS_NAME_MAP.get(level2, level2)
+            # Latest-period rollup (existing shape — dashboard reads these directly)
             entry = {
                 "n": name,
                 "p": g("W"),
@@ -586,6 +595,28 @@ class FactSetParserV3:
             }
             if entry["a"] is None and entry["p"] is not None and entry["b"] is not None:
                 entry["a"] = round(entry["p"] - entry["b"], 2)
+            # Per-period history — same 12 fields × num_groups
+            hist = []
+            for gi in range(schema.num_groups):
+                d = gd("PERIOD_START", gi)
+                if not d: continue
+                hist.append({
+                    "d": d,
+                    "p": g("W", gi),
+                    "b": g("BW", gi),
+                    "a": g("AW", gi),
+                    "mcr": g("PCT_S", gi),
+                    "tr":  g("PCT_T", gi),
+                    "over": g("OVER_WAVG", gi),
+                    "rev":  g("REV_WAVG", gi),
+                    "val":  g("VAL_WAVG", gi),
+                    "qual": g("QUAL_WAVG", gi),
+                    "mom":  g("MOM_WAVG", gi),
+                    "stab": g("STAB_WAVG", gi),
+                })
+            hist.sort(key=lambda x: x.get("d") or "")
+            if hist:
+                entry["hist"] = hist
             results.append(entry)
 
         return self._dedup_by_name(results)
@@ -1097,9 +1128,15 @@ class FactSetParserV3:
                 "chars":   self._build_chars(pc_metrics, current_rm, mcap, bmcap),
                 "hist": {
                     "summary": [self._hist_entry(pc) for pc in pc_rows],
-                    "fac": self._build_hist_fac(riskm_rows),
-                    "sec": {},
-                    "reg": {},
+                    "fac":  self._build_hist_fac(riskm_rows),
+                    # 2026-04-28: per-period group history. Each value is a list of
+                    # {d, p, b, a, mcr, tr, over, rev, val, qual, mom, stab} entries
+                    # ordered by date. Empty-history entries are skipped.
+                    "sec":  self._group_hist_dict(sectors),
+                    "ctry": self._group_hist_dict(countries),
+                    "ind":  self._group_hist_dict(industries),
+                    "reg":  self._group_hist_dict(regions),
+                    "grp":  self._group_hist_dict(groups),
                 },
                 "unowned": unowned_hold,
                 "raw_fac": raw_fac,
@@ -1110,6 +1147,19 @@ class FactSetParserV3:
             strategies[dash_id] = s
 
         return strategies, issues
+
+    def _group_hist_dict(self, group_list):
+        """Convert a list of group entries (with `hist` arrays) into a dict
+        keyed by group name. Used to populate strategy.hist.{sec,ctry,ind,reg,grp}.
+        Strips per-entry hist out of the original group dicts to keep latest-period
+        rollup clean (history lives at strategy level)."""
+        out = {}
+        for g in (group_list or []):
+            name = g.get("n")
+            hist = g.pop("hist", None)
+            if name and hist:
+                out[name] = hist
+        return out
 
     def _build_factor_list(self, current_rm, snap, factor_names):
         """Build cs.factors[]. Prefers RiskM-section values when available;

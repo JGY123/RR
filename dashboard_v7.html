@@ -712,7 +712,13 @@ function normalize(raw){
       sum:h.sum||h.summary||[],
       sec:h.sec||h.sectors||{},
       reg:h.reg||h.regions||{},
-      fac:h.fac||h.factors||{}
+      fac:h.fac||h.factors||{},
+      // 2026-04-28: parser now also ships ctry/ind/grp histories (per-period
+      // %T, %S, W, BW, ranks per group). Populates Trend column on cardCountry,
+      // cardGroups, cardIndustries with real risk-contribution time series.
+      ctry:h.ctry||h.countries||{},
+      ind: h.ind ||h.industries||{},
+      grp: h.grp ||h.groups||{}
     };
     // B115 (2026-04-27): hist.sum synthesis from hist.fac dates REMOVED.
     // The previous implementation fabricated hist.sum entries by stamping CURRENT week's
@@ -2277,10 +2283,13 @@ function rWt(data,type,hold){
     // Trend sparkline cell (inline SVG of .a over last N periods)
     let sparkSeries=type==='sec'?(cs.hist&&cs.hist.sec&&cs.hist.sec[d.n]):(cs.hist&&cs.hist.reg&&cs.hist.reg[d.n]);
     let sparkWin=type==='sec'?_secSparkWin:_regSparkWin;
-    // Layered sparkline (per spec): active-weight line + TE-sign glyph + colored end-dot.
-    // teSeries currently null until parser writes per-sector %T history (B6 backlog) — V2 falls back gracefully.
+    // Layered sparkline: active-weight line + TE-history band + TE-sign glyph + colored end-dot.
+    // 2026-04-28: parser now ships hist.sec/reg with per-period %T (mapped to `tr` field).
+    // V2 reads teSeries directly from the same per-group history, so the polygon-band TE
+    // layer turns on automatically.
     const _curTE=showTE?aggTr(d.n):null;
-    let sparkCell=`<td class="r" data-col="trend" style="width:72px;padding:4px 8px">${inlineSparkSvgV2(sparkSeries,null,sparkWin,_curTE)}</td>`;
+    const _teSeries=sparkSeries; // sparkSeries items have both `a` (active wt) and `tr` (%T) per period
+    let sparkCell=`<td class="r" data-col="trend" style="width:72px;padding:4px 8px">${inlineSparkSvgV2(sparkSeries,_teSeries,sparkWin,_curTE)}</td>`;
     const cnt=hold?(factorAgg[d.n]?.count ?? 0):null;
     const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">

@@ -427,17 +427,24 @@ def check_strategy(strat_id, strat, csv_text=None):
         out.append((FAIL, "C2 % of Variance per snapshot row",
                     "not added to 18 Style Snapshot rows"))
 
-    # ---- C3: sector-level historical fields ----
-    hist_sec = (strat.get("hist") or {}).get("sec") or {}
-    if hist_sec and len(hist_sec) > 5:
-        out.append((PASS, "C3 Sector historical fields",
-                    f"hist.sec has {len(hist_sec)} sectors with history"))
-    elif hist_sec:
-        out.append((PART, "C3 Sector historical fields",
-                    f"hist.sec has only {len(hist_sec)} sectors"))
+    # ---- C3: group-level historical fields ----
+    # 2026-04-28 update: data WAS shipped per period in the group tables — parser
+    # was just dropping it. Now extracted into hist.{sec,ctry,ind,reg,grp}.
+    h = strat.get("hist") or {}
+    sec_h  = len(h.get("sec")  or {})
+    ctry_h = len(h.get("ctry") or {})
+    ind_h  = len(h.get("ind")  or {})
+    reg_h  = len(h.get("reg")  or {})
+    grp_h  = len(h.get("grp")  or {})
+    if sec_h > 5 and ctry_h > 5:
+        out.append((PASS, "C3 Group-level historical fields",
+                    f"hist.sec={sec_h} · hist.ctry={ctry_h} · hist.ind={ind_h} · hist.reg={reg_h} · hist.grp={grp_h}"))
+    elif sec_h or ctry_h:
+        out.append((PART, "C3 Group-level historical fields",
+                    f"partial — hist.sec={sec_h}, hist.ctry={ctry_h}"))
     else:
-        out.append((FAIL, "C3 Sector historical fields",
-                    "hist.sec is empty"))
+        out.append((FAIL, "C3 Group-level historical fields",
+                    "no group-level history extracted"))
 
     # ---- C4: top-10 fundamentals ----
     # 2026-04-28 update: FactSet now ships these under NTM-style names. Match flexibly.

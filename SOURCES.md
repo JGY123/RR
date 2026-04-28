@@ -15,9 +15,9 @@
 
 | Cell | Source class | Path |
 |---|---|---|
-| Tracking Error big number | 🟢 sourced | RiskM section → "Predicted Tracking Error (Std Dev)" → `parser.sum.te` |
-| Idiosyncratic Risk % | 🟢 sourced (current week) / ⚫ empty (historical week) | RiskM → `% Asset Specific Risk` → `parser.sum.pct_specific`. Hist weeks not shipped → `—` |
-| Factor Risk % | 🟢 sourced (current week) / ⚫ empty (historical week) | RiskM → `% Factor Risk` → `parser.sum.pct_factor`. Hist weeks not shipped → `—` |
+| Tracking Error big number | 🟢 sourced | Portfolio Characteristics → "Predicted Tracking Error (Std Dev):P" → `parser.sum.te` |
+| Idiosyncratic Risk % | 🟡 derived from aggregation (2026-04-28 update) | RiskM section was retired; FactSet did NOT carry portfolio-level % Asset Specific Risk forward to 18 Style Snapshot. Per user direction: derive `pct_specific = Σ(sector mcr)` since no sectors are hidden anymore (Σ sector %T = 100 confirms no missing buckets). Marker: `_pct_specific_source: 'sum_sector_mcr'` on the strategy. |
+| Factor Risk % | 🟡 derived | `pct_factor = 100 − pct_specific` (math identity). Marker: `_pct_factor_source: '100_minus_pct_specific'`. |
 | State bullets | 🟢 sourced + 🟡 derived | TE/AS/Beta from `parser.sum`; "largest overweight is X" from `cs.sectors[]` sort. Composition logic in `thisWeekCardHtml`. |
 | 3-week trend arrow | 🟢 sourced | `cs.hist.sum[]` last 3 entries → `gt()` helper |
 

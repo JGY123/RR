@@ -98,16 +98,30 @@ FactSet CSVs may contain multiple report dates. Dates with row count ≥ 30% of 
 - `Overall Rank` = Extra column in 101-col holdings sections only (position 5 in each 19-col group). Dropped during parsing to restore standard 18-col layout.
 
 ## Strategy Account Mapping
+
+**Two-file model split** (confirmed 2026-04-28 by user during sample-3 review):
+- **Worldwide risk model** file → 6 international strategies, larger factor set including Currency, Country, Exchange Rate Sensitivity macro factors.
+- **Domestic risk model** file → SCG + Alger accounts (US-only), smaller factor set (no FX/country macros). Will land in a separate file with its own column structure.
+
+The parser is header-driven and adapts to factor-list differences automatically. Verifier classifies missing factors as PARTIAL not FAIL when in domestic mode.
+
+### Worldwide-model accounts (current 6)
 | File Code | Dashboard ID | Full Name | Benchmark |
 |-----------|-------------|-----------|-----------|
 | IDM | IDM | International Developed Markets | MSCI EAFE |
 | ACWIXUS | IOP | International Opportunities | MSCI ACWI ex USA |
 | EM | EM | Emerging Markets | MSCI Emerging Markets |
 | ISC | ISC | International Small Cap | MSCI World ex USA Small Cap |
-| SCG | SCG | Small Cap Growth | Russell 2000 Growth |
 | ACWI | ACWI | All Country World | MSCI ACWI |
 | GSC | GSC | Global Small Cap | MSCI ACWI Small Cap |
-More accounts expected in future — same file structure.
+
+### Domestic-model accounts (SCG + Alger, separate file forthcoming)
+| File Code | Dashboard ID | Full Name | Benchmark | Notes |
+|-----------|-------------|-----------|-----------|-------|
+| SCG | SCG | Small Cap Growth | Russell 2000 Growth | Was in worldwide file; moved to domestic per 2026-04-28 user direction |
+| (alger accounts) | TBD | (user to provide list + descriptions) | (TBD) | Domestic risk model |
+
+When the domestic file lands: run `./load_data.sh <file.csv>` → verifier auto-runs → schema fingerprint will flag drift → user deletes baseline to acknowledge new model shape.
 
 ## CSV Column Schemas (from factset_parser.py)
 - 96-col: 6 prefix + 5 groups × 18 metrics (sector/country/region/group aggregates)

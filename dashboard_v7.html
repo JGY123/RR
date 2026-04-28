@@ -2659,6 +2659,9 @@ function _rerenderAggTiles(){
     // Re-render the sector quadrant chart if the user is currently looking at it.
     const sc=document.getElementById('secChart');
     if(sc&&sc.style.display!=='none'&&typeof rSecChart==='function')rSecChart(cs);
+    // Re-render the country heatmap chart if currently visible (chart toggle on).
+    const ccd=document.getElementById('countryChartDiv');
+    if(ccd&&ccd.offsetParent!==null&&typeof rCountryChart==='function')rCountryChart(cs);
   }
 }
 function setAvgMode(m){
@@ -3797,16 +3800,61 @@ function toggleCountryView(v,btn){
 }
 
 function rCountryChart(s){
-  if(!s.countries||!s.countries.length)return;
-  let sorted=[...s.countries].sort((a,b)=>b.a-a.a);
-  let top5=sorted.slice(0,5);
-  let bot5=sorted.slice(-5).reverse();
-  let all=[...top5,...bot5];
+  // 2026-04-28 rebuild — Country × Factor TE heatmap.
+  // Per viz-specs/cardCountry-chart-spec.md. Replaces the old top-5/bottom-5
+  // active-weight bar (which duplicated info already in the map + table).
+  // The heatmap shows which countries drive which factor exposures — answers
+  // "where is my Value tilt coming from?" at a glance.
+  if(!s.countries||!s.countries.length||!s.hold)return;
+  const T=THEME();
+  const factorCols=RNK_FACTOR_COLS;  // user-picked via global ⚙ Cols picker
+  // Aggregate factor_contr per country under current Universe mode
+  const fa=aggregateHoldingsBy(s.hold,h=>h.co,factorCols,{mode:_aggMode});
+  // Total |TE| per country (for sorting + top-N)
+  const totals=s.countries.map(c=>({n:c.n,abs:Math.abs(fa[c.n]?.tr||0)}));
+  totals.sort((a,b)=>b.abs-a.abs);
+  // Honor the existing _ctryTopN pill (0=all)
+  const limit=_ctryTopN>0?Math.min(_ctryTopN,totals.length):totals.length;
+  const countries=totals.slice(0,limit).map(t=>t.n).filter(n=>fa[n]&&fa[n].count>0);
+  if(!countries.length){
+    document.getElementById('countryChartDiv').innerHTML='<p style="color:var(--txt);padding:40px;text-align:center;font-size:12px">No countries match the current filter</p>';
+    return;
+  }
+  // Build z matrix (rows = countries, cols = factors)
+  const shortFactor=f=>f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
+  const z=countries.map(c=>factorCols.map(f=>{const v=fa[c]?.factor?.[f]??0;return +v.toFixed(3);}));
+  const absMax=Math.max(0.5,...z.flat().map(Math.abs));
+  const customdata=countries.map(c=>factorCols.map(f=>[c,f,(fa[c]?.factor?.[f]??0).toFixed(2)]));
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  const div=document.getElementById('countryChartDiv');
+  // Adaptive height: ~22px per row, capped at 600
+  const h=Math.min(600,Math.max(280,countries.length*22+80));
+  if(div)div.style.height=h+'px';
   Plotly.newPlot('countryChartDiv',[{
-    y:all.map(x=>x.n),x:all.map(x=>x.a),type:'bar',orientation:'h',
-    marker:{color:all.map(x=>x.a>=0?THEME().pos:THEME().neg)},
-    text:all.map(x=>fp(x.a)),textposition:'outside',textfont:{size:10,color:THEME().tick}
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed'},xaxis:{...plotBg.xaxis,title:'Active Weight %'}},plotCfg);
+    type:'heatmap',
+    x:factorCols.map(shortFactor),
+    y:countries,
+    z:z,
+    colorscale:[[0,'#10b981'],[0.5,T.heatMid||'#1e293b'],[1,'#ef4444']],
+    zmin:-absMax,zmid:0,zmax:absMax,
+    customdata:customdata,
+    hovertemplate:'<b>%{customdata[0]}</b><br>Factor: <b>%{customdata[1]}</b><br>TE Contribution: %{customdata[2]}%<extra></extra>',
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
+    colorbar:{title:{text:'TE Contrib<br>(%)',font:{size:9,color:T.tick}},thickness:10,len:0.7,tickfont:{color:T.tick,size:9}},
+    xgap:1,ygap:1
+  }],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{color:T.tick,family:'DM Sans, system-ui',size:10},
+    xaxis:{side:'top',tickfont:{size:10,color:T.tick},showgrid:false,ticks:''},
+    yaxis:{autorange:'reversed',tickfont:{size:10,color:T.tick},showgrid:false,ticks:''},
+    margin:{l:130,r:60,t:50,b:10},
+    annotations:[{x:0.5,xref:'paper',y:1.08,yref:'paper',text:`Country × Factor TE Breakdown · ${aggLbl} universe · click any cell to drill`,showarrow:false,font:{size:10,color:T.tickH||T.tick},xanchor:'center'}]
+  },{displayModeBar:false,responsive:true});
+  // Click → drill into that country (TODO: optionally pre-filter by clicked factor)
+  const el=document.getElementById('countryChartDiv');
+  if(el)el.on('plotly_click',function(e){
+    if(e.points&&e.points[0]){const cn=e.points[0].customdata[0];if(cn)oDrCountry(cn);}
+  });
 }
 
 function rGroupChart(s){

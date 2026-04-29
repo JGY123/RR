@@ -7173,8 +7173,89 @@ function _teDecompositionHistory(){
   });
 }
 
+// 2026-04-29: TE modal — click handler for the 5 stat boxes. Toggles an
+// inline detail strip below the row. Saves a round-trip to a separate modal
+// for things like factor breakdown / idio top contributors.
+let _teActiveBox=null;
+function _setTEBox(name){
+  _teActiveBox=(_teActiveBox===name)?null:name;
+  // Toggle highlight on box borders
+  document.querySelectorAll('#metricContent [data-tebox]').forEach(el=>{
+    const active=el.getAttribute('data-tebox')===_teActiveBox;
+    el.style.background=active?'rgba(99,102,241,0.06)':'';
+    el.style.boxShadow=active?'inset 0 0 0 1px var(--pri)':'';
+  });
+  const div=document.getElementById('teBoxDetail');
+  if(!div){return;}
+  if(!_teActiveBox){div.innerHTML='';return;}
+  const ctx=window._teModalCtx||{};
+  const accent={current:'var(--pos)',idio:'var(--acc)',fac:'var(--pri)',tepct:'var(--txth)',ratiopct:'#f59e0b'}[_teActiveBox];
+  let body='';
+  if(_teActiveBox==='idio'){
+    const top=(cs.hold||[]).filter(h=>!isCash(h)&&h.p>0&&isFinite(h.mcr)).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,5);
+    if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No per-holding MCR data — Security section is empty in current parse.</div>';}
+    else body=`<div style="display:grid;grid-template-columns:1fr;gap:3px">${top.map(h=>`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px solid var(--grid)"><span><span style="color:var(--txth);font-weight:600">${h.t}</span> <span style="color:var(--txt)">${(h.n||'').slice(0,32)}</span></span><span style="color:var(--acc);font-weight:600;font-family:'JetBrains Mono',monospace">MCR ${f2(h.mcr,2)}%</span></div>`).join('')}</div>`;
+  }else if(_teActiveBox==='fac'){
+    const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+    const top=factors.slice(0,8);
+    if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No factor TE contributions available.</div>';}
+    else body=`<div id="teFacPieDiv" style="height:170px"></div>`;
+  }else if(_teActiveBox==='tepct'){
+    body=`<div id="teHistDiv" style="height:120px"></div>`;
+  }else if(_teActiveBox==='ratiopct'){
+    body=`<div id="teRatioHistDiv" style="height:120px"></div>`;
+  }else if(_teActiveBox==='current'){
+    // 4w / 13w / 52w deltas — concise "where is TE moving"
+    const vals=cs.hist?.sum||[];
+    const cur=ctx.current;
+    const at=n=>{const i=vals.length-1-n;return i>=0?vals[i].te:null;};
+    const d=n=>{const v=at(n);return v==null?'—':((cur-v)>=0?'+':'')+f2(cur-v,1);};
+    body=`<div style="display:flex;gap:14px;font-size:11px;color:var(--txt)">
+      <span><span style="color:var(--textDim);font-size:9px;text-transform:uppercase;letter-spacing:0.4px">4w Δ</span> <strong style="color:var(--txth)">${d(4)}</strong></span>
+      <span><span style="color:var(--textDim);font-size:9px;text-transform:uppercase;letter-spacing:0.4px">13w Δ</span> <strong style="color:var(--txth)">${d(13)}</strong></span>
+      <span><span style="color:var(--textDim);font-size:9px;text-transform:uppercase;letter-spacing:0.4px">52w Δ</span> <strong style="color:var(--txth)">${d(52)}</strong></span>
+      <span style="margin-left:auto;color:var(--textDim);font-size:9px">Recent trend in TE</span>
+    </div>`;
+  }
+  div.innerHTML=`<div style="padding:10px 14px;background:rgba(99,102,241,0.04);border-left:3px solid ${accent};border-radius:0 6px 6px 0;font-size:11px">${body}</div>`;
+  // Lazy-render Plotly mini charts after innerHTML is in place
+  if(_teActiveBox==='fac'){
+    const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).slice(0,8);
+    const labels=factors.map(f=>f.n);
+    const vals=factors.map(f=>Math.abs(f.c||0));
+    Plotly.newPlot('teFacPieDiv',[{type:'pie',labels,values:vals,hole:0.55,
+      textinfo:'label+percent',textposition:'outside',textfont:{size:10,color:'#cbd5e1'},
+      marker:{colors:['#6366f1','#a78bfa','#10b981','#22c55e','#eab308','#f97316','#ef4444','#ec4899'],line:{color:'rgba(15,23,42,0.4)',width:1}},
+      hovertemplate:'<b>%{label}</b><br>|TE Contribution|: %{value:.2f}%<br>%{percent}<extra></extra>'
+    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:10},margin:{l:80,r:80,t:8,b:8},showlegend:false},{displayModeBar:false,responsive:true});
+  }else if(_teActiveBox==='tepct'){
+    Plotly.newPlot('teHistDiv',[{type:'histogram',x:ctx.numVals,nbinsx:30,
+      marker:{color:'rgba(168,85,247,0.45)',line:{color:'rgba(168,85,247,0.8)',width:0.5}},
+      hovertemplate:'TE in [%{x:.1f}%]<br>%{y} weeks<extra></extra>'
+    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:9},margin:{l:30,r:10,t:6,b:24},
+      xaxis:{title:{text:'TE %',font:{size:9}},gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
+      yaxis:{gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
+      shapes:[{type:'line',x0:ctx.current,x1:ctx.current,yref:'paper',y0:0,y1:1,line:{color:'#fff',width:2}}],
+      annotations:[{x:ctx.current,xref:'x',yref:'paper',y:1,text:'today '+f2(ctx.current,1)+'%',showarrow:false,font:{size:9,color:'#fff'},xanchor:'left',xshift:4,yanchor:'top'}]
+    },{displayModeBar:false,responsive:true});
+  }else if(_teActiveBox==='ratiopct'){
+    Plotly.newPlot('teRatioHistDiv',[{type:'histogram',x:ctx.idioPctVals,nbinsx:30,
+      marker:{color:'rgba(245,158,11,0.45)',line:{color:'rgba(245,158,11,0.8)',width:0.5}},
+      hovertemplate:'Idio share in [%{x:.0f}%]<br>%{y} weeks<extra></extra>'
+    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:9},margin:{l:30,r:10,t:6,b:24},
+      xaxis:{title:{text:'Idio share %',font:{size:9}},gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
+      yaxis:{gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
+      shapes:[{type:'line',x0:ctx.idioPct,x1:ctx.idioPct,yref:'paper',y0:0,y1:1,line:{color:'#fff',width:2}}],
+      annotations:[{x:ctx.idioPct,xref:'x',yref:'paper',y:1,text:'today '+f2(ctx.idioPct,0)+'%',showarrow:false,font:{size:9,color:'#fff'},xanchor:'left',xshift:4,yanchor:'top'}]
+    },{displayModeBar:false,responsive:true});
+  }
+}
+
 function oDrMetric(metric,range){
   let m=$('metricModal');
+
+  // Reset box-detail state when (re)opening the metric modal
+  _teActiveBox=null;
 
   // Factor risk — delegate to the richer top-contributors modal
   if(metric==='fac'){oDrFacRiskBreak();return;}
@@ -7382,54 +7463,88 @@ function oDrMetric(metric,range){
 
   let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_metricRange===r?' active':''}" onclick="oDrMetric('${metric}','${r}')">${r}</button>`).join('');
 
-  // 2026-04-29: TE-specific stat layout — Current is the headline, Avg/Min/Max
-  // collapse into a single small row beneath it, freeing up boxes 2 & 3 for
-  // Idiosyncratic + Factor split (% share + MCR value), and box 4 for the
-  // historical percentile of the current TE.
+  // 2026-04-29: TE-specific stat layout — 5 boxes in a tight grid:
+  // Current TE | Idiosyncratic | Factor | TE Percentile | Ratio Percentile
+  // Each shows a SD line so the user sees that idio fluctuates much less
+  // than factor — i.e., TE volatility is factor-driven. Boxes are clickable;
+  // selected box renders an inline detail strip below the row.
   let statHtml;
   if(metric==='te'){
     const idioPct=cs.sum?.pct_specific;
     const facPct=cs.sum?.pct_factor;
     const idioMCR=(idioPct!=null&&current!=null)?current*idioPct/100:null;
     const facMCR=(facPct!=null&&current!=null)?current*facPct/100:null;
+    // TE percentile (current TE level vs historical TE distribution)
     let pctile=null;
     if(current!=null&&numVals.length){
       const below=numVals.filter(v=>v<current).length;
       pctile=Math.round(below/numVals.length*100);
     }
     const pctileLabel=pctile==null?'—':(pctile>=90?'very high':pctile>=70?'elevated':pctile>=30?'mid-range':pctile>=10?'subdued':'very low');
-    const cardStyle='text-align:center;padding:12px 12px 10px;min-height:96px;display:flex;flex-direction:column;justify-content:center';
-    const labelStyle='font-size:10px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px';
-    const subStyle='font-size:10px;color:var(--txt);margin-top:5px;letter-spacing:0.2px';
-    const bigNum='font-size:24px;font-weight:700;line-height:1';
-    statHtml=`<div class="grid g4" style="margin-bottom:12px;gap:8px">
-      <div class="card" style="${cardStyle};border-top:2px solid ${valColor}">
+    // Per-period decomposition history → SDs of each component + ratio percentile
+    const decomp=_teDecompositionHistory()||[];
+    const validD=decomp.filter(e=>e.idio_te!=null&&e.factor_te!=null);
+    const idioVals=validD.map(e=>e.idio_te);
+    const facVals=validD.map(e=>e.factor_te);
+    const idioPctVals=validD.map(e=>e.idio_pct);
+    const _sd=arr=>{if(arr.length<2)return null;const m=arr.reduce((a,b)=>a+b,0)/arr.length;return Math.sqrt(arr.reduce((a,v)=>a+(v-m)**2,0)/arr.length);};
+    const teSD=_sd(numVals);
+    const idioSD=_sd(idioVals);
+    const facSD=_sd(facVals);
+    // Ratio percentile (current idio share vs historical idio shares)
+    let ratioPctile=null;
+    if(idioPct!=null&&idioPctVals.length){
+      const below=idioPctVals.filter(v=>v<idioPct).length;
+      ratioPctile=Math.round(below/idioPctVals.length*100);
+    }
+    const rpctLabel=ratioPctile==null?'—':(ratioPctile>=90?'idio-driven (rare)':ratioPctile>=70?'idio-leaning':ratioPctile>=30?'mixed':ratioPctile>=10?'factor-leaning':'factor-driven (rare)');
+    // Cell-level styles, scoped to TE modal only
+    const cardStyle='text-align:center;padding:10px 8px 8px;min-height:104px;display:flex;flex-direction:column;justify-content:center;cursor:pointer;transition:background 0.12s';
+    const labelStyle='font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px';
+    const subStyle='font-size:10px;color:var(--txt);margin-top:4px;letter-spacing:0.2px;line-height:1.3';
+    const sdStyle='font-size:9px;color:var(--textDim);margin-top:2px;letter-spacing:0.3px';
+    const bigNum='font-size:22px;font-weight:700;line-height:1';
+    statHtml=`<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-bottom:10px">
+      <div class="card" data-tebox="current" onclick="_setTEBox('current')" style="${cardStyle};border-top:2px solid ${valColor}">
         <div style="${labelStyle}">Current TE</div>
         <div style="${bigNum};color:${valColor}">${f2(current,1)}${units[metric]}</div>
-        <div style="display:flex;gap:6px;justify-content:center;${subStyle}">
+        <div style="display:flex;gap:4px;justify-content:center;${subStyle}">
           <span>Avg ${f2(avg,1)}</span>
           <span style="opacity:0.35">·</span>
-          <span style="color:var(--pos)">Min ${f2(min,1)}</span>
-          <span style="opacity:0.35">·</span>
-          <span style="color:var(--neg)">Max ${f2(max,1)}</span>
+          <span style="color:var(--pos)">${f2(min,1)}</span>
+          <span style="opacity:0.35">/</span>
+          <span style="color:var(--neg)">${f2(max,1)}</span>
         </div>
+        <div style="${sdStyle}">${teSD!=null?'σ '+f2(teSD,1):''}</div>
       </div>
-      <div class="card tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: Σ MCR across sectors / Σ TR per period — same as cs.sum.pct_specific. Big number = share % of TE; small number = absolute MCR." style="${cardStyle};border-top:2px solid var(--acc)">
+      <div class="card" data-tebox="idio" onclick="_setTEBox('idio')" title="Stock-specific (idiosyncratic) portion. Click for top contributors." style="${cardStyle};border-top:2px solid var(--acc)">
         <div style="${labelStyle}">Idiosyncratic</div>
         <div style="${bigNum};color:var(--acc)">${idioPct!=null?f2(idioPct,1)+'%':'—'}</div>
         <div style="${subStyle}">${idioMCR!=null?'MCR '+f2(idioMCR,1):''}</div>
+        <div style="${sdStyle}">${idioSD!=null?'σ '+f2(idioSD,1):''}</div>
       </div>
-      <div class="card tip" data-tip="Factor-driven portion of tracking error. Computed as 100% − Idiosyncratic share. Big number = share % of TE; small number = absolute MCR." style="${cardStyle};border-top:2px solid var(--pri)">
+      <div class="card" data-tebox="fac" onclick="_setTEBox('fac')" title="Factor-driven portion. Click for factor breakdown pie." style="${cardStyle};border-top:2px solid var(--pri)">
         <div style="${labelStyle}">Factor</div>
         <div style="${bigNum};color:var(--pri)">${facPct!=null?f2(facPct,1)+'%':'—'}</div>
         <div style="${subStyle}">${facMCR!=null?'MCR '+f2(facMCR,1):''}</div>
+        <div style="${sdStyle}">${facSD!=null?'σ '+f2(facSD,1):''}</div>
       </div>
-      <div class="card tip" data-tip="Where the current TE level sits in the historical distribution of weekly TE values (not the idio/factor ratio). 90th = unusually high TE; 50th = median; 10th = unusually low." style="${cardStyle};border-top:2px solid var(--txth)">
+      <div class="card" data-tebox="tepct" onclick="_setTEBox('tepct')" title="Where the current TE level sits in the historical TE distribution. Click for histogram." style="${cardStyle};border-top:2px solid var(--txth)">
         <div style="${labelStyle}">TE Percentile</div>
-        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:14px;color:var(--txt);font-weight:500\">th</span>':'—'}</div>
-        <div style="${subStyle}">${pctileLabel} · vs ${numVals.length} wks</div>
+        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">th</span>':'—'}</div>
+        <div style="${subStyle}">${pctileLabel}</div>
+        <div style="${sdStyle}">vs ${numVals.length} wks</div>
       </div>
-    </div>`;
+      <div class="card" data-tebox="ratiopct" onclick="_setTEBox('ratiopct')" title="Where the current Idio/Factor ratio sits historically. 90th = unusually idio-driven; 10th = unusually factor-driven." style="${cardStyle};border-top:2px solid #f59e0b">
+        <div style="${labelStyle}">Ratio Percentile</div>
+        <div style="${bigNum};color:#f59e0b">${ratioPctile!=null?ratioPctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">th</span>':'—'}</div>
+        <div style="${subStyle}">${rpctLabel}</div>
+        <div style="${sdStyle}">on idio share</div>
+      </div>
+    </div>
+    <div id="teBoxDetail" style="margin-bottom:10px"></div>`;
+    // Stash the data the inline detail handlers need (to avoid recomputing)
+    window._teModalCtx={idioPctVals,numVals,decomp:validD,idioPct,facPct,current,pctile,ratioPctile};
   }else{
     statHtml=`<div class="grid g4" style="margin-bottom:12px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current</div><div style="font-size:18px;font-weight:700;color:${valColor}">${f2(current,dec)}${units[metric]}</div></div>
@@ -7480,23 +7595,15 @@ function oDrMetric(metric,range){
         const decompDates=filtered.map(e=>isoDate(e.d));
         const idioVals=filtered.map(e=>e.idio_te);
         const factorVals=filtered.map(e=>e.factor_te);
-        // Stacked area: idio (bottom) + factor (above idio). Sum = TE.
-        // Hover shows the share-ratio (% of TE), not absolute MCR — clearer
-        // than "Idio: 4.68%" which the user found confusing alongside the
-        // 6.42% TE on the same chart.
-        const idioPctSeries=filtered.map(e=>e.idio_pct);
-        const facPctSeries=filtered.map(e=>e.factor_pct);
+        // Stacked area traces: hover suppressed — all 3 numbers are
+        // consolidated into a single concise tooltip on the TE line below.
         allTraces.push(
           {x:decompDates,y:idioVals,type:'scatter',mode:'lines',stackgroup:'te',
             name:'Idiosyncratic',line:{width:0.5,color:'rgba(168,85,247,0.6)'},
-            fillcolor:'rgba(168,85,247,0.28)',connectgaps:true,
-            customdata:idioPctSeries,
-            hovertemplate:'%{x|%b %d %Y}<br>Idiosyncratic: %{customdata:.0f}% of TE<extra></extra>'},
+            fillcolor:'rgba(168,85,247,0.28)',connectgaps:true,hoverinfo:'skip'},
           {x:decompDates,y:factorVals,type:'scatter',mode:'lines',stackgroup:'te',
             name:'Factor',line:{width:0.5,color:'rgba(99,102,241,0.6)'},
-            fillcolor:'rgba(99,102,241,0.32)',connectgaps:true,
-            customdata:facPctSeries,
-            hovertemplate:'%{x|%b %d %Y}<br>Factor: %{customdata:.0f}% of TE<extra></extra>'}
+            fillcolor:'rgba(99,102,241,0.32)',connectgaps:true,hoverinfo:'skip'}
         );
       }
       // Avg dashed line — keep for context (no fill band, since stacked area replaces it)
@@ -7512,10 +7619,22 @@ function oDrMetric(metric,range){
       shapes.push({type:'line',y0:avg,y1:avg,xref:'paper',x0:0,x1:1,line:{color:THEME().tick,dash:'dash',width:1}});
       annotations.push({x:1,xref:'paper',y:avg,text:'avg',showarrow:false,font:{size:9,color:THEME().tick},xanchor:'left',xshift:4});
     }
-    // Main data line — on top, always visible
-    allTraces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],
-      line:{color:THEME().tickH,width:2.5},connectgaps:true,
-      hovertemplate:'%{x|%b %d %Y}<br>'+labels[metric]+': %{y:.2f}'+(units[metric]||'')+'<extra></extra>'});
+    // Main data line — on top, always visible.
+    // For TE, consolidate the per-week TE + idio share + factor share into a
+    // single concise tooltip (avoids the 3-line "x unified" hover that the
+    // user found cluttered).
+    let mainTrace={x:dates,y:vals,type:'scatter',mode:'lines',name:labels[metric],
+      line:{color:THEME().tickH,width:2.5},connectgaps:true};
+    if(metric==='te'){
+      const decomp=_teDecompositionHistory()||[];
+      const dByDate={};decomp.forEach(e=>{dByDate[isoDate(e.d)]={ip:e.idio_pct,fp:e.factor_pct};});
+      const cd=dates.map(d=>{const r=dByDate[d]||{};return[r.ip!=null?Math.round(r.ip):'—',r.fp!=null?Math.round(r.fp):'—'];});
+      mainTrace.customdata=cd;
+      mainTrace.hovertemplate='<b>%{x|%b %d %Y}</b> · TE %{y:.1f}%<br><span style="color:#a78bfa">Idio %{customdata[0]}%</span> · <span style="color:#6366f1">Factor %{customdata[1]}%</span><extra></extra>';
+    }else{
+      mainTrace.hovertemplate='%{x|%b %d %Y}<br>'+labels[metric]+': %{y:.2f}'+(units[metric]||'')+'<extra></extra>';
+    }
+    allTraces.push(mainTrace);
     // Beta overlays
     if(metric==='beta'&&window._betaVariants&&window._betaSelected){
       let betaColors=['#10b981','#a78bfa','#ef4444','#8b5cf6','#6366f1','#ec4899','#f97316','#22c55e'];

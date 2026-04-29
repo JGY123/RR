@@ -550,9 +550,9 @@ let _availDates=[];       // cached sorted available dates for current strategy
 // Choices: 'latest' (most recent weekly snapshot — default), '1m' (last 4 weekly snaps),
 // '3m' (last 13), '6m' (last 26), '1y' (last 52), 'all' (full sample period via cimp)
 let _impactPeriod=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.impactPeriod'))||'latest';
-const IMPACT_PERIOD_LABELS={latest:'Latest',m1:'1M',m3:'3M',m6:'6M',y1:'1Y',all:'Full Period'};
+const IMPACT_PERIOD_LABELS={latest:'Last Wk',m1:'1M',m3:'3M',m6:'6M',y1:'1Y',all:'Full'};
 const IMPACT_PERIOD_WEEKS={latest:1,m1:4,m3:13,m6:26,y1:52,all:null};
-function getImpactPeriodLabel(){return IMPACT_PERIOD_LABELS[_impactPeriod]||'Latest';}
+function getImpactPeriodLabel(){return IMPACT_PERIOD_LABELS[_impactPeriod]||'Last Wk';}
 function setImpactPeriod(p){
   if(!IMPACT_PERIOD_LABELS[p])return;
   _impactPeriod=p;
@@ -3900,7 +3900,7 @@ function rFacButt(s){
     margin:{l:60,r:20,t:30,b:50},
     xaxis:{title:{text:'Active Exposure (σ) — UW ← → OW',font:{size:10,color:T.tick}},
       range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
-    yaxis:{title:{text:`Impact ${yLab} (%) — bet paying off ↑`,font:{size:10,color:T.tick}},
+    yaxis:{title:{text:`Active-return contribution · ${yLab} (%) — paying off ↑`,font:{size:10,color:T.tick}},
       range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.2f'},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
@@ -3928,11 +3928,11 @@ function openFacButtFullscreen(){
   const facPctT=cs.sum?.pct_factor;
   // Pre-compute multi-period impact per factor
   const periods=[
-    {key:'latest',label:'Wk',tip:'Latest single-week impact (one weekly observation, no aggregation).'},
-    {key:'m1',label:'1m',tip:'Trailing 1 month — SUM of last 4 weekly impacts. Approximate, not compounded.'},
-    {key:'m3',label:'3m',tip:'Trailing 3 months — SUM of last 13 weekly impacts. Approximate.'},
-    {key:'y1',label:'1y',tip:'Trailing 1 year — SUM of last 52 weekly impacts. Approximate.'},
-    {key:'all',label:'Full',tip:'Full period — compounded value from FactSet if shipped (full_period_imp), otherwise SUM of all weekly impacts.'}
+    {key:'latest',label:'Wk',tip:'Most recent week — the factor\'s contribution to portfolio active return for that single week.'},
+    {key:'m1',label:'1m',tip:'Trailing 1 month — factor\'s contribution to portfolio active return over the last 4 weeks (sum of weekly contributions).'},
+    {key:'m3',label:'3m',tip:'Trailing 3 months — factor\'s contribution to portfolio active return over the last 13 weeks (sum of weekly contributions).'},
+    {key:'y1',label:'1y',tip:'Trailing 1 year — factor\'s contribution to portfolio active return over the last 52 weeks (sum of weekly contributions).'},
+    {key:'all',label:'Full',tip:'Full period — FactSet\'s compounded full_period_imp when shipped; otherwise sum of weekly contributions across all weeks.'}
   ];
   const sortedFacs=[...facsBase].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
   // Build the multi-period table — sticky header + colored cells (red=cost, green=gain)
@@ -3971,7 +3971,7 @@ function openFacButtFullscreen(){
         <div style="padding:8px 16px;border-bottom:1px solid var(--grid);background:var(--card);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
           <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Impact across periods</div>
           <div style="font-size:10px;color:var(--txt);line-height:1.4">
-            <strong style="color:var(--txth)">Wk</strong> = single weekly observation · <strong style="color:var(--txth)">1m / 3m / 1y</strong> = SUM of trailing weekly impacts (approx, not compounded) · <strong style="color:var(--txth)">Full</strong> = FactSet's compounded full_period_imp if shipped, else sum-fallback
+            Each value = the factor's contribution to portfolio active return over that period. <strong style="color:var(--txth)">Wk</strong> = the most recent week (one observation) · <strong style="color:var(--txth)">1m / 3m / 1y</strong> = sum of weekly contributions across the trailing window · <strong style="color:var(--txth)">Full</strong> = compounded full-period value when FactSet ships it, otherwise the sum across all weeks.
           </div>
         </div>
         <div style="flex:1;overflow:auto;padding:0 0 8px">
@@ -4048,7 +4048,7 @@ function openFacButtFullscreen(){
       font:{family:'DM Sans, system-ui',color:T.tick,size:10},
       margin:{l:60,r:30,t:30,b:50},
       xaxis:{title:{text:'Active Exposure (σ) — UW ← → OW',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},
-      yaxis:{title:{text:`Impact ${yLab} (%) — bet paying off ↑`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f'},
+      yaxis:{title:{text:`Active-return contribution · ${yLab} (%) — paying off ↑`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f'},
       shapes,annotations,showlegend:false
     },{displayModeBar:false,responsive:true});
     const qel=document.getElementById('facFsQuadDiv');

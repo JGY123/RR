@@ -564,10 +564,15 @@ function getAvgFieldForPeriod(factorName,field,period){
   if(!cs||!cs.snap_attrib)return null;
   const sa=cs.snap_attrib[factorName];
   if(!sa||!sa.hist||!sa.hist.length)return null;
+  // Respect _selectedWeek: slice ENDS at the selected week (or latest if null)
+  const endIdx=_histEndIdx(sa.hist);
   const n=IMPACT_PERIOD_WEEKS[period];
   let slice;
-  if(period==='all'||!n)slice=sa.hist;
-  else slice=sa.hist.slice(-n);
+  if(period==='all'||!n)slice=sa.hist.slice(0,endIdx+1);
+  else{
+    const startIdx=Math.max(0,endIdx-n+1);
+    slice=sa.hist.slice(startIdx,endIdx+1);
+  }
   if(!slice.length)return null;
   const vals=slice.map(p=>+p[field]).filter(v=>v!=null&&isFinite(v));
   if(!vals.length)return null;
@@ -588,31 +593,45 @@ function setImpactPeriod(p){
 }
 // Compute factor Impact for the given period from snap_attrib history.
 // Returns { v, note } where note is a human-readable date range for the cell title attribute.
+// 2026-04-29: respects _selectedWeek — when the user picks a historical week
+// from the date selector, period slices END at that week instead of "latest".
+function _histEndIdx(hist){
+  if(!_selectedWeek||!hist||!hist.length)return hist.length-1;
+  for(let i=hist.length-1;i>=0;i--){
+    const d=hist[i].d_end||hist[i].d;
+    if(d&&d<=_selectedWeek)return i;
+  }
+  return hist.length-1;
+}
 function getImpactForPeriod(factorName,period){
   if(!cs||!cs.snap_attrib)return{v:null,note:''};
   const sa=cs.snap_attrib[factorName];
   if(!sa)return{v:null,note:''};
   const hist=sa.hist||[];
+  if(!hist.length)return{v:null,note:''};
+  const endIdx=_histEndIdx(hist);
   if(period==='latest'||!period){
-    const last=hist[hist.length-1];
+    const last=hist[endIdx];
     if(!last)return{v:sa.imp,note:''};
-    return{v:last.imp,note:`Period: ${last.d_start||last.d}→${last.d_end||last.d}`};
+    return{v:last.imp,note:`Week: ${last.d_start||last.d}→${last.d_end||last.d}`};
   }
   if(period==='all'){
-    // Full-period compounded impact when available
-    if(sa.full_period_imp!=null){
+    // Full-period compounded impact when available — only meaningful at "latest"
+    if(!_selectedWeek&&sa.full_period_imp!=null){
       const first=hist[0],last=hist[hist.length-1];
       return{v:sa.full_period_imp,note:`Full period: ${first?.d_start||''}→${last?.d_end||''}`};
     }
-    // Fallback: sum every period's imp
-    const total=hist.reduce((s,p)=>s+(+p.imp||0),0);
-    const first=hist[0],last=hist[hist.length-1];
-    return{v:+total.toFixed(3),note:`Sum of ${hist.length} periods: ${first?.d_start||''}→${last?.d_end||''}`};
+    // Fallback / historical: sum from start to selected end
+    const slice=hist.slice(0,endIdx+1);
+    const total=slice.reduce((s,p)=>s+(+p.imp||0),0);
+    const first=slice[0],last=slice[slice.length-1];
+    return{v:+total.toFixed(3),note:`Sum of ${slice.length} periods: ${first?.d_start||''}→${last?.d_end||''}`};
   }
-  // Trailing N weeks
+  // Trailing N weeks ending at selected week (or latest)
   const n=IMPACT_PERIOD_WEEKS[period];
   if(!n)return{v:null,note:''};
-  const slice=hist.slice(-n);
+  const startIdx=Math.max(0,endIdx-n+1);
+  const slice=hist.slice(startIdx,endIdx+1);
   if(!slice.length)return{v:null,note:''};
   const total=slice.reduce((s,p)=>s+(+p.imp||0),0);
   const first=slice[0],last=slice[slice.length-1];
@@ -1425,7 +1444,13 @@ function rExp(){
   <!-- Row 3a: Factor Risk Snapshot + Factor Performance Map (split from single tile per user request) -->
   <div class="grid g2">
     <div class="card" id="cardFacRisk">
-      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Factor Risk Snapshot — point-in-time view. X = active exposure (UW ← → OW, σ). Y = TE contribution (% TE, +/- adds vs diversifies). Bubble size = factor's own volatility (σ). KPI strip shows Idio vs Factor portion of total TE. Click a bubble to drill." oncontextmenu="showNotePopup(event,'cardFacRisk');return false">Factor Risk Snapshot</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × risk × volatility</span></div></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div class="card-title tip" data-tip="Factor Risk Snapshot — point-in-time view. X = active exposure (UW ← → OW, σ). Y = TE contribution (% TE, +/- adds vs diversifies). Bubble size = factor's own volatility (σ). KPI strip shows Idio vs Factor portion of total TE. Click a bubble to drill." oncontextmenu="showNotePopup(event,'cardFacRisk');return false">Factor Risk Snapshot</div>
+          <span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × risk · bubble = factor σ</span>
+        </div>
+        <button class="export-btn" title="Full screen — bigger snapshot quadrant" onclick="openFacRiskFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+      </div>
       <div id="facRiskKpi" style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap;align-items:center"></div>
       <div id="facRiskDiv" style="height:440px"></div>
     </div>
@@ -1433,7 +1458,7 @@ function rExp(){
       <div class="flex-between" style="flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:baseline;gap:10px">
           <div class="card-title tip" data-tip="Factor Performance — period view. Toggle between Bubble (exposure × payoff × risk weight quadrant) and Waterfall (sorted contributions with running total). Period selector controls both views." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Performance</div>
-          <span id="facPerfSubtitle" style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span>
+          <span id="facPerfSubtitle" style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff · bubble = avg TE contribution</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <div class="toggle-wrap" style="margin:0">
@@ -2755,7 +2780,7 @@ function setFacPerfView(v){
   if(wb)wb.classList.toggle('active',v==='waterfall');
   // Subtitle reflects current view
   const sub=document.getElementById('facPerfSubtitle');
-  if(sub)sub.textContent=v==='bubble'?'exposure × payoff × risk weight':'sorted contributions + running total';
+  if(sub)sub.textContent=v==='bubble'?'exposure × payoff · bubble = avg TE contribution':'sorted contributions + running total';
   // CSV button only meaningful for waterfall (per-factor table export)
   const csvBtn=document.getElementById('facPerfCsv');
   if(csvBtn)csvBtn.style.display=v==='waterfall'?'inline-block':'none';
@@ -4124,11 +4149,81 @@ function rFacRisk(s){
   });}
 }
 
-// 2026-04-29: Factor Risk Map full-screen — bigger quadrant + multi-period
-// impact comparison panel. Addresses recurring confusion around how impact is
-// computed across periods: shows Latest (single weekly observation), Trailing
-// 1m/3m/1y (sums of weekly impacts), and Full (compounded if FactSet ships
-// it, else sum-fallback) all side-by-side per factor. Tooltipped per period.
+// 2026-04-29: Factor Risk Snapshot full-screen — same encoding as inline
+// (active σ × TE contrib, sized by factor σ), just bigger and with the KPI
+// strip up top. No period concept (snapshot is point-in-time).
+function openFacRiskFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  const idioPct=cs.sum?.pct_specific;
+  const facPct=cs.sum?.pct_factor;
+  const te=cs.sum?.te;
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(168,85,247,0.04),transparent)">
+      <div style="display:flex;align-items:baseline;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Factor Risk Snapshot · ${cs.id||cs.name||''}</h2><span style="font-size:10px;color:var(--textDim)">click any factor to drill · bubble size = factor σ</span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="padding:8px 18px;border-bottom:1px solid var(--grid);display:flex;gap:10px;flex-wrap:wrap;background:rgba(15,23,42,0.4)">
+      <span style="font-size:10px;color:var(--txt)"><strong style="color:var(--pri)">Total TE</strong> ${te!=null?f2(te,2)+'%':'—'}</span>
+      <span style="color:var(--textDim)">·</span>
+      <span style="font-size:10px;color:var(--txt)"><strong style="color:var(--acc)">Idiosyncratic</strong> ${idioPct!=null?f2(idioPct,1)+'%':'—'} ${idioPct!=null&&te!=null?'(MCR '+f2(te*idioPct/100,1)+')':''}</span>
+      <span style="color:var(--textDim)">·</span>
+      <span style="font-size:10px;color:var(--txt)"><strong style="color:var(--pri)">Factor</strong> ${facPct!=null?f2(facPct,1)+'%':'—'} ${facPct!=null&&te!=null?'(MCR '+f2(te*facPct/100,1)+')':''}</span>
+    </div>
+    <div style="flex:1;min-height:0;padding:14px 18px"><div id="facRiskFsDiv" style="width:100%;height:100%;min-height:560px"></div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{
+    // Render quadrant — same logic as rFacRisk but into the FS div with bigger sizes
+    const facs=(cs.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
+    const T=THEME();
+    const xVals=facs.map(f=>f.a||0);
+    const yVals=facs.map(f=>f.c||0);
+    const devVals=facs.map(f=>f.dev!=null&&isFinite(f.dev)?Math.abs(f.dev):2);
+    const sizes=devVals.map(d=>Math.max(20,Math.min(72,Math.sqrt(d)*12+14)));
+    const colors=facs.map(f=>{const c=f.c||0;if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;});
+    const facPctT=cs.sum?.pct_factor;
+    const hovertext=facs.map(f=>{
+      const dirHtml=(f.c||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+      const sgnA=(f.a||0)>=0?'+':'';
+      const sgnC=(f.c||0)>=0?'+':'';
+      const ofTE=`${sgnC}${f2(f.c||0,1)}% of TE`;
+      const ofFac=(facPctT&&facPctT>0)?` · ${sgnC}${f2((f.c||0)/facPctT*100,0)}% of Factor`:'';
+      const dev=f.dev!=null?f2(f.dev,2):'—';
+      return `<b>${f.n}</b><br>Active: ${sgnA}${f2(f.a||0,2)}σ · ${dirHtml}<br>Risk contrib: ${ofTE}${ofFac}<br>Factor σ: ${dev}`;
+    });
+    const labels=facs.map(f=>{
+      const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
+      return short;
+    });
+    const xMax=Math.max(0.3,...xVals.map(Math.abs))*1.18;
+    const yMax=Math.max(1,...yVals.map(Math.abs))*1.3;
+    const shapes=[
+      {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(239,68,68,0.04)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:-yMax,y1:0,fillcolor:'rgba(99,102,241,0.03)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:-yMax,y1:0,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
+      {type:'line',xref:'x',yref:'y',x0:0,x1:0,y0:-yMax,y1:yMax,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}},
+      {type:'line',xref:'x',yref:'y',x0:-xMax,x1:xMax,y0:0,y1:0,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}}
+    ];
+    const annotations=[
+      {x:xMax,y:yMax,xref:'x',yref:'y',text:'OW · risk-on bet',xanchor:'right',yanchor:'top',font:{size:10,color:'rgba(239,68,68,0.8)'},showarrow:false},
+      {x:-xMax,y:yMax,xref:'x',yref:'y',text:'UW yet adds',xanchor:'left',yanchor:'top',font:{size:10,color:'rgba(245,158,11,0.8)'},showarrow:false},
+      {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW hedge',xanchor:'right',yanchor:'bottom',font:{size:10,color:'rgba(99,102,241,0.8)'},showarrow:false},
+      {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · risk-off bet',xanchor:'left',yanchor:'bottom',font:{size:10,color:'rgba(34,197,94,0.8)'},showarrow:false}
+    ];
+    Plotly.newPlot('facRiskFsDiv',[{type:'scatter',mode:'markers+text',x:xVals,y:yVals,text:labels,textposition:'top center',textfont:{size:11,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},hovertext:hovertext,hoverinfo:'text',hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}}],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:T.tick,size:10},margin:{l:60,r:30,t:30,b:50},xaxis:{title:{text:'Active Exposure (σ, latest) — UW ← → OW',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},yaxis:{title:{text:'Risk Contribution (% TE) — adds ↑ / diversifies ↓',font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f'},shapes,annotations,showlegend:false},{displayModeBar:false,responsive:true});
+    const qel=document.getElementById('facRiskFsDiv');
+    if(qel&&qel.on){qel.on('plotly_click',function(d){if(d&&d.points&&d.points[0]){const idx=d.points[0].pointIndex;const f=facs[idx];if(f){closeSecFullscreen();oDrF(f.n);}}});}
+  },80);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+
+// 2026-04-29: Factor Performance Map full-screen — bigger quadrant + multi-period
+// impact comparison panel.
 function openFacButtFullscreen(){
   if(!cs)return;
   const m=document.getElementById('secFsModal');

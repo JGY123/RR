@@ -7306,19 +7306,112 @@ function oDrMetric(metric,range){
 
   // Idiosyncratic risk — show top 5 contributors
   if(metric==='idio'){
-    let eqHold=cs.hold.filter(h=>!isCash(h)&&h.p>0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0));
-    let top5=eqHold.slice(0,5);
+    // 2026-04-29 rebuild — degrades gracefully when Security section is missing.
+    // Holding-level top-5 stays as the headline when h.mcr is populated;
+    // otherwise fall back to sector-level idio breakdown (always available
+    // when cs.sectors carries mcr, which is the common case even without
+    // per-holding data — confirmed for current GSC sample-4 parse).
+    const eqHold=(cs.hold||[]).filter(h=>!isCash(h)&&h.p>0&&isFinite(h.mcr)&&Math.abs(h.mcr||0)>0.01).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0));
+    const hasHoldings=eqHold.length>0;
+    const sectors=(cs.sectors||[]).filter(s=>s.n&&!/cash/i.test(s.n||'')&&isFinite(s.mcr)&&s.mcr>0).sort((a,b)=>(b.mcr||0)-(a.mcr||0));
+    const idioMCR=(cs.sum?.te!=null&&cs.sum?.pct_specific!=null)?cs.sum.te*cs.sum.pct_specific/100:null;
+    const idioPct=cs.sum?.pct_specific;
+    const top=hasHoldings?eqHold.slice(0,5):sectors.slice(0,5);
+    const totalContribMCR=sectors.reduce((a,s)=>a+(s.mcr||0),0);
+    const decomp=_teDecompositionHistory()||[];
+    const validD=decomp.filter(e=>e.idio_te!=null);
+    const idioVals=validD.map(e=>e.idio_te);
+    const _sd=arr=>{if(arr.length<2)return null;const m=arr.reduce((a,b)=>a+b,0)/arr.length;return Math.sqrt(arr.reduce((a,v)=>a+(v-m)**2,0)/arr.length);};
+    const idioSDhist=_sd(idioVals);
+    const idioPctValsAll=validD.map(e=>e.idio_pct);
+    const idioPctMin=idioPctValsAll.length?Math.min(...idioPctValsAll):null;
+    const idioPctMax=idioPctValsAll.length?Math.max(...idioPctValsAll):null;
+    const cardStyle='text-align:center;padding:10px 8px 8px;min-height:104px;display:flex;flex-direction:column;justify-content:center';
+    const labelStyle='font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px';
+    const subStyle='font-size:10px;color:var(--txt);margin-top:4px;letter-spacing:0.2px;line-height:1.3';
+    const sdStyle='font-size:9px;color:var(--textDim);margin-top:2px;letter-spacing:0.3px';
+    const bigNum='font-size:22px;font-weight:700;line-height:1';
+    const sourceTag=hasHoldings?'per holding':'per sector (Security section missing)';
+    const topHtml=hasHoldings
+      ? `<table style="font-size:11px;width:100%"><thead><tr><th>Ticker</th><th>Name</th><th class="r">MCR</th>${ORVQ_TH_PLAIN}</tr></thead>
+        <tbody>${top.map(h=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
+          <td style="color:var(--txth);font-weight:600">${h.t}</td>
+          <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
+          <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,2)}%</td>
+          ${rORVQCells(h)}
+        </tr>`).join('')}</tbody></table>`
+      : `<table style="font-size:11px;width:100%"><thead><tr><th>Sector</th><th class="r">MCR</th><th class="r">Share of Idio</th><th class="r">Active Wt</th></tr></thead>
+        <tbody>${top.map(s=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDr('sec','${(s.n||'').replace(/'/g,'\\\'')}','All')">
+          <td style="color:var(--txth);font-weight:600">${s.n}</td>
+          <td class="r" style="font-weight:700;color:var(--acc)">${f2(s.mcr,2)}%</td>
+          <td class="r">${totalContribMCR>0?f2(s.mcr/totalContribMCR*100,1)+'%':'—'}</td>
+          <td class="r ${(s.a||0)>=0?'pos':'neg'}">${fp(s.a,1)}</td>
+        </tr>`).join('')}${sectors.length>5?`<tr><td colspan="4" style="text-align:center;color:var(--textDim);font-size:10px;padding:4px">+ ${sectors.length-5} more sectors</td></tr>`:''}</tbody></table>`;
     $('metricContent').innerHTML=`
-      <h2>Idiosyncratic Risk — Top Contributors<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
-      <p style="font-size:11px;color:var(--txt);margin-bottom:12px">Top 5 securities by stock-specific TE contribution. Click a row to view holding detail.</p>
-      <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">%S</th>${ORVQ_TH_PLAIN}</tr></thead>
-      <tbody>${top5.map(h=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
-        <td style="color:var(--txth);font-weight:600">${h.t}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
-        <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,2)}%</td>
-        ${rORVQCells(h)}
-      </tr>`).join('')}</tbody></table>`;
+      <h2>Idiosyncratic Risk — ${cs.id||cs.name||''}<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px">
+        <div class="card" style="${cardStyle};border-top:2px solid var(--acc)">
+          <div style="${labelStyle}">Idio MCR</div>
+          <div style="${bigNum};color:var(--acc)">${idioMCR!=null?f2(idioMCR,1)+'%':'—'}</div>
+          <div style="${subStyle}">${idioSDhist!=null?'σ '+f2(idioSDhist,1)+' hist':''}</div>
+        </div>
+        <div class="card" style="${cardStyle};border-top:2px solid var(--pos)">
+          <div style="${labelStyle}">Share of TE</div>
+          <div style="${bigNum};color:var(--pos)">${idioPct!=null?f2(idioPct,1)+'%':'—'}</div>
+          <div style="${subStyle}">${idioPctMin!=null?'hist '+f2(idioPctMin,0)+'–'+f2(idioPctMax,0)+'%':''}</div>
+        </div>
+        <div class="card" style="${cardStyle};border-top:2px solid #f59e0b">
+          <div style="${labelStyle}">Top contributor</div>
+          <div style="font-size:14px;font-weight:700;line-height:1.1;color:var(--txth);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${top[0]?(hasHoldings?(top[0].t+' '+(top[0].n||'').slice(0,30)):top[0].n):'—'}">${top[0]?(hasHoldings?top[0].t:(top[0].n||'').slice(0,16)):'—'}</div>
+          <div style="${subStyle};color:#f59e0b">${top[0]?'MCR '+f2(top[0].mcr,2)+'%':''}</div>
+        </div>
+        <div class="card" style="${cardStyle};border-top:2px solid var(--txth)">
+          <div style="${labelStyle}">Granularity</div>
+          <div style="${bigNum};color:var(--txth);font-size:18px">${hasHoldings?eqHold.length:sectors.length}</div>
+          <div style="${subStyle}">${hasHoldings?'holdings':'sectors'} contributing</div>
+          <div style="${sdStyle}">${sourceTag}</div>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div class="card-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          Top ${hasHoldings?'Holdings':'Sectors'} by Idio MCR
+          <span style="font-size:10px;color:var(--txt);font-weight:400">— click a row to drill</span>
+        </div>
+        ${topHtml}
+      </div>
+      <div class="card-title" style="margin-top:14px">Idiosyncratic MCR History</div>
+      <div id="idioHistChart" style="height:240px"></div>
+      ${!hasHoldings?'<p style="font-size:10px;color:var(--textDim);margin-top:8px;font-style:italic">Per-holding view will populate once the Security section ships from FactSet. Currently showing sector-level breakdown (Σ MCR per sector) which sums to the same Idio MCR total.</p>':''}`;
     m.classList.add('show');
+    // Render the idio history chart — derived from cs.hist.sec (sector MCR
+    // per period, summed across sectors per week)
+    setTimeout(()=>{
+      const div=document.getElementById('idioHistChart');
+      if(!div||!validD.length)return;
+      const dates=validD.map(e=>isoDate(e.d));
+      const idioSeries=validD.map(e=>e.idio_te);
+      const teSeries=validD.map(e=>e.te);
+      const T=THEME();
+      const meanIdio=idioSeries.reduce((a,b)=>a+b,0)/idioSeries.length;
+      Plotly.newPlot('idioHistChart',[
+        {x:dates,y:teSeries,type:'scatter',mode:'lines',name:'Total TE',
+          line:{color:'rgba(148,163,184,0.4)',width:1,dash:'dot'},
+          hovertemplate:'%{x|%b %d %Y}<br>TE: %{y:.2f}%<extra></extra>'},
+        {x:dates,y:idioSeries,type:'scatter',mode:'lines',name:'Idio MCR',
+          line:{color:'#a78bfa',width:2.2},fill:'tozeroy',fillcolor:'rgba(168,85,247,0.18)',
+          hovertemplate:'%{x|%b %d %Y}<br>Idio MCR: %{y:.2f}%<extra></extra>'}
+      ],{
+        paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+        font:{family:'DM Sans',color:T.tick,size:10},
+        margin:{l:40,r:18,t:18,b:30},
+        hovermode:'x unified',
+        legend:{orientation:'h',y:1.12,x:0.5,xanchor:'center',font:{size:9}},
+        xaxis:{type:'date',gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9},tickformat:'%b %Y',nticks:8},
+        yaxis:{title:{text:'%',font:{size:9}},gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9},rangemode:'tozero'},
+        shapes:[{type:'line',y0:meanIdio,y1:meanIdio,xref:'paper',x0:0,x1:1,line:{color:'rgba(168,85,247,0.5)',dash:'dash',width:1}}],
+        annotations:[{x:1,xref:'paper',y:meanIdio,text:'avg idio',showarrow:false,font:{size:9,color:'#a78bfa'},xanchor:'left',xshift:4}]
+      },{displayModeBar:false,responsive:true});
+    },80);
     return;
   }
 

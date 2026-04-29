@@ -1,0 +1,21 @@
+# macOS junk
+.DS_Store
+**/.DS_Store
+
+# Verifier outputs (regenerate every parser run)
+last_verify_report.log
+.schema_fingerprint.json
+
+# Stale backups / scratch
+dashboard_v*_partial.html
+tile_spec.html
+
+# Local IDE / agent settings (project-specific, not for the repo)
+.claude/settings.json
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Large parsed JSON outputs (regenerate via load_data.sh)
+latest_data.json

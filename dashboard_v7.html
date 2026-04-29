@@ -7194,7 +7194,7 @@ function _setTEBox(name){
   if(_teActiveBox==='idio'){
     const top=(cs.hold||[]).filter(h=>!isCash(h)&&h.p>0&&isFinite(h.mcr)).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,5);
     if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No per-holding MCR data — Security section is empty in current parse.</div>';}
-    else body=`<div style="display:grid;grid-template-columns:1fr;gap:3px">${top.map(h=>`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px solid var(--grid)"><span><span style="color:var(--txth);font-weight:600">${h.t}</span> <span style="color:var(--txt)">${(h.n||'').slice(0,32)}</span></span><span style="color:var(--acc);font-weight:600;font-family:'JetBrains Mono',monospace">MCR ${f2(h.mcr,2)}</span></div>`).join('')}</div>`;
+    else body=`<div style="display:grid;grid-template-columns:1fr;gap:3px">${top.map(h=>`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px solid var(--grid)"><span><span style="color:var(--txth);font-weight:600">${h.t}</span> <span style="color:var(--txt)">${(h.n||'').slice(0,32)}</span></span><span style="color:var(--acc);font-weight:600;font-family:'JetBrains Mono',monospace">MCR ${f2(h.mcr,1)}</span></div>`).join('')}</div>`;
   }else if(_teActiveBox==='fac'){
     const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
     const top=factors.slice(0,8);
@@ -7337,13 +7337,13 @@ function oDrMetric(metric,range){
         <tbody>${top.map(h=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
           <td style="color:var(--txth);font-weight:600">${h.t}</td>
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
-          <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,2)}</td>
+          <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,1)}</td>
           ${rORVQCells(h)}
         </tr>`).join('')}</tbody></table>`
       : `<table style="font-size:11px;width:100%"><thead><tr><th>Sector</th><th class="r">MCR</th><th class="r">Share of Idio</th><th class="r">Active Wt</th></tr></thead>
         <tbody>${top.map(s=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDr('sec','${(s.n||'').replace(/'/g,'\\\'')}','All')">
           <td style="color:var(--txth);font-weight:600">${s.n}</td>
-          <td class="r" style="font-weight:700;color:var(--acc)">${f2(s.mcr,2)}</td>
+          <td class="r" style="font-weight:700;color:var(--acc)">${f2(s.mcr,1)}</td>
           <td class="r">${totalContribMCR>0?f2(s.mcr/totalContribMCR*100,1)+'%':'—'}</td>
           <td class="r ${(s.a||0)>=0?'pos':'neg'}">${fp(s.a,1)}</td>
         </tr>`).join('')}${sectors.length>5?`<tr><td colspan="4" style="text-align:center;color:var(--textDim);font-size:10px;padding:4px">+ ${sectors.length-5} more sectors</td></tr>`:''}</tbody></table>`;
@@ -7363,7 +7363,7 @@ function oDrMetric(metric,range){
         <div class="card" style="${cardStyle};border-top:2px solid #f59e0b">
           <div style="${labelStyle}">Top contributor</div>
           <div style="font-size:14px;font-weight:700;line-height:1.1;color:var(--txth);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${top[0]?(hasHoldings?(top[0].t+' '+(top[0].n||'').slice(0,30)):top[0].n):'—'}">${top[0]?(hasHoldings?top[0].t:(top[0].n||'').slice(0,16)):'—'}</div>
-          <div style="${subStyle};color:#f59e0b">${top[0]?'MCR '+f2(top[0].mcr,2):''}</div>
+          <div style="${subStyle};color:#f59e0b">${top[0]?'MCR '+f2(top[0].mcr,1):''}</div>
         </div>
         <div class="card" style="${cardStyle};border-top:2px solid var(--txth)">
           <div style="${labelStyle}">Granularity</div>

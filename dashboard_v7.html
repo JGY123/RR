@@ -7904,6 +7904,58 @@ function oDrMetric(metric,range){
         <div style="${sdStyle}">vs ${numVals.length} wks · range ${f2(min,1)}↔${f2(max,1)}%</div>
       </div>
     </div>`;
+  }else if(metric==='h'){
+    // 2026-04-29: Holdings Count — diversification view. Stats answer:
+    // how many names, how concentrated, how spread across sectors.
+    const eqHold=(cs.hold||[]).filter(h=>!isCash(h)&&h.p>0);
+    const cashHold=(cs.hold||[]).filter(h=>isCash(h));
+    const eqCount=eqHold.length;
+    const sortedByP=[...eqHold].sort((a,b)=>(b.p||0)-(a.p||0));
+    const top10Wt=sortedByP.slice(0,10).reduce((a,h)=>a+(h.p||0),0);
+    const top5Wt=sortedByP.slice(0,5).reduce((a,h)=>a+(h.p||0),0);
+    // Sector spread: count sectors with > 0 portfolio weight
+    const sectorSpread=(cs.sectors||[]).filter(s=>s.n&&!/cash/i.test(s.n||'')&&(s.p||0)>0).length;
+    // Top sector by port weight (fallback when no holdings)
+    const topSec=[...(cs.sectors||[])].filter(s=>s.n&&!/cash/i.test(s.n||'')).sort((a,b)=>(b.p||0)-(a.p||0))[0];
+    let pctile=null;
+    if(current!=null&&numVals.length){
+      const below=numVals.filter(v=>v<current).length;
+      pctile=Math.round(below/numVals.length*100);
+    }
+    const pctileLabel=pctile==null?'—':pctile>=90?'unusually broad':pctile>=70?'broad book':pctile>=30?'mid-size':pctile>=10?'concentrated':'unusually concentrated';
+    const concLabel=top10Wt>=70?'highly concentrated':top10Wt>=50?'concentrated':top10Wt>=30?'moderate':'diversified';
+    const concColor=top10Wt>=70?'var(--neg)':top10Wt>=50?'#f59e0b':top10Wt>=30?'#fbbf24':'var(--pos)';
+    const cardStyle='text-align:center;padding:10px 8px 8px;min-height:104px;display:flex;flex-direction:column;justify-content:center';
+    const labelStyle='font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px';
+    const subStyle='font-size:10px;color:var(--txt);margin-top:4px;letter-spacing:0.2px;line-height:1.3';
+    const sdStyle='font-size:9px;color:var(--textDim);margin-top:2px;letter-spacing:0.3px';
+    const bigNum='font-size:22px;font-weight:700;line-height:1';
+    statHtml=`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px">
+      <div class="card" style="${cardStyle};border-top:2px solid var(--cyan,#06b6d4)">
+        <div style="${labelStyle}">Total Holdings</div>
+        <div style="${bigNum};color:var(--txth)">${current!=null?Math.round(current):'—'}</div>
+        <div style="${subStyle}">${eqCount?eqCount+' equity · ':''}${cashHold.length?cashHold.length+' cash':eqCount?'':'no holdings (Security missing)'}</div>
+        <div style="${sdStyle}">${stddev>0?'σ '+f2(stddev,1)+' hist':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid ${concColor}">
+        <div style="${labelStyle}">Top-10 Concentration</div>
+        <div style="${bigNum};color:${concColor}">${eqCount?f2(top10Wt,0)+'%':topSec?f2(topSec.p,0)+'%':'—'}</div>
+        <div style="${subStyle}">${eqCount?concLabel:topSec?'Top sector: '+topSec.n:''}</div>
+        <div style="${sdStyle}">${eqCount?'Top-5 wt: '+f2(top5Wt,0)+'%':topSec?'(sector fallback)':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid #f59e0b">
+        <div style="${labelStyle}">Sector Spread</div>
+        <div style="${bigNum};color:var(--txth)">${sectorSpread||'—'}</div>
+        <div style="${subStyle}">${sectorSpread?'sectors active':'no sector data'}</div>
+        <div style="${sdStyle}">${sectorSpread&&current?'~'+f2(current/sectorSpread,1)+' names/sector':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid var(--txth)">
+        <div style="${labelStyle}">Holdings Percentile</div>
+        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">'+_ord(pctile)+'</span>':'—'}</div>
+        <div style="${subStyle}">${pctileLabel}</div>
+        <div style="${sdStyle}">vs ${numVals.length} wks · range ${Math.round(min)}–${Math.round(max)}</div>
+      </div>
+    </div>`;
   }else{
     statHtml=`<div class="grid g4" style="margin-bottom:12px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current</div><div style="font-size:18px;font-weight:700;color:${valColor}">${f2(current,dec)}${units[metric]}</div></div>

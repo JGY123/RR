@@ -7213,7 +7213,7 @@ function oDrMetric(metric,range){
     beta:[{v:0.9,c:'#a78bfa',l:'0.9',dir:'floor'},{v:1.1,c:'#a78bfa',l:'1.1',dir:'ceil'}]
   };
   // Per-metric y-axis range
-  let yRanges={te:[3,10],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
+  let yRanges={te:[0,10],as:[75,100],beta:[0.65,1.35],sr:[40,100],cash:[0,10]};
 
   let vals=hist.map(h=>{let v=h[metric];return typeof v==='number'?v:parseFloat(v)||0;});
   let dates=hist.map(h=>isoDate(h.d));
@@ -7410,15 +7410,15 @@ function oDrMetric(metric,range){
           <span style="color:var(--neg)">Max ${f2(max,2)}</span>
         </div>
       </div>
-      <div class="card tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: Σ MCR across sectors / Σ TR across sectors per period — same as cs.sum.pct_specific. Both percentage of TE and absolute MCR are shown." style="text-align:center;padding:10px 12px">
+      <div class="card tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: Σ MCR across sectors / Σ TR across sectors per period — same as cs.sum.pct_specific. The big number is the share %; the small number is the absolute MCR." style="text-align:center;padding:10px 12px">
         <div class="label" style="font-size:10px;margin-bottom:4px">Idiosyncratic</div>
         <div style="font-size:22px;font-weight:700;color:var(--acc);line-height:1.1">${idioPct!=null?f2(idioPct,1)+'%':'—'}</div>
-        <div style="font-size:11px;color:var(--txt);margin-top:4px">${idioMCR!=null?f2(idioMCR,2)+'% of TE':''}</div>
+        <div style="font-size:11px;color:var(--txt);margin-top:4px">${idioMCR!=null?'MCR '+f2(idioMCR,2):''}</div>
       </div>
-      <div class="card tip" data-tip="Factor-driven portion of tracking error. Computed as 100% − Idiosyncratic share (Σ TR per period sums to 100% — verified)." style="text-align:center;padding:10px 12px">
+      <div class="card tip" data-tip="Factor-driven portion of tracking error. Computed as 100% − Idiosyncratic share (Σ TR per period sums to 100% — verified). The big number is the share %; the small number is the absolute MCR." style="text-align:center;padding:10px 12px">
         <div class="label" style="font-size:10px;margin-bottom:4px">Factor</div>
         <div style="font-size:22px;font-weight:700;color:var(--pri);line-height:1.1">${facPct!=null?f2(facPct,1)+'%':'—'}</div>
-        <div style="font-size:11px;color:var(--txt);margin-top:4px">${facMCR!=null?f2(facMCR,2)+'% of TE':''}</div>
+        <div style="font-size:11px;color:var(--txt);margin-top:4px">${facMCR!=null?'MCR '+f2(facMCR,2):''}</div>
       </div>
       <div class="card tip" data-tip="Where the current TE sits in the historical distribution. 90th = unusually high; 50th = median; 10th = unusually low." style="text-align:center;padding:10px 12px">
         <div class="label" style="font-size:10px;margin-bottom:4px">Percentile</div>
@@ -7477,15 +7477,22 @@ function oDrMetric(metric,range){
         const idioVals=filtered.map(e=>e.idio_te);
         const factorVals=filtered.map(e=>e.factor_te);
         // Stacked area: idio (bottom) + factor (above idio). Sum = TE.
+        // Hover shows the share-ratio (% of TE), not absolute MCR — clearer
+        // than "Idio: 4.68%" which the user found confusing alongside the
+        // 6.42% TE on the same chart.
+        const idioPctSeries=filtered.map(e=>e.idio_pct);
+        const facPctSeries=filtered.map(e=>e.factor_pct);
         allTraces.push(
           {x:decompDates,y:idioVals,type:'scatter',mode:'lines',stackgroup:'te',
             name:'Idiosyncratic',line:{width:0.5,color:'rgba(168,85,247,0.6)'},
             fillcolor:'rgba(168,85,247,0.28)',connectgaps:true,
-            hovertemplate:'%{x|%b %d %Y}<br>Idiosyncratic: %{y:.2f}%<extra></extra>'},
+            customdata:idioPctSeries,
+            hovertemplate:'%{x|%b %d %Y}<br>Idiosyncratic: %{customdata:.0f}% of TE<extra></extra>'},
           {x:decompDates,y:factorVals,type:'scatter',mode:'lines',stackgroup:'te',
             name:'Factor',line:{width:0.5,color:'rgba(99,102,241,0.6)'},
             fillcolor:'rgba(99,102,241,0.32)',connectgaps:true,
-            hovertemplate:'%{x|%b %d %Y}<br>Factor: %{y:.2f}%<extra></extra>'}
+            customdata:facPctSeries,
+            hovertemplate:'%{x|%b %d %Y}<br>Factor: %{customdata:.0f}% of TE<extra></extra>'}
         );
       }
       // Avg dashed line — keep for context (no fill band, since stacked area replaces it)

@@ -7439,10 +7439,12 @@ function oDrMetric(metric,range){
   }
 
   // Compact breach display
-  let breachHtml='';
+  // 2026-04-29: chart arrows are linked to the table by numbered badges.
+  // Last 5 grouped runs get arrow markers ① to ⑤ in chart + matching numbered
+  // badges in the table rows. Arrow text and table number share state via
+  // the linkedRuns variable used in the chart's setTimeout below.
+  let grouped=[];
   if(breaches.length){
-    // Group consecutive breaches, just show date ranges
-    let grouped=[];
     let cur=null;
     breaches.forEach(b=>{
       if(cur&&cur.label===b.label){cur.end=b.date;cur.count++}
@@ -7450,15 +7452,38 @@ function oDrMetric(metric,range){
       if(Math.abs(b.val)>Math.abs(cur.peak))cur.peak=b.val;
     });
     if(cur)grouped.push(cur);
-    breachHtml=`<div style="margin-top:12px"><div class="card-title">Threshold Events (${breaches.length} months)</div>
-      <div style="max-height:100px;overflow-y:auto">
-      <table style="font-size:11px"><thead><tr><th>Period</th><th class="r">Months</th><th class="r">Peak</th><th>Type</th></tr></thead>
-      <tbody>${grouped.slice(-10).map(g=>`<tr>
+  }
+  const linkedRuns=grouped.slice(-5);
+  let breachHtml='';
+  if(grouped.length){
+    const tableRows=grouped.slice(-10).map((g,idx,arr)=>{
+      const isLinked=idx>=arr.length-linkedRuns.length;
+      const num=isLinked?(idx-(arr.length-linkedRuns.length))+1:null;
+      const numCell=num!=null
+        ?`<td style="text-align:center;width:30px"><span style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:#ef4444;color:#fff;font-size:10px;font-weight:700">${num}</span></td>`
+        :`<td style="text-align:center;color:var(--textDim);font-size:10px">—</td>`;
+      const rowBg=isLinked?'background:rgba(239,68,68,0.05)':'';
+      return`<tr style="${rowBg}">
+        ${numCell}
         <td style="color:var(--txth)">${g.start.slice(0,7)}${g.start!==g.end?' → '+g.end.slice(0,7):''}</td>
         <td class="r">${g.count}</td>
         <td class="r" style="font-weight:600">${f2(g.peak,dec)}</td>
         <td><span class="pill ${g.label.includes('above')?'pill-neg':'pill-pos'}" style="font-size:9px">${g.label}</span></td>
-      </tr>`).join('')}</tbody></table></div></div>`;
+      </tr>`;
+    }).join('');
+    const _circ=['','①','②','③','④','⑤'];
+    const _rangeStr=linkedRuns.length<=1?(_circ[linkedRuns.length]||''):`${_circ[1]}–${_circ[linkedRuns.length]||linkedRuns.length}`;
+    const _runWord=grouped.length===1?'run':'runs';
+    breachHtml=`<div style="margin-top:12px">
+      <div class="card-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+        Threshold Events
+        <span style="font-size:10px;color:var(--txt);font-weight:400">— red <strong style="color:#ef4444">${_rangeStr}</strong> in chart above mark these rows · ${breaches.length} weeks across ${grouped.length} ${_runWord}</span>
+      </div>
+      <div style="max-height:140px;overflow-y:auto">
+        <table style="font-size:11px;width:100%"><thead><tr><th style="width:36px;text-align:center">#</th><th>Period</th><th class="r">Weeks</th><th class="r">Peak</th><th>Type</th></tr></thead>
+        <tbody>${tableRows}</tbody></table>
+      </div>
+    </div>`;
   }
 
   let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_metricRange===r?' active':''}" onclick="oDrMetric('${metric}','${r}')">${r}</button>`).join('');
@@ -7572,7 +7597,14 @@ function oDrMetric(metric,range){
     if(metric==='te'){
       shapes.push({type:'rect',y0:5,y1:10,xref:'paper',x0:0,x1:1,fillcolor:'rgba(16,185,129,.06)',line:{width:0}});
     }
-    let annotations=breaches.slice(-5).map(b=>({x:b.date,y:b.val,text:'!',showarrow:true,arrowhead:2,arrowcolor:'#ef4444',font:{size:10,color:'#ef4444'}}));
+    // Numbered annotations matching the table's red badges below the chart
+    let annotations=linkedRuns.map((g,i)=>({
+      x:g.end,y:g.peak,text:String(i+1),
+      showarrow:true,arrowhead:2,arrowcolor:'#ef4444',arrowwidth:1.5,
+      font:{size:10,color:'#fff',family:'DM Sans'},
+      bgcolor:'#ef4444',bordercolor:'#ef4444',borderwidth:1,borderpad:3,
+      ax:0,ay:-22
+    }));
     let yRange=yRanges[metric]||undefined;
     let yaxis={...plotBg.yaxis,title:labels[metric]+(units[metric]?' ('+units[metric]+')':'')};
     if(yRange){yaxis.range=yRange;yaxis.autorange=false;}

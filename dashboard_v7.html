@@ -1398,7 +1398,7 @@ function rExp(){
   <!-- Row 3: Factor Exposures -->
   <div class="grid g2">
     <div class="card" id="cardFacButt">
-      <div class="flex-between"><div class="card-title tip" data-tip="Active factor exposures (portfolio − benchmark, in σ). Bars diverge: positive = overweight, negative = underweight. Click a bar to drill into the factor." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Risk Map</div></div>
+      <div class="flex-between"><div class="card-title tip" data-tip="Factor Risk Quadrant. X = active exposure (UW ← → OW, σ units). Y = recent impact (bet paying off ↑). Bubble size = |TE contribution|. Color = adds risk (red) / diversifies (green). Click a bubble for full factor drill." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Risk Map</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span></div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
       <div id="facButtDiv" style="height:480px"></div>
     </div>
@@ -3831,55 +3831,86 @@ function rFacTopTeStrip(s){
 
 function rFacButt(s){
   rFacTopTeStrip(s);
-  // Single-trace diverging bar: f.a (active exposure) only
-  // Positive f.a → bar extends RIGHT, negative → LEFT. Not portfolio vs benchmark.
-  // B115 (2026-04-27): explicit null check before isFinite — isFinite(null) returns true
-  // due to type coercion, which previously let null-active factors through and threw on
-  // .toFixed(). The throw aborted the parent setTimeout, leaving 9+ downstream charts blank.
-  let facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a));
-  if(!facs.length){let el=document.getElementById('facButtDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
-  let names=facs.map(f=>f.n);
-  let vals=facs.map(f=>+(f.a).toFixed(3));
-  // Hover carries dual ratio: % TE + % Fac (share of Factor Risk side)
-  const facPctT=cs.sum?.pct_factor;
-  let cData=facs.map(f=>{
-    const cStr=isFinite(f.c)?f2(f.c,1):'—';
-    const facPct=(facPctT&&facPctT>0&&isFinite(f.c))?f2(f.c/facPctT*100,0):'—';
-    const devStr=isFinite(f.dev)?fp(f.dev,2):'—';
-    const dirLabel=isFinite(f.c)?(f.c>=0?'adds risk':'diversifies'):'';
-    return [cStr,devStr,facPct,dirLabel];
+  // 2026-04-29 redesign — Factor Risk Quadrant.
+  // Replaces a simple bar of f.a only. Packs four dimensions in one chart:
+  //   x = Active Exposure (σ)        — direction of bet (UW ←→ OW)
+  //   y = Impact (period selector)    — is the bet paying off?
+  //   size = |TE Contribution|        — how much this bet matters
+  //   color = sign of c (red adds / green diversifies)
+  // Quadrants tell a story: top-right = OW & working / top-left = UW & you
+  // missed / bottom-right = OW & hurting / bottom-left = UW & dodged.
+  let facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
+  const el=document.getElementById('facButtDiv');
+  if(!facs.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
+  facs=facs.map(f=>{
+    const ipd=getImpactForPeriod(f.n,_impactPeriod);
+    return Object.assign({},f,{_y:ipd.v!=null?ipd.v:(f.imp!=null?f.imp:0)});
   });
-  let maxE=Math.max(...vals.map(Math.abs),0.3);
-  let xmax=Math.ceil(maxE*10)/10+0.2;
-  let tvStep=xmax>1?0.5:xmax>0.5?0.2:0.1;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax+0.001;v=Math.round((v+tvStep)*100)/100){
-    tickVals.push(v,-v);tickText.push(v.toFixed(1),v.toFixed(1));
-  }
-  let h=Math.max(480,facs.length*30+60);
-  let el=document.getElementById('facButtDiv');
-  if(el)el.style.height=h+'px';
-  let T=THEME();
-  let posColor=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#22c55e';
-  let negColor=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+  const facPctT=s.sum?.pct_factor;
+  const T=THEME();
+  const xVals=facs.map(f=>f.a||0);
+  const yVals=facs.map(f=>f._y||0);
+  const cVals=facs.map(f=>f.c||0);
+  const sizes=cVals.map(c=>Math.max(14,Math.min(56,Math.sqrt(Math.abs(c))*9+14)));
+  const colors=cVals.map(c=>{
+    if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}
+    const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;
+  });
+  const yLab=getImpactPeriodLabel();
+  const hovertext=facs.map(f=>{
+    const dirHtml=(f.c||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+    const sgnC=(f.c||0)>=0?'+':'';
+    const ofTE=`${sgnC}${f2(f.c||0,1)}% of TE`;
+    const ofFac=(facPctT&&facPctT>0)?` · ${sgnC}${f2((f.c||0)/facPctT*100,0)}% of Factor`:'';
+    const sgnA=(f.a||0)>=0?'+':'';
+    const sgnY=(f._y||0)>=0?'+':'';
+    return `<b>${f.n}</b><br>Active: ${sgnA}${f2(f.a||0,2)}σ · ${dirHtml}<br>${ofTE}${ofFac}<br>Impact (${yLab}): ${sgnY}${f2(f._y||0,2)}%`;
+  });
+  const labels=facs.map(f=>{
+    const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
+    return short.length>14?short.slice(0,13)+'…':short;
+  });
+  const xMax=Math.max(0.3,...xVals.map(Math.abs))*1.18;
+  const yMax=Math.max(0.05,...yVals.map(Math.abs))*1.4;
+  const shapes=[
+    {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:-yMax,y1:0,fillcolor:'rgba(239,68,68,0.04)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:-yMax,y1:0,fillcolor:'rgba(99,102,241,0.03)',line:{width:0},layer:'below'},
+    {type:'line',xref:'x',yref:'y',x0:0,x1:0,y0:-yMax,y1:yMax,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}},
+    {type:'line',xref:'x',yref:'y',x0:-xMax,x1:xMax,y0:0,y1:0,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}}
+  ];
+  const annotations=[
+    {x:xMax,y:yMax,xref:'x',yref:'y',text:'OW · working ✓',xanchor:'right',yanchor:'top',font:{size:9,color:'rgba(34,197,94,0.7)'},showarrow:false},
+    {x:-xMax,y:yMax,xref:'x',yref:'y',text:'UW · missed',xanchor:'left',yanchor:'top',font:{size:9,color:'rgba(245,158,11,0.7)'},showarrow:false},
+    {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW · hurting',xanchor:'right',yanchor:'bottom',font:{size:9,color:'rgba(239,68,68,0.7)'},showarrow:false},
+    {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · dodged',xanchor:'left',yanchor:'bottom',font:{size:9,color:'rgba(99,102,241,0.7)'},showarrow:false}
+  ];
+  if(el)el.style.height='480px';
   Plotly.newPlot('facButtDiv',[{
-    name:'Active Exposure',type:'bar',orientation:'h',
-    y:names,x:vals,customdata:cData,
-    marker:{color:vals.map(v=>v>=0?posColor:negColor)},
-    hovertemplate:'<b>%{y}</b><br>Active Exposure: %{x:.3f}\u03c3<br>%{customdata[3]} (%{customdata[0]}% of TE · %{customdata[2]}% of Factor)<br>Factor σ: %{customdata[1]}<extra></extra>'
+    type:'scatter',mode:'markers+text',
+    x:xVals,y:yVals,text:labels,textposition:'top center',
+    textfont:{size:10,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
+    marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},
+    hovertext:hovertext,hoverinfo:'text',
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:T.tick,size:11},
-    height:h,
-    margin:{l:10,r:20,t:10,b:30},
-    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:T.tickH},automargin:true},
-    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:T.tick,size:9},title:'Active Exposure'},
-    showlegend:false
-  },plotCfg);
-  if(el&&el.on){el.on('plotly_click',function(d){if(d&&d.points&&d.points[0]&&typeof oDrF==='function')oDrF(d.points[0].y);});}
+    font:{family:'DM Sans, system-ui',color:T.tick,size:10},
+    margin:{l:60,r:20,t:30,b:50},
+    xaxis:{title:{text:'Active Exposure (σ) — UW ← → OW',font:{size:10,color:T.tick}},
+      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
+    yaxis:{title:{text:`Impact ${yLab} (%) — bet paying off ↑`,font:{size:10,color:T.tick}},
+      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.2f'},
+    shapes,annotations,showlegend:false
+  },{displayModeBar:false,responsive:true});
+  if(el&&el.on){el.on('plotly_click',function(d){
+    if(d&&d.points&&d.points[0]&&typeof oDrF==='function'){
+      const idx=d.points[0].pointIndex;
+      const f=facs[idx];
+      if(f)oDrF(f.n);
+    }
+  });}
 }
 
 const COUNTRY_ISO3={

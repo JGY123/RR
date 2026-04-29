@@ -1398,7 +1398,7 @@ function rExp(){
   <!-- Row 3: Factor Exposures -->
   <div class="grid g2">
     <div class="card" id="cardFacButt">
-      <div class="flex-between"><div class="card-title tip" data-tip="Factor Risk Quadrant. X = active exposure (UW ← → OW, σ units). Y = recent impact (bet paying off ↑). Bubble size = |TE contribution|. Color = adds risk (red) / diversifies (green). Click a bubble for full factor drill." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Risk Map</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span></div>
+      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Factor Risk Quadrant. X = active exposure (UW ← → OW, σ units). Y = recent impact (bet paying off ↑). Bubble size = |TE contribution|. Color = adds risk (red) / diversifies (green). Click a bubble for full factor drill." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Risk Map</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span></div><button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button></div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
       <div id="facButtDiv" style="height:480px"></div>
     </div>
@@ -3911,6 +3911,151 @@ function rFacButt(s){
       if(f)oDrF(f.n);
     }
   });}
+}
+
+// 2026-04-29: Factor Risk Map full-screen — bigger quadrant + multi-period
+// impact comparison panel. Addresses recurring confusion around how impact is
+// computed across periods: shows Latest (single weekly observation), Trailing
+// 1m/3m/1y (sums of weekly impacts), and Full (compounded if FactSet ships
+// it, else sum-fallback) all side-by-side per factor. Tooltipped per period.
+function openFacButtFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  const facsBase=(cs.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
+  if(!facsBase.length){return;}
+  const facPctT=cs.sum?.pct_factor;
+  // Pre-compute multi-period impact per factor
+  const periods=[
+    {key:'latest',label:'Wk',tip:'Latest single-week impact (one weekly observation, no aggregation).'},
+    {key:'m1',label:'1m',tip:'Trailing 1 month — SUM of last 4 weekly impacts. Approximate, not compounded.'},
+    {key:'m3',label:'3m',tip:'Trailing 3 months — SUM of last 13 weekly impacts. Approximate.'},
+    {key:'y1',label:'1y',tip:'Trailing 1 year — SUM of last 52 weekly impacts. Approximate.'},
+    {key:'all',label:'Full',tip:'Full period — compounded value from FactSet if shipped (full_period_imp), otherwise SUM of all weekly impacts.'}
+  ];
+  const sortedFacs=[...facsBase].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+  // Build the multi-period table — sticky header + colored cells (red=cost, green=gain)
+  const periodHead=periods.map(p=>`<th class="r tip" data-tip="${p.tip}" style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:5px 6px">${p.label}</th>`).join('');
+  const cellColor=(v)=>v==null?'color:var(--textDim)':v>0?'color:var(--pos)':v<0?'color:var(--neg)':'color:var(--txt)';
+  const facRows=sortedFacs.map(f=>{
+    const sgnA=(f.a||0)>=0?'+':'';
+    const sgnC=(f.c||0)>=0?'+':'';
+    const isAdds=(f.c||0)>=0;
+    const dirChip=isAdds?'<span style="color:var(--neg);font-size:9px">▲</span>':'<span style="color:var(--pos);font-size:9px">▼</span>';
+    const ofFac=(facPctT&&facPctT>0)?(f.c/facPctT*100):null;
+    const periodCells=periods.map(p=>{
+      const r=getImpactForPeriod(f.n,p.key);
+      const v=r.v;
+      const note=(r.note||'').replace(/"/g,'&quot;');
+      return `<td class="r tip" data-tip="${note}" style="${cellColor(v)};font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:6px 6px">${v==null?'—':fp(v,2)}</td>`;
+    }).join('');
+    return `<tr class="clickable" onclick="closeSecFullscreen();oDrF('${f.n.replace(/'/g,"\\'")}')" style="cursor:pointer">
+      <td style="padding:6px 8px;font-size:11px;color:var(--txth);font-weight:500">${dirChip} ${f.n}</td>
+      <td class="r" style="padding:6px 6px;font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace">${sgnA}${f2(f.a||0,2)}</td>
+      <td class="r" style="padding:6px 6px;font-size:10px;font-weight:600;color:${isAdds?'var(--neg)':'var(--pos)'};font-family:'JetBrains Mono',monospace">${sgnC}${f2(f.c||0,1)}%</td>
+      <td class="r" style="padding:6px 6px;font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace">${ofFac!=null?(ofFac>=0?'+':'')+f2(ofFac,0)+'%':'—'}</td>
+      ${periodCells}
+    </tr>`;
+  }).join('');
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
+      <div style="display:flex;align-items:baseline;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Factor Risk Map · ${cs.id||cs.name||''}</h2><span style="font-size:10px;color:var(--textDim)">click any factor to drill</span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
+      <div style="flex:0 0 auto;padding:8px 14px 4px">
+        <div id="facFsQuadDiv" style="height:380px"></div>
+      </div>
+      <div style="flex:1;min-height:0;border-top:1px solid var(--grid);display:flex;flex-direction:column;background:rgba(15,23,42,0.4);overflow:hidden">
+        <div style="padding:8px 16px;border-bottom:1px solid var(--grid);background:var(--card);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+          <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Impact across periods</div>
+          <div style="font-size:10px;color:var(--txt);line-height:1.4">
+            <strong style="color:var(--txth)">Wk</strong> = single weekly observation · <strong style="color:var(--txth)">1m / 3m / 1y</strong> = SUM of trailing weekly impacts (approx, not compounded) · <strong style="color:var(--txth)">Full</strong> = FactSet's compounded full_period_imp if shipped, else sum-fallback
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;padding:0 0 8px">
+          <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:11px">
+            <thead style="position:sticky;top:0;background:var(--card);z-index:1">
+              <tr>
+                <th style="text-align:left;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:8px 8px;border-bottom:1px solid var(--grid)">Factor</th>
+                <th class="r" style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:8px 6px;border-bottom:1px solid var(--grid)"><span style="text-transform:none">σ</span> Act</th>
+                <th class="r" style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:8px 6px;border-bottom:1px solid var(--grid)">% TE</th>
+                <th class="r" style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:8px 6px;border-bottom:1px solid var(--grid)">% Fac</th>
+                ${periods.map(p=>`<th class="r tip" data-tip="${p.tip}" style="font-size:9px;color:var(--pri);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;padding:8px 6px;border-bottom:1px solid var(--grid)">${p.label}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>${facRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{
+    // Reuse the inline render but target the FS div by temporarily swapping ID
+    // — cleaner: factor out inline body to take an optional divId. For now,
+    // do a direct render here matching rFacButt's quadrant.
+    const facs=facsBase.map(f=>{
+      const ipd=getImpactForPeriod(f.n,_impactPeriod);
+      return Object.assign({},f,{_y:ipd.v!=null?ipd.v:(f.imp!=null?f.imp:0)});
+    });
+    const T=THEME();
+    const xVals=facs.map(f=>f.a||0);
+    const yVals=facs.map(f=>f._y||0);
+    const cVals=facs.map(f=>f.c||0);
+    const sizes=cVals.map(c=>Math.max(18,Math.min(72,Math.sqrt(Math.abs(c))*11+18)));
+    const colors=cVals.map(c=>{if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;});
+    const yLab=getImpactPeriodLabel();
+    const hovertext=facs.map(f=>{
+      const dirHtml=(f.c||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+      const sgnC=(f.c||0)>=0?'+':'';
+      const ofTE=`${sgnC}${f2(f.c||0,1)}% of TE`;
+      const ofFac=(facPctT&&facPctT>0)?` · ${sgnC}${f2((f.c||0)/facPctT*100,0)}% of Factor`:'';
+      const sgnA=(f.a||0)>=0?'+':'';
+      const sgnY=(f._y||0)>=0?'+':'';
+      return `<b>${f.n}</b><br>Active: ${sgnA}${f2(f.a||0,2)}σ · ${dirHtml}<br>${ofTE}${ofFac}<br>Impact (${yLab}): ${sgnY}${f2(f._y||0,2)}%`;
+    });
+    const labels=facs.map(f=>{
+      const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
+      return short.length>16?short.slice(0,15)+'…':short;
+    });
+    const xMax=Math.max(0.3,...xVals.map(Math.abs))*1.2;
+    const yMax=Math.max(0.05,...yVals.map(Math.abs))*1.4;
+    const shapes=[
+      {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:-yMax,y1:0,fillcolor:'rgba(239,68,68,0.04)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:-yMax,y1:0,fillcolor:'rgba(99,102,241,0.03)',line:{width:0},layer:'below'},
+      {type:'line',xref:'x',yref:'y',x0:0,x1:0,y0:-yMax,y1:yMax,line:{color:'rgba(148,163,184,0.5)',width:1,dash:'dot'}},
+      {type:'line',xref:'x',yref:'y',x0:-xMax,x1:xMax,y0:0,y1:0,line:{color:'rgba(148,163,184,0.5)',width:1,dash:'dot'}}
+    ];
+    const annotations=[
+      {x:xMax,y:yMax,xref:'x',yref:'y',text:'OW · working ✓',xanchor:'right',yanchor:'top',font:{size:10,color:'rgba(34,197,94,0.8)'},showarrow:false},
+      {x:-xMax,y:yMax,xref:'x',yref:'y',text:'UW · missed',xanchor:'left',yanchor:'top',font:{size:10,color:'rgba(245,158,11,0.8)'},showarrow:false},
+      {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW · hurting',xanchor:'right',yanchor:'bottom',font:{size:10,color:'rgba(239,68,68,0.8)'},showarrow:false},
+      {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · dodged',xanchor:'left',yanchor:'bottom',font:{size:10,color:'rgba(99,102,241,0.8)'},showarrow:false}
+    ];
+    Plotly.newPlot('facFsQuadDiv',[{
+      type:'scatter',mode:'markers+text',
+      x:xVals,y:yVals,text:labels,textposition:'top center',
+      textfont:{size:11,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
+      marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},
+      hovertext:hovertext,hoverinfo:'text',
+      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+    }],{
+      paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+      font:{family:'DM Sans, system-ui',color:T.tick,size:10},
+      margin:{l:60,r:30,t:30,b:50},
+      xaxis:{title:{text:'Active Exposure (σ) — UW ← → OW',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},
+      yaxis:{title:{text:`Impact ${yLab} (%) — bet paying off ↑`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f'},
+      shapes,annotations,showlegend:false
+    },{displayModeBar:false,responsive:true});
+    const qel=document.getElementById('facFsQuadDiv');
+    if(qel&&qel.on){qel.on('plotly_click',function(d){if(d&&d.points&&d.points[0]){const idx=d.points[0].pointIndex;const f=facs[idx];if(f){closeSecFullscreen();oDrF(f.n);}}});}
+  },80);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
 }
 
 const COUNTRY_ISO3={

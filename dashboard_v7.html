@@ -1422,29 +1422,36 @@ function rExp(){
 
   ${benchOnlySecHtml(s)}
 
-  <!-- Row 3: Factor Exposures -->
+  <!-- Row 3a: Factor Risk Snapshot + Factor Performance Map (split from single tile per user request) -->
   <div class="grid g2">
-    <div class="card" id="cardFacButt">
-      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Factor Risk Quadrant. X = active exposure (UW ← → OW, σ units). Y = recent impact (bet paying off ↑). Bubble size = |TE contribution|. Color = adds risk (red) / diversifies (green). Click a bubble for full factor drill." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Risk Map</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span></div><button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button></div>
-      <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
-      <div id="facButtDiv" style="height:480px"></div>
+    <div class="card" id="cardFacRisk">
+      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Factor Risk Snapshot — point-in-time view. X = active exposure (UW ← → OW, σ). Y = TE contribution (% TE, +/- adds vs diversifies). Bubble size = factor's own volatility (σ). KPI strip shows Idio vs Factor portion of total TE. Click a bubble to drill." oncontextmenu="showNotePopup(event,'cardFacRisk');return false">Factor Risk Snapshot</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × risk × volatility</span></div></div>
+      <div id="facRiskKpi" style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap;align-items:center"></div>
+      <div id="facRiskDiv" style="height:440px"></div>
     </div>
-    <div class="card" id="cardFacDetail">
-      <div class="flex-between" style="margin-bottom:6px">
-        <div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
-          ${facColDropHtml()}
-          <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardFacDetail');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download PNG</div><div onclick="exportCSV('#cardFacDetail table','factors');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download CSV</div></div></div>
-          <div class="toggle-wrap" style="margin:0">
-            <button id="facViewPrimary" class="toggle-btn${_facView==='primary'?' active':''}" onclick="setFacView('primary')">Primary</button>
-            <button id="facViewAll" class="toggle-btn${_facView==='all'?' active':''}" onclick="setFacView('all')">All</button>
-          </div>
+    <div class="card" id="cardFacButt">
+      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Factor Performance Map — period view (driven by global Impact selector). X = avg active exposure over period. Y = period impact (paying off ↑). Bubble size = avg TE contribution. Color = adds/diversifies. Click for full-screen multi-period comparison." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Performance Map</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span></div><button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button></div>
+      <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
+      <div id="facButtDiv" style="height:440px"></div>
+    </div>
+  </div>
+
+  <!-- Row 3b: Factor Detail (full width below the two map tiles) -->
+  <div class="card" id="cardFacDetail" style="margin-top:16px">
+    <div class="flex-between" style="margin-bottom:6px">
+      <div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
+        ${facColDropHtml()}
+        <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardFacDetail');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download PNG</div><div onclick="exportCSV('#cardFacDetail table','factors');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download CSV</div></div></div>
+        <div class="toggle-wrap" style="margin:0">
+          <button id="facViewPrimary" class="toggle-btn${_facView==='primary'?' active':''}" onclick="setFacView('primary')">Primary</button>
+          <button id="facViewAll" class="toggle-btn${_facView==='all'?' active':''}" onclick="setFacView('all')">All</button>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${facGroupPillsHtml()}</div>
-      ${rFac(s.factors)}
     </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${facGroupPillsHtml()}</div>
+    ${rFac(s.factors)}
   </div>
 
   <!-- Factor Attribution Waterfall -->
@@ -1627,6 +1634,7 @@ function rExp(){
       ['rSecChart',()=>rSecChart(s)],
       ['rRegChart',()=>rRegChart(s)],
       ['rFacButt',()=>rFacButt(s)],
+      ['rFacRisk',()=>rFacRisk(s)],
       ['rCountryMap',()=>rCountryMap(s)],
       ['rCountryChart',()=>rCountryChart(s)],
       ['rGroupChart',()=>rGroupChart(s)],
@@ -3940,6 +3948,99 @@ function rFacButt(s){
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(el&&el.on){el.on('plotly_click',function(d){
+    if(d&&d.points&&d.points[0]&&typeof oDrF==='function'){
+      const idx=d.points[0].pointIndex;
+      const f=facs[idx];
+      if(f)oDrF(f.n);
+    }
+  });}
+}
+
+// 2026-04-29: Factor Risk Snapshot — companion tile to the Performance Map.
+// Pure point-in-time view: no impact axis. Shows the four dimensions PMs care
+// about RIGHT NOW: active exposure, TE contribution (signed), factor's own
+// volatility, and adds-vs-diversifies direction. Plus a KPI strip at the top
+// summarizing Idio vs Factor share of total TE.
+function rFacRisk(s){
+  const kpi=document.getElementById('facRiskKpi');
+  const div=document.getElementById('facRiskDiv');
+  if(!div)return;
+  const facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
+  if(!facs.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
+  // KPI strip — Idio vs Factor share of total TE
+  if(kpi){
+    const idioPct=s.sum?.pct_specific;
+    const facPct=s.sum?.pct_factor;
+    const te=s.sum?.te;
+    const matCount=facs.filter(f=>Math.abs(f.c||0)>0.5).length;
+    const kpiCard=(label,value,sub,color)=>`<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">${label}</span><span style="font-size:14px;font-weight:700;color:${color||'var(--txth)'};line-height:1.1;margin-top:1px">${value}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${sub||''}</span></div>`;
+    kpi.innerHTML=
+      kpiCard('TE','total',te!=null?f2(te,2)+'%':'—','var(--pri)').replace('total',f2(te,2)+'%').replace(f2(te,2)+'%',(te!=null?f2(te,2)+'%':'—'))+
+      kpiCard('Idiosyncratic',idioPct!=null?f2(idioPct,1)+'%':'—',idioPct!=null&&te!=null?'MCR '+f2(te*idioPct/100,1):'','var(--acc)')+
+      kpiCard('Factor',facPct!=null?f2(facPct,1)+'%':'—',facPct!=null&&te!=null?'MCR '+f2(te*facPct/100,1):'','var(--pri)')+
+      kpiCard('Material factors',matCount,'|TE| > 0.5%','var(--txth)');
+    // Re-do TE card cleanly
+    const teText=te!=null?f2(te,2)+'%':'—';
+    kpi.innerHTML=
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Total TE</span><span style="font-size:14px;font-weight:700;color:var(--pri);line-height:1.1;margin-top:1px">${teText}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">latest</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(168,85,247,0.06);border:1px solid var(--grid);border-radius:6px;min-width:120px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Idiosyncratic</span><span style="font-size:14px;font-weight:700;color:var(--acc);line-height:1.1;margin-top:1px">${idioPct!=null?f2(idioPct,1)+'% of TE':'—'}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${idioPct!=null&&te!=null?'MCR '+f2(te*idioPct/100,1):''}</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.06);border:1px solid var(--grid);border-radius:6px;min-width:120px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Factor</span><span style="font-size:14px;font-weight:700;color:var(--pri);line-height:1.1;margin-top:1px">${facPct!=null?f2(facPct,1)+'% of TE':'—'}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${facPct!=null&&te!=null?'MCR '+f2(te*facPct/100,1):''}</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(245,158,11,0.05);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Material factors</span><span style="font-size:14px;font-weight:700;color:#f59e0b;line-height:1.1;margin-top:1px">${matCount}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">|TE| > 0.5%</span></div>`;
+  }
+  // Quadrant: x = active σ (latest), y = TE contribution % (signed),
+  // bubble size = factor σ (dev), color = adds/diversifies
+  const T=THEME();
+  const xVals=facs.map(f=>f.a||0);
+  const yVals=facs.map(f=>f.c||0);
+  const devVals=facs.map(f=>f.dev!=null&&isFinite(f.dev)?Math.abs(f.dev):2);
+  const sizes=devVals.map(d=>Math.max(14,Math.min(56,Math.sqrt(d)*9+10)));
+  const colors=facs.map(f=>{const c=f.c||0;if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;});
+  const facPctT=s.sum?.pct_factor;
+  const hovertext=facs.map(f=>{
+    const dirHtml=(f.c||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+    const sgnA=(f.a||0)>=0?'+':'';
+    const sgnC=(f.c||0)>=0?'+':'';
+    const ofTE=`${sgnC}${f2(f.c||0,1)}% of TE`;
+    const ofFac=(facPctT&&facPctT>0)?` · ${sgnC}${f2((f.c||0)/facPctT*100,0)}% of Factor`:'';
+    const dev=f.dev!=null?f2(f.dev,2):'—';
+    return `<b>${f.n}</b><br>Active: ${sgnA}${f2(f.a||0,2)}σ · ${dirHtml}<br>Risk contrib: ${ofTE}${ofFac}<br>Factor σ: ${dev}`;
+  });
+  const labels=facs.map(f=>{
+    const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
+    return short.length>14?short.slice(0,13)+'…':short;
+  });
+  const xMax=Math.max(0.3,...xVals.map(Math.abs))*1.18;
+  const yMax=Math.max(1,...yVals.map(Math.abs))*1.3;
+  const shapes=[
+    {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(239,68,68,0.04)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:-yMax,y1:0,fillcolor:'rgba(99,102,241,0.03)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:-yMax,y1:0,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
+    {type:'line',xref:'x',yref:'y',x0:0,x1:0,y0:-yMax,y1:yMax,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}},
+    {type:'line',xref:'x',yref:'y',x0:-xMax,x1:xMax,y0:0,y1:0,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}}
+  ];
+  const annotations=[
+    {x:xMax,y:yMax,xref:'x',yref:'y',text:'OW · risk-on bet',xanchor:'right',yanchor:'top',font:{size:9,color:'rgba(239,68,68,0.7)'},showarrow:false},
+    {x:-xMax,y:yMax,xref:'x',yref:'y',text:'UW yet adds',xanchor:'left',yanchor:'top',font:{size:9,color:'rgba(245,158,11,0.7)'},showarrow:false},
+    {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW hedge',xanchor:'right',yanchor:'bottom',font:{size:9,color:'rgba(99,102,241,0.7)'},showarrow:false},
+    {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · risk-off bet',xanchor:'left',yanchor:'bottom',font:{size:9,color:'rgba(34,197,94,0.7)'},showarrow:false}
+  ];
+  Plotly.newPlot('facRiskDiv',[{
+    type:'scatter',mode:'markers+text',
+    x:xVals,y:yVals,text:labels,textposition:'top center',
+    textfont:{size:10,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
+    marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},
+    hovertext:hovertext,hoverinfo:'text',
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+  }],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{family:'DM Sans, system-ui',color:T.tick,size:10},
+    margin:{l:60,r:20,t:30,b:50},
+    xaxis:{title:{text:'Active Exposure (σ, latest) — UW ← → OW',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
+    yaxis:{title:{text:'Risk Contribution (% TE) — adds ↑ / diversifies ↓',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f'},
+    shapes,annotations,showlegend:false
+  },{displayModeBar:false,responsive:true});
+  if(div&&div.on){div.on('plotly_click',function(d){
     if(d&&d.points&&d.points[0]&&typeof oDrF==='function'){
       const idx=d.points[0].pointIndex;
       const f=facs[idx];

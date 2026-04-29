@@ -7199,7 +7199,7 @@ function _setTEBox(name){
     const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
     const top=factors.slice(0,8);
     if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No factor TE contributions available.</div>';}
-    else body=`<div id="teFacPieDiv" style="height:240px"></div>`;
+    else body=`<div style="display:grid;grid-template-columns:minmax(160px,200px) 1fr;gap:14px;align-items:center"><div id="teFacPieDiv" style="height:200px"></div><div id="teFacLegend" style="font-size:11px"></div></div>`;
   }else if(_teActiveBox==='tepct'){
     body=`<div id="teHistDiv" style="height:120px"></div>`;
   }else if(_teActiveBox==='ratiopct'){
@@ -7235,21 +7235,43 @@ function _setTEBox(name){
       return divs[Math.min(divs.length-1,dIdx++)];
     });
     const cd=factors.map(f=>[f.n,(f.c||0)>=0?'adds risk':'diversifies',+(f.c||0).toFixed(2)]);
-    Plotly.newPlot('teFacPieDiv',[{type:'pie',labels,values:vals,hole:0.6,
-      textinfo:'label+percent',textposition:'inside',insidetextorientation:'radial',
-      textfont:{size:10,color:'#0f172a',family:'DM Sans'},
-      marker:{colors:colors,line:{color:'rgba(15,23,42,0.65)',width:1.5}},
+    // Pie: clean donut with NO inside labels (legend moved to side panel below).
+    // Just percent shown for the largest few slices.
+    const totalAbs=vals.reduce((a,b)=>a+b,0)||1;
+    const pieText=vals.map(v=>(v/totalAbs)>=0.08?Math.round(v/totalAbs*100)+'%':'');
+    Plotly.newPlot('teFacPieDiv',[{type:'pie',labels,values:vals,hole:0.62,
+      text:pieText,textinfo:'text',textposition:'inside',
+      textfont:{size:11,color:'#0f172a',family:'DM Sans, system-ui',weight:600},
+      marker:{colors:colors,line:{color:'rgba(15,23,42,0.7)',width:1.5}},
       customdata:cd,
       hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[1]} (%{customdata[2]:+.2f}%)<br>%{percent} of |TE|<extra></extra>',
-      hoverlabel:{bgcolor:'rgba(15,23,42,0.95)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11}},
-      sort:false
+      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}},
+      sort:false,
+      showlegend:false
     }],{
       paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-      font:{family:'DM Sans',color:'#cbd5e1',size:10},
-      margin:{l:18,r:18,t:8,b:30},
-      showlegend:true,
-      legend:{orientation:'h',y:-0.05,x:0.5,xanchor:'center',font:{size:9,color:'#94a3b8'},itemwidth:30}
+      font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:10},
+      margin:{l:6,r:6,t:6,b:6}
     },{displayModeBar:false,responsive:true});
+    // Side legend: ranked rows with color swatch + factor name + share% + signed value
+    const legend=document.getElementById('teFacLegend');
+    if(legend){
+      const rows=factors.map((f,i)=>{
+        const sharePct=Math.round(vals[i]/totalAbs*100);
+        const isPos=(f.c||0)>=0;
+        const arrow=isPos?'<span style="color:#fca5a5">▲</span>':'<span style="color:#86efac">▼</span>';
+        const sign=isPos?'+':'';
+        return `<div style="display:grid;grid-template-columns:14px 1fr auto auto;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.06)">
+          <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colors[i]}"></span>
+          <span style="color:var(--txth);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.n}">${f.n}</span>
+          <span style="color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:10px">${sharePct}%</span>
+          <span style="color:${isPos?'var(--neg)':'var(--pos)'};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;min-width:48px;text-align:right">${arrow} ${sign}${f2(f.c||0,2)}</span>
+        </div>`;
+      }).join('');
+      legend.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--grid)">
+        <span>Factor</span><span style="display:flex;gap:14px;padding-right:2px"><span>Share</span><span style="min-width:48px;text-align:right">Active σ</span></span>
+      </div>${rows}`;
+    }
   }else if(_teActiveBox==='tepct'){
     Plotly.newPlot('teHistDiv',[{type:'histogram',x:ctx.numVals,nbinsx:30,
       marker:{color:'rgba(168,85,247,0.45)',line:{color:'rgba(168,85,247,0.8)',width:0.5}},

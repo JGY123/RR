@@ -1455,6 +1455,7 @@ function rExp(){
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
+      <button class="export-btn" title="Full screen — opens different view based on current Chart / Table mode" onclick="openGrpFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
     </div></div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
     <div id="grpTable" style="display:none;overflow-x:auto">${rGroupTable(s.groups,s.hold)}</div>
@@ -1562,6 +1563,7 @@ function rExp(){
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
+      <button class="export-btn" title="Full screen — opens different view based on current Table / Chart mode" onclick="openRegFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
     </div></div>
     <div id="regTable" style="overflow-x:auto">${rWt(s.regions,'reg',s.hold)}</div>
     <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
@@ -2171,6 +2173,98 @@ function openSecTableFullscreen(){
   const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
   document.addEventListener('keydown',escHandler);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// View-aware FS for cardGroups (2026-04-29). Same dispatcher pattern as Sec/Ctry.
+// Reuses #secFsModal as the generic FS shell.
+// ─────────────────────────────────────────────────────────────────────────────
+function openGrpFullscreen(){
+  const tbl=document.getElementById('grpTable');
+  const cht=document.getElementById('grpChart');
+  const isChart=cht&&cht.style.display!=='none';
+  if(isChart)return openGrpChartFullscreen();
+  return openGrpTableFullscreen();
+}
+function openGrpChartFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
+      <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Redwood Groups · ${cs.id}</h2><span style="font-size:10px;color:var(--textDim)">Click a bar to drill into that group</span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:12px 18px"><div id="grpFsChartDiv" style="min-height:600px"></div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{rGroupChart(cs,'grpFsChartDiv');},80);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+function openGrpTableFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid)">
+      <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Redwood Groups · Table · ${cs.id}</h2><span style="font-size:10px;color:var(--textDim)">Click a row to drill</span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="grpFsTableWrap">${rGroupTable(cs.groups,cs.hold)}</div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{if(typeof applySectColVis==='function')applySectColVis();},50);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// View-aware FS for cardRegions (2026-04-29). Same pattern.
+// ─────────────────────────────────────────────────────────────────────────────
+function openRegFullscreen(){
+  const tbl=document.getElementById('regTable');
+  const cht=document.getElementById('regChart');
+  const isChart=cht&&cht.style.display!=='none';
+  if(isChart)return openRegChartFullscreen();
+  return openRegTableFullscreen();
+}
+function openRegChartFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
+      <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Region Active Weights · ${cs.id}</h2></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:12px 18px"><div id="regFsChartDiv" style="min-height:600px"></div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{rRegChart(cs,'regFsChartDiv');},80);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+function openRegTableFullscreen(){
+  if(!cs)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid)">
+      <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Region Active Weights · Table · ${cs.id}</h2><span style="font-size:10px;color:var(--textDim)">Click a row to drill</span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="regFsTableWrap">${rWt(cs.regions,'reg',cs.hold)}</div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{if(typeof applySectColVis==='function')applySectColVis();},50);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
+}
+
 function _secFsTotals(){
   // Compute universe-aware aggregate stats for the stat-strip
   if(!cs||!cs.hold)return null;
@@ -3620,8 +3714,11 @@ function rSecChart(s){
   }
 }
 
-function rRegChart(s){
-  let el=$('regChartDiv');
+function rRegChart(s,divId){
+  // 2026-04-29: divId param so the same renderer powers both the inline cardRegions
+  // chart and the chart-FS modal (#regFsChartDiv). Defaults to inline div.
+  divId=divId||'regChartDiv';
+  let el=document.getElementById(divId);
   let d=[...(s.regions||[])].filter(x=>x.n).sort((a,b)=>b.a-a.a);
   if(!d.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No region data</p>';return;}
   let names=d.map(x=>x.n);
@@ -3636,7 +3733,7 @@ function rRegChart(s){
   let tvStep=xmax>=20?5:2;
   let tickVals=[0],tickText=['0'];
   for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
-  Plotly.newPlot('regChartDiv',[
+  Plotly.newPlot(divId,[
     {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
      marker:{color:priC,opacity:0.85},customdata:pvals,
      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
@@ -4076,7 +4173,10 @@ function rCountryChart(s,divId){
   });
 }
 
-function rGroupChart(s){
+function rGroupChart(s,divId){
+  // 2026-04-29: divId param so the same renderer powers both the inline cardGroups
+  // chart and the chart-FS modal (#grpFsChartDiv). Defaults to inline div.
+  divId=divId||'grpChartDiv';
   if(!s.groups||!s.groups.length)return;
   let d=s.groups.filter(g=>g.n&&g.n!=='[Cash]');
   if(!d.length)return;
@@ -4084,13 +4184,13 @@ function rGroupChart(s){
   let pvals=d.map(g=>+(g.p||0).toFixed(2));
   let bvals=d.map(g=>+(g.b||0).toFixed(2));
   let h=Math.max(220,d.length*36+80);
-  let el=$('grpChartDiv');if(el)el.style.height=h+'px';
+  let el=document.getElementById(divId);if(el)el.style.height=h+'px';
   let maxW=Math.max(...pvals,...bvals,5);
   let xmax=Math.ceil((maxW+5)/5)*5;
   let tvStep=xmax>=20?5:2;
   let tickVals=[0],tickText=['0'];
   for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
-  Plotly.newPlot('grpChartDiv',[
+  Plotly.newPlot(divId,[
     {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
      marker:{color:'rgba(99,102,241,0.85)'},customdata:pvals,
      hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
@@ -4107,7 +4207,7 @@ function rGroupChart(s){
            tickfont:{color:THEME().tick,size:10}},
     legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
   },plotCfg);
-  let grpEl=document.getElementById('grpChartDiv');
+  let grpEl=document.getElementById(divId);
   if(grpEl&&grpEl.on)grpEl.on('plotly_click',d=>{let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n)oDrGroup(n);});
 }
 

@@ -1366,7 +1366,7 @@ function rExp(){
       ${secColDropHtml()}
       <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
-      <button class="export-btn" title="Open full-screen view (chart + full table + side panel of top holdings)" onclick="openSecFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+      <button class="export-btn" title="Full screen — opens different view based on current Table / Chart mode" onclick="openSecFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
     </div></div>
     <div id="secTable" style="overflow-x:auto">${rWt(s.sectors,'sec',s.hold)}</div>
     <div id="secChart" style="display:none"><div id="secChartDiv" style="height:380px"></div><div id="secChartCaption" style="text-align:center;padding:6px 8px"></div></div>
@@ -2076,7 +2076,22 @@ function applyCtryTopN(){
 let _secFsFocusedSector=null;     // when a row/marker is clicked, top-holdings panel pivots
 let _secFsAllColsForced=false;     // when entering, snapshot user's _secColVis and force all-on
 let _secFsColVisSnapshot=null;
+// 2026-04-29: view-aware FS dispatcher. Chart-view → chart-led layout (this fn);
+// Table-view → table-led layout (openSecTableFullscreen). Cross-tile pattern,
+// mirrors openCtryFullscreen. See LESSONS_LEARNED for rationale.
 function openSecFullscreen(){
+  const tbl=document.getElementById('secTable');
+  const cht=document.getElementById('secChart');
+  const isChart = cht && cht.style.display !== 'none';
+  if(isChart) return openSecChartFullscreen();
+  // Default + table view → table-led FS
+  return openSecTableFullscreen();
+}
+
+// Chart-led FS (the original openSecFullscreen body): stat strip + scatter +
+// top-holdings side panel + compact table at the bottom. Triggered when the
+// inline tile is in Chart view at click time.
+function openSecChartFullscreen(){
   if(!cs||!cs.sectors)return;
   const m=document.getElementById('secFsModal');
   const c=document.getElementById('secFsContent');
@@ -2118,6 +2133,43 @@ function closeSecFullscreen(){
     _secFsColVisSnapshot=null;_secFsAllColsForced=false;
     if(typeof applySectColVis==='function')applySectColVis();
   }
+}
+// Table-led FS (2026-04-29): full-width sector table at max density. Used when
+// the inline tile is in Table view at click time. Mirrors openCtryTableFullscreen.
+function openSecTableFullscreen(){
+  if(!cs||!cs.sectors)return;
+  const m=document.getElementById('secFsModal');
+  const c=document.getElementById('secFsContent');
+  if(!m||!c)return;
+  // Snapshot + force-all visible cols (consistent with chart-FS — more info in FS)
+  _secFsColVisSnapshot=Object.assign({},_secColVis);
+  SEC_COLS.forEach(col=>{_secColVis[col.id]=true;});
+  _secFsAllColsForced=true;
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  const t=_secFsTotals();
+  const wtdLbl=_avgMode==='wtd'?'Wtd':'Avg';
+  const stat=(label,val,sub,color)=>`<div style="background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;padding:6px 10px;min-width:108px"><div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px">${label}</div><div style="font-size:15px;color:${color||'var(--txth)'};font-weight:600;font-family:'JetBrains Mono',monospace">${val}</div>${sub?`<div style="font-size:10px;color:var(--textDim);margin-top:1px">${sub}</div>`:''}</div>`;
+  const stats=t?(
+    stat('Universe',`${aggLbl}`,`${t.totalCount} secs · Ranks ${wtdLbl}`)+
+    stat('Σ TE',f2(t.totalTR,2)+'%',`Stock ${f2(t.totalMCR,2)}% · Fac ${f2(t.totalFactor,2)}%`,'var(--pri)')+
+    stat('Top Risk',t.topName?t.topName.slice(0,16):'—',t.topName?`+${f2(t.topV,2)}%`:'','var(--neg)')+
+    stat('Top Diversifier',t.divName&&t.divV<-0.01?t.divName.slice(0,16):'—',t.divName&&t.divV<-0.01?`${f2(t.divV,2)}%`:'','var(--pos)')
+  ):'';
+  c.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
+      <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Sector Table · ${cs.id} · ${aggLbl}</h2><span style="font-size:10px;color:var(--textDim)">All columns visible · Click any sector row to drill</span></div>
+      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit" title="Close (Esc)">✕</button>
+    </div>
+    ${stats?`<div style="display:flex;gap:8px;padding:8px 18px;flex-wrap:wrap;border-bottom:1px solid var(--grid)">${stats}</div>`:''}
+    <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="secFsTableWrap">${rWt(cs.sectors,'sec',cs.hold)}</div></div>`;
+  m.classList.add('show');
+  document.body.style.overflow='hidden';
+  setTimeout(()=>{
+    if(typeof applySectColVis==='function')applySectColVis();
+    if(typeof applySectFilters==='function')applySectFilters();
+  },50);
+  const escHandler=(e)=>{if(e.key==='Escape'){closeSecFullscreen();document.removeEventListener('keydown',escHandler);}};
+  document.addEventListener('keydown',escHandler);
 }
 function _secFsTotals(){
   // Compute universe-aware aggregate stats for the stat-strip

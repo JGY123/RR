@@ -1599,17 +1599,14 @@ function rExp(){
   </div>
 
   <!-- Row 8: MCR + Risk Weight Budget -->
-  <div class="grid g2">
-    <div class="card" id="cardMCR">
-      <div class="flex-between"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions). Always shows latest holdings — historical MCR not persisted. Click a bar for stock detail." oncontextmenu="showNotePopup(event,'cardMCR');return false">Marginal Contribution to Risk (Top & Bottom)</div>
-      <div class="export-bar"><button class="export-btn" onclick="exportMcrCsv()">CSV</button></div></div>
-      <div id="mcrDiv" style="height:300px"></div>
-    </div>
-    <div class="card" id="cardFRB" style="cursor:pointer" tabindex="0" role="button" aria-label="Factor risk budget — open detailed breakdown" onclick="oDrRiskBudget()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();oDrRiskBudget();}">
-      <div class="flex-between"><div class="card-title tip" data-tip="Click for detailed factor risk budget breakdown. Slice color: red = adds risk, green = diversifies." oncontextmenu="showNotePopup(event,'cardFRB');return false">Factor Risk Budget</div>
-      <span style="font-size:10px;color:var(--pri)">Detail &#8594;</span></div>
-      <div id="frbDiv" style="height:260px"></div>
-    </div>
+  <!-- cardFRB removed 2026-04-29 — redundant with Factor Risk Snapshot, Factor
+       Performance bubble, factor pie inside TE modal, and the "% TE/% Fac"
+       columns on cardFacDetail. cardMCR (holding-level top 10 by |MCR|) stays
+       since it's a holding-level view not duplicated elsewhere. -->
+  <div class="card" id="cardMCR">
+    <div class="flex-between"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions). Always shows latest holdings — historical MCR not persisted. Click a bar for stock detail." oncontextmenu="showNotePopup(event,'cardMCR');return false">Marginal Contribution to Risk (Top & Bottom)</div>
+    <div class="export-bar"><button class="export-btn" onclick="exportMcrCsv()">CSV</button></div></div>
+    <div id="mcrDiv" style="height:300px"></div>
   </div>
 
   <!-- Row 10: Unowned Risk Contributors -->
@@ -1677,7 +1674,6 @@ function rExp(){
       ['rScat',()=>rScat(s)],
       ['rTree',()=>rTree(s)],
       ['rMCR',()=>rMCR(s)],
-      ['rFRB',()=>rFRB(s)],
       ['rAttribTable',()=>rAttribTable()],
       ['renderRanksTable',()=>renderRanksTable()],   // cardRanks rebuild — populates #rnkTableWrap
     ];

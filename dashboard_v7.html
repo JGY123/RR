@@ -2875,6 +2875,9 @@ function _rerenderAggTiles(){
     // Risk-tab country×factor heatmap if visible
     const rch=document.getElementById('riskCtryHeatDiv');
     if(rch&&rch.offsetParent!==null&&typeof rCountryChart==='function')rCountryChart(cs,'riskCtryHeatDiv');
+    // 2026-04-29: cardRegions heatmap when chart-view is on
+    const rgc=document.getElementById('regChartDiv');
+    if(rgc&&rgc.offsetParent!==null&&typeof rRegChart==='function')rRegChart(cs);
   }
 }
 function setAvgMode(m){
@@ -3715,41 +3718,63 @@ function rSecChart(s){
 }
 
 function rRegChart(s,divId){
-  // 2026-04-29: divId param so the same renderer powers both the inline cardRegions
-  // chart and the chart-FS modal (#regFsChartDiv). Defaults to inline div.
+  // 2026-04-29 round 1 rebuild — Region × Factor TE heatmap.
+  // Mirrors cardCountry's heatmap pattern (rCountryChart). Replaces the old
+  // bar-chart of active weights — the table already shows weights numerically;
+  // the heatmap exposes which regions drive which factor exposures, which
+  // wasn't visible at all in the old chart.
+  // divId param: same renderer for inline tile and chart-FS (#regFsChartDiv).
   divId=divId||'regChartDiv';
-  let el=document.getElementById(divId);
-  let d=[...(s.regions||[])].filter(x=>x.n).sort((a,b)=>b.a-a.a);
-  if(!d.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No region data</p>';return;}
-  let names=d.map(x=>x.n);
-  let pvals=d.map(x=>+(x.p||0).toFixed(2));
-  let bvals=d.map(x=>+(x.b||0).toFixed(2));
-  let h=Math.max(200,d.length*36+80);
-  if(el)el.style.height=h+'px';
-  let priC=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#6366f1';
-  let bmC=getComputedStyle(document.body).getPropertyValue('--txt').trim()||'#6b7280';
-  let maxW=Math.max(...pvals,...bvals,5);
-  let xmax=Math.ceil((maxW+5)/5)*5;
-  let tvStep=xmax>=20?5:2;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
-  Plotly.newPlot(divId,[
-    {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
-     marker:{color:priC,opacity:0.85},customdata:pvals,
-     hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
-    {name:'Benchmark',type:'bar',orientation:'h',y:names,x:bvals,
-     marker:{color:bmC,opacity:0.6},
-     hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'}
-  ],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:THEME().tick,size:11},height:h,barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:THEME().grid,zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:THEME().tickH},automargin:true},
-    xaxis:{gridcolor:THEME().grid,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:THEME().tick,size:10}},
-    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
-  },plotCfg);
+  if(!s.regions||!s.regions.length||!s.hold){
+    const el0=document.getElementById(divId);
+    if(el0)el0.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No region data</p>';
+    return;
+  }
+  const T=THEME();
+  const factorCols=RNK_FACTOR_COLS;
+  // Aggregate factor_contr per region under current Universe mode
+  const fa=aggregateHoldingsBy(s.hold,h=>h.reg,factorCols,{mode:_aggMode});
+  // Sort regions by total |TE|, drop those with no holdings under universe
+  const totals=s.regions.map(r=>({n:r.n,abs:Math.abs(fa[r.n]?.tr||0)}));
+  totals.sort((a,b)=>b.abs-a.abs);
+  const regions=totals.map(t=>t.n).filter(n=>fa[n]&&fa[n].count>0);
+  const div=document.getElementById(divId);
+  if(!div)return;
+  if(!regions.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No regions match the current universe</p>';return;}
+  const shortFactor=f=>f==='Medium-Term Momentum'?'Mom':f==='Profitability'?'Prof':f==='Volatility'?'Vol':f==='Growth'?'Gro':f==='Dividend Yield'?'DivYld':f==='Earnings Yield'?'ErnYld':f==='Market Sensitivity'?'MktSens':f==='Exchange Rate Sensitivity'?'FXSens':f==='Liquidity'?'Liq':f==='Leverage'?'Lev':f;
+  const z=regions.map(r=>factorCols.map(f=>+(fa[r]?.factor?.[f]??0).toFixed(3)));
+  const absMax=Math.max(0.5,...z.flat().map(Math.abs));
+  const customdata=regions.map(r=>factorCols.map(f=>[r,f,(fa[r]?.factor?.[f]??0).toFixed(2)]));
+  const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
+  const h=Math.min(500,Math.max(220,regions.length*32+80));
+  div.style.height=h+'px';
+  Plotly.newPlot(divId,[{
+    type:'heatmap',
+    x:factorCols.map(shortFactor),
+    y:regions,
+    z:z,
+    colorscale:[[0,'#10b981'],[0.5,T.heatMid||'#1e293b'],[1,'#ef4444']],
+    zmin:-absMax,zmid:0,zmax:absMax,
+    customdata:customdata,
+    hovertemplate:'<b>%{customdata[0]}</b><br>Factor: <b>%{customdata[1]}</b><br>TE Contribution: %{customdata[2]}%<extra></extra>',
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
+    colorbar:{title:{text:'TE Contrib<br>(%)',font:{size:9,color:T.tick}},thickness:10,len:0.7,tickfont:{color:T.tick,size:9}},
+    xgap:1,ygap:1
+  }],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{color:T.tick,family:'DM Sans, system-ui',size:10},
+    xaxis:{side:'top',tickfont:{size:10,color:T.tick},showgrid:false,ticks:''},
+    yaxis:{autorange:'reversed',tickfont:{size:10,color:T.tick},showgrid:false,ticks:''},
+    margin:{l:130,r:60,t:50,b:10},
+    annotations:[{x:0.5,xref:'paper',y:1.08,yref:'paper',text:`Region × Factor TE Breakdown · ${aggLbl} universe · click any cell to drill`,showarrow:false,font:{size:10,color:T.tickH||T.tick},xanchor:'center'}]
+  },{displayModeBar:false,responsive:true});
+  const el=document.getElementById(divId);
+  if(el)el.on('plotly_click',function(e){
+    if(!e.points||!e.points[0])return;
+    const cd=e.points[0].customdata;
+    const rn=cd[0];
+    if(rn)oDr('reg',rn);
+  });
 }
 
 function rFacTopTeStrip(s){

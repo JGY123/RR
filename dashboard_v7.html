@@ -7125,21 +7125,111 @@ function showLoading(containerId){
 }
 
 function oDrFacRiskBreak(){
-  let facs=[...(cs.factors||[])].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).slice(0,5);
+  // 2026-04-29 rebuild — mirrors the Idio modal pattern (stat boxes + history
+  // chart + ranked breakdown), but for the factor side of TE.
   let m=$('metricModal');
+  const allFacs=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01);
+  const sortedByMag=[...allFacs].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+  const adders=[...allFacs].filter(f=>(f.c||0)>0).sort((a,b)=>(b.c||0)-(a.c||0));
+  const divers=[...allFacs].filter(f=>(f.c||0)<0).sort((a,b)=>(a.c||0)-(b.c||0));
+  const factorMCR=(cs.sum?.te!=null&&cs.sum?.pct_factor!=null)?cs.sum.te*cs.sum.pct_factor/100:null;
+  const factorPct=cs.sum?.pct_factor;
+  const decomp=_teDecompositionHistory()||[];
+  const validD=decomp.filter(e=>e.factor_te!=null);
+  const facVals=validD.map(e=>e.factor_te);
+  const facPctValsAll=validD.map(e=>e.factor_pct);
+  const _sd=arr=>{if(arr.length<2)return null;const m=arr.reduce((a,b)=>a+b,0)/arr.length;return Math.sqrt(arr.reduce((a,v)=>a+(v-m)**2,0)/arr.length);};
+  const facSDhist=_sd(facVals);
+  const facPctMin=facPctValsAll.length?Math.min(...facPctValsAll):null;
+  const facPctMax=facPctValsAll.length?Math.max(...facPctValsAll):null;
+  const topFac=sortedByMag[0];
+  const cardStyle='text-align:center;padding:10px 8px 8px;min-height:104px;display:flex;flex-direction:column;justify-content:center';
+  const labelStyle='font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px';
+  const subStyle='font-size:10px;color:var(--txt);margin-top:4px;letter-spacing:0.2px;line-height:1.3';
+  const sdStyle='font-size:9px;color:var(--textDim);margin-top:2px;letter-spacing:0.3px';
+  const bigNum='font-size:22px;font-weight:700;line-height:1';
+  const facRow=(f)=>{
+    const isAdds=(f.c||0)>=0;
+    const arrow=isAdds?'<span style="color:#fca5a5">▲</span>':'<span style="color:#86efac">▼</span>';
+    const c=isAdds?'var(--neg)':'var(--pos)';
+    const sign=isAdds?'+':'';
+    return `<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
+      <td style="color:var(--txth);font-weight:500">${f.n}</td>
+      <td class="r" style="color:var(--txt)">${f.a!=null?fp(f.a,2):'—'}</td>
+      <td class="r" style="font-weight:700;color:${c};font-family:'JetBrains Mono',monospace">${arrow} ${sign}${f2(f.c||0,1)}</td>
+    </tr>`;
+  };
   $('metricContent').innerHTML=`
-    <h2>Factor Risk — Top Contributors<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
-    <p style="font-size:11px;color:var(--txt);margin-bottom:12px">Top 5 factors by absolute TE contribution. Click a row for time series detail.</p>
-    <table><thead><tr><th>Factor</th><th class="r">Contrib to TE</th><th class="r">Active Exposure</th></tr></thead>
-    <tbody>${facs.map(f=>{
-      let isStyle=FAC_PRIMARY.has(f.n);
-      return`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
-        <td style="color:var(--txth);font-weight:500">${f.n}</td>
-        <td class="r" style="font-weight:700;color:${(f.c||0)>0?'var(--pos)':'var(--neg)'}">${f2(f.c,1)}%</td>
-        <td class="r">${f.a!=null?fp(f.a,2):'—'}</td>
-      </tr>`;
-    }).join('')}</tbody></table>`;
+    <h2>Factor Risk — ${cs.id||cs.name||''}<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px">
+      <div class="card" style="${cardStyle};border-top:2px solid var(--pri)">
+        <div style="${labelStyle}">Factor MCR</div>
+        <div style="${bigNum};color:var(--pri)">${factorMCR!=null?f2(factorMCR,1):'—'}</div>
+        <div style="${subStyle}">${facSDhist!=null?'σ '+f2(facSDhist,1)+' hist':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid var(--pos)">
+        <div style="${labelStyle}">Share of TE</div>
+        <div style="${bigNum};color:var(--pos)">${factorPct!=null?f2(factorPct,1)+'%':'—'}</div>
+        <div style="${subStyle}">${facPctMin!=null?'hist '+f2(facPctMin,0)+'–'+f2(facPctMax,0)+'%':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid #f59e0b">
+        <div style="${labelStyle}">Top contributor</div>
+        <div style="font-size:14px;font-weight:700;line-height:1.1;color:var(--txth);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${topFac?topFac.n:'—'}">${topFac?topFac.n.length>18?topFac.n.slice(0,17)+'…':topFac.n:'—'}</div>
+        <div style="${subStyle};color:${topFac&&(topFac.c||0)>=0?'var(--neg)':'var(--pos)'}">${topFac?(topFac.c||0>=0?'+':'')+f2(topFac.c||0,1)+'σ':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid var(--txth)">
+        <div style="${labelStyle}">Material factors</div>
+        <div style="${bigNum};color:var(--txth);font-size:18px">${allFacs.length}</div>
+        <div style="${subStyle}">${adders.length} add · ${divers.length} dvfy</div>
+        <div style="${sdStyle}">|σ| > 0.01</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:10px">
+      <div>
+        <div class="card-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="color:var(--neg)">▲</span> Adds Risk
+          <span style="font-size:10px;color:var(--txt);font-weight:400">${adders.length} factors · click to drill</span>
+        </div>
+        ${adders.length?`<table style="font-size:11px;width:100%"><thead><tr><th>Factor</th><th class="r">σ active</th><th class="r">TE %</th></tr></thead><tbody>${adders.slice(0,8).map(facRow).join('')}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">None</p>'}
+      </div>
+      <div>
+        <div class="card-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="color:var(--pos)">▼</span> Diversifies
+          <span style="font-size:10px;color:var(--txt);font-weight:400">${divers.length} factors · click to drill</span>
+        </div>
+        ${divers.length?`<table style="font-size:11px;width:100%"><thead><tr><th>Factor</th><th class="r">σ active</th><th class="r">TE %</th></tr></thead><tbody>${divers.slice(0,8).map(facRow).join('')}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">None</p>'}
+      </div>
+    </div>
+    <div class="card-title" style="margin-top:14px">Factor MCR History</div>
+    <div id="facHistChart" style="height:240px"></div>`;
   m.classList.add('show');
+  setTimeout(()=>{
+    const div=document.getElementById('facHistChart');
+    if(!div||!validD.length)return;
+    const dates=validD.map(e=>isoDate(e.d));
+    const facSeries=validD.map(e=>e.factor_te);
+    const teSeries=validD.map(e=>e.te);
+    const T=THEME();
+    const meanFac=facSeries.reduce((a,b)=>a+b,0)/facSeries.length;
+    Plotly.newPlot('facHistChart',[
+      {x:dates,y:teSeries,type:'scatter',mode:'lines',name:'Total TE',
+        line:{color:'rgba(148,163,184,0.4)',width:1,dash:'dot'},
+        hovertemplate:'%{x|%b %d %Y}<br>TE: %{y:.2f}%<extra></extra>'},
+      {x:dates,y:facSeries,type:'scatter',mode:'lines',name:'Factor MCR',
+        line:{color:'#6366f1',width:2.2},fill:'tozeroy',fillcolor:'rgba(99,102,241,0.18)',
+        hovertemplate:'%{x|%b %d %Y}<br>Factor MCR: %{y:.2f}<extra></extra>'}
+    ],{
+      paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+      font:{family:'DM Sans',color:T.tick,size:10},
+      margin:{l:40,r:18,t:18,b:30},
+      hovermode:'x unified',
+      legend:{orientation:'h',y:1.12,x:0.5,xanchor:'center',font:{size:9}},
+      xaxis:{type:'date',gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9},tickformat:'%b %Y',nticks:8},
+      yaxis:{title:{text:'%',font:{size:9}},gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9},rangemode:'tozero'},
+      shapes:[{type:'line',y0:meanFac,y1:meanFac,xref:'paper',x0:0,x1:1,line:{color:'rgba(99,102,241,0.5)',dash:'dash',width:1}}],
+      annotations:[{x:1,xref:'paper',y:meanFac,text:'avg factor',showarrow:false,font:{size:9,color:'#818cf8'},xanchor:'left',xshift:4}]
+    },{displayModeBar:false,responsive:true});
+  },80);
 }
 
 // ===== METRIC DRILL (Summary Card Click) =====

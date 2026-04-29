@@ -549,10 +549,37 @@ let _availDates=[];       // cached sorted available dates for current strategy
 // B109 Impact-period selector — global state, applies to every tile that displays factor Impact
 // Choices: 'latest' (most recent weekly snapshot — default), '1m' (last 4 weekly snaps),
 // '3m' (last 13), '6m' (last 26), '1y' (last 52), 'all' (full sample period via cimp)
-let _impactPeriod=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.impactPeriod'))||'latest';
+// 2026-04-29: default to 3M — single-week impact is too noisy to draw conclusions.
+// User: "1 week is too short, should be more something like 3 month".
+let _impactPeriod=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.impactPeriod'))||'m3';
 const IMPACT_PERIOD_LABELS={latest:'Last Wk',m1:'1M',m3:'3M',m6:'6M',y1:'1Y',all:'Full'};
 const IMPACT_PERIOD_WEEKS={latest:1,m1:4,m3:13,m6:26,y1:52,all:null};
-function getImpactPeriodLabel(){return IMPACT_PERIOD_LABELS[_impactPeriod]||'Last Wk';}
+function getImpactPeriodLabel(){return IMPACT_PERIOD_LABELS[_impactPeriod]||'3M';}
+
+// Avg of a field across the last N weekly snap_attrib entries. Used so the
+// Factor Risk Map's exposure axis and bubble size match the impact-axis
+// time horizon (3m impact paired with 3m avg exposure, etc.). Returns null
+// when data missing.
+function getAvgFieldForPeriod(factorName,field,period){
+  if(!cs||!cs.snap_attrib)return null;
+  const sa=cs.snap_attrib[factorName];
+  if(!sa||!sa.hist||!sa.hist.length)return null;
+  const n=IMPACT_PERIOD_WEEKS[period];
+  let slice;
+  if(period==='all'||!n)slice=sa.hist;
+  else slice=sa.hist.slice(-n);
+  if(!slice.length)return null;
+  const vals=slice.map(p=>+p[field]).filter(v=>v!=null&&isFinite(v));
+  if(!vals.length)return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+function getAvgActiveExpForPeriod(factorName,period){
+  // Active exposure = exp - bench_exp, averaged across the period
+  const e=getAvgFieldForPeriod(factorName,'exp',period);
+  const b=getAvgFieldForPeriod(factorName,'bench_exp',period);
+  if(e==null)return null;
+  return +(e-(b||0)).toFixed(3);
+}
 function setImpactPeriod(p){
   if(!IMPACT_PERIOD_LABELS[p])return;
   _impactPeriod=p;
@@ -3842,29 +3869,37 @@ function rFacButt(s){
   let facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
   const el=document.getElementById('facButtDiv');
   if(!facs.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor exposure data</p>';return;}
+  // Period-coherent: x = avg active exposure over period, y = period impact,
+  // size = avg risk contribution over period. So 3m impact pairs with 3m avg
+  // exposure (not point-in-time). Falls back to f.a / f.c when period === latest.
+  const isSnap=(_impactPeriod==='latest');
   facs=facs.map(f=>{
     const ipd=getImpactForPeriod(f.n,_impactPeriod);
-    return Object.assign({},f,{_y:ipd.v!=null?ipd.v:(f.imp!=null?f.imp:0)});
+    const avgExp=isSnap?(f.a||0):(getAvgActiveExpForPeriod(f.n,_impactPeriod)??(f.a||0));
+    const avgRC=isSnap?(f.c||0):(getAvgFieldForPeriod(f.n,'risk_contr',_impactPeriod)??(f.c||0));
+    return Object.assign({},f,{_y:ipd.v!=null?ipd.v:(f.imp!=null?f.imp:0),_xExp:avgExp,_szRC:avgRC});
   });
   const facPctT=s.sum?.pct_factor;
   const T=THEME();
-  const xVals=facs.map(f=>f.a||0);
+  const xVals=facs.map(f=>f._xExp||0);
   const yVals=facs.map(f=>f._y||0);
-  const cVals=facs.map(f=>f.c||0);
+  const cVals=facs.map(f=>f._szRC||0);
   const sizes=cVals.map(c=>Math.max(14,Math.min(56,Math.sqrt(Math.abs(c))*9+14)));
   const colors=cVals.map(c=>{
     if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}
     const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;
   });
   const yLab=getImpactPeriodLabel();
+  const expLbl=isSnap?'Active':`Avg active (${yLab})`;
+  const rcLbl=isSnap?'TE Contrib':`Avg TE contrib (${yLab})`;
   const hovertext=facs.map(f=>{
-    const dirHtml=(f.c||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
-    const sgnC=(f.c||0)>=0?'+':'';
-    const ofTE=`${sgnC}${f2(f.c||0,1)}% of TE`;
-    const ofFac=(facPctT&&facPctT>0)?` · ${sgnC}${f2((f.c||0)/facPctT*100,0)}% of Factor`:'';
-    const sgnA=(f.a||0)>=0?'+':'';
+    const dirHtml=(f._szRC||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+    const sgnSize=(f._szRC||0)>=0?'+':'';
+    const sgnExp=(f._xExp||0)>=0?'+':'';
     const sgnY=(f._y||0)>=0?'+':'';
-    return `<b>${f.n}</b><br>Active: ${sgnA}${f2(f.a||0,2)}σ · ${dirHtml}<br>${ofTE}${ofFac}<br>Impact (${yLab}): ${sgnY}${f2(f._y||0,2)}%`;
+    const ofTE=`${sgnSize}${f2(f._szRC||0,1)}% of TE`;
+    const ofFac=(facPctT&&facPctT>0)?` · ${sgnSize}${f2((f._szRC||0)/facPctT*100,0)}% of Factor`:'';
+    return `<b>${f.n}</b><br>${expLbl}: ${sgnExp}${f2(f._xExp||0,2)}σ · ${dirHtml}<br>${rcLbl}: ${ofTE}${ofFac}<br>Impact (${yLab}): ${sgnY}${f2(f._y||0,2)}%`;
   });
   const labels=facs.map(f=>{
     const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
@@ -3898,7 +3933,7 @@ function rFacButt(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    xaxis:{title:{text:'Active Exposure (σ) — UW ← → OW',font:{size:10,color:T.tick}},
+    xaxis:{title:{text:`${isSnap?'Active Exposure':'Avg Active Exposure'} (σ, ${yLab}) — UW ← → OW`,font:{size:10,color:T.tick}},
       range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
     yaxis:{title:{text:`Active-return contribution · ${yLab} (%) — paying off ↑`,font:{size:10,color:T.tick}},
       range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.2f'},
@@ -3993,28 +4028,32 @@ function openFacButtFullscreen(){
   m.classList.add('show');
   document.body.style.overflow='hidden';
   setTimeout(()=>{
-    // Reuse the inline render but target the FS div by temporarily swapping ID
-    // — cleaner: factor out inline body to take an optional divId. For now,
-    // do a direct render here matching rFacButt's quadrant.
+    // Period-coherent quadrant: x = avg active exposure over period,
+    // y = period impact, size = avg risk contribution over period.
+    const isSnapFS=(_impactPeriod==='latest');
     const facs=facsBase.map(f=>{
       const ipd=getImpactForPeriod(f.n,_impactPeriod);
-      return Object.assign({},f,{_y:ipd.v!=null?ipd.v:(f.imp!=null?f.imp:0)});
+      const avgExp=isSnapFS?(f.a||0):(getAvgActiveExpForPeriod(f.n,_impactPeriod)??(f.a||0));
+      const avgRC=isSnapFS?(f.c||0):(getAvgFieldForPeriod(f.n,'risk_contr',_impactPeriod)??(f.c||0));
+      return Object.assign({},f,{_y:ipd.v!=null?ipd.v:(f.imp!=null?f.imp:0),_xExp:avgExp,_szRC:avgRC});
     });
     const T=THEME();
-    const xVals=facs.map(f=>f.a||0);
+    const xVals=facs.map(f=>f._xExp||0);
     const yVals=facs.map(f=>f._y||0);
-    const cVals=facs.map(f=>f.c||0);
+    const cVals=facs.map(f=>f._szRC||0);
     const sizes=cVals.map(c=>Math.max(18,Math.min(72,Math.sqrt(Math.abs(c))*11+18)));
     const colors=cVals.map(c=>{if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;});
     const yLab=getImpactPeriodLabel();
+    const expLbl=isSnapFS?'Active':`Avg active (${yLab})`;
+    const rcLbl=isSnapFS?'TE Contrib':`Avg TE contrib (${yLab})`;
     const hovertext=facs.map(f=>{
-      const dirHtml=(f.c||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
-      const sgnC=(f.c||0)>=0?'+':'';
-      const ofTE=`${sgnC}${f2(f.c||0,1)}% of TE`;
-      const ofFac=(facPctT&&facPctT>0)?` · ${sgnC}${f2((f.c||0)/facPctT*100,0)}% of Factor`:'';
-      const sgnA=(f.a||0)>=0?'+':'';
+      const dirHtml=(f._szRC||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+      const sgnSize=(f._szRC||0)>=0?'+':'';
+      const ofTE=`${sgnSize}${f2(f._szRC||0,1)}% of TE`;
+      const ofFac=(facPctT&&facPctT>0)?` · ${sgnSize}${f2((f._szRC||0)/facPctT*100,0)}% of Factor`:'';
+      const sgnExp=(f._xExp||0)>=0?'+':'';
       const sgnY=(f._y||0)>=0?'+':'';
-      return `<b>${f.n}</b><br>Active: ${sgnA}${f2(f.a||0,2)}σ · ${dirHtml}<br>${ofTE}${ofFac}<br>Impact (${yLab}): ${sgnY}${f2(f._y||0,2)}%`;
+      return `<b>${f.n}</b><br>${expLbl}: ${sgnExp}${f2(f._xExp||0,2)}σ · ${dirHtml}<br>${rcLbl}: ${ofTE}${ofFac}<br>Impact (${yLab}): ${sgnY}${f2(f._y||0,2)}%`;
     });
     const labels=facs.map(f=>{
       const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
@@ -4047,7 +4086,7 @@ function openFacButtFullscreen(){
       paper_bgcolor:'transparent',plot_bgcolor:'transparent',
       font:{family:'DM Sans, system-ui',color:T.tick,size:10},
       margin:{l:60,r:30,t:30,b:50},
-      xaxis:{title:{text:'Active Exposure (σ) — UW ← → OW',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},
+      xaxis:{title:{text:`${isSnapFS?'Active Exposure':'Avg Active Exposure'} (σ, ${yLab}) — UW ← → OW`,font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},
       yaxis:{title:{text:`Active-return contribution · ${yLab} (%) — paying off ↑`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f'},
       shapes,annotations,showlegend:false
     },{displayModeBar:false,responsive:true});

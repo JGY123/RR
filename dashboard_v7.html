@@ -1398,7 +1398,6 @@ function rExp(){
     <div class="sum-card ${teClass}" onclick="oDrMetric('te')" tabindex="0" role="button" aria-label="Tracking Error trend">
       <div class="label tip" data-tip="Annualized standard deviation of excess returns vs benchmark">Tracking Error</div>
       <div class="value" style="${ws.te>=10?'color:var(--neg)':ws.te<5?'color:var(--warn)':'color:var(--pos)'}">${f2(ws.te,1)}${riskDelta(ws.te,prevWs&&prevWs.te,1)}</div>
-      <div class="sub">${gt(s.hist.sum,'te')} ${s.hist.sum.length} wk trend</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('idio')" tabindex="0" role="button" aria-label="Idiosyncratic risk breakdown">
       <div class="label tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: RiskM section &lsquo;% Asset Specific Risk&rsquo; column for the current week. Shows &mdash; for historical weeks where the per-week value isn&rsquo;t shipped.">Idiosyncratic Risk</div>

@@ -2878,6 +2878,9 @@ function _rerenderAggTiles(){
     // 2026-04-29: cardRegions heatmap when chart-view is on
     const rgc=document.getElementById('regChartDiv');
     if(rgc&&rgc.offsetParent!==null&&typeof rRegChart==='function')rRegChart(cs);
+    // 2026-04-29: cardGroups treemap when chart-view is on
+    const grc=document.getElementById('grpChartDiv');
+    if(grc&&grc.offsetParent!==null&&typeof rGroupChart==='function')rGroupChart(cs);
   }
 }
 function setAvgMode(m){
@@ -4199,41 +4202,100 @@ function rCountryChart(s,divId){
 }
 
 function rGroupChart(s,divId){
-  // 2026-04-29: divId param so the same renderer powers both the inline cardGroups
-  // chart and the chart-FS modal (#grpFsChartDiv). Defaults to inline div.
+  // 2026-04-29 round 1 rebuild — Group → Sub-group hierarchical treemap.
+  // What makes Redwood Groups unique vs sectors/regions/countries is the
+  // PARENT (g) → CHILD (sg) hierarchy defined in GROUPS_DEF. The old bar chart
+  // duplicated info in the table and ignored that structure entirely.
+  // Treemap encoding:
+  //   - Top-level rectangles = parent groups (CYCLICALS, DEFENSIVE, GROWTH,
+  //     COMMODITY, RATE SENSITIVE)
+  //   - Child cells = sub-groups (HARD CYCLICAL, GROWTH CYCLICAL, etc.)
+  //   - Cell size = portfolio weight
+  //   - Cell color = active weight (signed, diverging green=OW / red=UW)
+  //   - Click any sub-group cell → oDrGroup(name) drill
   divId=divId||'grpChartDiv';
   if(!s.groups||!s.groups.length)return;
-  let d=s.groups.filter(g=>g.n&&g.n!=='[Cash]');
-  if(!d.length)return;
-  let names=d.map(g=>g.n);
-  let pvals=d.map(g=>+(g.p||0).toFixed(2));
-  let bvals=d.map(g=>+(g.b||0).toFixed(2));
-  let h=Math.max(220,d.length*36+80);
-  let el=document.getElementById(divId);if(el)el.style.height=h+'px';
-  let maxW=Math.max(...pvals,...bvals,5);
-  let xmax=Math.ceil((maxW+5)/5)*5;
-  let tvStep=xmax>=20?5:2;
-  let tickVals=[0],tickText=['0'];
-  for(let v=tvStep;v<=xmax;v+=tvStep){tickVals.push(v,-v);tickText.push(v+'%',v+'%');}
-  Plotly.newPlot(divId,[
-    {name:'Portfolio',type:'bar',orientation:'h',y:names,x:pvals.map(v=>-v),
-     marker:{color:'rgba(99,102,241,0.85)'},customdata:pvals,
-     hovertemplate:'<b>%{y}</b><br>Portfolio: %{customdata:.1f}%<extra></extra>'},
-    {name:'Benchmark',type:'bar',orientation:'h',y:names,x:bvals,
-     marker:{color:'rgba(75,85,99,0.85)'},
-     hovertemplate:'<b>%{y}</b><br>Benchmark: %{x:.1f}%<extra></extra>'}
-  ],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:THEME().tick,size:11},height:h,barmode:'overlay',
-    margin:{l:10,r:20,t:30,b:30},
-    yaxis:{gridcolor:THEME().grid,zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:THEME().tickH},automargin:true},
-    xaxis:{gridcolor:THEME().grid,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2,
-           range:[-xmax,xmax],tickmode:'array',tickvals:tickVals,ticktext:tickText,
-           tickfont:{color:THEME().tick,size:10}},
-    legend:{orientation:'h',y:1.05,x:0.5,xanchor:'center',font:{size:10},bgcolor:'transparent'}
-  },plotCfg);
-  let grpEl=document.getElementById(divId);
-  if(grpEl&&grpEl.on)grpEl.on('plotly_click',d=>{let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n)oDrGroup(n);});
+  const subgroups=s.groups.filter(g=>g.n&&g.n!=='[Cash]');
+  if(!subgroups.length)return;
+  // Build sub-group → parent map from GROUPS_DEF
+  const sgToParent={};
+  GROUPS_DEF.forEach(gd=>{sgToParent[gd.sg]=gd.g;});
+  // Aggregate parent values from constituent sub-groups
+  const parentSum={};
+  subgroups.forEach(g=>{
+    const p=sgToParent[g.n];
+    if(!p)return;
+    if(!parentSum[p])parentSum[p]={p:0,b:0,a:0,count:0};
+    parentSum[p].p+=(g.p||0);
+    parentSum[p].b+=(g.b||0);
+    parentSum[p].a+=(g.a||0);
+    parentSum[p].count++;
+  });
+  const parents=Object.keys(parentSum);
+  // Build treemap arrays — use unique ids since "DEFENSIVE"/"GROWTH"/"COMMODITY"
+  // are both parent labels AND sub-group labels (label collision)
+  const ids=[],labels=[],parentRefs=[],values=[],colors=[],customdata=[];
+  // Parent rows
+  parents.forEach(pn=>{
+    const ps=parentSum[pn];
+    ids.push('g:'+pn);
+    labels.push(pn);
+    parentRefs.push('');
+    values.push(+(ps.p||0).toFixed(2));
+    colors.push(ps.a||0);
+    customdata.push([pn,'Group',+(ps.p||0).toFixed(1),+(ps.b||0).toFixed(1),+(ps.a||0).toFixed(1),ps.count]);
+  });
+  // Sub-group children
+  subgroups.forEach(g=>{
+    const pn=sgToParent[g.n]||'(Unmapped)';
+    ids.push('sg:'+g.n);
+    labels.push(g.n);
+    parentRefs.push('g:'+pn);
+    values.push(+(g.p||0).toFixed(2));
+    colors.push(g.a||0);
+    customdata.push([g.n,'Sub-group',+(g.p||0).toFixed(1),+(g.b||0).toFixed(1),+(g.a||0).toFixed(1),null]);
+  });
+  const T=THEME();
+  const div=document.getElementById(divId);
+  if(!div)return;
+  // Adaptive height
+  const h=Math.min(560,Math.max(280,parents.length*60+subgroups.length*22+80));
+  div.style.height=h+'px';
+  const absMaxA=Math.max(0.5,...colors.map(Math.abs));
+  Plotly.newPlot(divId,[{
+    type:'treemap',
+    ids:ids,labels:labels,parents:parentRefs,values:values,
+    branchvalues:'total',
+    marker:{
+      colors:colors,
+      colorscale:[[0,'#ef4444'],[0.5,T.heatMid||'#1e293b'],[1,'#10b981']],
+      cmin:-absMaxA,cmid:0,cmax:absMaxA,
+      line:{color:T.grid||'rgba(148,163,184,0.18)',width:1},
+      colorbar:{title:{text:'Active<br>Wt %',font:{size:9,color:T.tick}},thickness:10,len:0.6,tickfont:{color:T.tick,size:9}}
+    },
+    textinfo:'label+value',
+    texttemplate:'<b>%{label}</b><br>%{value:.1f}%',
+    textfont:{color:T.txth||'#f1f5f9',family:'DM Sans, system-ui',size:11},
+    customdata:customdata,
+    hovertemplate:'<b>%{customdata[0]}</b> (%{customdata[1]})<br>Port: %{customdata[2]:.1f}%<br>Bench: %{customdata[3]:.1f}%<br>Active: %{customdata[4]:+.1f}%<extra></extra>',
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
+    pathbar:{visible:false}
+  }],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{color:T.tick,family:'DM Sans, system-ui',size:10},
+    margin:{l:6,r:6,t:30,b:6},
+    annotations:[{x:0.5,xref:'paper',y:1.05,yref:'paper',text:`Parent group → sub-group hierarchy · cell size = port wt · color = active wt · click sub-group to drill`,showarrow:false,font:{size:10,color:T.tickH||T.tick},xanchor:'center'}]
+  },{displayModeBar:false,responsive:true});
+  const grpEl=document.getElementById(divId);
+  if(grpEl&&grpEl.on)grpEl.on('plotly_click',e=>{
+    if(!e.points||!e.points[0])return;
+    const id=e.points[0].id||'';
+    // Only drill on sub-group clicks (parent group rectangles roll up sub-groups)
+    if(id.startsWith('sg:')){
+      const sgName=id.slice(3);
+      oDrGroup(sgName);
+    }
+  });
 }
 
 function rScat(s){

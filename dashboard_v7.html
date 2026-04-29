@@ -7236,6 +7236,14 @@ function oDrFacRiskBreak(){
 let _metricRange='All';
 let _facDrillRange='All';
 
+// Ordinal suffix helper — "62nd" not "62th"
+function _ord(n){
+  if(n==null)return'';
+  const a=n%100;
+  if(a>=11&&a<=13)return'th';
+  switch(n%10){case 1:return'st';case 2:return'nd';case 3:return'rd';default:return'th';}
+}
+
 // 2026-04-29: per-period TE decomposition (idio vs factor) from cs.hist.sec.
 // Σ tr across sectors = 100% per week (already verified); Σ mcr = idio share,
 // (Σ tr - Σ mcr) = factor share. Multiply weekly TE by share to get absolute %.
@@ -7783,13 +7791,13 @@ function oDrMetric(metric,range){
       </div>
       <div class="card" data-tebox="tepct" onclick="_setTEBox('tepct')" title="Where the current TE level sits in the historical TE distribution. Click for histogram." style="${cardStyle};border-top:2px solid var(--txth)">
         <div style="${labelStyle}">TE Percentile</div>
-        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">th</span>':'—'}</div>
+        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">'+_ord(pctile)+'</span>':'—'}</div>
         <div style="${subStyle}">${pctileLabel}</div>
         <div style="${sdStyle}">vs ${numVals.length} wks</div>
       </div>
       <div class="card" data-tebox="ratiopct" onclick="_setTEBox('ratiopct')" title="Where the current Idio/Factor ratio sits historically. 90th = unusually idio-driven; 10th = unusually factor-driven." style="${cardStyle};border-top:2px solid #f59e0b">
         <div style="${labelStyle}">Ratio Percentile</div>
-        <div style="${bigNum};color:#f59e0b">${ratioPctile!=null?ratioPctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">th</span>':'—'}</div>
+        <div style="${bigNum};color:#f59e0b">${ratioPctile!=null?ratioPctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">'+_ord(ratioPctile)+'</span>':'—'}</div>
         <div style="${subStyle}">${rpctLabel}</div>
         <div style="${sdStyle}">on idio share</div>
       </div>
@@ -7797,6 +7805,56 @@ function oDrMetric(metric,range){
     <div id="teBoxDetail" style="margin-bottom:10px"></div>`;
     // Stash the data the inline detail handlers need (to avoid recomputing)
     window._teModalCtx={idioPctVals,numVals,decomp:validD,idioPct,facPct,current,pctile,ratioPctile};
+  }else if(metric==='beta'){
+    // 2026-04-29: Beta-specific stat layout. Beta is interpreted relative to
+    // 1.0 (market neutral), so the headline values are the current value, the
+    // active beta (Δ from 1.0), the variant spread (multiple beta measures),
+    // and the percentile in historical distribution.
+    const variants=cs.sum?.betas||{};
+    const variantValues=Object.values(variants).filter(v=>v!=null&&isFinite(v));
+    const variantMin=variantValues.length?Math.min(...variantValues):null;
+    const variantMax=variantValues.length?Math.max(...variantValues):null;
+    const activeBeta=current!=null?current-1.0:null;
+    const activeAbs=activeBeta!=null?Math.abs(activeBeta):null;
+    const activeLabel=activeAbs==null?'—':activeAbs<0.05?'neutral':activeAbs<0.10?'slight tilt':activeAbs<0.15?'active tilt':'aggressive bet';
+    const activeColor=activeBeta==null?'var(--txth)':activeAbs<0.05?'var(--pos)':activeAbs<0.10?'#fbbf24':activeAbs<0.15?'#f59e0b':'var(--neg)';
+    let pctile=null;
+    if(current!=null&&numVals.length){
+      const below=numVals.filter(v=>v<current).length;
+      pctile=Math.round(below/numVals.length*100);
+    }
+    const pctileLabel=pctile==null?'—':pctile>=90?'unusually high':pctile>=70?'elevated':pctile>=30?'mid-range':pctile>=10?'subdued':'unusually low';
+    const cardStyle='text-align:center;padding:10px 8px 8px;min-height:104px;display:flex;flex-direction:column;justify-content:center';
+    const labelStyle='font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px';
+    const subStyle='font-size:10px;color:var(--txt);margin-top:4px;letter-spacing:0.2px;line-height:1.3';
+    const sdStyle='font-size:9px;color:var(--textDim);margin-top:2px;letter-spacing:0.3px';
+    const bigNum='font-size:22px;font-weight:700;line-height:1';
+    statHtml=`<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:10px">
+      <div class="card" style="${cardStyle};border-top:2px solid var(--cyan,#06b6d4)">
+        <div style="${labelStyle}">Current Beta</div>
+        <div style="${bigNum};color:var(--txth)">${f2(current,3)}</div>
+        <div style="${subStyle}">${activeBeta!=null?'Δ '+(activeBeta>=0?'+':'')+f2(activeBeta,3)+' vs 1.0':''}</div>
+        <div style="${sdStyle}">${stddev>0?'σ '+f2(stddev,3)+' hist':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid ${activeColor}">
+        <div style="${labelStyle}">Active Beta</div>
+        <div style="${bigNum};color:${activeColor}">${activeBeta!=null?(activeBeta>=0?'+':'')+f2(activeBeta,3):'—'}</div>
+        <div style="${subStyle}">${activeLabel}</div>
+        <div style="${sdStyle}">|β−1.0| · ${activeBeta!=null&&stddev>0?f2(activeAbs/stddev,1)+'σ':''}</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid #f59e0b">
+        <div style="${labelStyle}">Variant Spread</div>
+        <div style="${bigNum};color:var(--txth);font-size:16px">${variantMin!=null?f2(variantMin,2)+' ↔ '+f2(variantMax,2):'—'}</div>
+        <div style="${subStyle}">${variantValues.length} measure${variantValues.length===1?'':'s'} loaded</div>
+        <div style="${sdStyle}">click rows below to overlay</div>
+      </div>
+      <div class="card" style="${cardStyle};border-top:2px solid var(--txth)">
+        <div style="${labelStyle}">Beta Percentile</div>
+        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:13px;color:var(--txt);font-weight:500\">'+_ord(pctile)+'</span>':'—'}</div>
+        <div style="${subStyle}">${pctileLabel}</div>
+        <div style="${sdStyle}">vs ${numVals.length} wks · range ${f2(min,2)}↔${f2(max,2)}</div>
+      </div>
+    </div>`;
   }else{
     statHtml=`<div class="grid g4" style="margin-bottom:12px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current</div><div style="font-size:18px;font-weight:700;color:${valColor}">${f2(current,dec)}${units[metric]}</div></div>

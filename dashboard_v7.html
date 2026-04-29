@@ -7398,32 +7398,36 @@ function oDrMetric(metric,range){
       pctile=Math.round(below/numVals.length*100);
     }
     const pctileLabel=pctile==null?'—':(pctile>=90?'very high':pctile>=70?'elevated':pctile>=30?'mid-range':pctile>=10?'subdued':'very low');
-    statHtml=`<div class="grid g4" style="margin-bottom:12px">
-      <div class="card" style="text-align:center;padding:10px 12px">
-        <div class="label" style="font-size:10px;margin-bottom:4px">Current</div>
-        <div style="font-size:26px;font-weight:700;color:${valColor};line-height:1.1">${f2(current,dec)}${units[metric]}</div>
-        <div style="display:flex;gap:6px;justify-content:center;margin-top:6px;font-size:9px;color:var(--txt)">
-          <span>Avg ${f2(avg,2)}%</span>
-          <span style="opacity:0.4">·</span>
-          <span style="color:var(--pos)">Min ${f2(min,2)}</span>
-          <span style="opacity:0.4">·</span>
-          <span style="color:var(--neg)">Max ${f2(max,2)}</span>
+    const cardStyle='text-align:center;padding:12px 12px 10px;min-height:96px;display:flex;flex-direction:column;justify-content:center';
+    const labelStyle='font-size:10px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px';
+    const subStyle='font-size:10px;color:var(--txt);margin-top:5px;letter-spacing:0.2px';
+    const bigNum='font-size:24px;font-weight:700;line-height:1';
+    statHtml=`<div class="grid g4" style="margin-bottom:12px;gap:8px">
+      <div class="card" style="${cardStyle};border-top:2px solid ${valColor}">
+        <div style="${labelStyle}">Current TE</div>
+        <div style="${bigNum};color:${valColor}">${f2(current,1)}${units[metric]}</div>
+        <div style="display:flex;gap:6px;justify-content:center;${subStyle}">
+          <span>Avg ${f2(avg,1)}</span>
+          <span style="opacity:0.35">·</span>
+          <span style="color:var(--pos)">Min ${f2(min,1)}</span>
+          <span style="opacity:0.35">·</span>
+          <span style="color:var(--neg)">Max ${f2(max,1)}</span>
         </div>
       </div>
-      <div class="card tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: Σ MCR across sectors / Σ TR across sectors per period — same as cs.sum.pct_specific. The big number is the share %; the small number is the absolute MCR." style="text-align:center;padding:10px 12px">
-        <div class="label" style="font-size:10px;margin-bottom:4px">Idiosyncratic</div>
-        <div style="font-size:22px;font-weight:700;color:var(--acc);line-height:1.1">${idioPct!=null?f2(idioPct,1)+'%':'—'}</div>
-        <div style="font-size:11px;color:var(--txt);margin-top:4px">${idioMCR!=null?'MCR '+f2(idioMCR,2):''}</div>
+      <div class="card tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: Σ MCR across sectors / Σ TR per period — same as cs.sum.pct_specific. Big number = share % of TE; small number = absolute MCR." style="${cardStyle};border-top:2px solid var(--acc)">
+        <div style="${labelStyle}">Idiosyncratic</div>
+        <div style="${bigNum};color:var(--acc)">${idioPct!=null?f2(idioPct,1)+'%':'—'}</div>
+        <div style="${subStyle}">${idioMCR!=null?'MCR '+f2(idioMCR,1):''}</div>
       </div>
-      <div class="card tip" data-tip="Factor-driven portion of tracking error. Computed as 100% − Idiosyncratic share (Σ TR per period sums to 100% — verified). The big number is the share %; the small number is the absolute MCR." style="text-align:center;padding:10px 12px">
-        <div class="label" style="font-size:10px;margin-bottom:4px">Factor</div>
-        <div style="font-size:22px;font-weight:700;color:var(--pri);line-height:1.1">${facPct!=null?f2(facPct,1)+'%':'—'}</div>
-        <div style="font-size:11px;color:var(--txt);margin-top:4px">${facMCR!=null?'MCR '+f2(facMCR,2):''}</div>
+      <div class="card tip" data-tip="Factor-driven portion of tracking error. Computed as 100% − Idiosyncratic share. Big number = share % of TE; small number = absolute MCR." style="${cardStyle};border-top:2px solid var(--pri)">
+        <div style="${labelStyle}">Factor</div>
+        <div style="${bigNum};color:var(--pri)">${facPct!=null?f2(facPct,1)+'%':'—'}</div>
+        <div style="${subStyle}">${facMCR!=null?'MCR '+f2(facMCR,1):''}</div>
       </div>
-      <div class="card tip" data-tip="Where the current TE sits in the historical distribution. 90th = unusually high; 50th = median; 10th = unusually low." style="text-align:center;padding:10px 12px">
-        <div class="label" style="font-size:10px;margin-bottom:4px">Percentile</div>
-        <div style="font-size:22px;font-weight:700;color:var(--txth);line-height:1.1">${pctile!=null?pctile+'%':'—'}</div>
-        <div style="font-size:10px;color:var(--txt);margin-top:4px">${pctileLabel} · ${numVals.length} wks</div>
+      <div class="card tip" data-tip="Where the current TE level sits in the historical distribution of weekly TE values (not the idio/factor ratio). 90th = unusually high TE; 50th = median; 10th = unusually low." style="${cardStyle};border-top:2px solid var(--txth)">
+        <div style="${labelStyle}">TE Percentile</div>
+        <div style="${bigNum};color:var(--txth)">${pctile!=null?pctile+'<span style=\"font-size:14px;color:var(--txt);font-weight:500\">th</span>':'—'}</div>
+        <div style="${subStyle}">${pctileLabel} · vs ${numVals.length} wks</div>
       </div>
     </div>`;
   }else{

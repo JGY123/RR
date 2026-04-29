@@ -7199,7 +7199,7 @@ function _setTEBox(name){
     const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
     const top=factors.slice(0,8);
     if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No factor TE contributions available.</div>';}
-    else body=`<div id="teFacPieDiv" style="height:170px"></div>`;
+    else body=`<div id="teFacPieDiv" style="height:240px"></div>`;
   }else if(_teActiveBox==='tepct'){
     body=`<div id="teHistDiv" style="height:120px"></div>`;
   }else if(_teActiveBox==='ratiopct'){
@@ -7223,11 +7223,33 @@ function _setTEBox(name){
     const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).slice(0,8);
     const labels=factors.map(f=>f.n);
     const vals=factors.map(f=>Math.abs(f.c||0));
-    Plotly.newPlot('teFacPieDiv',[{type:'pie',labels,values:vals,hole:0.55,
-      textinfo:'label+percent',textposition:'outside',textfont:{size:10,color:'#cbd5e1'},
-      marker:{colors:['#6366f1','#a78bfa','#10b981','#22c55e','#eab308','#f97316','#ef4444','#ec4899'],line:{color:'rgba(15,23,42,0.4)',width:1}},
-      hovertemplate:'<b>%{label}</b><br>|TE Contribution|: %{value:.2f}%<br>%{percent}<extra></extra>'
-    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:10},margin:{l:80,r:80,t:8,b:8},showlegend:false},{displayModeBar:false,responsive:true});
+    // Signed color scheme: red shades = factor adds risk (c>0); green shades
+    // = diversifies (c<0). Uses dashboard --pos / --neg palette so it matches
+    // the rest of the modal. Most-impactful factor on each side gets the
+    // strongest shade, descending tones from there.
+    const adds=['#ef4444','#f87171','#fca5a5','#fecaca'];
+    const divs=['#10b981','#34d399','#6ee7b7','#a7f3d0'];
+    let aIdx=0,dIdx=0;
+    const colors=factors.map(f=>{
+      if((f.c||0)>=0)return adds[Math.min(adds.length-1,aIdx++)];
+      return divs[Math.min(divs.length-1,dIdx++)];
+    });
+    const cd=factors.map(f=>[f.n,(f.c||0)>=0?'adds risk':'diversifies',+(f.c||0).toFixed(2)]);
+    Plotly.newPlot('teFacPieDiv',[{type:'pie',labels,values:vals,hole:0.6,
+      textinfo:'label+percent',textposition:'inside',insidetextorientation:'radial',
+      textfont:{size:10,color:'#0f172a',family:'DM Sans'},
+      marker:{colors:colors,line:{color:'rgba(15,23,42,0.65)',width:1.5}},
+      customdata:cd,
+      hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[1]} (%{customdata[2]:+.2f}%)<br>%{percent} of |TE|<extra></extra>',
+      hoverlabel:{bgcolor:'rgba(15,23,42,0.95)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11}},
+      sort:false
+    }],{
+      paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+      font:{family:'DM Sans',color:'#cbd5e1',size:10},
+      margin:{l:18,r:18,t:8,b:30},
+      showlegend:true,
+      legend:{orientation:'h',y:-0.05,x:0.5,xanchor:'center',font:{size:9,color:'#94a3b8'},itemwidth:30}
+    },{displayModeBar:false,responsive:true});
   }else if(_teActiveBox==='tepct'){
     Plotly.newPlot('teHistDiv',[{type:'histogram',x:ctx.numVals,nbinsx:30,
       marker:{color:'rgba(168,85,247,0.45)',line:{color:'rgba(168,85,247,0.8)',width:0.5}},

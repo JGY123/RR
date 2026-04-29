@@ -7146,6 +7146,33 @@ function oDrFacRiskBreak(){
 let _metricRange='All';
 let _facDrillRange='All';
 
+// 2026-04-29: per-period TE decomposition (idio vs factor) from cs.hist.sec.
+// Σ tr across sectors = 100% per week (already verified); Σ mcr = idio share,
+// (Σ tr - Σ mcr) = factor share. Multiply weekly TE by share to get absolute %.
+// Same calculation FactSet uses for cs.sum.pct_specific (_pct_specific_source =
+// "sum_sector_mcr"), applied per week via the historical sector data.
+function _teDecompositionHistory(){
+  if(!cs||!cs.hist||!cs.hist.sec||!cs.hist.sum)return null;
+  const histSec=cs.hist.sec;
+  const histSum=cs.hist.sum;
+  const byDate={};
+  Object.keys(histSec).forEach(s=>{
+    (histSec[s]||[]).forEach(e=>{
+      if(!byDate[e.d])byDate[e.d]={tr:0,mcr:0};
+      byDate[e.d].tr+=(e.tr||0);
+      byDate[e.d].mcr+=(e.mcr||0);
+    });
+  });
+  return histSum.map(h=>{
+    const split=byDate[h.d];
+    if(!split||!split.tr||h.te==null)return{d:h.d,te:h.te,idio_te:null,factor_te:null};
+    const idioShare=split.mcr/split.tr;
+    const idio_te=+(h.te*idioShare).toFixed(3);
+    const factor_te=+(h.te-idio_te).toFixed(3);
+    return{d:h.d,te:h.te,idio_te,factor_te,idio_pct:+(idioShare*100).toFixed(1),factor_pct:+((1-idioShare)*100).toFixed(1)};
+  });
+}
+
 function oDrMetric(metric,range){
   let m=$('metricModal');
 
@@ -7354,14 +7381,63 @@ function oDrMetric(metric,range){
   }
 
   let rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_metricRange===r?' active':''}" onclick="oDrMetric('${metric}','${r}')">${r}</button>`).join('');
-  $('metricContent').innerHTML=`
-    <h2>${labels[metric]||metric}<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
-    <div class="grid g4" style="margin-bottom:12px">
+
+  // 2026-04-29: TE-specific stat layout — Current is the headline, Avg/Min/Max
+  // collapse into a single small row beneath it, freeing up boxes 2 & 3 for
+  // Idiosyncratic + Factor split (% share + MCR value), and box 4 for the
+  // historical percentile of the current TE.
+  let statHtml;
+  if(metric==='te'){
+    const idioPct=cs.sum?.pct_specific;
+    const facPct=cs.sum?.pct_factor;
+    const idioMCR=(idioPct!=null&&current!=null)?current*idioPct/100:null;
+    const facMCR=(facPct!=null&&current!=null)?current*facPct/100:null;
+    let pctile=null;
+    if(current!=null&&numVals.length){
+      const below=numVals.filter(v=>v<current).length;
+      pctile=Math.round(below/numVals.length*100);
+    }
+    const pctileLabel=pctile==null?'—':(pctile>=90?'very high':pctile>=70?'elevated':pctile>=30?'mid-range':pctile>=10?'subdued':'very low');
+    statHtml=`<div class="grid g4" style="margin-bottom:12px">
+      <div class="card" style="text-align:center;padding:10px 12px">
+        <div class="label" style="font-size:10px;margin-bottom:4px">Current</div>
+        <div style="font-size:26px;font-weight:700;color:${valColor};line-height:1.1">${f2(current,dec)}${units[metric]}</div>
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:6px;font-size:9px;color:var(--txt)">
+          <span>Avg ${f2(avg,2)}%</span>
+          <span style="opacity:0.4">·</span>
+          <span style="color:var(--pos)">Min ${f2(min,2)}</span>
+          <span style="opacity:0.4">·</span>
+          <span style="color:var(--neg)">Max ${f2(max,2)}</span>
+        </div>
+      </div>
+      <div class="card tip" data-tip="Stock-specific (idiosyncratic) portion of tracking error. Source: Σ MCR across sectors / Σ TR across sectors per period — same as cs.sum.pct_specific. Both percentage of TE and absolute MCR are shown." style="text-align:center;padding:10px 12px">
+        <div class="label" style="font-size:10px;margin-bottom:4px">Idiosyncratic</div>
+        <div style="font-size:22px;font-weight:700;color:var(--acc);line-height:1.1">${idioPct!=null?f2(idioPct,1)+'%':'—'}</div>
+        <div style="font-size:11px;color:var(--txt);margin-top:4px">${idioMCR!=null?f2(idioMCR,2)+'% of TE':''}</div>
+      </div>
+      <div class="card tip" data-tip="Factor-driven portion of tracking error. Computed as 100% − Idiosyncratic share (Σ TR per period sums to 100% — verified)." style="text-align:center;padding:10px 12px">
+        <div class="label" style="font-size:10px;margin-bottom:4px">Factor</div>
+        <div style="font-size:22px;font-weight:700;color:var(--pri);line-height:1.1">${facPct!=null?f2(facPct,1)+'%':'—'}</div>
+        <div style="font-size:11px;color:var(--txt);margin-top:4px">${facMCR!=null?f2(facMCR,2)+'% of TE':''}</div>
+      </div>
+      <div class="card tip" data-tip="Where the current TE sits in the historical distribution. 90th = unusually high; 50th = median; 10th = unusually low." style="text-align:center;padding:10px 12px">
+        <div class="label" style="font-size:10px;margin-bottom:4px">Percentile</div>
+        <div style="font-size:22px;font-weight:700;color:var(--txth);line-height:1.1">${pctile!=null?pctile+'%':'—'}</div>
+        <div style="font-size:10px;color:var(--txt);margin-top:4px">${pctileLabel} · ${numVals.length} wks</div>
+      </div>
+    </div>`;
+  }else{
+    statHtml=`<div class="grid g4" style="margin-bottom:12px">
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Current</div><div style="font-size:18px;font-weight:700;color:${valColor}">${f2(current,dec)}${units[metric]}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Avg</div><div style="font-size:18px;font-weight:700;color:var(--txt)">${f2(avg,dec)}${units[metric]}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Min</div><div style="font-size:18px;font-weight:700;color:var(--pos)">${f2(min,dec)}</div></div>
       <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Max</div><div style="font-size:18px;font-weight:700;color:var(--neg)">${f2(max,dec)}</div></div>
-    </div>
+    </div>`;
+  }
+
+  $('metricContent').innerHTML=`
+    <h2>${labels[metric]||metric}<button class="close" onclick="$('metricModal').classList.remove('show')">&times;</button></h2>
+    ${statHtml}
     <div class="range-btns">${rangeBtns}</div>
     <div style="font-size:10px;color:var(--txt);margin-bottom:6px">Since ${inception} | ${fullHist.length} wks total | Showing: ${hist.length} wks</div>
     <div id="metricChartDiv" style="height:300px"></div>
@@ -7386,9 +7462,38 @@ function oDrMetric(metric,range){
     let xaxis={...plotBg.xaxis,tickangle:0,nticks:maxTicks,tickformat:'%b %Y',tickfont:{size:10,color:THEME().tick}};
     let fillColor=metric==='beta'?'rgba(99,102,241,.04)':'rgba(99,102,241,.08)';
     let fill=metric==='beta'?'none':'tozeroy';
-    // Build traces: [upper_band, lower_band(fill), main_line]
+    // Build traces.
+    // 2026-04-29: for TE specifically, stack idio + factor breakdown UNDER the
+    // line so the user can see the composition shift over time. Idio at base,
+    // factor stacked on top — sums exactly to TE. Replaces the ±σ band for TE
+    // since the stacked decomposition is more informative than mean ± stddev.
     let allTraces=[];
-    if(avg!=null&&stddev>0){
+    if(metric==='te'){
+      const decomp=_teDecompositionHistory();
+      if(decomp&&decomp.length){
+        const dateSet=new Set(dates);
+        const filtered=decomp.filter(e=>dateSet.has(isoDate(e.d)));
+        const decompDates=filtered.map(e=>isoDate(e.d));
+        const idioVals=filtered.map(e=>e.idio_te);
+        const factorVals=filtered.map(e=>e.factor_te);
+        // Stacked area: idio (bottom) + factor (above idio). Sum = TE.
+        allTraces.push(
+          {x:decompDates,y:idioVals,type:'scatter',mode:'lines',stackgroup:'te',
+            name:'Idiosyncratic',line:{width:0.5,color:'rgba(168,85,247,0.6)'},
+            fillcolor:'rgba(168,85,247,0.28)',connectgaps:true,
+            hovertemplate:'%{x|%b %d %Y}<br>Idiosyncratic: %{y:.2f}%<extra></extra>'},
+          {x:decompDates,y:factorVals,type:'scatter',mode:'lines',stackgroup:'te',
+            name:'Factor',line:{width:0.5,color:'rgba(99,102,241,0.6)'},
+            fillcolor:'rgba(99,102,241,0.32)',connectgaps:true,
+            hovertemplate:'%{x|%b %d %Y}<br>Factor: %{y:.2f}%<extra></extra>'}
+        );
+      }
+      // Avg dashed line — keep for context (no fill band, since stacked area replaces it)
+      if(avg!=null){
+        shapes.push({type:'line',y0:avg,y1:avg,xref:'paper',x0:0,x1:1,line:{color:THEME().tick,dash:'dash',width:1}});
+        annotations.push({x:1,xref:'paper',y:avg,text:'avg',showarrow:false,font:{size:9,color:THEME().tick},xanchor:'left',xshift:4});
+      }
+    }else if(avg!=null&&stddev>0){
       allTraces.push(
         {x:dates,y:dates.map(()=>avg+stddev),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'},
         {x:dates,y:dates.map(()=>avg-stddev),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip',name:'±1σ'}

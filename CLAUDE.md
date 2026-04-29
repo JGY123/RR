@@ -1,3 +1,20 @@
+---
+slug: rr
+name: Redwood Risk
+path: ~/RR/
+github: JGY123/RR
+account: JGY123
+priority: P1
+category: Analytics
+techStack:
+  - JavaScript
+  - Plotly
+  - Python
+  - FactSet
+description: Portfolio risk analytics dashboard for Redwood Investments.
+launchCmd: open ~/RR/dashboard_v7.html
+launchLabel: Open Dashboard
+---
 # RR — Redwood Risk Control Panel
 
 ## ⚠️ MANDATORY: READ THE SPECIALIST AGENT FIRST

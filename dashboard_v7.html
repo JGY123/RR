@@ -7303,7 +7303,7 @@ function _setTEBox(name){
     const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
     const top=factors.slice(0,8);
     if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No factor TE contributions available.</div>';}
-    else body=`<div style="display:grid;grid-template-columns:minmax(160px,200px) 1fr;gap:14px;align-items:center"><div id="teFacPieDiv" style="height:200px"></div><div id="teFacLegend" style="font-size:11px"></div></div>`;
+    else body=`<div style="display:grid;grid-template-columns:minmax(240px,280px) 1fr;gap:18px;align-items:center"><div id="teFacPieDiv" style="height:240px"></div><div id="teFacLegend" style="font-size:11px"></div></div>`;
   }else if(_teActiveBox==='tepct'){
     body=`<div id="teHistDiv" style="height:120px"></div>`;
   }else if(_teActiveBox==='ratiopct'){
@@ -7357,29 +7357,32 @@ function _setTEBox(name){
       font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:10},
       margin:{l:6,r:6,t:6,b:6}
     },{displayModeBar:false,responsive:true});
-    // Side legend: ranked rows with color swatch + factor name + dual ratios
-    // (% of |TE| absolute — for cross-factor comparison; AND signed σ — for direction)
-    // Per the dual-ratio rule: when drilling into a sub-component, surface
-    // both its absolute share and its share within parent.
+    // Side legend: 5 columns, header + data rows share the same grid template
+    // so alignment is clean. Three ratio columns are distinct:
+    //   % Fac   — slice's share of the Factor Risk side
+    //   % TE    — slice's share of total tracking error (absolute)
+    //   σ Act   — the active EXPOSURE (f.a in σ), NOT the TE contribution.
+    //             Direction arrow shows OW/UW. (Earlier bug: σ Act used f.c
+    //             which made it identical to % TE — fixed.)
     const legend=document.getElementById('teFacLegend');
-    const facPctTotal=cs.sum?.pct_factor;
     if(legend){
+      const gridCols='10px 1fr 44px 44px 56px';
       const rows=factors.map((f,i)=>{
         const sharePct=Math.round(vals[i]/totalAbs*100); // share of |Factor TE|
         const ofTE=Math.abs(f.c||0);                       // % of TE (absolute)
-        const isPos=(f.c||0)>=0;
-        const arrow=isPos?'<span style="color:#fca5a5">▲</span>':'<span style="color:#86efac">▼</span>';
-        const sign=isPos?'+':'';
-        return `<div style="display:grid;grid-template-columns:14px 1fr auto auto auto;gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.06)">
+        const isOW=(f.a||0)>=0;
+        const arrow=isOW?'<span style="color:#fca5a5">▲</span>':'<span style="color:#86efac">▼</span>';
+        const aSign=isOW?'+':'';
+        return `<div style="display:grid;grid-template-columns:${gridCols};gap:8px;align-items:center;padding:3px 0;border-bottom:1px solid rgba(148,163,184,0.06)">
           <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${colors[i]}"></span>
           <span style="color:var(--txth);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.n}">${f.n}</span>
-          <span style="color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:10px;min-width:38px;text-align:right" title="% of Factor Risk">${sharePct}% F</span>
-          <span style="color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:10px;min-width:42px;text-align:right" title="% of total TE">${f2(ofTE,1)}% TE</span>
-          <span style="color:${isPos?'var(--neg)':'var(--pos)'};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;min-width:46px;text-align:right">${arrow} ${sign}${f2(f.c||0,1)}</span>
+          <span style="color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right" title="% of Factor Risk">${sharePct}%</span>
+          <span style="color:var(--txt);font-family:'JetBrains Mono',monospace;font-size:10px;text-align:right" title="% of total TE">${f2(ofTE,1)}%</span>
+          <span style="color:${isOW?'var(--neg)':'var(--pos)'};font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;text-align:right" title="Active exposure in σ — ▲ overweight / ▼ underweight">${arrow} ${aSign}${f2(f.a||0,2)}</span>
         </div>`;
       }).join('');
-      legend.innerHTML=`<div style="display:grid;grid-template-columns:14px 1fr auto auto auto;gap:8px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--grid)">
-        <span></span><span>Factor</span><span style="text-align:right">% Fac</span><span style="text-align:right">% TE</span><span style="text-align:right;min-width:46px">σ act</span>
+      legend.innerHTML=`<div style="display:grid;grid-template-columns:${gridCols};gap:8px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--grid)">
+        <span></span><span>Factor</span><span style="text-align:right">% Fac</span><span style="text-align:right">% TE</span><span style="text-align:right">σ Act</span>
       </div>${rows}`;
     }
   }else if(_teActiveBox==='tepct'){

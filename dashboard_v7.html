@@ -1161,6 +1161,23 @@ function dismissWhatChanged(stratId,reportDate){
 }
 
 // ===== "THIS WEEK" — Exec Summary + Weekly Insights (Patch 015) =====
+// 2026-04-29: collapsible. State persists via localStorage so the user's
+// preference survives reloads. Default = expanded.
+let _thisWeekCollapsed=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.thisWeekCollapsed')==='1');
+function toggleThisWeek(){
+  _thisWeekCollapsed=!_thisWeekCollapsed;
+  try{localStorage.setItem('rr.thisWeekCollapsed',_thisWeekCollapsed?'1':'0');}catch(e){}
+  const body=document.getElementById('thisWeekBody');
+  const caret=document.getElementById('thisWeekCaret');
+  if(body)body.style.display=_thisWeekCollapsed?'none':'';
+  if(caret)caret.textContent=_thisWeekCollapsed?'▶':'▾';
+}
+function _thisWeekHeaderHtml(title){
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+    <div class="card-title" style="margin:0">${title}</div>
+    <button onclick="toggleThisWeek()" title="Collapse / expand" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 8px;border-radius:5px;cursor:pointer;line-height:1"><span id="thisWeekCaret">${_thisWeekCollapsed?'▶':'▾'}</span></button>
+  </div>`;
+}
 function thisWeekCardHtml(s){
   if(!s||!s.sum)return '';
   let stateBullets=[];
@@ -1258,8 +1275,10 @@ function thisWeekCardHtml(s){
   let thresholdTipBase=`Thresholds (configurable in Settings): TE red \u2265 ${_thresholds.teRed??tD.teRed}%, TE amber \u2265 ${_thresholds.teAmber??tD.teAmber}%, factor |\u03c3| \u2265 ${_thresholds.factorSigma??tD.factorSigma}, cash > ${_thresholds.cashMax??tD.cashMax}%.`;
   if(!stateBullets.length&&!changeBullets.length){
     return `<div class="card" id="cardThisWeek" style="margin-bottom:16px">
-      <div class="card-title">This Week \u2014 ${s.name||s.id}</div>
-      <p style="color:var(--txt);font-size:12px;margin-top:8px">No material state alerts or week-over-week changes exceed current thresholds. <span class="tip" data-tip="${thresholdTipBase}" style="cursor:help;text-decoration:underline dotted">(thresholds)</span></p>
+      ${_thisWeekHeaderHtml('This Week \u2014 '+(s.name||s.id))}
+      <div id="thisWeekBody" style="${_thisWeekCollapsed?'display:none':''}">
+        <p style="color:var(--txt);font-size:12px;margin-top:8px">No material state alerts or week-over-week changes exceed current thresholds. <span class="tip" data-tip="${thresholdTipBase}" style="cursor:help;text-decoration:underline dotted">(thresholds)</span></p>
+      </div>
     </div>`;
   }
   let stateHtml=stateBullets.length?`<div style="flex:1;min-width:300px">
@@ -1271,8 +1290,10 @@ function thisWeekCardHtml(s){
     <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.7;color:var(--txth)">${changeBullets.map(b=>`<li>${b}</li>`).join('')}</ul>
   </div>`:'';
   return `<div class="card" id="cardThisWeek" style="margin-bottom:16px">
-    <div class="card-title">This Week \u2014 ${s.name||s.id}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:8px">${stateHtml}${changeHtml}</div>
+    ${_thisWeekHeaderHtml('This Week \u2014 '+(s.name||s.id))}
+    <div id="thisWeekBody" style="${_thisWeekCollapsed?'display:none':''}">
+      <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:8px">${stateHtml}${changeHtml}</div>
+    </div>
   </div>`;
 }
 

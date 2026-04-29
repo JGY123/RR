@@ -2779,10 +2779,15 @@ function rFacTable(factors){
     let impTipText=(impData.note||'').replace(/"/g,'&quot;');
     let nameEsc=f.n.replace(/"/g,'&quot;');
     let nameDisplay=isProfitability?`<span style="color:var(--pos);font-weight:600">${f.n} ✦</span>${profWarn}`:f.n;
+    // Dual-ratio per the user's rule: TE% is share of total TE; % Fac is the
+    // share within the Factor Risk side (= f.c / cs.sum.pct_factor × 100).
+    const facPctTotal=cs.sum?.pct_factor;
+    const ofFactor=(facPctTotal&&facPctTotal>0&&f.c!=null)?(f.c/facPctTotal*100):null;
     return`<tr class="clickable" data-fac="${f.n.replace(/"/g,'&quot;')}" style="${rowBase}cursor:pointer" onclick="oDrF('${nm}')">
       <td data-col="name"${profTip} title="${nameEsc}" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${nameDisplay}</td>
       <td class="r" data-col="exp_active" data-sv="${f.a??''}" style="background:${barBg};color:${expColor};font-weight:600">${fp(f.a,2)}</td>
       <td class="r${f._c_synth?' tip-cell':''}" data-col="te" data-sv="${f.c??''}"${f._c_synth?` data-tip="DERIVED: TE contribution synthesized as |Active|×σ × scale-to-pct_factor. Source CSV doesn't ship this field today (FACTSET_FEEDBACK F5). For Size: |${f.a}|×${f.dev}×scale ≈ ${f2(f.c,2)}. This is a sanity-check estimate, not a real reported value."`:''}>${f2(f.c,1)}%${f._c_synth?'<span style="color:var(--warn);font-size:9px;margin-left:2px" title="Derived value — see tooltip">ᵉ</span>':''}</td>
+      <td class="r" data-col="of_factor" data-sv="${ofFactor??''}" style="color:var(--txt);font-size:11px">${ofFactor!=null?(ofFactor>=0?'+':'')+f2(ofFactor,0)+'%':'—'}</td>
       <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
       <td class="r tip-cell" data-col="imp" data-sv="${impVal??''}" data-tip="${impTipText}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(impVal,2)}</td>
     </tr>`;
@@ -2790,14 +2795,14 @@ function rFacTable(factors){
 
   let thead=`<thead><tr>
     <th data-col="name" onclick="sortTbl('tbl-fac',0)">Factor</th>
-    <th class="r tip" data-col="exp_active" data-tip="ACTIVE exposure = portfolio − benchmark (in &sigma; units). Positive = portfolio overweight; negative = underweight. Source: Axioma factor model (already orthogonalized). Absolute portfolio &amp; benchmark exposures are not shipped in the current CSV format — to derive them you'd need the per-factor &lsquo;% of Variance&rsquo; columns FactSet used to provide. Synthesis tile (B104) will derive approximate absolute exposures from per-security raw factor data." onclick="sortTbl('tbl-fac',1)">Active Exp</th>
-    <th class="r tip" data-col="te" data-tip="Contribution to total tracking error (% of TE). Currently null on most factors in the new format pending parser fix (B73)." onclick="sortTbl('tbl-fac',2)">TE%</th>
-    <th class="r tip" data-col="ret" data-tip="Factor return for the period selected in the header (default: latest weekly snapshot)." onclick="sortTbl('tbl-fac',3)">Return</th>
-    <th class="r tip" data-col="imp" data-tip="P&amp;L attribution = Exposure × Return. Period is set by the global selector in the header. Hover the cell for the actual date range used." onclick="sortTbl('tbl-fac',4)">Impact <span style="opacity:0.6;font-weight:400">(${getImpactPeriodLabel()})</span></th>
+    <th class="r tip" data-col="exp_active" data-tip="ACTIVE exposure = portfolio − benchmark (in &sigma; units). Positive = portfolio overweight; negative = underweight. Source: Axioma factor model (already orthogonalized)." onclick="sortTbl('tbl-fac',1)">Active Exp</th>
+    <th class="r tip" data-col="te" data-tip="Contribution to total tracking error (% of TE). Negative values diversify." onclick="sortTbl('tbl-fac',2)">% TE</th>
+    <th class="r tip" data-col="of_factor" data-tip="Factor's share of the Factor Risk portion only (= TE% / Factor Risk%). Lets you see relative dominance within the factor side." onclick="sortTbl('tbl-fac',3)">% Fac</th>
+    <th class="r tip" data-col="ret" data-tip="Factor return for the period selected in the header (default: latest weekly snapshot)." onclick="sortTbl('tbl-fac',4)">Return</th>
+    <th class="r tip" data-col="imp" data-tip="P&amp;L attribution = Exposure × Return. Period is set by the global selector in the header. Hover the cell for the actual date range used." onclick="sortTbl('tbl-fac',5)">Impact <span style="opacity:0.6;font-weight:400">(${getImpactPeriodLabel()})</span></th>
   </tr></thead>`;
 
-  // F4 fix: tighter colgroup + ellipsis on Factor name (set on td, see facRow). Total min-width 420px fits 1024-viewport card.
-  return`<table id="tbl-fac"><colgroup><col style="min-width:130px"><col style="width:80px"><col style="width:55px"><col style="width:65px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
+  return`<table id="tbl-fac"><colgroup><col style="min-width:130px"><col style="width:80px"><col style="width:55px"><col style="width:50px"><col style="width:65px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
 }
 
 // ===== B102-pattern: reusable holdings-aggregation helper =====

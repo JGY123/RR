@@ -7196,14 +7196,14 @@ function oDrFacRiskBreak(){
           <span style="color:var(--neg)">▲</span> Adds Risk
           <span style="font-size:10px;color:var(--txt);font-weight:400">${adders.length} factors · click to drill</span>
         </div>
-        ${adders.length?`<table style="font-size:11px;width:100%"><thead><tr><th>Factor</th><th class="r">σ active</th><th class="r tip" data-tip="Factor's contribution as a % of total tracking error">% of TE</th><th class="r tip" data-tip="Factor's contribution as a % of the Factor Risk portion (29.3% of TE on this strategy)">% of Factor</th></tr></thead><tbody>${adders.slice(0,8).map(facRow).join('')}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">None</p>'}
+        ${adders.length?`<table style="font-size:11px;width:100%"><thead><tr><th>Factor</th><th class="r"><span style="text-transform:none">σ</span> active</th><th class="r tip" data-tip="Factor's contribution as a % of total tracking error">% of TE</th><th class="r tip" data-tip="Factor's contribution as a % of the Factor Risk portion (29.3% of TE on this strategy)">% of Factor</th></tr></thead><tbody>${adders.slice(0,8).map(facRow).join('')}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">None</p>'}
       </div>
       <div>
         <div class="card-title" style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
           <span style="color:var(--pos)">▼</span> Diversifies
           <span style="font-size:10px;color:var(--txt);font-weight:400">${divers.length} factors · click to drill</span>
         </div>
-        ${divers.length?`<table style="font-size:11px;width:100%"><thead><tr><th>Factor</th><th class="r">σ active</th><th class="r tip" data-tip="Factor's contribution as a % of total tracking error (negative = diversifies)">% of TE</th><th class="r tip" data-tip="Factor's contribution as a % of the Factor Risk portion">% of Factor</th></tr></thead><tbody>${divers.slice(0,8).map(facRow).join('')}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">None</p>'}
+        ${divers.length?`<table style="font-size:11px;width:100%"><thead><tr><th>Factor</th><th class="r"><span style="text-transform:none">σ</span> active</th><th class="r tip" data-tip="Factor's contribution as a % of total tracking error (negative = diversifies)">% of TE</th><th class="r tip" data-tip="Factor's contribution as a % of the Factor Risk portion">% of Factor</th></tr></thead><tbody>${divers.slice(0,8).map(facRow).join('')}</tbody></table>`:'<p style="font-size:11px;color:var(--txt)">None</p>'}
       </div>
     </div>
     <div class="card-title" style="margin-top:14px">Factor MCR History</div>
@@ -7382,7 +7382,7 @@ function _setTEBox(name){
         </div>`;
       }).join('');
       legend.innerHTML=`<div style="display:grid;grid-template-columns:${gridCols};gap:8px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px;padding-bottom:3px;border-bottom:1px solid var(--grid)">
-        <span></span><span>Factor</span><span style="text-align:right">% Fac</span><span style="text-align:right">% TE</span><span style="text-align:right">σ Act</span>
+        <span></span><span>Factor</span><span style="text-align:right">% Fac</span><span style="text-align:right">% TE</span><span style="text-align:right"><span style="text-transform:none">σ</span> Act</span>
       </div>${rows}`;
     }
   }else if(_teActiveBox==='tepct'){

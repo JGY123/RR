@@ -1430,7 +1430,24 @@ function rExp(){
       <div id="facRiskDiv" style="height:440px"></div>
     </div>
     <div class="card" id="cardFacButt">
-      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Factor Performance Map — period view (driven by global Impact selector). X = avg active exposure over period. Y = period impact (paying off ↑). Bubble size = avg TE contribution. Color = adds/diversifies. Click for full-screen multi-period comparison." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Performance Map</div><span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span></div><button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div class="card-title tip" data-tip="Factor Performance — period view. Toggle between Bubble (exposure × payoff × risk weight quadrant) and Waterfall (sorted contributions with running total). Period selector controls both views." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Performance</div>
+          <span id="facPerfSubtitle" style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff × risk weight</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <div class="toggle-wrap" style="margin:0">
+            <button id="facPerfBubbleBtn" class="toggle-btn active" onclick="setFacPerfView('bubble')" title="Quadrant: exposure × payoff × risk weight">Bubble</button>
+            <button id="facPerfWaterBtn" class="toggle-btn" onclick="setFacPerfView('waterfall')" title="Sorted bars + cumulative running total">Waterfall</button>
+          </div>
+          <div style="display:flex;gap:2px;align-items:center;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:2px">
+            <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;padding:0 6px">Period</span>
+            ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" data-fac-period="${p}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
+          </div>
+          <button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+          <button class="export-btn" id="facPerfCsv" onclick="exportFacAttribCsv()" style="padding:3px 8px;font-size:11px;display:${_facPerfView==='waterfall'?'inline-block':'none'}">CSV</button>
+        </div>
+      </div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
       <div id="facButtDiv" style="height:440px"></div>
     </div>
@@ -1454,12 +1471,6 @@ function rExp(){
     ${rFac(s.factors)}
   </div>
 
-  <!-- Factor Attribution Waterfall -->
-  <div class="card" id="cardAttribWaterfall" style="margin-top:16px">
-    <div class="flex-between"><div class="card-title tip" data-tip="Per-factor return impact for the latest period. Green = positive contribution, red = negative. Click a bar for factor detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardAttribWaterfall');return false">Factor Attribution — Return Impact</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportFacAttribCsv()">CSV</button></div></div>
-    <div id="facWaterfallDiv" style="height:${Math.min(900,Math.max(160,s.factors.filter(f=>f.imp!=null).length*32)+20)}px;overflow-y:auto"></div>
-  </div>
 
   ${isUSOnly?`<div style="margin-top:16px;padding:10px 14px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;font-size:11px;color:var(--txt)">ⓘ US-focused strategy — country and region analysis not applicable</div>`:''}
   <!-- Row 4: Country Exposure -->
@@ -1633,7 +1644,7 @@ function rExp(){
     const chartFns=[
       ['rSecChart',()=>rSecChart(s)],
       ['rRegChart',()=>rRegChart(s)],
-      ['rFacButt',()=>rFacButt(s)],
+      ['rFacPerf',()=>rFacPerf(s)],
       ['rFacRisk',()=>rFacRisk(s)],
       ['rCountryMap',()=>rCountryMap(s)],
       ['rCountryChart',()=>rCountryChart(s)],
@@ -1642,7 +1653,6 @@ function rExp(){
       ['rTree',()=>rTree(s)],
       ['rMCR',()=>rMCR(s)],
       ['rFRB',()=>rFRB(s)],
-      ['rFacWaterfall',()=>rFacWaterfall(s)],
       ['rAttribTable',()=>rAttribTable()],
       ['renderRanksTable',()=>renderRanksTable()],   // cardRanks rebuild — populates #rnkTableWrap
     ];
@@ -1666,7 +1676,8 @@ function rFacWaterfall(s){
   // the chart actually looks/works like a waterfall — each bar contributes,
   // running total visualizes the build-up to total factor impact for the
   // period. Hover carries direction + active-exposure context.
-  const el=document.getElementById('facWaterfallDiv');
+  // 2026-04-29: shares facButtDiv with the bubble view (toggle on tile).
+  const el=document.getElementById('facButtDiv');
   if(!el)return;
   // Pull period-aware impact for each factor instead of the snapshot f.imp
   const yLab=getImpactPeriodLabel();
@@ -1702,7 +1713,7 @@ function rFacWaterfall(s){
   // Set chart container height — adapt to factor count, leave room for total badge
   const h=Math.min(900,Math.max(200,facs.length*30+60));
   el.style.height=h+'px';
-  Plotly.newPlot('facWaterfallDiv',[
+  Plotly.newPlot('facButtDiv',[
     // Primary bars (per-factor impact)
     {
       y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
@@ -2733,6 +2744,32 @@ const FAC_COLS=[
   {id:'imp',label:'Impact'}
 ];
 let _facView='primary';  // 'primary' | 'all'
+// 2026-04-29: Performance tile view toggle (bubble quadrant vs waterfall)
+let _facPerfView='bubble';  // 'bubble' | 'waterfall'
+function setFacPerfView(v){
+  if(v!==_facPerfView){_facPerfView=v;}
+  // Toggle UI states
+  const bb=document.getElementById('facPerfBubbleBtn');
+  const wb=document.getElementById('facPerfWaterBtn');
+  if(bb)bb.classList.toggle('active',v==='bubble');
+  if(wb)wb.classList.toggle('active',v==='waterfall');
+  // Subtitle reflects current view
+  const sub=document.getElementById('facPerfSubtitle');
+  if(sub)sub.textContent=v==='bubble'?'exposure × payoff × risk weight':'sorted contributions + running total';
+  // CSV button only meaningful for waterfall (per-factor table export)
+  const csvBtn=document.getElementById('facPerfCsv');
+  if(csvBtn)csvBtn.style.display=v==='waterfall'?'inline-block':'none';
+  // Top TE strip is bubble-companion (snapshot of current TE drivers)
+  const strip=document.getElementById('facTopTeStrip');
+  if(strip)strip.style.display=v==='bubble'?'flex':'none';
+  // Re-render
+  if(typeof cs!=='undefined'&&cs)rFacPerf(cs);
+}
+function rFacPerf(s){
+  // Dispatcher: bubble or waterfall, both into the shared facButtDiv.
+  if(_facPerfView==='waterfall'){return rFacWaterfall(s);}
+  return rFacButt(s);
+}
 let _facHighlight=null;  // group id or null
 let _facColVis=(function(){
   let d={};FAC_COLS.forEach(c=>d[c.id]=true);

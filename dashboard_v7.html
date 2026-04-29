@@ -1662,37 +1662,75 @@ function rExp(){
 }
 
 function rFacWaterfall(s){
-  // Sort: most positive at top, most negative at bottom
-  let facs=(s.factors||[]).filter(f=>isFinite(f.imp)).sort((a,b)=>(b.imp||0)-(a.imp||0));
-  let el=document.getElementById('facWaterfallDiv');
+  // 2026-04-29: period-aware (global Impact selector) + cumulative overlay so
+  // the chart actually looks/works like a waterfall — each bar contributes,
+  // running total visualizes the build-up to total factor impact for the
+  // period. Hover carries direction + active-exposure context.
+  const el=document.getElementById('facWaterfallDiv');
   if(!el)return;
-  if(!facs.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:40px">No factor impact data</p>';return;}
-  let vals=facs.map(f=>+(f.imp||0));
-  let maxAbs=Math.max(...vals.map(Math.abs),0.1);
-  let xmax=+(Math.ceil(maxAbs*10)/10+0.1).toFixed(2);
-  // Period label from current_date
-  let periodStr='';
-  let cd=s.current_date||(s.available_dates&&s.available_dates[s.available_dates.length-1]);
-  if(cd){let d=parseDate(cd);if(d)periodStr='Period ending '+d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});}
-  let T=THEME();
-  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
-  let negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
-  Plotly.newPlot('facWaterfallDiv',[{
-    y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
-    marker:{color:vals.map(v=>v>=0?posC:negC)},
-    hovertemplate:'<b>%{y}</b><br>Impact: %{x:+.3f}%<extra></extra>'
-  }],{
+  // Pull period-aware impact for each factor instead of the snapshot f.imp
+  const yLab=getImpactPeriodLabel();
+  const facs0=(s.factors||[]).filter(f=>f&&f.n).map(f=>{
+    const ipd=getImpactForPeriod(f.n,_impactPeriod);
+    const v=ipd.v!=null?ipd.v:(isFinite(f.imp)?f.imp:null);
+    return Object.assign({},f,{_imp:v});
+  }).filter(f=>isFinite(f._imp)&&Math.abs(f._imp)>0.001);
+  if(!facs0.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:40px">No factor impact data for selected period</p>';return;}
+  const facs=[...facs0].sort((a,b)=>(b._imp||0)-(a._imp||0));
+  const vals=facs.map(f=>+(f._imp||0));
+  const totalImp=vals.reduce((a,b)=>a+b,0);
+  // Cumulative running sum (top → bottom matches sort order)
+  let cum=0;
+  const cumVals=vals.map(v=>{cum+=v;return cum;});
+  const facPctT=s.sum?.pct_factor;
+  const T=THEME();
+  // Hover: direction, value, period, active exposure context, dual ratio if available
+  const hovertext=facs.map(f=>{
+    const dir=(f._imp||0)>=0?'<span style="color:#86efac">▲ helped</span>':'<span style="color:#fca5a5">▼ hurt</span>';
+    const sgnImp=(f._imp||0)>=0?'+':'';
+    const sgnA=(f.a||0)>=0?'+':'';
+    const expCtx=isFinite(f.a)?` · Active ${sgnA}${f2(f.a,2)}σ`:'';
+    const sgnC=(f.c||0)>=0?'+':'';
+    const ofTE=isFinite(f.c)?` · ${sgnC}${f2(f.c,1)}% of TE`:'';
+    return `<b>${f.n}</b><br>Impact (${yLab}): ${sgnImp}${f2(f._imp,3)}% · ${dir}${expCtx}${ofTE}`;
+  });
+  const cumHover=facs.map((f,i)=>`Running total after ${f.n}: ${cumVals[i]>=0?'+':''}${f2(cumVals[i],2)}%`);
+  const maxAbs=Math.max(...vals.map(Math.abs),Math.abs(totalImp)*0.5,0.1);
+  const xmax=+(Math.ceil(maxAbs*12)/10+0.1).toFixed(2);
+  const posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  const negC=getComputedStyle(document.body).getPropertyValue('--neg').trim()||'#ef4444';
+  // Set chart container height — adapt to factor count, leave room for total badge
+  const h=Math.min(900,Math.max(200,facs.length*30+60));
+  el.style.height=h+'px';
+  Plotly.newPlot('facWaterfallDiv',[
+    // Primary bars (per-factor impact)
+    {
+      y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
+      name:'Per-factor impact',
+      marker:{color:vals.map(v=>v>=0?posC:negC),line:{color:'rgba(15,23,42,0.5)',width:0.5}},
+      hovertext:hovertext,hoverinfo:'text',
+      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+    },
+    // Cumulative running total (line + markers)
+    {
+      y:facs.map(f=>f.n),x:cumVals,type:'scatter',mode:'lines+markers',
+      name:'Running total',
+      line:{color:'rgba(168,85,247,0.85)',width:1.5,dash:'dot'},
+      marker:{size:5,color:'rgba(168,85,247,0.95)',symbol:'circle',line:{color:'rgba(15,23,42,0.5)',width:0.5}},
+      hovertext:cumHover,hoverinfo:'text',
+      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#a78bfa',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+    }
+  ],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
-    font:{family:'Inter',color:T.tick,size:11},
-    margin:{l:10,r:20,t:periodStr?28:10,b:36},
-    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',
-           tickfont:{size:10,color:T.tickH},automargin:true},
-    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,
-           range:[-xmax,xmax],title:'Impact (%)',tickfont:{color:T.tick,size:9}},
-    annotations:periodStr?[{
-      text:periodStr,x:0.5,y:1.0,xref:'paper',yref:'paper',
-      showarrow:false,font:{size:10,color:T.tick},xanchor:'center',yanchor:'bottom'
-    }]:[]
+    font:{family:'DM Sans, system-ui',color:T.tick,size:11},
+    margin:{l:10,r:20,t:38,b:40},
+    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',tickfont:{size:10,color:T.tickH},automargin:true},
+    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,range:[-xmax,xmax],title:`Active-return contribution (${yLab}, %)`,tickfont:{color:T.tick,size:9},tickformat:'+.2f'},
+    showlegend:false,
+    annotations:[
+      {text:`<b>Total factor impact (${yLab}):</b> <span style="color:${totalImp>=0?'#10b981':'#ef4444'}">${totalImp>=0?'+':''}${f2(totalImp,2)}%</span> across ${facs.length} factors`,
+       x:0.5,y:1.06,xref:'paper',yref:'paper',showarrow:false,font:{size:11,color:T.tickH||'#cbd5e1'},xanchor:'center',yanchor:'bottom'}
+    ]
   },plotCfg);
   if(el.on){el.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrF==='function')oDrF(n);});}
 }

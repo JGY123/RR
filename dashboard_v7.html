@@ -7338,17 +7338,22 @@ function _setTEBox(name){
       if((f.c||0)>=0)return adds[Math.min(adds.length-1,aIdx++)];
       return divs[Math.min(divs.length-1,dIdx++)];
     });
-    const cd=factors.map(f=>[f.n,(f.c||0)>=0?'adds risk':'diversifies',+(f.c||0).toFixed(2)]);
-    // Pie: clean donut with NO inside labels (legend moved to side panel below).
-    // Just percent shown for the largest few slices.
+    // Pie: clean donut with only large-slice % labels inside; full info in hover.
     const totalAbs=vals.reduce((a,b)=>a+b,0)||1;
     const pieText=vals.map(v=>(v/totalAbs)>=0.08?Math.round(v/totalAbs*100)+'%':'');
+    // Pre-built hover strings — robust replacement for customdata+hovertemplate
+    // (Plotly was rendering the template placeholders literally on pie hover).
+    const hovertext=factors.map((f,i)=>{
+      const dir=(f.c||0)>=0?'adds risk':'diversifies';
+      const sign=(f.c||0)>=0?'+':'';
+      const sharePct=Math.round(vals[i]/totalAbs*100);
+      return `<b>${f.n}</b><br>${dir} (${sign}${f2(f.c||0,1)}% of TE)<br>${sharePct}% of Factor side`;
+    });
     Plotly.newPlot('teFacPieDiv',[{type:'pie',labels,values:vals,hole:0.62,
       text:pieText,textinfo:'text',textposition:'inside',
       textfont:{size:11,color:'#0f172a',family:'DM Sans, system-ui',weight:600},
       marker:{colors:colors,line:{color:'rgba(15,23,42,0.7)',width:1.5}},
-      customdata:cd,
-      hovertemplate:'<b>%{customdata[0]}</b><br>%{customdata[1]} (%{customdata[2]:+.2f}%)<br>%{percent} of |TE|<extra></extra>',
+      hovertext:hovertext,hoverinfo:'text',
       hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}},
       sort:false,
       showlegend:false

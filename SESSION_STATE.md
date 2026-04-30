@@ -1,7 +1,51 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-24 (design-polish-v1 shipped — B105 Phase 1 SurpriseEdge-parity)
+last_updated: 2026-04-30 (About-popup framework + cardChars audit RED→GREEN + header polish + Q121 brainstorm — all pushed to origin)
+---
+
+## Just finished (this session, 2026-04-30 — pre-format-change marathon push)
+
+**Branch state:** `main` is clean and pushed to origin/main (JGY123). 11 commits landed today across two thematic batches — the format-change parser updates (morning) and the About-popup + cardChars audit + new-tile brainstorm (afternoon).
+
+**Commits this session (most recent first):**
+- `aa98c3e` docs(changelog): record session highlights
+- `cb3b245` feat(header+footer): Redwood Risk wordmark + page footer with changelog link (Q69)
+- `2052367` docs: 10 new-tile candidates ranked by PM impact ÷ effort (Q121)
+- `437ff5a` feat(About): expand _ABOUT_REG to 25 tiles + wire ⓘ across both tabs
+- `11a5c7e` feat(cardChars): rewire drill modal + group + format + invert (audit RED → GREEN)
+- `05e9a7d` feat: About-popup framework + cardScatter polish + tile audits
+- `ec7c0f7` feat: 1-year GSC sample green-lit + four queue items shipped
+- `a0107a1` docs: capture answers from 135-question Inquisitor queue
+- `30f83b4` feat(parser): support new Raw Factors layout (group_size=23) + merge moved fields
+- `5e7e1b6` / `6f1abb1` fix(holdings): tk(h) display helper
+
+**What landed:**
+1. **About-popup framework (Q88)** — `_ABOUT_REG` registry now covers 25 major tiles. `aboutBtn(tileId)` ⓘ button wired into ~22 tile headers (Exposures + Risk tabs). Click ⓘ → modal with What / How / Source / Caveats / Related. Provenance trust-layer for PMs.
+2. **cardChars audit RED → GREEN (5 findings closed)** —
+   - F1 SEV-1: `oDrChar` no longer dead-ends "no historical data". For TE/Beta/Active Share (which DO have history in `cs.hist.sum`), modal renders Plotly time series with range buttons + 5-stat strip. For the 35 fundamentals on B114 backlog, honest "Per-week persistence pending" callout.
+   - F2 SEV-2: cardChars header now matches cardFacRisk pattern (subtitle + ⓘ + CSV).
+   - F3 SEV-2: `CHAR_META` (39 metrics) drives per-row tooltips + unit-aware formatters ("18.3x", "$4.2B", "x.x%").
+   - F4 SEV-2: 39 metrics grouped into Risk / Valuation / Quality / Growth / Revisions / Size with mini-cap section dividers. `sortTbl` updated to drop group headers when user explicitly sorts.
+   - F5 SEV-3: inverted color semantics — P/E +28% vs BM now renders red (worse) not green. ↓ marker on the row + warning in modal header.
+3. **cardScatter SEV-1 fix** — null-rank holdings (`h.r==null`) were rendering as Q5 red. ~23% of GSC sample affected. Now neutral grey across 3 sites (rScat, _renderFsScatPanel, _renderFsHoldDetail). Title rebrand: "MCR vs TE" → "Stock-Specific TE vs Total TE Contribution".
+4. **NEW_TILE_CANDIDATES.md (Q121)** — 10 ranked tile ideas + 8 honorable mentions + 5-tile recommended build order for Phase 2-3.
+5. **Q69 header polish** — REDWOOD wordmark expanded to "REDWOOD RISK · Control Panel" two-line lockup. New page footer with CHANGELOG link + repo link + status dot.
+6. **Earlier today (morning batch):** parser `group_size=23` support; SEDOL → ticker_region merge for moved mcap/adv/spotlight ranks; INQUISITOR_DECISIONS_2026-04-30.md (135 questions); 1-year GSC GREEN-LIGHT; MIGRATION_PLAN.md.
+
+**Outstanding from the audit subagents:**
+- `tile-specs/cardScatter-audit.md` — YELLOW resolved.
+- `tile-specs/cardChars-audit.md` — RED resolved (F1-F5 all done).
+- No new audits pending. Could spawn new `tile-audit` subagents for tiles not yet audited (cardCountry, cardGroups, cardMCR, cardWatchlist, etc.) — but lower priority than the Phase 1 GSC validation work that gates the multi-account run.
+
+**Where we are vs MIGRATION_PLAN.md:**
+- ✅ Phase 0: parser, SEDOL merge, anti-fabrication, GitHub repo all in place.
+- ✅ Phase 1: 1-year GSC sample GREEN-LIT (verifier output green; smoke test 19/19 pass on actual data).
+- ⏳ Phase 2: pending Redwood IT decisions about pro environment.
+- ⏳ Phase 3: pending FactSet team to ship the multi-year multi-account file.
+
+**For next session:** When the multi-account file arrives, run `./load_data.sh` → walk every tab/tile per Phase 1 checklist → spot-check ≥10 numbers per strategy against FactSet workstation. Until then, the marathon focus is per-tile polish (the next natural targets are cardCountry, cardGroups, cardMCR audits — or build the top 2-3 tile candidates from NEW_TILE_CANDIDATES.md as Phase 2 prep).
+
 ---
 
 # Session State — Live

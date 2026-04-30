@@ -7777,10 +7777,22 @@ function _drillKeyHandler(e){
 //   Profitability is reverse-convention positive=good marked with ✦).
 // - Themed hover labels everywhere.
 // - oDrFRisk is now an alias to this single function.
-let _facDrillMetric='exp';  // 'exp' | 'ret' | 'cret'
+// 2026-04-30 v2 (user feedback): two-chart structure.
+//   Chart 1 (RISK panel): three lines together — Active Exposure (left axis,
+//   σ) + TE Contribution per period (right axis, % TE) + Factor σ (right axis,
+//   shares the % scale). User asked "if there's a way to show all three to fit
+//   nicely" — multi-axis dual-y achieves that on a single panel.
+//   Chart 2 (RETURN panel): metric toggle Factor Return / Cum Return / Impact.
+let _facDrillMetric='ret';  // For Chart 2: 'ret' | 'cret' | 'imp'
+let _facDrillUniverse='portfolio';  // For contributors: 'portfolio' | 'benchmark' | 'both'
 function setFacDrillMetric(m, name){
-  if(!['exp','ret','cret'].includes(m))return;
+  if(!['ret','cret','imp'].includes(m))return;
   _facDrillMetric=m;
+  if(name)oDrF(name);
+}
+function setFacDrillUniverse(u, name){
+  if(!['portfolio','benchmark','both'].includes(u))return;
+  _facDrillUniverse=u;
   if(name)oDrF(name);
 }
 function oDrF(name,range){
@@ -7815,6 +7827,20 @@ function oDrF(name,range){
   const totalFacC=(cs.factors||[]).reduce((a,f)=>a+Math.abs(f.c||0),0)||1;
   const isProf=name==='Profitability';
   const isMacro=['Country','Currency','Industry','Market'].includes(name);
+  // 2026-04-30 v2: per-holding raw factor exposure index (style factors only;
+  // macro factors don't have a raw_exp position). raw_fac_labels lives on the
+  // strategy; index it once.
+  const rawLabels=cs.raw_fac_labels||[];
+  const rawIdx=rawLabels.indexOf(name);
+  const hasRawExp=rawIdx>=0;
+  // Universe filter for contributors (B116 semantics: TE invariant; universe
+  // toggles only count-based selection of which holdings to display).
+  const inUniverse=(h)=>{
+    if(_facDrillUniverse==='both')return true;
+    if(_facDrillUniverse==='portfolio')return (h.p||0)>0;
+    if(_facDrillUniverse==='benchmark')return (h.b||0)>0;
+    return true;
+  };
   // Top/Bottom contributors — proper logic this time:
   // - For style factors: sort cs.hold[] by h.factor_contr[name].
   // - For macro factors: aggregate h.factor_contr[name] by classification
@@ -7826,6 +7852,7 @@ function oDrF(name,range){
       const sums={};
       (cs.hold||[]).forEach(h=>{
         if(isCash(h))return;
+        if(!inUniverse(h))return;
         const k=classifier(h);
         if(!k)return;
         const v=h.factor_contr&&h.factor_contr[name];
@@ -7842,7 +7869,7 @@ function oDrF(name,range){
     const haveContrib=(cs.hold||[]).some(h=>h.factor_contr&&h.factor_contr[name]!=null);
     if(haveContrib){
       const ranked=(cs.hold||[])
-        .filter(h=>!isCash(h)&&h.factor_contr&&h.factor_contr[name]!=null)
+        .filter(h=>!isCash(h)&&inUniverse(h)&&h.factor_contr&&h.factor_contr[name]!=null)
         .sort((a,b)=>(b.factor_contr[name]||0)-(a.factor_contr[name]||0));
       topRows=ranked.slice(0,5).map(h=>[h.t,h.factor_contr[name],h]);
       botRows=ranked.slice(-5).reverse().map(h=>[h.t,h.factor_contr[name],h]);
@@ -7851,7 +7878,7 @@ function oDrF(name,range){
     } else {
       // Fallback when factor_contr isn't shipped per-holding for this factor:
       // sort by port wt as a coarse "biggest exposure to factor" proxy
-      const ranked=(cs.hold||[]).filter(h=>!isCash(h)&&(h.p||0)>0).sort((a,b)=>(b.p||0)-(a.p||0));
+      const ranked=(cs.hold||[]).filter(h=>!isCash(h)&&inUniverse(h)&&(h.p||0)>0).sort((a,b)=>(b.p||0)-(a.p||0));
       topRows=ranked.slice(0,5).map(h=>[h.t,h.p,h]);
       botRows=[];
       topLabel='Top by port weight (per-holding factor contribution not shipped)';
@@ -7879,12 +7906,22 @@ function oDrF(name,range){
   const nm=name.replace(/'/g,"\\'");
   const periodChips=['m1','m3','m6','y1','all'].map(p=>{const lblP=({m1:'1M',m3:'3M',m6:'6M',y1:'1Y',all:'Full'})[p];return `<button class="pill${_impactPeriod===p?' active':''}" onclick="setImpactPeriod('${p}');oDrF('${nm}')" style="font-size:10px;padding:2px 8px">${lblP}</button>`;}).join('');
   const rangeChips=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_facDrillRange===r?' active':''}" onclick="oDrF('${nm}','${r}')">${r}</button>`).join('');
-  const metricChips=[['exp','Active Exp'],['ret','Factor Return'],['cret','Cum Return']].map(([k,l])=>`<button class="pill${_facDrillMetric===k?' active':''}" onclick="setFacDrillMetric('${k}','${nm}')" style="font-size:10px;padding:2px 8px">${l}</button>`).join('');
+  // Chart 2 (Return panel) metric toggle. Chart 1 always shows Active Exp +
+  // TE Contrib + Factor σ together — no toggle there. So the metric pills
+  // here only switch the SECOND chart between Return / Cumulative / Impact.
+  const metricChips=[['ret','Factor Return'],['cret','Cum Return'],['imp','Impact']].map(([k,l])=>`<button class="pill${_facDrillMetric===k?' active':''}" onclick="setFacDrillMetric('${k}','${nm}')" style="font-size:10px;padding:2px 8px">${l}</button>`).join('');
 
-  // Contributor table HTML
+  // 2026-04-30 v2 user feedback: rename "Contrib" → "% TE" (it IS contribution
+  // to tracking error, verified — `risk_contr` from snap_attrib matches
+  // `cs.factors[].c` exactly at the latest week). Add "Raw Exp" column for
+  // style factors (h.raw_exp[idx] is the per-holding z-score exposure to
+  // this factor). Add Active Wt for size context.
   const renderContribTable=(rows,header,emptyMsg)=>{
     if(!rows.length)return `<div style="padding:8px 4px;font-size:11px;color:var(--textDim)">${emptyMsg||'—'}</div>`;
-    return `<table style="font-size:11px;width:100%"><thead><tr><th>${isMacro?'Bucket':'Ticker'}</th>${isMacro?'':'<th>Name</th>'}<th class="r">${isMacro?'Σ contrib':'Contrib'}</th>${isMacro?'':'<th class="r">Port%</th>'}</tr></thead>
+    const headers=isMacro
+      ? `<th>Bucket</th><th class="r">Σ % TE</th>`
+      : `<th>Ticker</th><th>Name</th><th class="r">Active%</th>${hasRawExp?'<th class="r tip" data-tip="Holding\'s raw factor exposure (z-score) to this factor. Source: cs.hold[].raw_exp[idx] from FactSet Raw Factors section.">Raw Exp</th>':''}<th class="r tip" data-tip="Per-holding contribution to total portfolio TE. Sum of these across all holdings = factor\'s % TE shown in the KPI strip.">% TE</th><th class="r">Port%</th>`;
+    return `<table style="font-size:11px;width:100%"><thead><tr>${headers}</tr></thead>
       <tbody>${rows.map(r=>{
         if(isMacro){
           const [k,v]=r;
@@ -7897,9 +7934,13 @@ function oDrF(name,range){
         } else {
           const [t,v,h]=r;
           const tEsc=t.replace(/'/g,"\\'");
+          const rawV=hasRawExp&&Array.isArray(h.raw_exp)&&h.raw_exp.length>rawIdx?h.raw_exp[rawIdx]:null;
+          const rawCell=hasRawExp?`<td class="r" style="color:${rawV>0?'var(--pos)':rawV<0?'var(--neg)':'var(--txt)'}">${rawV!=null?(rawV>0?'+':'')+rawV.toFixed(2):'—'}</td>`:'';
           return `<tr class="clickable" onclick="closeDrill();oSt('${tEsc}')">
             <td style="color:var(--txth);font-weight:600">${tk(h)}</td>
             <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n||t}</td>
+            <td class="r ${(h.a||0)>0?'pos':(h.a||0)<0?'neg':''}">${(h.a||0)>=0?'+':''}${(h.a||0).toFixed(1)}%</td>
+            ${rawCell}
             <td class="r" style="color:${v>0?'var(--neg)':'var(--pos)'};font-weight:600">${(v>0?'+':'')+(v||0).toFixed(2)}%</td>
             <td class="r">${(h.p||0).toFixed(1)}%</td>
           </tr>`;
@@ -7939,67 +7980,131 @@ function oDrF(name,range){
       </div>
     </div>
 
-    <!-- Period selector + History -->
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px">
+    <!-- Period + Range selectors -->
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
         <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Impact period</span>
         ${periodChips}
       </div>
-      <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Chart metric</span>
-        ${metricChips}
-      </div>
       <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Range</span>
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Chart range</span>
         <div class="range-btns" style="margin:0">${rangeChips}</div>
       </div>
     </div>
-    <div class="card-title" style="margin-top:6px;margin-bottom:4px">${({exp:'Active Exposure History',ret:'Factor Return (per week)',cret:'Cumulative Factor Return'})[_facDrillMetric]||''}${expAvg!=null&&_facDrillMetric==='exp'?` <span style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px">avg ${fp(expAvg,2)}σ${expSd!=null?` · σ-band ±${f2(expSd,2)}`:''}</span>`:''}</div>
-    <div id="facDrillChart" style="height:240px;margin-bottom:14px"></div>
 
-    <!-- Contributors -->
+    <!-- CHART 1 — Risk panel (Active Exp + TE Contrib + Factor σ overlay) -->
+    <div class="card-title" style="margin-top:6px;margin-bottom:4px;display:flex;align-items:baseline;gap:10px">
+      <span>Risk profile over time</span>
+      <span style="font-size:10px;color:var(--textDim);font-weight:400">three lenses: active exposure (σ, left axis) · TE contribution (% of TE, right) · factor σ (intrinsic vol, right)</span>
+    </div>
+    <div id="facDrillRiskChart" style="height:230px;margin-bottom:14px"></div>
+
+    <!-- CHART 2 — Return panel with metric toggle -->
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap">
+      <div class="card-title" style="margin:0">${({ret:'Factor Return (per week)',cret:'Cumulative Factor Return',imp:'Portfolio Impact (per week)'})[_facDrillMetric]||'Return'}</div>
+      <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px;margin-left:auto">
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Chart metric</span>
+        ${metricChips}
+      </div>
+    </div>
+    <div id="facDrillReturnChart" style="height:200px;margin-bottom:14px"></div>
+
+    <!-- Contributors header + Universe pill -->
+    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap">
+      <div class="card-title" style="margin:0">Top / Bottom contributors</div>
+      <span style="font-size:10px;color:var(--textDim);font-weight:400">${isMacro?`aggregated by ${name==='Country'?'country':name==='Currency'?'currency':name==='Industry'?'industry':'classification'}`:`per-holding contribution to ${name}`}</span>
+      <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px;margin-left:auto">
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Universe</span>
+        ${['portfolio','benchmark','both'].map(u=>`<button class="pill${_facDrillUniverse===u?' active':''}" onclick="setFacDrillUniverse('${u}','${nm}')" style="font-size:10px;padding:2px 8px">${({portfolio:'Port',benchmark:'Bench',both:'Both'})[u]}</button>`).join('')}
+      </div>
+    </div>
     <div class="grid g2" style="gap:14px">
       <div>
-        <div class="card-title" style="display:flex;align-items:baseline;gap:8px">${topLabel}<span style="font-size:9px;color:var(--textDim);font-weight:400">Σ contribution to ${name}</span></div>
-        ${renderContribTable(topRows,topLabel,'No contributor data shipped')}
+        <div style="font-size:10px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:4px">${topLabel}</div>
+        ${renderContribTable(topRows,topLabel,'No contributor data shipped for this universe')}
       </div>
       <div>
-        <div class="card-title" style="display:flex;align-items:baseline;gap:8px">${botLabel}<span style="font-size:9px;color:var(--textDim);font-weight:400">most negative contribution</span></div>
+        <div style="font-size:10px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:4px">${botLabel}</div>
         ${renderContribTable(botRows,botLabel,isMacro&&name!=='Country'?'No diversifiers in this factor':'—')}
       </div>
     </div>
-    <p style="margin-top:12px;font-size:9px;color:var(--textDim);line-height:1.5">Source: cs.factors[] (current snapshot) · cs.hist.fac[name] (active exposure history) · cs.snap_attrib[name].hist (return/impact history) · cs.hold[].factor_contr[name] (per-holding contribution).${periodImpact.derived?' Period impact ᵉ marker = simple sum (FactSet full_period_imp not available for this period).':''}</p>`;
+    <p style="margin-top:12px;font-size:9px;color:var(--textDim);line-height:1.5">Source: cs.factors[] (current snapshot) · cs.snap_attrib[name].hist (per-period exp / bench_exp / ret / imp / dev / risk_contr) · cs.hold[].factor_contr[name] (per-holding % TE) · cs.hold[].raw_exp[idx] (per-holding raw factor z-score).${periodImpact.derived?' Period impact ᵉ marker = simple sum (FactSet full_period_imp not available for this period).':''}</p>`;
 
   m.classList.add('show');
 
-  // Render the chosen chart
+  // 2026-04-30 v2: render TWO charts —
+  //   1) Risk panel: Active Exp (left axis) + TE Contrib + Factor σ (right axis)
+  //   2) Return panel: pick one of {ret, cret, imp} via metric pills
   setTimeout(()=>{
-    const div=document.getElementById('facDrillChart');
-    if(!div)return;
     const T=THEME();
-    if(_facDrillMetric==='exp'){
-      const dates=facHist.map(h=>isoDate(h.d));
-      const vals=facHist.map(h=>h.e);
-      const traces=[];
-      if(expAvg!=null&&expSd!=null&&expSd>0){
-        traces.push({x:dates,y:dates.map(()=>expAvg+expSd),type:'scatter',mode:'lines',line:{color:'transparent'},showlegend:false,hoverinfo:'skip'});
-        traces.push({x:dates,y:dates.map(()=>expAvg-expSd),type:'scatter',mode:'lines',line:{color:'transparent'},fill:'tonexty',fillcolor:'rgba(148,163,184,0.10)',showlegend:false,hoverinfo:'skip'});
-      }
-      traces.push({x:dates,y:vals,type:'scatter',mode:'lines',name:'Active Exposure',line:{color:'#6366f1',width:2.4},fill:'tozeroy',fillcolor:'rgba(99,102,241,0.10)',hovertemplate:'%{x|%b %d %Y}<br>Active Exposure: %{y:.3f}<extra></extra>',hoverlabel:HOVERLABEL_THEME});
-      const shapes=[{type:'line',y0:0,y1:0,xref:'paper',x0:0,x1:1,line:{color:T.tick,dash:'dot',width:1}}];
-      if(expAvg!=null)shapes.push({type:'line',y0:expAvg,y1:expAvg,xref:'paper',x0:0,x1:1,line:{color:T.tick,dash:'dash',width:1}});
-      Plotly.newPlot('facDrillChart',traces,{...plotBg,xaxis:{...plotBg.xaxis,tickformat:'%b %y'},yaxis:{...plotBg.yaxis,title:'Active Exposure (σ)',zeroline:true,zerolinecolor:T.zero,zerolinewidth:1.5},shapes,hovermode:'x unified',showlegend:false,margin:{l:54,r:18,t:8,b:32}},modalPlotCfg);
-    } else if(_facDrillMetric==='ret'||_facDrillMetric==='cret'){
+
+    // ===== CHART 1 — RISK PANEL (3 lines, dual axis) =====
+    const riskDiv=document.getElementById('facDrillRiskChart');
+    if(riskDiv){
+      const dates=saHist.map(h=>isoDate(h.d));
+      const expVals=saHist.map(h=>h.bench_exp!=null?+(h.exp-h.bench_exp).toFixed(4):h.exp);  // active = exp - bench_exp
+      const teVals=saHist.map(h=>h.risk_contr);  // verified: matches cs.factors[].c
+      const sigmaVals=saHist.map(h=>h.dev);
+      const traces=[
+        {x:dates,y:expVals,type:'scatter',mode:'lines',name:'Active Exposure (σ)',
+          line:{color:'#6366f1',width:2.4},
+          hovertemplate:'%{x|%b %d %Y}<br>Active Exposure: %{y:.3f}σ<extra></extra>',
+          hoverlabel:HOVERLABEL_THEME,
+          yaxis:'y'},
+        {x:dates,y:teVals,type:'scatter',mode:'lines',name:'TE Contribution (%)',
+          line:{color:'#ef4444',width:2,dash:'solid'},
+          hovertemplate:'%{x|%b %d %Y}<br>TE Contrib: %{y:.2f}%<extra></extra>',
+          hoverlabel:HOVERLABEL_THEME,
+          yaxis:'y2'},
+        {x:dates,y:sigmaVals,type:'scatter',mode:'lines',name:'Factor σ (%)',
+          line:{color:'#94a3b8',width:1.5,dash:'dot'},
+          hovertemplate:'%{x|%b %d %Y}<br>Factor σ: %{y:.2f}%<extra></extra>',
+          hoverlabel:HOVERLABEL_THEME,
+          yaxis:'y2'}
+      ];
+      Plotly.newPlot('facDrillRiskChart',traces,{
+        paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+        font:{family:'DM Sans, system-ui',color:T.tick,size:10},
+        margin:{l:54,r:54,t:24,b:32},
+        hovermode:'x unified',
+        hoverlabel:HOVERLABEL_THEME,
+        legend:{orientation:'h',y:1.16,x:0.5,xanchor:'center',font:{size:10}},
+        xaxis:{...plotBg.xaxis,tickformat:'%b %y'},
+        yaxis:{...plotBg.yaxis,title:{text:'Active Exposure (σ)',font:{size:10,color:'#6366f1'}},zeroline:true,zerolinecolor:T.zero,zerolinewidth:1.5,tickfont:{color:'#6366f1',size:9}},
+        yaxis2:{title:{text:'% (TE Contrib & σ)',font:{size:10,color:'#ef4444'}},overlaying:'y',side:'right',gridcolor:'transparent',zeroline:false,tickfont:{color:'#ef4444',size:9},ticksuffix:'%'},
+        shapes:[{type:'line',y0:0,y1:0,xref:'paper',yref:'y',x0:0,x1:1,line:{color:T.tick,dash:'dot',width:1}}]
+      },modalPlotCfg);
+    }
+
+    // ===== CHART 2 — RETURN PANEL (toggle ret/cret/imp) =====
+    const retDiv=document.getElementById('facDrillReturnChart');
+    if(retDiv){
       const dates=saHist.map(h=>isoDate(h.d));
       const rets=saHist.map(h=>+(h.ret||0));
-      let yvals=rets,lbl='Factor Return (per week, %)',ttip='Factor Return: %{y:+.2f}%';
-      if(_facDrillMetric==='cret'){
-        let cum=0;
-        yvals=rets.map(r=>{cum+=r;return +cum.toFixed(3);});
-        lbl='Cumulative Factor Return (%)';
-        ttip='Cumulative: %{y:+.2f}%';
+      const imps=saHist.map(h=>+(h.imp||0));
+      let yvals,lbl,ttip,col,fillcol;
+      if(_facDrillMetric==='ret'){
+        yvals=rets; lbl='Factor Return (% per week)'; ttip='Factor Return: %{y:+.2f}%';
+        col='#a78bfa'; fillcol='rgba(167,139,250,0.10)';
+      } else if(_facDrillMetric==='cret'){
+        let cum=0; yvals=rets.map(r=>{cum+=r;return +cum.toFixed(3);});
+        lbl='Cumulative Factor Return (%)'; ttip='Cumulative: %{y:+.2f}%';
+        col='#a78bfa'; fillcol='rgba(167,139,250,0.10)';
+      } else {  // imp
+        yvals=imps; lbl='Portfolio Impact (% per week)'; ttip='Impact: %{y:+.3f}%';
+        col='#10b981'; fillcol='rgba(16,185,129,0.10)';
       }
-      Plotly.newPlot('facDrillChart',[{x:dates,y:yvals,type:'scatter',mode:'lines',name:lbl,line:{color:'#a78bfa',width:2.2},fill:'tozeroy',fillcolor:'rgba(167,139,250,0.10)',hovertemplate:'%{x|%b %d %Y}<br>'+ttip+'<extra></extra>',hoverlabel:HOVERLABEL_THEME}],{...plotBg,xaxis:{...plotBg.xaxis,tickformat:'%b %y'},yaxis:{...plotBg.yaxis,title:lbl,zeroline:true,zerolinecolor:T.zero,zerolinewidth:1.5,tickformat:'+.1f',ticksuffix:'%'},shapes:[{type:'line',y0:0,y1:0,xref:'paper',x0:0,x1:1,line:{color:T.tick,dash:'dot',width:1}}],hovermode:'x unified',showlegend:false,margin:{l:54,r:18,t:8,b:32}},modalPlotCfg);
+      Plotly.newPlot('facDrillReturnChart',[{x:dates,y:yvals,type:'scatter',mode:'lines',name:lbl,
+        line:{color:col,width:2.2},fill:'tozeroy',fillcolor:fillcol,
+        hovertemplate:'%{x|%b %d %Y}<br>'+ttip+'<extra></extra>',hoverlabel:HOVERLABEL_THEME}],
+        {paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+          font:{family:'DM Sans, system-ui',color:T.tick,size:10},
+          margin:{l:54,r:18,t:8,b:32},
+          hovermode:'x unified',showlegend:false,hoverlabel:HOVERLABEL_THEME,
+          xaxis:{...plotBg.xaxis,tickformat:'%b %y'},
+          yaxis:{...plotBg.yaxis,title:lbl,zeroline:true,zerolinecolor:T.zero,zerolinewidth:1.5,tickformat:'+.1f',ticksuffix:'%'},
+          shapes:[{type:'line',y0:0,y1:0,xref:'paper',x0:0,x1:1,line:{color:T.tick,dash:'dot',width:1}}]
+        },modalPlotCfg);
     }
   },50);
 }

@@ -9689,8 +9689,14 @@ function oDrChar(metric,range){
   if(!char)return;
   const meta=CHAR_META[metric]||{};
   const histKey=meta.histKey;
+  // 2026-04-30: prefer per-metric chars history (cs.hist.chars[metric]) when
+  // shipped — unblocks the drill modal's time series for every chars metric.
+  // Falls back to cs.hist.sum[].KEY for the legacy TE/Beta/AS path so older
+  // JSON files still work.
+  const charsHist=(cs.hist&&cs.hist.chars&&cs.hist.chars[metric])||null;
   const histAll=(cs.hist&&cs.hist.sum)||[];
-  const haveHist=histKey&&histAll.length>0;
+  const haveHist=(charsHist&&charsHist.length>0)||(histKey&&histAll.length>0);
+  const useCharsHist=charsHist&&charsHist.length>0;
   const diff=(char.p!=null&&char.b!=null&&isFinite(char.p)&&isFinite(char.b))?char.p-char.b:null;
   const cls=charDiffClass(metric,diff);
   const groupBadge=meta.group?`<span style="font-size:10px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.6px;margin-left:10px;padding:2px 7px;border:1px solid var(--grid);border-radius:3px;vertical-align:middle">${meta.group}</span>`:'';
@@ -9702,8 +9708,10 @@ function oDrChar(metric,range){
   if(haveHist){
     const rangeMap={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
     const pts=_charDrillRange==='All'?Infinity:(rangeMap[_charDrillRange]||52);
-    const sliced=pts===Infinity?histAll:histAll.slice(-pts);
-    const series=sliced.map(e=>e[histKey]).filter(v=>v!=null&&isFinite(v));
+    // Pick the right history source: per-metric chars (preferred) or fallback hist.sum
+    const sourceArr=useCharsHist?charsHist:histAll;
+    const sliced=pts===Infinity?sourceArr:sourceArr.slice(-pts);
+    const series=sliced.map(e=>useCharsHist?e.p:e[histKey]).filter(v=>v!=null&&isFinite(v));
     let sMin=null,sMax=null,sAvg=null,sSd=null,sLast=null,sPctile=null;
     if(series.length){
       sMin=Math.min(...series); sMax=Math.max(...series);
@@ -9760,13 +9768,17 @@ function oDrChar(metric,range){
 function renderCharHistChart(metric,histKey){
   const div=document.getElementById('charHistChart');
   if(!div)return;
+  const charsHist=(cs.hist&&cs.hist.chars&&cs.hist.chars[metric])||null;
   const histAll=(cs.hist&&cs.hist.sum)||[];
-  if(!histAll.length)return;
+  const useCharsHist=charsHist&&charsHist.length>0;
+  const sourceArr=useCharsHist?charsHist:histAll;
+  if(!sourceArr.length)return;
   const rangeMap={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
   const pts=_charDrillRange==='All'?Infinity:(rangeMap[_charDrillRange]||52);
-  const hist=pts===Infinity?histAll:histAll.slice(-pts);
+  const hist=pts===Infinity?sourceArr:sourceArr.slice(-pts);
   const dates=hist.map(e=>isoDate(e.d));
-  const series=hist.map(e=>e[histKey]);
+  const series=hist.map(e=>useCharsHist?e.p:e[histKey]);
+  const benchSeries=useCharsHist?hist.map(e=>e.b):null;
   const T=THEME();
   const meta=CHAR_META[metric]||{};
   const fmt=meta.fmt;
@@ -9775,18 +9787,29 @@ function renderCharHistChart(metric,histKey){
   const yprefix=fmt==='usdB'?'$':'';
   const valid=series.filter(v=>v!=null&&isFinite(v));
   const avg=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:null;
-  Plotly.newPlot('charHistChart',[
-    {x:dates,y:series,type:'scatter',mode:'lines',name:metric,
+  // When per-metric chars history is available AND has bench values, plot
+  // both port and bench so the user sees the relationship over time.
+  const traces=[
+    {x:dates,y:series,type:'scatter',mode:'lines',name:'Portfolio',
       line:{color:'#6366f1',width:2.2},
-      fill:'tozeroy',fillcolor:'rgba(99,102,241,0.12)',
-      hovertemplate:'%{x|%b %d %Y}<br>'+metric+': '+yprefix+'%{y:'+tickfmt+'}'+ysuffix+'<extra></extra>',
+      fill:benchSeries&&benchSeries.some(v=>v!=null)?'none':'tozeroy',
+      fillcolor:'rgba(99,102,241,0.12)',
+      hovertemplate:'%{x|%b %d %Y}<br>Portfolio: '+yprefix+'%{y:'+tickfmt+'}'+ysuffix+'<extra></extra>',
       connectgaps:false}
-  ],{
+  ];
+  if(benchSeries&&benchSeries.some(v=>v!=null&&isFinite(v))){
+    traces.push({x:dates,y:benchSeries,type:'scatter',mode:'lines',name:'Benchmark',
+      line:{color:'#94a3b8',width:1.4,dash:'dot'},
+      hovertemplate:'%{x|%b %d %Y}<br>Benchmark: '+yprefix+'%{y:'+tickfmt+'}'+ysuffix+'<extra></extra>',
+      connectgaps:false});
+  }
+  Plotly.newPlot('charHistChart',traces,{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans',color:T.tick,size:10},
-    margin:{l:54,r:18,t:8,b:32},
+    margin:{l:54,r:18,t:18,b:32},
     hovermode:'x unified',
-    showlegend:false,
+    showlegend:traces.length>1,
+    legend:{orientation:'h',y:1.12,x:0.5,xanchor:'center',font:{size:10}},
     xaxis:{...plotBg.xaxis,tickformat:'%b %y',nticks:8},
     yaxis:{...plotBg.yaxis,tickformat:tickfmt,ticksuffix:ysuffix,tickprefix:yprefix},
     shapes:avg!=null?[{type:'line',xref:'paper',x0:0,x1:1,y0:avg,y1:avg,line:{color:T.tick,dash:'dot',width:1}}]:[]

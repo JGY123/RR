@@ -1182,6 +1182,13 @@ class FactSetParserV3:
                     "ind":  self._group_hist_dict(industries),
                     "reg":  self._group_hist_dict(regions),
                     "grp":  self._group_hist_dict(groups),
+                    # 2026-04-30: per-period chars history. {metric: [{d,p,b}, ...]}.
+                    # Built from the same pc_rows used by hist.summary; lifts the
+                    # "no historical data" wall on the cardChars drill modal for
+                    # every numeric metric (TE / Beta / Active Share already
+                    # surfaced via hist.summary; the other ~35 fundamentals
+                    # were B114-blocked until now).
+                    "chars": self._build_hist_chars(pc_rows),
                 },
                 "unowned": unowned_hold,
                 "raw_fac": raw_fac,
@@ -1318,6 +1325,50 @@ class FactSetParserV3:
                     "bm": exp.get("bm"),
                     "a":  exp.get("a"),
                 })
+        return out
+
+    def _build_hist_chars(self, pc_rows):
+        """Per-period chars history. Output: {metric: [{d, p, b}, ...]} ordered by date.
+        Drives the cardChars drill modal time-series for every shipped metric —
+        unblocks B114 for numeric :P/:B pairs without changing the snapshot
+        cs.chars contract. Date matches Predicted Tracking Error column-style
+        d-string; metric names match _build_chars output.
+        """
+        out = {}
+        # Metrics already exposed at top-level (TE/Beta/AS) get aliases that
+        # match cs.chars[].m so the dashboard's CHAR_META map can look them up.
+        ALIAS = {
+            "Predicted Tracking Error (Std Dev)": "Tracking Error (%)",
+            "Axioma- Predicted Beta to Benchmark": "Beta",
+            "Port. Ending Active Share": "Active Share (%)",
+            "Market Capitalization": "Market Cap ($B)",
+        }
+        # Skip non-numeric / structural columns.
+        SKIP = {
+            "Period Start Date",
+            "Portfolio",
+            "Axioma World-Wide Fundamental Equity Risk Model MH 4",
+            "# of Securities",
+        }
+        for pc in pc_rows:
+            d = pc.get("d")
+            if not d:
+                continue
+            metrics = pc.get("_metrics", {})
+            for metric, pair in metrics.items():
+                if metric in SKIP:
+                    continue
+                p = pair.get("p")
+                b = pair.get("b")
+                if p is None and b is None:
+                    continue
+                # Special transform: Market Cap shipped as $B in chars but
+                # as raw $M in pc_metrics — divide by 1000 for consistency.
+                if metric == "Market Capitalization":
+                    p = round(p / 1000, 2) if p is not None else None
+                    b = round(b / 1000, 2) if b is not None else None
+                key = ALIAS.get(metric, metric)
+                out.setdefault(key, []).append({"d": d, "p": p, "b": b})
         return out
 
     # ------------------------------------------------------------ public

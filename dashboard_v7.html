@@ -502,6 +502,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <!-- Full-screen sectors view (chart + full table + side panel of top holdings) -->
 <div class="modal-overlay" id="secFsModal" style="z-index:998"><div id="secFsContent" style="background:var(--card);border-radius:10px;width:96vw;height:94vh;max-width:none;max-height:none;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 48px rgba(0,0,0,0.6)"></div></div>
 <div class="modal-overlay" id="riskBudgetModal"><div class="modal modal-lg" id="riskBudgetContent"></div></div>
+<!-- 2026-04-30 (Q88): per-tile "About this tile" popup. Anti-fabrication / trust layer:
+     every tile can advertise its data source, math, and caveats. -->
+<div class="modal-overlay" id="aboutModal"><div class="modal" id="aboutContent"></div></div>
 <div class="fs-modal" id="fsModal">
   <button class="fs-close" onclick="closeFsModal()" title="Close">&times;</button>
   <div class="fs-chart">
@@ -646,6 +649,97 @@ const fp=(v,d)=>{if(d==null)d=_prefs.precision==='full'?2:1;if(v==null||Number.i
 // when the SEDOL→ticker_region merge succeeded; fall back to h.t (SEDOL).
 // Use this in DISPLAY contexts only — keep h.t in onclick lookups.
 const tk=h=>(h&&(h.tkr_region||h.t))||'';
+
+// 2026-04-30 (Q88): per-tile "About this tile" registry.
+// Each entry: { title, what, how, source, caveats, related }.
+// "what" = plain-English purpose. "how" = math/calculation. "source" =
+// JSON path / FactSet field. "caveats" = limitations / known gaps /
+// synth markers. "related" = links to other tiles for cross-reference.
+const _ABOUT_REG={
+  cardSectors:{
+    title:'Sector Active Weights',
+    what:'Portfolio vs benchmark sector exposure with active-weight + per-sector TE contribution + spotlight ranks per sector. Click any sector for the holdings drill.',
+    how:'Active = Port % − Bench %. TE Contrib = Σ h.tr for holdings in sector. Sector ORVQ averages computed with the global Wtd/Avg toggle (Wtd = weighted by port wt or bench wt per Universe pill; Avg = simple).',
+    source:'cs.sectors[] (FactSet "Sector Weights" section, group-aggregate rows). ORVQ averages aggregated from cs.hold[].over/rev/val/qual.',
+    caveats:'Synth markers (ᵉ) appear next to any value derived rather than received from FactSet. Bench-only sectors visible in greyed-out style under Port mode (per Q17 decision).',
+    related:'cardCountry · cardGroups · cardRegions'
+  },
+  cardCountry:{
+    title:'Country Exposure',
+    what:'Geographic country exposure as map / chart / table. Map view colors countries by selected metric (Active, Port, Bench, Avg ranks). Chart view = Country × Factor TE Heatmap. Table view = full country breakdown.',
+    how:'Active wt = Port % − Bench %. Country × Factor TE matrix: Σ h.factor_contr[fname] per country, signed (red = adds risk, green = diversifies). Top-N pill applies to all 3 sub-views.',
+    source:'cs.countries[] (FactSet "Country" section). Per-country factor contributions from cs.hold[].factor_contr aggregated by h.co.',
+    caveats:'Country = country-of-RISK (issuer domicile), not country-of-listing. Toggle planned in Q25 backlog. Map projection currently equirectangular; Robinson recommended (Q26).',
+    related:'cardRegions (parent containers) · cardGroups'
+  },
+  cardFacRisk:{
+    title:'Factor Risk Snapshot',
+    what:'Point-in-time view of factor positioning. X = active exposure (UW ← → OW), Y = TE contribution (signed adds/diversifies), bubble size = factor σ (intrinsic volatility), color = adds vs diversifies.',
+    how:'Active exposure = portfolio σ exposure − benchmark σ exposure (Axioma factor model). TE contribution = factor\'s signed contribution to total tracking error. Quadrants labeled: OW · risk-on bet / UW · risk-off / OW hedge / UW yet adds.',
+    source:'cs.factors[] with f.a (active σ), f.c (TE %), f.dev (factor σ). KPI strip uses cs.sum.te / pct_specific / pct_factor.',
+    caveats:'Snapshot only — the latest weekly observation. For period view, see Factor Performance Map. Bubble size encoding (factor σ) labelled in subtitle.',
+    related:'cardFacButt (period view) · cardFacDetail (table) · TE modal Factor pie'
+  },
+  cardFacButt:{
+    title:'Factor Performance Map',
+    what:'Period view of factor positioning. Period set by global Impact selector (default 3M). X = avg active exposure over period, Y = period impact (paying off ↑), bubble size = avg TE contribution.',
+    how:'Per-factor avg exposure / impact pulled from cs.snap_attrib[name].hist sliced to period. Impact = sum of weekly imp values across the trailing window (or compounded full_period_imp at "Full"). Quadrants: OW · working ✓ / UW · missed / OW · hurting / UW · dodged.',
+    source:'cs.snap_attrib (per-factor weekly history). Date selection respects the week-selector (slice ends at selected week).',
+    caveats:'Avg-period axes pair with period impact — apples-to-apples. When period === "Last Wk", falls back to single-observation snapshot. Per-holding impact attribution is C-tier from FactSet (not yet shipped).',
+    related:'cardFacRisk (snapshot) · cardAttribWaterfall · TE modal'
+  },
+  cardFacDetail:{
+    title:'Factor Detail',
+    what:'Sortable factor table: Active Exp / % TE / % Fac / Return / Impact (period). Click any row for per-factor drill.',
+    how:'% TE = f.c (factor\'s contribution to total TE). % Fac = % TE / cs.sum.pct_factor × 100 (share of factor side only). Impact = period-aware via global Impact selector.',
+    source:'cs.factors[] (RiskM section). Active = f.a, TE = f.c, Return = f.ret, Impact = period-aware getImpactForPeriod.',
+    caveats:'When historical impact period > 1 wk, sums weekly contributions (standard attribution math). Profitability has reversed convention (positive = good, marked with ✦).',
+    related:'cardFacRisk · cardFacButt'
+  },
+  cardScatter:{
+    title:'Stock-Specific TE vs Total TE Contribution',
+    what:'Quadrant scatter — every holding placed by stock-specific TE (x) vs total TE contribution (y). Bubble size = port weight. Color = active weight (red UW → green OW). Top-right cluster = high-conviction concentrated bets; bottom-right = high port weight + low risk consumed (efficient).',
+    how:'x = h.mcr (FactSet %S, stock-specific TE component). y = h.tr (FactSet %T, total TE contribution). Size = port wt. Color = h.a (active wt) on a diverging scale.',
+    source:'cs.hold[] (Security section). Color and bubble size both derive directly from the holding object — no computed values, all FactSet primitive fields.',
+    caveats:'Latest snapshot only — no period dimension here (factor period selector does not apply to per-holding TE). Per-holding rank null gracefully renders grey (was painting Q5-red for 23% of holdings before fix).',
+    related:'cardMCR · cardHoldings · cardWatchlist'
+  },
+  cardChars:{
+    title:'Portfolio Characteristics',
+    what:'Fundamentals comparison — every metric (P/E, P/B, ROE, sales growth, etc.) shown port vs benchmark with diff. Click any row to drill into the metric.',
+    how:'Port and bench values come straight from FactSet "Portfolio Characteristics" section (header-driven extraction; every :P/:B column pair becomes a metric row). Diff = Port − Bench.',
+    source:'cs.chars[] for current snapshot. Per-week historical chars are extracted by parser but not yet plotted (drift coming with the chars time-series modal).',
+    caveats:'~38-39 metrics shipped (parser is dynamic; count grows when FactSet adds columns). Some metrics are inverted (P/E lower=better) — the diff color does NOT account for this yet.',
+    related:'cardScatter · cardSectors'
+  },
+  cardHoldings:{
+    title:'Portfolio Holdings',
+    what:'Full per-holding table with port/bench/active weights, TE contribution, RBE (risk budget efficiency = |active|/|TE|), spotlight ranks (O/R/V/Q). Card view alternative for browsing.',
+    how:'Sortable by any column. Filterable by sector + rank. Search by ticker or name. Top-10 TE pill in title shows what % of total |TE| the top 10 holdings drive (concentration check).',
+    source:'cs.hold[] (FactSet "Security" section). Ticker shown as TKR-REGION via tk(h) helper (h.tkr_region from SEDOL→Raw Factors merge); falls back to SEDOL.',
+    caveats:'Includes active port + material BM-only (b > 0.5% or |tr| > 1%). New format: market cap, ADV, vol, ranks moved to Raw Factors and merged via SEDOL onto each holding.',
+    related:'cardWatchlist · cardScatter · cardMCR'
+  }
+};
+function openAbout(tileId){
+  const m=document.getElementById('aboutModal');
+  const c=document.getElementById('aboutContent');
+  if(!m||!c)return;
+  const e=_ABOUT_REG[tileId];
+  if(!e){c.innerHTML=`<h2>About<button class="close" onclick="$('aboutModal').classList.remove('show')">&times;</button></h2><p style="color:var(--txt);font-size:12px">No reference yet for ${tileId}. Add to _ABOUT_REG.</p>`;m.classList.add('show');return;}
+  c.innerHTML=`
+    <h2>${e.title}<button class="close" onclick="$('aboutModal').classList.remove('show')">&times;</button></h2>
+    <div style="font-size:12px;color:var(--txth);line-height:1.6">
+      <p style="margin:0 0 10px"><strong style="color:var(--pri);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">What it shows</strong><br>${e.what}</p>
+      <p style="margin:0 0 10px"><strong style="color:var(--acc);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">How it\'s computed</strong><br>${e.how}</p>
+      <p style="margin:0 0 10px"><strong style="color:var(--pos);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">Source</strong><br>${e.source}</p>
+      <p style="margin:0 0 10px"><strong style="color:#f59e0b;text-transform:uppercase;font-size:9px;letter-spacing:0.5px">Caveats</strong><br>${e.caveats}</p>
+      ${e.related?`<p style="margin:0 0 6px;padding-top:8px;border-top:1px solid var(--grid)"><strong style="color:var(--textDim);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">Related tiles</strong><br><span style="color:var(--txt)">${e.related}</span></p>`:''}
+    </div>`;
+  m.classList.add('show');
+}
+// Tiny ⓘ button HTML for inclusion in tile headers
+const aboutBtn=tileId=>`<button onclick="openAbout('${tileId}')" title="About this tile — what it shows, how it's computed, source, caveats" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:1px 7px;border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;line-height:1.2">ⓘ</button>`;
 const rc=r=>r<=1?'var(--r1)':r<=2?'var(--r2)':r<=3?'var(--r3)':r<=4?'var(--r4)':'var(--r5)';
 const as=v=>{let a=Math.abs(v);return a>8?'color:var(--neg);font-weight:600':a>5?'color:var(--warn);font-weight:500':v>0?'color:var(--pos)':'color:var(--neg)'};
 const gt=(arr,key)=>{if(!arr||arr.length<2)return'<span class="trend flat">—</span>';let l=arr[arr.length-1][key],p=arr[arr.length-2][key];let d=l-p;return d>0.01?'<span class="trend up">&#9650;</span>':d<-0.01?'<span class="trend down">&#9660;</span>':'<span class="trend flat">&#9644;</span>'};
@@ -1433,6 +1527,7 @@ function rExp(){
   <div class="card" id="cardSectors" style="margin-bottom:16px">
     <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Sector Active Weights</div><span id="secFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
+      ${aboutBtn('cardSectors')}
       ${secColDropHtml()}
       <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
@@ -1452,7 +1547,10 @@ function rExp(){
           <div class="card-title tip" data-tip="Factor Risk Snapshot — point-in-time view. X = active exposure (UW ← → OW, σ). Y = TE contribution (% TE, +/- adds vs diversifies). Bubble size = factor's own volatility (σ). KPI strip shows Idio vs Factor portion of total TE. Click a bubble to drill." oncontextmenu="showNotePopup(event,'cardFacRisk');return false">Factor Risk Snapshot</div>
           <span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × risk · bubble = factor σ</span>
         </div>
-        <button class="export-btn" title="Full screen — bigger snapshot quadrant" onclick="openFacRiskFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${aboutBtn('cardFacRisk')}
+          <button class="export-btn" title="Full screen — bigger snapshot quadrant" onclick="openFacRiskFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+        </div>
       </div>
       <div id="facRiskKpi" style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap;align-items:center"></div>
       <div id="facRiskDiv" style="height:440px"></div>
@@ -1472,6 +1570,7 @@ function rExp(){
             <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;padding:0 6px">Period</span>
             ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" data-fac-period="${p}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
           </div>
+          ${aboutBtn('cardFacButt')}
           <button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
           <button class="export-btn" id="facPerfCsv" onclick="exportFacAttribCsv()" style="padding:3px 8px;font-size:11px;display:${_facPerfView==='waterfall'?'inline-block':'none'}">CSV</button>
         </div>
@@ -1579,7 +1678,7 @@ function rExp(){
   <!-- Row 7: Scatter + Treemap -->
   <div class="grid g2">
     <div class="card" id="cardScatter">
-      <div class="flex-between"><div class="card-title tip" data-tip="Stock-specific TE (x) vs total TE contribution (y). Bubble size = portfolio weight. Color = active weight. Click a dot for details." oncontextmenu="showNotePopup(event,'cardScatter');return false">MCR vs TE Contribution</div>
+      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Stock-specific TE (x) vs total TE contribution (y). Bubble size = portfolio weight. Color = active weight (red = UW, green = OW). Click a dot for stock detail." oncontextmenu="showNotePopup(event,'cardScatter');return false">Stock-Specific TE vs Total TE Contribution</div><span style="font-size:10px;color:var(--textDim);font-weight:400">stock-specific × total · bubble = port wt</span></div><div style="display:flex;gap:6px;align-items:center">${aboutBtn('cardScatter')}</div>
       <div class="export-bar" style="display:flex;gap:4px">
         <button onclick="openFullScreen('scatter')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         <button class="export-btn" title="Download CSV" onclick="exportScatCsv()">CSV</button>
@@ -4837,7 +4936,7 @@ function rScat(s){
     text:hold.map(h=>h.t),textposition:'top center',textfont:{size:9,color:THEME().tick},
     marker:{size:hold.map(h=>Math.max(h.p*3,6)),opacity:0.8,color:hold.map(h=>h.a),colorscale:[[0,negC],[0.5,midC],[1,posC]],showscale:true,colorbar:{title:'Active',titlefont:{size:10},tickfont:{size:9},len:0.8}},
     hovertemplate:'%{text}<br>Stock-Specific TE: %{x:.2f}<br>TE Contrib: %{y:.2f}%<extra></extra>'
-  }],{...plotBg,margin:{...(plotBg.margin||{}),r:60},xaxis:{...plotBg.xaxis,title:'Stock-Specific TE (MCR)',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1},yaxis:{...plotBg.yaxis,title:'TE Contribution %'}},plotCfg);
+  }],{...plotBg,margin:{...(plotBg.margin||{}),r:60},xaxis:{...plotBg.xaxis,title:'Stock-Specific TE (% of TE)',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1},yaxis:{...plotBg.yaxis,title:'Total TE Contribution (%)'}},plotCfg);
   if(el&&el.on){el.on('plotly_click',function(d){let t=d&&d.points&&d.points[0]&&d.points[0].text;if(t&&typeof oSt==='function')oSt(t);});}
 }
 function exportScatCsv(){
@@ -8946,7 +9045,7 @@ function openFullScreen(type){
   let modal=$('fsModal');
   if(!modal)return;
   let s=cs;
-  let titles={facmap:'Factor Risk Map \u2014 '+(s?s.name:''),scatter:'MCR vs TE Contribution \u2014 '+(s?s.name:''),country:'Country Exposure \u2014 '+(s?s.name:'')};
+  let titles={facmap:'Factor Risk Map \u2014 '+(s?s.name:''),scatter:'Stock-Specific TE vs Total TE Contribution \u2014 '+(s?s.name:''),country:'Country Exposure \u2014 '+(s?s.name:'')};
   let explains={
     facmap:'Each bubble = one factor. Position = exposure \u00d7 volatility. Size = tracking error contribution. Click to explore.',
     scatter:'Each dot = one holding. Ideal: top-left (high risk, high return). Click any dot for detail.',
@@ -9049,7 +9148,10 @@ function renderFsScatter(s){
   let xV=hold.map(function(h){return h.mcr||0;});
   let yV=hold.map(function(h){return h.tr||0;});
   let sz=hold.map(function(h){return Math.max(Math.sqrt(h.p||0)*9,5);});
-  let colors=hold.map(function(h){return h.r===1?'#10b981':h.r===2?'#34d399':h.r===3?'#f59e0b':h.r===4?'#fb923c':'#ef4444';});
+  // 2026-04-30: null-rank guard — was falling through to Q5 red, painting
+  // ~23% of GSC holdings (those with no Spotlight rank merged) as worst-quintile
+  // when their rank is simply unknown. Per data-integrity policy, neutral grey.
+  let colors=hold.map(function(h){return h.r==null?'#94a3b8':h.r===1?'#10b981':h.r===2?'#34d399':h.r===3?'#f59e0b':h.r===4?'#fb923c':'#ef4444';});
   Plotly.newPlot('fsChartDiv',[{
     type:'scatter',mode:'markers',
     x:xV,y:yV,
@@ -9085,7 +9187,7 @@ function _renderFsScatPanel(hold,selTicker){
       '<td style="padding:4px 4px;color:#94a3b8;font-size:10px">'+(h.sec||'').replace(/\s+/g,' ').substring(0,10)+'</td>'+
       '<td style="text-align:right;padding:4px 6px;color:#e2e8f0">'+(h.p||0).toFixed(1)+'%</td>'+
       '<td style="text-align:right;padding:4px 6px;font-weight:600;color:#e2e8f0">'+(h.tr!=null?h.tr.toFixed(1)+'%':'—')+'</td>'+
-      '<td style="text-align:right;padding:4px 6px;color:'+(h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+
+      '<td style="text-align:right;padding:4px 6px;color:'+(h.r==null?'#94a3b8':h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+
         (h.r!=null?'Q'+h.r:'—')+'</td>'+
       '</tr>';
   }).join('');
@@ -9150,7 +9252,7 @@ function _renderFsHoldDetail(ticker){
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:11px">'+
     '<div style="color:#64748b">Port %</div><div style="color:#e2e8f0">'+(h.p||0).toFixed(2)+'%</div>'+
     '<div style="color:#64748b">Active %</div><div style="color:'+(h.a>=0?'#10b981':'#ef4444')+'">'+(h.a>=0?'+':'')+((h.a||0).toFixed(2))+'%</div>'+
-    '<div style="color:#64748b">Rank</div><div style="color:'+(h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+(h.r!=null?'Q'+h.r:'—')+'</div>'+
+    '<div style="color:#64748b">Rank</div><div style="color:'+(h.r==null?'#94a3b8':h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+(h.r!=null?'Q'+h.r:'—')+'</div>'+
     '<div style="color:#64748b">Sector</div><div style="color:#94a3b8;font-size:10px">'+(h.sec||'—')+'</div>'+
     '<div style="color:#64748b">TE Contrib</div><div style="font-weight:600;color:#e2e8f0">'+(h.tr!=null?h.tr.toFixed(1)+'%':'—')+'</div>'+
     '</div>'+facHtml;

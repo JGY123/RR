@@ -4367,9 +4367,24 @@ function rUpdateCorr(){
   let selFacEls=document.querySelectorAll('.corr-fac-chk:checked');
   let selFacs=selFacEls.length?[...selFacEls].map(el=>el.value):null;
 
-  // Compute correlation from hist.fac
+  // 2026-04-30 (user reported "Factor Correlation Matrix is empty saying
+  // no factor history available why is it?"): cs.hist.fac is empty in
+  // current samples; the parser ships per-factor history in cs.snap_attrib
+  // instead. Switch the source: synthesize a hist.fac-shape view from
+  // snap_attrib.hist.exp + bench_exp (active = exp − bench_exp).
   let facHist=s.hist.fac;
+  let snap=s.snap_attrib||{};
   let hasFacData=facHist&&Object.values(facHist).some(v=>v&&v.length>0);
+  // Fallback to snap_attrib if hist.fac is empty
+  if(!hasFacData){
+    facHist={};
+    Object.entries(snap).forEach(([name,sa])=>{
+      const h=sa.hist||[];
+      if(!h.length)return;
+      facHist[name]=h.map(p=>({d:p.d, e:p.exp, bm:p.bench_exp}));
+    });
+    hasFacData=Object.values(facHist).some(v=>v&&v.length>0);
+  }
   if(!hasFacData){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:16px;text-align:center">No factor history available</p>';return;}
 
   let allFacNames=Object.keys(facHist);
@@ -4377,7 +4392,7 @@ function rUpdateCorr(){
   if(facNames.length<2){wrap.innerHTML='<p style="font-size:12px;color:var(--txt);padding:12px;text-align:center">Select at least 2 factors</p>';return;}
 
   // Slice each factor series to period — use ACTIVE exposure (e - bm)
-  // B76: monthly dedupe keeps the FIRST observation per YYYY-MM; assumes hist.fac is chronologically ordered (parser-guaranteed)
+  // B76: monthly dedupe keeps the FIRST observation per YYYY-MM
   let sliced={};
   facNames.forEach(fn=>{
     let arr=facHist[fn]||[];
@@ -6253,7 +6268,11 @@ function riskHistoricalTrends(s){
       <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:0">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
       ${aboutBtn('cardRiskHistTrends')}
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px">${cards}</div>
+    <!-- 2026-04-30 (user feedback "Historical Trends leaking off page"):
+         was repeat(4, minmax(180px,1fr)) → 768px floor, overflows narrow tabs.
+         Switched to auto-fit so cards wrap to a new row when the viewport
+         is narrower than 4×min-card. min-width also bumped down to 160px. -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px">${cards}</div>
   </div>`;
 }
 
@@ -6380,7 +6399,11 @@ function rRisk(){
     </div>
   </div>
 
-  ${rCalHeatCard(s)}
+  <!-- 2026-04-30 (user feedback): cardCalHeat removed from Risk tab.
+       Calendar-heatmap visualization didn't add much over the existing
+       TE charts (Historical Trends + TE Stacked). Pattern preserved in
+       viz-specs/cardCalendarHeatmap-spec.md for potential reuse elsewhere. -->
+  ${''}
 
   ${riskHistoricalTrends(s)}
 
@@ -6427,6 +6450,10 @@ function rRisk(){
       <button class="fgp" onclick="setFacGroup('mktBehavior',this)">Market Behavior</button>
       <button class="fgp prof" onclick="setFacGroup('profitability',this)">Profitability</button>
       <button class="fgp" onclick="setFacGroup('secondary',this)">Secondary</button>
+      <!-- 2026-04-30 (user feedback "no way back to original view"):
+           explicit Reset button restores: All group, threshold 0, mode TE,
+           every checkbox checked. -->
+      <button onclick="resetFacContrib()" title="Reset to default view (All factors, threshold 0, TE mode)" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--grid);background:none;color:var(--textDim);cursor:pointer;font-family:inherit;margin-left:auto">⤾ Reset</button>
     </div>
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
       <label style="font-size:11px;display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--txt)">
@@ -6469,8 +6496,20 @@ function rRisk(){
       <th class="r tip" data-col="trend" data-tip="Weekly active-exposure history for this factor.">Trend</th>
     </tr></thead><tbody>${facMCR.length?facMCR.map(f=>{
       let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
-      let facHist=s.hist.fac[f.n];
-      let sparkVals=facHist?facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)):[];
+      // 2026-04-30 (user reported "Factors Exposure Trend column is empty"):
+      // Same root cause as Correlation Matrix — cs.hist.fac empty in current
+      // samples. Fall back to cs.snap_attrib[name].hist (active exposure
+      // = exp − bench_exp) so the sparkline renders.
+      let facHist=s.hist.fac&&s.hist.fac[f.n];
+      let sparkVals=[];
+      if(facHist&&facHist.length){
+        sparkVals=facHist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0));
+      } else {
+        const sa=s.snap_attrib&&s.snap_attrib[f.n];
+        if(sa&&sa.hist&&sa.hist.length){
+          sparkVals=sa.hist.map(p=>p.bench_exp!=null?+(p.exp-p.bench_exp).toFixed(4):(p.exp||0));
+        }
+      }
       return`<tr class="clickable" style="cursor:pointer" onclick="oDrFRisk('${f.n.replace(/'/g,"\\'")}')">
         <td data-col="n" style="color:var(--txth);font-weight:500">${f.n}</td>
         <td class="r ${cls}" data-col="e" data-sv="${f.e??''}">${fp(f.e,3)}</td>
@@ -6506,16 +6545,12 @@ function rRisk(){
     <div id="rbdFooter" style="margin-top:6px;font-size:10px;color:var(--textDim);text-align:right"></div>
   </div>
 
-  <!-- 2026-04-29: Country × Factor TE heatmap on Risk tab. Same renderer as
-       cardCountry's chart-view, retargeted to a separate div. Honors Universe
-       pill, ⚙ Cols picker, and country picker (chart-only). -->
-  <div class="card" id="cardRiskCtryFactor" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Country × Factor TE heatmap. Cell color = signed factor TE contribution (red=adds risk, green=diversifies). Click any cell to drill into that country's holdings, sorted by the clicked factor. Same data source as cardCountry's chart view." oncontextmenu="showNotePopup(event,'cardRiskCtryFactor');return false" style="margin:0">Country × Factor TE Heatmap</div>${aboutBtn('cardRiskCtryFactor')}</div>
-      <div id="riskCtryHeatPickerSlot" style="display:flex;gap:6px;align-items:center"></div>
-    </div>
-    <div id="riskCtryHeatDiv" style="min-height:280px"></div>
-  </div>
+  <!-- 2026-04-30 (user feedback): cardRiskCtryFactor removed from Risk tab.
+       It was a duplicate of cardCountry's Chart-view heatmap on the Exposures
+       tab — same renderer (rCountryChart), same data, same drill behavior.
+       Per "totally redundant with the country on the main tab and then
+       maybe even remove". -->
+  ${''}
 
   <!-- Factor Exposure / Return Time Series with toggles -->
   <div class="card" id="cardFacHist" style="margin-bottom:16px">
@@ -6565,7 +6600,7 @@ function rRisk(){
   // Stops one bad render from cascading into N silent blanks. Lesson from B102 ship.
   setTimeout(()=>{
     const riskFns=[
-      ['rCalHeat',()=>rCalHeat()],
+      // ['rCalHeat',()=>rCalHeat()],  // 2026-04-30: cardCalHeat removed
       ['rRiskHistMinis',()=>rRiskHistMinis(s)],
       ['rTEStackedArea',()=>rTEStackedArea(s,factorRisk,idioRisk)],
       ['rMultiBeta',()=>rMultiBeta(s)],
@@ -6573,7 +6608,7 @@ function rRisk(){
       ['updateFacExpChart',()=>updateFacExpChart()],
       ['rUpdateCorr',()=>rUpdateCorr()],
       ['rRiskByDim',()=>rRiskByDim(s)],   // B102
-      ['rRiskCtryFactorHeatmap',()=>rCountryChart(s,'riskCtryHeatDiv')],   // 2026-04-29
+      // ['rRiskCtryFactorHeatmap',...],  // 2026-04-30: cardRiskCtryFactor removed (redundant with cardCountry chart-view)
     ];
     for(const [name,fn] of riskFns){
       try{fn();}
@@ -6827,6 +6862,25 @@ function setFacBarAll(v){
   document.querySelectorAll('.fac-bar-chk').forEach(chk=>{
     chk.checked=v?parseFloat(chk.dataset.c||'0')>=thresh:false;
   });
+  rRiskFacBarsMode();
+}
+
+// 2026-04-30 (user feedback): full reset back to the default view of
+// cardFacContribBars — All group, threshold 0, mode TE, every checkbox on.
+function resetFacContrib(){
+  // Threshold slider → 0
+  const sl=document.getElementById('facThreshSlider');
+  if(sl){sl.value=0;const lbl=document.getElementById('facThreshVal');if(lbl)lbl.textContent='0.0';}
+  // Group pills → All
+  document.querySelectorAll('.fgp').forEach(b=>b.classList.remove('active'));
+  const allBtn=document.querySelector('.fgp[onclick*="\'all\'"]');
+  if(allBtn)allBtn.classList.add('active');
+  // Mode → TE
+  window._rfbMode='te';
+  const modeRadio=document.querySelector('input[name="riskFacMode"][value="te"]');
+  if(modeRadio)modeRadio.checked=true;
+  // Every checkbox checked
+  document.querySelectorAll('.fac-bar-chk').forEach(chk=>{chk.checked=true;});
   rRiskFacBarsMode();
 }
 

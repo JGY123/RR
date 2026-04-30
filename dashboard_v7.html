@@ -721,21 +721,17 @@ const _ABOUT_REG={
     caveats:'When historical impact period > 1 wk, sums weekly contributions (standard attribution math). Profitability has reversed convention (positive = good, marked with ✦).',
     related:'cardFacRisk · cardFacButt'
   },
-  cardScatter:{
-    title:'Stock-Specific TE vs Total TE Contribution',
-    what:'Quadrant scatter — every holding placed by stock-specific TE (x) vs total TE contribution (y). Bubble size = port weight. Color = active weight (red UW → green OW). Top-right cluster = high-conviction concentrated bets; bottom-right = high port weight + low risk consumed (efficient).',
-    how:'x = h.mcr (FactSet %S, stock-specific TE component). y = h.tr (FactSet %T, total TE contribution). Size = port wt. Color = h.a (active wt) on a diverging scale.',
-    source:'cs.hold[] (Security section). Color and bubble size both derive directly from the holding object — no computed values, all FactSet primitive fields.',
-    caveats:'Latest snapshot only — no period dimension here (factor period selector does not apply to per-holding TE). Per-holding rank null gracefully renders grey (was painting Q5-red for 23% of holdings before fix).',
-    related:'cardMCR · cardHoldings · cardWatchlist'
-  },
+  // 2026-04-30: cardScatter removed (commit 2eff789); kept entry as inert
+  // alias mapping to its replacement so any stale `related:` cross-references
+  // don't render "No reference yet" — they fall through to cardHoldRisk.
+  // Scheduled for full deletion when no other entry references it.
   cardChars:{
     title:'Portfolio Characteristics',
-    what:'Fundamentals comparison — every metric (P/E, P/B, ROE, sales growth, etc.) shown port vs benchmark with diff. Click any row to drill into the metric.',
-    how:'Port and bench values come straight from FactSet "Portfolio Characteristics" section (header-driven extraction; every :P/:B column pair becomes a metric row). Diff = Port − Bench.',
-    source:'cs.chars[] for current snapshot. Per-week historical chars are extracted by parser but not yet plotted (drift coming with the chars time-series modal).',
-    caveats:'~38-39 metrics shipped (parser is dynamic; count grows when FactSet adds columns). Some metrics are inverted (P/E lower=better) — the diff color does NOT account for this yet.',
-    related:'cardScatter · cardSectors'
+    what:'Fundamentals comparison — every metric (P/E, P/B, ROE, sales growth, etc.) shown port vs benchmark with diff. Click any row to drill into the metric — full time-series for all 39 metrics from cs.hist.chars.',
+    how:'Port and bench values come straight from FactSet "Portfolio Characteristics" section (header-driven extraction; every :P/:B column pair becomes a metric row). Diff = Port − Bench. Inverted metrics (P/E variants, P/B, EV/Sales etc.) flip diff color and carry a ↓ marker.',
+    source:'cs.chars[] for current snapshot · cs.hist.chars[metric] for per-week history (39 metrics × ~69 weeks for GSC sample).',
+    caveats:'~39 metrics shipped (parser is dynamic; count grows when FactSet adds columns). Inverted (lower-is-better) handling implemented in commit 11a5c7e — diff cell flips color and the metric row shows ↓.',
+    related:'cardHoldRisk · cardSectors · cardHoldings'
   },
   cardHoldings:{
     title:'Portfolio Holdings',
@@ -743,7 +739,7 @@ const _ABOUT_REG={
     how:'Sortable by any column. Filterable by sector + rank. Search by ticker or name. Top-10 TE pill in title shows what % of total |TE| the top 10 holdings drive (concentration check).',
     source:'cs.hold[] (FactSet "Security" section). Ticker shown as TKR-REGION via tk(h) helper (h.tkr_region from SEDOL→Raw Factors merge); falls back to SEDOL.',
     caveats:'Includes active port + material BM-only (b > 0.5% or |tr| > 1%). New format: market cap, ADV, vol, ranks moved to Raw Factors and merged via SEDOL onto each holding.',
-    related:'cardWatchlist · cardScatter · cardMCR'
+    related:'cardHoldRisk · cardWatchlist · cardMCR'
   },
   cardGroups:{
     title:'Redwood Groups',
@@ -767,7 +763,7 @@ const _ABOUT_REG={
     how:'Quintile assignments from FactSet (Spotlight ranks merged via SEDOL → Raw Factors group_size=23). Per-quintile: count, average other-3-ranks, port wt, bench wt, active wt, TE contrib. Per-quintile factor contribution columns sum from h.factor_contr.',
     source:'cs.ranks[] (parser-built per-quintile aggregates). Per-holding rank from cs.hold[].over/rev/val/qual.',
     caveats:'~23% of GSC holdings had null rank in last sample (no SEDOL match) — these render as separate "—" bucket rather than miscategorized.',
-    related:'cardChars · cardScatter · cardHoldings'
+    related:'cardChars · cardHoldRisk · cardHoldings'
   },
   cardWatchlist:{
     title:'My Watchlist',
@@ -887,7 +883,7 @@ const _ABOUT_REG={
     how:'x = h.a (active weight = port − bench). y = h.tr (FactSet %T, total TE contribution, signed). Bubble area ∝ |h.mcr| (FactSet %S, the stock-specific component of that holding\'s TE). Color = sign of h.tr (red = adds risk, green = diversifies).',
     source:'cs.hold[] (FactSet "Security" section). All four encodings — x/y/size/color — come from primitive FactSet fields, no derived values.',
     caveats:'Latest snapshot only — no period dimension at the holding level (B114 backlog). Bench-only holdings show with negative active weight; if their TE contribution is also small, they cluster near the origin. Bubble size is per-holding idio TE — different from cardFacRisk where bubble is per-factor σ.',
-    related:'cardFacRisk (per-factor sibling) · cardScatter (different y-axis: stock-specific × total TE) · cardMCR · TE drill modal'
+    related:'cardFacRisk (per-factor sibling) · cardMCR · cardHoldings · TE drill modal'
   },
   cardCalHeat:{
     title:'TE Calendar Heatmap',

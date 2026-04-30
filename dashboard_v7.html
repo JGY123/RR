@@ -3241,6 +3241,34 @@ function facGroupPillsHtml(){
   }).join('');
 }
 
+// 2026-04-30 (user feedback): cardFacDetail was missing Country / Currency /
+// Industry as breakdowns. Build virtual factor rows by aggregating h.factor_contr
+// per holding's country / currency / industry classification.
+//   Country sub-rows: Σ h.factor_contr["Country"] grouped by h.co
+//   Currency sub-rows: Σ h.factor_contr["Currency"] grouped by h.ccy
+//   Industry sub-rows: Σ h.factor_contr["Industry"] grouped by h.ind
+// Each sub-row gets a synthetic factor object {n, c, _macroParent, _virtual}.
+// User direction: "nest under headers, with menu to choose which are shown".
+const _macroExpand={Country:false,Currency:false,Industry:false};
+function _buildMacroSubRows(macroName, hold, classifierFn){
+  const sums={};
+  (hold||[]).forEach(h=>{
+    if(isCash(h))return;
+    const key=classifierFn(h);
+    if(!key)return;
+    const v=h.factor_contr&&h.factor_contr[macroName];
+    if(v==null||!isFinite(v))return;
+    sums[key]=(sums[key]||0)+v;
+  });
+  return Object.entries(sums)
+    .filter(([k,v])=>Math.abs(v)>0.001)
+    .map(([k,v])=>({n:k,c:+v.toFixed(3),a:null,ret:null,imp:null,dev:null,_macroParent:macroName,_virtual:true}))
+    .sort((a,b)=>Math.abs(b.c)-Math.abs(a.c));
+}
+function toggleMacroExpand(name){
+  _macroExpand[name]=!_macroExpand[name];
+  if(cs)$('tbl-fac-wrap').innerHTML=rFacTable(cs.factors);
+}
 function rFac(factors){
   if(!factors||!factors.length)return'<div id="tbl-fac-wrap"><p style="color:var(--txt);font-size:12px">No factor data</p></div>';
   return`<div id="tbl-fac-wrap">${rFacTable(factors)}</div>`;
@@ -3256,6 +3284,21 @@ function rFacTable(factors){
   if(!visible.length&&!showAll){
     return'<p style="color:var(--txt);font-size:12px;padding:6px 0">No primary factors in view — try All.</p>';
   }
+  // 2026-04-30 (user feedback): Build macro factor sub-rows on the fly.
+  // Three macro families have h.factor_contr keys but no per-bucket rows in
+  // cs.factors[]. We bucket by the holding's classification (h.co / h.ccy / h.ind).
+  const hold=(cs&&cs.hold)||[];
+  const macroSubs={
+    Country:_buildMacroSubRows('Country', hold, h=>h.co||h.country),
+    Currency:_buildMacroSubRows('Currency', hold, h=>h.ccy||h.currency),
+    Industry:_buildMacroSubRows('Industry', hold, h=>h.ind||h.industry)
+  };
+  // Aggregate macro totals (sum across sub-rows) for the macro-header row
+  const macroTotals={
+    Country:macroSubs.Country.reduce((a,r)=>a+(r.c||0),0),
+    Currency:macroSubs.Currency.reduce((a,r)=>a+(r.c||0),0),
+    Industry:macroSubs.Industry.reduce((a,r)=>a+(r.c||0),0)
+  };
 
   // Max absolute exposure for diverging bar scaling
   let maxExp=Math.max(...facsFinite.map(f=>Math.abs(f.a||0)),0.01);
@@ -3324,7 +3367,50 @@ function rFacTable(factors){
     <th class="r tip" data-col="imp" data-tip="P&amp;L attribution = Exposure × Return. Period is set by the global selector in the header. Hover the cell for the actual date range used." onclick="sortTbl('tbl-fac',5)">Impact <span style="opacity:0.6;font-weight:400">(${getImpactPeriodLabel()})</span></th>
   </tr></thead>`;
 
-  return`<table id="tbl-fac"><colgroup><col style="min-width:130px"><col style="width:80px"><col style="width:55px"><col style="width:50px"><col style="width:65px"><col style="width:90px"></colgroup>${thead}<tbody>${visible.map(f=>facRow(f)).join('')}</tbody></table>`;
+  // Macro-factor group header — renders a clickable row that totals the
+  // macro factor's TE contribution. Click ▸/▾ to expand/collapse sub-rows.
+  function macroHeader(name,total,subCount){
+    if(!subCount)return'';
+    const open=_macroExpand[name];
+    const facObj=facsFinite.find(f=>f.n===name);
+    const ofFactor=(cs.sum?.pct_factor>0&&total!=null)?(total/cs.sum.pct_factor*100):null;
+    const expVal=facObj?.a;
+    return `<tr class="clickable" style="background:rgba(99,102,241,0.05);border-top:1px solid var(--grid);font-weight:600" onclick="toggleMacroExpand('${name}')">
+      <td data-col="name" style="font-size:11px;color:var(--txth)"><span style="display:inline-block;width:14px;color:var(--pri);font-size:10px">${open?'▾':'▸'}</span> ${name} <span style="font-size:9px;color:var(--textDim);margin-left:4px;font-weight:400">${subCount} ${name.toLowerCase()}${subCount===1?'':'ies'}</span></td>
+      <td class="r" data-col="exp_active" data-sv="${expVal??''}" style="color:var(--txth)">${expVal!=null?fp(expVal,2):'—'}</td>
+      <td class="r" data-col="te" data-sv="${total??''}" style="color:${total>0?'var(--neg)':total<0?'var(--pos)':'var(--txth)'};font-weight:700">${fp(total,1)}%</td>
+      <td class="r" data-col="of_factor" data-sv="${ofFactor??''}" style="color:var(--txt);font-size:11px">${ofFactor!=null?(ofFactor>=0?'+':'')+f2(ofFactor,0)+'%':'—'}</td>
+      <td class="r">—</td>
+      <td class="r">—</td>
+    </tr>`;
+  }
+  function macroSubRow(sub,parent){
+    const ofFactor=(cs.sum?.pct_factor>0&&sub.c!=null)?(sub.c/cs.sum.pct_factor*100):null;
+    // Country sub-rows drill to the country modal. Currency / Industry have no
+    // dedicated drill yet (would need a parallel modal pattern); leave inert
+    // so the row is informational without misleading affordance.
+    const cls=parent==='Country'?'clickable':'';
+    const click=parent==='Country'?`onclick="oDrCountry('${sub.n.replace(/'/g,"\\'")}')"`:'';
+    return `<tr class="${cls}" style="background:rgba(99,102,241,0.015);font-size:11px" ${click}>
+      <td data-col="name" style="padding-left:30px;color:var(--txt)"><span style="color:var(--textDim);font-size:9px">↳</span> ${sub.n}</td>
+      <td class="r" style="color:var(--textDim)">—</td>
+      <td class="r" data-col="te" data-sv="${sub.c??''}" style="color:${sub.c>0?'var(--neg)':sub.c<0?'var(--pos)':'var(--txt)'}">${fp(sub.c,2)}%</td>
+      <td class="r" data-col="of_factor" data-sv="${ofFactor??''}" style="color:var(--textDim);font-size:10px">${ofFactor!=null?(ofFactor>=0?'+':'')+f2(ofFactor,0)+'%':'—'}</td>
+      <td class="r" style="color:var(--textDim)">—</td>
+      <td class="r" style="color:var(--textDim)">—</td>
+    </tr>`;
+  }
+  // Style factors body (sorted, filtered)
+  const styleBody=visible.map(f=>facRow(f)).join('');
+  // Macro factor sections
+  const macroBody=['Country','Currency','Industry'].map(name=>{
+    const subs=macroSubs[name]||[];
+    if(!subs.length)return'';
+    const hdr=macroHeader(name,macroTotals[name],subs.length);
+    const subBody=_macroExpand[name]?subs.map(s=>macroSubRow(s,name)).join(''):'';
+    return hdr+subBody;
+  }).join('');
+  return`<table id="tbl-fac"><colgroup><col style="min-width:130px"><col style="width:80px"><col style="width:55px"><col style="width:50px"><col style="width:65px"><col style="width:90px"></colgroup>${thead}<tbody>${styleBody}${macroBody}</tbody></table>`;
 }
 
 // ===== B102-pattern: reusable holdings-aggregation helper =====

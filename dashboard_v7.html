@@ -359,10 +359,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 </head>
 <body>
 <div class="header">
-<!-- Left: branding -->
-<div style="min-width:130px;flex-shrink:0;display:flex;align-items:center;gap:8px">
-  <div style="width:4px;height:20px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--univ))"></div>
-  <h1 style="font-size:13px;font-weight:700;letter-spacing:2px;color:var(--textBright);line-height:1;margin:0">RED<span style="color:var(--accent)">WOOD</span></h1>
+<!-- Left: branding (Q69 — full Redwood Risk wordmark) -->
+<div style="min-width:170px;flex-shrink:0;display:flex;align-items:center;gap:10px">
+  <div style="width:4px;height:30px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--univ))"></div>
+  <div style="line-height:1;display:flex;flex-direction:column;gap:3px" title="Redwood Risk Control Panel — portfolio risk + factor analytics for the Redwood PM team">
+    <h1 style="font-size:14px;font-weight:700;letter-spacing:2.5px;color:var(--textBright);line-height:1;margin:0">REDWOOD <span style="color:var(--accent)">RISK</span></h1>
+    <div style="font-size:8px;font-weight:600;letter-spacing:3px;color:var(--textDim);line-height:1;text-transform:uppercase">Control Panel</div>
+  </div>
 </div>
 <!-- Center: strategy + report date -->
 <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
@@ -10392,5 +10395,22 @@ window.addEventListener('DOMContentLoaded',()=>{
   });
 });
 </script>
+<!-- 2026-04-30 (Q69): page footer with version + changelog link. Static markup —
+     content visible at the bottom of the page below all tabs. -->
+<div style="margin:24px 24px 16px;padding:14px 18px;border-top:1px solid var(--grid);font-size:10px;color:var(--textDim);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="letter-spacing:1px;text-transform:uppercase;font-weight:600;color:var(--txt)">Redwood Risk · Control Panel</span>
+    <span style="opacity:0.5">·</span>
+    <span>v7 · single-file architecture</span>
+    <span style="opacity:0.5">·</span>
+    <a href="https://github.com/JGY123/RR/blob/main/CHANGELOG.md" target="_blank" rel="noopener" style="color:var(--pri);text-decoration:none">Changelog ↗</a>
+    <span style="opacity:0.5">·</span>
+    <a href="https://github.com/JGY123/RR" target="_blank" rel="noopener" style="color:var(--pri);text-decoration:none">Repo ↗</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;color:var(--txt)">
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos)"></span>
+    <span id="footerStatus">Live</span>
+  </div>
+</div>
 </body>
 </html>

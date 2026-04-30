@@ -4,7 +4,12 @@ Visible from the dashboard footer. Most recent first. Format: `- YYYY-MM-DD — 
 
 ## 2026-04-30
 
-- Parser: support new Raw Factors layout (group_size=23) with merged mcap/adv/spotlight ranks via SEDOL match. Verifier 17/4/2 GREEN-LIGHT WITH NOTES on GSC quick sample. (30f83b4)
+- Header polish: REDWOOD wordmark expanded to "REDWOOD RISK · Control Panel" two-line lockup; new page footer at bottom with changelog + repo links + live status dot. (cb3b245)
+- NEW_TILE_CANDIDATES.md: 10 new-tile ideas ranked by PM impact ÷ effort, plus 8 honorable mentions and a recommended 5-tile build order for Phase 2-3. (2052367)
+- About-popup framework: ⓘ button in tile headers opens a What/How/Source/Caveats/Related modal. _ABOUT_REG covers all 25 major tiles. Trust-layer surface for PMs to check provenance without reading code. (05e9a7d, 437ff5a)
+- cardChars audit RED → GREEN: drill modal now plots history for TE/Beta/Active Share (was dead-end "no historical data"); 39 metrics grouped by Risk/Valuation/Quality/Growth/Revisions/Size; per-row tooltips; unit-aware formatters (P/E "18.3x", Mcap "$4.2B", ROE "x.x%"); inverted color semantics for "lower-is-better" valuation/leverage rows; cardFacRisk-pattern header. (11a5c7e)
+- cardScatter SEV-1 fix: holdings with null Spotlight rank were rendering Q5-red (~23% of GSC sample); now neutral grey. Title rebrand "MCR vs TE Contribution" → "Stock-Specific TE vs Total TE Contribution". (05e9a7d)
+- Parser: support new Raw Factors layout (group_size=23) with merged mcap/adv/spotlight ranks via SEDOL match. Verifier 17/4/2 GREEN-LIGHT WITH NOTES on GSC quick sample, full GREEN on 1-year sample. (30f83b4, ec7c0f7)
 - Holdings tab: ticker display now shows TKR-REGION (e.g., SIMO-US, WIE-AT) instead of SEDOL when the merge succeeds — falls back to SEDOL otherwise. (5e7e1b6, 6f1abb1)
 - Risk tab summary cards: responsive grid (auto-fit) so values render fully on narrow viewports. (fbe86d1)
 - INQUISITOR_DECISIONS_2026-04-30.md captured: 135 questions answered, 10-item action queue prioritized. (a0107a1)

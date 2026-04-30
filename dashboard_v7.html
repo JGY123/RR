@@ -2519,6 +2519,12 @@ function setCtryTopN(n){
     if(btn)btn.classList.toggle('active', _ctryTopN===(k==='all'?0:+k));
   });
   applyCtryTopN();
+  // F1 (cardCountry audit, 2026-04-30): re-render Map and Chart views so the
+  // pill is no longer silently inert on those views. Table is already live
+  // (applyCtryTopN above hides DOM rows). Cheap to call when views are hidden;
+  // rCountryMap exits early if the div isn't in DOM.
+  if(typeof rCountryMap==='function'&&cs)rCountryMap(cs);
+  if(typeof rCountryChart==='function'&&cs)rCountryChart(cs);
 }
 function applyCtryTopN(){
   const tb=document.querySelector('#tbl-ctry tbody');
@@ -4799,7 +4805,22 @@ function rCountryMap(s){
     scale=[[0,'#d67272'],[0.5,T.heatMid],[1,'#10b981']];
   }
   let vals=mapped.map(getVal);
-  let absMax=Math.max(...vals.map(Math.abs),0.01);
+  // F1 (cardCountry audit, 2026-04-30, SEV-1 fix): Top-N pill was silently
+  // inert on the Map view despite being the most prominent control on the
+  // tile. Now: when _ctryTopN > 0, set z to null for countries outside the
+  // top N by |value|. Plotly renders null cells in the choropleth's `nullcolor`
+  // (transparent grey) — visually clear that they're filtered out.
+  let _topNApplied=0;
+  if(_ctryTopN>0&&mapped.length>_ctryTopN){
+    const idxs=mapped.map((c,i)=>({i,v:Math.abs(vals[i]||0)}))
+      .sort((a,b)=>b.v-a.v)
+      .slice(0,_ctryTopN)
+      .map(r=>r.i);
+    const keep=new Set(idxs);
+    vals=vals.map((v,i)=>keep.has(i)?v:null);
+    _topNApplied=_ctryTopN;
+  }
+  let absMax=Math.max(...vals.filter(v=>v!=null).map(Math.abs),0.01);
   let reg=MAP_REGIONS[_mapRegion]||MAP_REGIONS.world;
   // 2026-04-28: rank modes use fixed 1..5 bounds + drop the % suffix
   const isRankMode=mode.startsWith('rk:');
@@ -4863,7 +4884,7 @@ function rCountryMap(s){
       showland:true,landcolor:T.land,
       showocean:true,oceancolor:T.ocean,
       showlakes:false,
-      projection:{type:'natural earth'},
+      projection:{type:'robinson'},
       center:{lon:reg.lon,lat:reg.lat},
       lonaxis:{range:[reg.lon-180/reg.scale,reg.lon+180/reg.scale]},
       lataxis:{range:[reg.lat-90/reg.scale,reg.lat+90/reg.scale]}
@@ -4898,6 +4919,7 @@ function toggleMapColorPicker(){
 
 function setMapColor(mode){
   _mapColorMode=mode;
+  try{localStorage.setItem('rr.mapColorMode',mode);}catch(e){}
   $('mapColorPicker').style.display='none';
   let groups=getMapColorGroups(cs);
   let item=groups.flatMap(g=>g.items).find(i=>i.id===mode);
@@ -5075,19 +5097,17 @@ function rCountryChart(s,divId){
     margin:{l:130,r:60,t:50,b:10},
     annotations:[{x:0.5,xref:'paper',y:1.08,yref:'paper',text:`Country × Factor TE Breakdown · ${aggLbl} universe · click any cell to drill`,showarrow:false,font:{size:10,color:T.tickH||T.tick},xanchor:'center'}]
   },{displayModeBar:false,responsive:true});
-  // 2026-04-29: per-cell drill carries factor context. customdata[1] is the
-  // (already-shortened) factor label; we resolve it back to the full name so
-  // the drill modal can read h.factor_contr[fullName] correctly.
-  const shortToFull={};
-  factorCols.forEach(f=>shortToFull[shortFactor(f)]=f);
+  // 2026-04-30 (audit 1.3 cleanup): customdata[1] is the FULL factor name
+  // (factorCols is the full list, not shortened). The previous shortToFull
+  // dictionary was a no-op because the lookup key is already the full name —
+  // dropped 4 lines of dead code.
   const el=document.getElementById(divId);
   if(el)el.on('plotly_click',function(e){
     if(!e.points||!e.points[0])return;
     const cd=e.points[0].customdata;
     const cn=cd[0];
-    const factorShort=cd[1];
-    const factorFull=shortToFull[factorShort]||factorShort;
-    if(cn)oDrCountry(cn,factorFull);
+    const factorName=cd[1];
+    if(cn)oDrCountry(cn,factorName);
   });
 }
 
@@ -9474,7 +9494,10 @@ function oDrRiskBudget(){
 }
 
 // ===== FULL-SCREEN CHART MODALS =====
-let _mapColorMode='active';
+// Q24 (2026-04-30): default map color = TE Contribution (was 'active'). PMs
+// look at countries to find risk concentration first; active weight is the
+// secondary lens. Decided in INQUISITOR_DECISIONS_2026-04-30 Q24 default-A.
+let _mapColorMode=localStorage.getItem('rr.mapColorMode')||'te';
 let _mapFacParam='exp';
 let _mapRegion='world';
 const MAP_REGIONS={world:{lon:0,lat:20,scale:1},europe:{lon:15,lat:52,scale:3},asia:{lon:100,lat:35,scale:2.5},americas:{lon:-80,lat:10,scale:2}};
@@ -9827,7 +9850,7 @@ function _renderFsCtryMap(s){
       showframe:false,showcoastlines:true,coastlinecolor:THEME().grid,
       showland:true,landcolor:THEME().land,
       showocean:true,oceancolor:THEME().ocean,
-      projection:{type:'natural earth'},
+      projection:{type:'robinson'},
       center:{lon:reg.lon,lat:reg.lat},
       lonaxis:{range:[reg.lon-180/reg.scale,reg.lon+180/reg.scale]},
       lataxis:{range:[reg.lat-90/reg.scale,reg.lat+90/reg.scale]},

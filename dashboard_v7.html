@@ -1764,7 +1764,13 @@ function rExp(){
     <div id="secChart" style="display:none"><div id="secChartDiv" style="height:380px"></div><div id="secChartCaption" style="text-align:center;padding:6px 8px"></div></div>
   </div>
 
-  ${benchOnlySecHtml(s)}
+  <!-- 2026-04-30 (user feedback): cardBenchOnlySec removed. The information
+       it surfaced (which sectors have BM-only holdings I'm not owning) is
+       already accessible via cardSectors — every sector row's drill modal
+       has a "Benchmark-Only in {sector}" sub-section listing the unowned
+       names. cardUnowned (in this Exposures tab) lists the BM-only stocks
+       by TE contribution directly. The standalone aggregate-by-sector tile
+       was duplicating without adding insight. -->${''}
 
   <!-- Row 3a: Factor Risk Snapshot + Factor Performance Map (split from single tile per user request) -->
   <div class="grid g2">
@@ -4535,6 +4541,30 @@ function rFacRisk(s){
       if(f)oDrF(f.n);
     }
   });}
+  // 2026-04-30 (user feedback "what is the size of the bubble? need a legend"):
+  // Add a small SVG legend below the chart showing bubble = factor σ (factor's
+  // intrinsic volatility, not contribution to TE — that's already on the Y axis).
+  // Legend renders directly into a container so it lives with the tile.
+  let lg=document.getElementById('facRiskLegend');
+  if(!lg){
+    lg=document.createElement('div');
+    lg.id='facRiskLegend';
+    lg.style.cssText='display:flex;align-items:center;gap:18px;justify-content:center;margin-top:6px;padding:6px 12px;font-size:10px;color:var(--txt);flex-wrap:wrap;border-top:1px solid var(--grid)';
+    div.parentNode.insertBefore(lg,div.nextSibling);
+  }
+  lg.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px;font-weight:600">Bubble size</span>
+      <svg width="80" height="22" style="overflow:visible">
+        <circle cx="10" cy="11" r="6" fill="rgba(148,163,184,0.4)" stroke="rgba(15,23,42,0.7)" stroke-width="1"></circle>
+        <circle cx="34" cy="11" r="9" fill="rgba(148,163,184,0.5)" stroke="rgba(15,23,42,0.7)" stroke-width="1"></circle>
+        <circle cx="62" cy="11" r="13" fill="rgba(148,163,184,0.6)" stroke="rgba(15,23,42,0.7)" stroke-width="1"></circle>
+      </svg>
+      <span style="font-size:10px"><span style="text-transform:none">σ</span> factor (intrinsic volatility) — bigger bubble = more volatile factor</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px;font-weight:600">Color</span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgba(239,68,68,0.85)"></span><span>adds risk</span>
+      <span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgba(34,197,94,0.85);margin-left:6px"></span><span>diversifies</span>
+    </div>`;
 }
 
 // 2026-04-29: Factor Risk Snapshot full-screen — same encoding as inline

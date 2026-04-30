@@ -5202,28 +5202,42 @@ function rGroupChart(s,divId){
     parentSum[p].count++;
   });
   const parents=Object.keys(parentSum);
+  // Aggregate per-group TE contribution from holdings (for cell labels). Per
+  // user feedback 2026-04-30: rectangles had blank space — surface the most
+  // useful extra info (TE contribution + active wt) directly on each cell.
+  const grpTrSum={};
+  (s.hold||[]).forEach(h=>{
+    if(isCash(h))return;
+    const sg=h.subg||h.sg;
+    if(!sg)return;
+    grpTrSum['sg:'+sg]=(grpTrSum['sg:'+sg]||0)+(h.tr||0);
+    const pn=sgToParent[sg];
+    if(pn)grpTrSum['g:'+pn]=(grpTrSum['g:'+pn]||0)+(h.tr||0);
+  });
   // Build treemap arrays — use unique ids since "DEFENSIVE"/"GROWTH"/"COMMODITY"
   // are both parent labels AND sub-group labels (label collision)
   const ids=[],labels=[],parentRefs=[],values=[],colors=[],customdata=[];
   // Parent rows
   parents.forEach(pn=>{
     const ps=parentSum[pn];
+    const tr=grpTrSum['g:'+pn]||0;
     ids.push('g:'+pn);
     labels.push(pn);
     parentRefs.push('');
     values.push(+(ps.p||0).toFixed(2));
     colors.push(ps.a||0);
-    customdata.push([pn,'Group',+(ps.p||0).toFixed(1),+(ps.b||0).toFixed(1),+(ps.a||0).toFixed(1),ps.count]);
+    customdata.push([pn,'Group',+(ps.p||0).toFixed(1),+(ps.b||0).toFixed(1),+(ps.a||0).toFixed(1),ps.count,+tr.toFixed(1)]);
   });
   // Sub-group children
   subgroups.forEach(g=>{
     const pn=sgToParent[g.n]||'(Unmapped)';
+    const tr=grpTrSum['sg:'+g.n]||0;
     ids.push('sg:'+g.n);
     labels.push(g.n);
     parentRefs.push('g:'+pn);
     values.push(+(g.p||0).toFixed(2));
     colors.push(g.a||0);
-    customdata.push([g.n,'Sub-group',+(g.p||0).toFixed(1),+(g.b||0).toFixed(1),+(g.a||0).toFixed(1),null]);
+    customdata.push([g.n,'Sub-group',+(g.p||0).toFixed(1),+(g.b||0).toFixed(1),+(g.a||0).toFixed(1),null,+tr.toFixed(1)]);
   });
   const T=THEME();
   const div=document.getElementById(divId);
@@ -5244,10 +5258,14 @@ function rGroupChart(s,divId){
       colorbar:{title:{text:'Active<br>Wt %',font:{size:9,color:T.tick}},thickness:10,len:0.6,tickfont:{color:T.tick,size:9}}
     },
     textinfo:'label+value',
-    texttemplate:'<b>%{label}</b><br>%{value:.1f}%',
-    textfont:{color:T.txth||'#f1f5f9',family:'DM Sans, system-ui',size:11},
+    // 2026-04-30 (user feedback): label visibility was poor against the
+    // saturated green/red cell colors. Force pure white text with a strong
+    // dark text-stroke; expand templates to surface Active + TE contribution
+    // alongside the label so cells aren't visually empty.
+    texttemplate:'<b>%{label}</b><br>%{value:.1f}% port  ·  %{customdata[4]:+.1f} act<br>TE %{customdata[6]:+.1f}',
+    textfont:{color:'#ffffff',family:'DM Sans, system-ui',size:11},
     customdata:customdata,
-    hovertemplate:'<b>%{customdata[0]}</b> (%{customdata[1]})<br>Port: %{customdata[2]:.1f}%<br>Bench: %{customdata[3]:.1f}%<br>Active: %{customdata[4]:+.1f}%<extra></extra>',
+    hovertemplate:'<b>%{customdata[0]}</b> (%{customdata[1]})<br>Port: %{customdata[2]:.1f}%<br>Bench: %{customdata[3]:.1f}%<br>Active: %{customdata[4]:+.1f}%<br>TE Contrib: %{customdata[6]:+.1f}%<extra></extra>',
     hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
     pathbar:{visible:false}
   }],{

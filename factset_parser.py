@@ -895,15 +895,28 @@ class FactSetParserV3:
         if not schema or not rows or schema.num_groups == 0:
             return {}, RAW_FACTOR_ORDER
 
-        # Two-layout support:
-        #   group_size=13 (legacy): [Period Start Date, v0..v11]
+        # Three-layout support:
+        #   group_size=13 (legacy):    [Period Start Date, v0..v11]
         #   group_size=14 (2026-04-28): [Period Start Date, v0..v11, SEDOLCHK_of_next]
-        # In the 14-col layout, the FIRST SEDOLCHK is at fixed col 7 (outside the group).
-        # Each period block ends with the NEXT period's SEDOLCHK; the last block's
-        # trailing SEDOLCHK is unused. The date is always at offset 0, values at 1..12.
-        if schema.group_size in (13, 14):
-            date_offset  = 0
+        #   group_size=23 (2026-04-30): NEW — fields moved from Security to Raw
+        #     Factors so Security can be slimmed. Layout:
+        #       [Period Start Date, Market Cap, 90D_ADV, 52W_Vol,
+        #        OVER, REV, VAL, QUAL, MOM, STAB,
+        #        RawFactorExposure×12, SEDOLCHK]
+        # Date is always at offset 0; raw factor exposures (the 12 z-score
+        # loadings) shift between layouts.
+        if schema.group_size == 13:
+            date_offset = 0
             value_offset = 1
+            extra_offset = None  # No moved fields in this legacy layout
+        elif schema.group_size == 14:
+            date_offset = 0
+            value_offset = 1
+            extra_offset = None
+        elif schema.group_size == 23:
+            date_offset = 0
+            extra_offset = 1   # mcap/adv/vol/OVER/REV/VAL/QUAL/MOM/STAB at offsets 1..9
+            value_offset = 10  # 12 raw factor exposures at offsets 10..21
         else:
             return {}, RAW_FACTOR_ORDER
 
@@ -938,17 +951,36 @@ class FactSetParserV3:
                 if not d:
                     continue
                 exps = [safe_float(row[base + value_offset + i]) for i in range(12)]
-                periods.append({"d": d, "e": exps})
+                period = {"d": d, "e": exps}
+                # 2026-04-30: extract the moved fields if present (group_size=23 layout)
+                if extra_offset is not None:
+                    period["mcap"]    = safe_float(row[base + 1])
+                    period["adv"]     = safe_float(row[base + 2])
+                    period["vol_52w"] = safe_float(row[base + 3])
+                    period["over"]    = safe_float(row[base + 4])
+                    period["rev"]     = safe_float(row[base + 5])
+                    period["val"]     = safe_float(row[base + 6])
+                    period["qual"]    = safe_float(row[base + 7])
+                    period["mom"]     = safe_float(row[base + 8])
+                    period["stab"]    = safe_float(row[base + 9])
+                periods.append(period)
 
             if not periods:
                 continue
             periods.sort(key=lambda p: p["d"] or "")
-            out[ident] = {
+            entry = {
                 "n": name,
                 "e": periods[-1]["e"],
                 "hist": periods,
                 "sedol": sedol,
             }
+            # Surface the latest period's moved fields at the top level so
+            # downstream code can read them without traversing hist[-1].
+            last = periods[-1]
+            for k in ("mcap","adv","vol_52w","over","rev","val","qual","mom","stab"):
+                if k in last:
+                    entry[k] = last[k]
+            out[ident] = entry
         return out, labels
 
     # ---- Rank tables (Overall / REV / VAL / QUAL)
@@ -1004,24 +1036,34 @@ class FactSetParserV3:
             # SEDOL to add tkr_region (display label) AND raw_exp (z-score loadings) to
             # each holding. Holdings without a Raw Factors match keep tkr_region=null.
             if raw_fac and holdings:
-                sedol_to_tkr = {}
-                sedol_to_exp = {}
+                # 2026-04-30 update: Security section was slimmed and per-security
+                # market cap, ADV, 52w vol, and 6 spotlight ranks (OVER/REV/VAL/
+                # QUAL/MOM/STAB) all moved into Raw Factors. Pull every moved
+                # field onto each holding via SEDOL match so downstream tiles
+                # (sector ORVQ averages, Holdings tab rank columns, cardRanks
+                # quintile bucketing) keep working unchanged.
+                sedol_to_info = {}
                 for tkr_region, info in raw_fac.items():
                     sedol = info.get("sedol")
                     if sedol:
-                        sedol_to_tkr[sedol] = tkr_region
-                        sedol_to_exp[sedol] = info.get("e")
+                        sedol_to_info[sedol] = (tkr_region, info)
                 matched = 0
                 for h in holdings + unowned_hold:
                     sedol = (h.get("t") or "").strip()
                     if not sedol:
                         continue
-                    if sedol in sedol_to_tkr:
-                        h["tkr_region"] = sedol_to_tkr[sedol]
-                        h["raw_exp"]    = sedol_to_exp[sedol]   # 12-element list of z-scores
+                    if sedol in sedol_to_info:
+                        tkr_region, info = sedol_to_info[sedol]
+                        h["tkr_region"] = tkr_region
+                        h["raw_exp"]    = info.get("e")  # 12-element list of z-scores
+                        # Merge the moved fields. Don't overwrite if Security
+                        # still ships the field (legacy compat) — only fill blanks.
+                        for k in ("mcap","adv","vol_52w","over","rev","val","qual","mom","stab"):
+                            if k in info and h.get(k) is None:
+                                h[k] = info[k]
                         matched += 1
                 if matched:
-                    print(f"  {dash_id}: SEDOL→tkr_region matched {matched}/{len(holdings)} port holdings")
+                    print(f"  {dash_id}: SEDOL→Raw Factors matched {matched}/{len(holdings)} port holdings")
 
             if _SECURITY_REF:
                 enriched = sum(1 for h in holdings if h.get("country"))

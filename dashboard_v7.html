@@ -4210,8 +4210,22 @@ function rCountryTable(countries,hold){
   // Factor-contribution aggregation — universe-aware via _aggMode. avgFields drive simple-avg ORVQ.
   let factorAgg={};
   if(hold){factorAgg=aggregateHoldingsBy(hold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
-  const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
-  const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
+  // 2026-04-30 (BENCH_MODE_AUDIT finding): aggTr/aggMcr fallback to the
+  // parser-shipped cs.countries[].tr / .mcr when the holding-aggregation
+  // returns 0 — bench-only countries with thin slim coverage would otherwise
+  // show TE=0 even though the source aggregate row has the correct value.
+  // Same pattern rWt + rGroupTable already use; restoring parity here.
+  const _coByName=Object.fromEntries((countries||[]).map(c=>[c.n,c]));
+  const aggTr=(name)=>{
+    const v=factorAgg[name]?.tr;
+    if(v!==undefined && v!==null && Math.abs(v)>0.005)return v;
+    return _coByName[name]?.tr ?? 0;
+  };
+  const aggMcr=(name)=>{
+    const v=factorAgg[name]?.mcr;
+    if(v!==undefined && v!==null && Math.abs(v)>0.005)return v;
+    return _coByName[name]?.mcr ?? 0;
+  };
   const rankCell=(avg,col)=>{
     let c=avg!=null?rc(Math.round(avg)):'#334155';
     return`<td class="r" data-col="${col||''}" style="font-size:11px;font-weight:600;color:${c}" data-sv="${avg!=null?+avg.toFixed(2):''}">${avg!=null?f2(avg,1):'—'}</td>`;

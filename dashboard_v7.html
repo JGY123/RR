@@ -5227,8 +5227,8 @@ function rRisk(){
   window._riskFacColors=facColors;
 
   let html=`${weekBannerHtml()}
-  <!-- Risk Summary Cards -->
-  <div class="sum-cards" style="grid-template-columns:repeat(5,1fr)">
+  <!-- Risk Summary Cards — auto-fit so 5 cards fit on wide screens but wrap to 2-3 cols on narrow -->
+  <div class="sum-cards" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
     <div class="sum-card ${totalTE>7?'alert':totalTE>5?'warn':''}" onclick="oDrMetric('te')" title="Tracking error detail">
       <div class="label">Total Risk (TE)</div>
       <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}</div>

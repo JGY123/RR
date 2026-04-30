@@ -127,6 +127,17 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 @media(max-width:1200px){.g2,.g3,.g4,.g23,.g32,.g12{grid-template-columns:1fr}.sum-cards{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:1024px){.sum-cards{grid-template-columns:repeat(3,1fr)}.modal{width:95vw;padding:16px}}
 @media(max-width:768px){.sum-cards{grid-template-columns:repeat(2,1fr)}.header{flex-direction:column;gap:8px;padding:8px 16px}.header h1{font-size:15px}.tabs{overflow-x:auto;padding:0 12px}.tab{padding:8px 12px;font-size:12px}#content{padding:8px 12px 24px}.strat-sel{flex-wrap:wrap}.modal{max-height:95vh;border-radius:12px}}
+/* 2026-04-30 (user feedback "Chrome bigger screen tiles don't scale"):
+   Viewport-aware chart heights. Tiles tagged with .chart-h-{md|lg|xl} grow
+   gracefully on wider/taller viewports so a 1440p or 4k Chrome window doesn't
+   leave charts looking stamp-sized. Falls back to a fixed minimum on small. */
+.chart-h-sm{height:clamp(180px,22vh,260px)}
+.chart-h-md{height:clamp(260px,32vh,400px)}
+.chart-h-lg{height:clamp(320px,40vh,520px)}
+.chart-h-xl{height:clamp(400px,52vh,640px)}
+/* Ultra-wide breakpoint — pair two related Risk/Holdings tiles on >1600px */
+@media(min-width:1600px){.g2-wide{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}}
+@media(max-width:1599px){.g2-wide{display:block}.g2-wide>.card{margin-bottom:16px}}
 
 /* Transitions & Animations */
 .tab-content{opacity:0;transition:opacity .3s ease}
@@ -737,7 +748,7 @@ const _ABOUT_REG={
     how:'Sortable by any column. Filterable by sector + rank. Search by ticker or name. Top-10 TE pill in title shows what % of total |TE| the top 10 holdings drive (concentration check).',
     source:'cs.hold[] (FactSet "Security" section). Ticker shown as TKR-REGION via tk(h) helper (h.tkr_region from SEDOL→Raw Factors merge); falls back to SEDOL.',
     caveats:'Includes active port + material BM-only (b > 0.5% or |tr| > 1%). New format: market cap, ADV, vol, ranks moved to Raw Factors and merged via SEDOL onto each holding.',
-    related:'cardHoldRisk · cardWatchlist · cardMCR'
+    related:'cardHoldRisk · cardWatchlist'
   },
   cardGroups:{
     title:'Redwood Groups',
@@ -769,16 +780,12 @@ const _ABOUT_REG={
     how:'localStorage key "rr_watchlist_v1" stores per-strategy ticker → category map. On every render, current cs.hold[] is checked against the list; entries that have exited (no longer in cs.hold) grey out.',
     source:'localStorage (preferences-only per CLAUDE.md hard rule #3 — no data caching). Holding details from cs.hold[].',
     caveats:'Strategy-scoped — IDM watchlist independent from GSC. Cleared if user clicks Reset Preferences. Will be migrated to durable storage when professional environment lands (Phase 2 of MIGRATION_PLAN).',
-    related:'cardHoldings · cardMCR'
+    related:'cardHoldings'
   },
-  cardMCR:{
-    title:'Top Idiosyncratic Risk Contributors',
-    what:'Top 10 holdings ranked by |MCR| — the stock-specific (idiosyncratic) component of each holding\'s tracking error. Bars carry inline labels with both the MCR value and the port weight, so a high-MCR holding driven by a small bet vs a large position is visually obvious.',
-    how:'MCR = h.mcr (FactSet %S, the stock-specific TE component for each holding). Sorted descending by signed MCR; magnitudes ranked by |h.mcr|. Hover surfaces full Sector / Country / Port / Active / Total TE context. Click a bar for the holding drill.',
-    source:'cs.hold[].mcr (FactSet Security section %S column). Ticker labels via tk(h) — TKR-REGION when SEDOL→Raw Factors merge succeeded, else SEDOL.',
-    caveats:'Latest snapshot only — per-holding MCR not historized (B114 backlog). Bench-only holdings often appear since their implied-underweight idio TE is positive. cardMCR vs cardHoldRisk: same source field, different framings — cardMCR is a top-N ranked list; cardHoldRisk is the per-holding quadrant scatter. Considering reframe as a TE-concentration tile (Herfindahl + Σ|h.mcr| share) so the two answer different questions.',
-    related:'cardHoldRisk · cardHoldings · TE drill modal Idio breakdown'
-  },
+  // 2026-04-30 (audit, item #1): cardMCR registry entry deleted as orphan.
+  // Tile removed in commit 2eff789; per-holding |MCR| now lives on
+  // cardHoldRisk (Holdings tab) as bubble-size encoding + bottom Top-10
+  // chart. Spec preserved in tile-specs/cardMCR-audit-2026-04-23.md.
   cardUnowned:{
     title:'Unowned Risk Contributors',
     what:'Benchmark holdings the portfolio does NOT own, ranked by their tracking-error contribution if owned. Each represents an active short position the portfolio has by omission.',
@@ -849,23 +856,37 @@ const _ABOUT_REG={
     how:'Σ h.tr per bucket. Dimension toggle (3-state pill) switches the grouping attribute (h.co / h.ccy / h.ind). Sorted descending by |TE share|.',
     source:'cs.hold[] aggregated by dimension.',
     caveats:'Different from cardSectors (GICS sector) — uses Country / Currency / Industry instead. Currency exposure includes the implicit FX risk of holding non-USD assets.',
-    related:'cardSectors · cardCountry · cardRiskCtryFactor'
+    related:'cardSectors · cardCountry'
   },
-  cardRiskCtryFactor:{
-    title:'Country × Factor TE Heatmap',
-    what:'Two-dimensional heatmap: country (rows) × factor (cols). Cell = signed factor TE contribution from that country. Red adds risk; green diversifies.',
-    how:'Σ h.factor_contr[fname] per country bucket, signed. Same source data as cardCountry chart view; transposed for at-a-glance pattern detection.',
-    source:'cs.hold[].factor_contr aggregated by h.co.',
-    caveats:'Click any cell to drill into the country\'s holdings filtered by factor context. Factor context propagates through to holding rows.',
-    related:'cardCountry · cardRiskByDim · cardFacRisk'
-  },
+  // 2026-04-30 (audit, item #1): cardRiskCtryFactor registry entry deleted as
+  // orphan. Tile removed in commit fd31b26 — was redundant with cardCountry
+  // chart-view (same renderer, same data). Spec preserved at
+  // tile-specs/cardRiskHistTrends-audit-2026-04-23.md.
   cardFacHist:{
     title:'Factor Exposure History',
     what:'Time series of active factor exposure (e − bm) for any factor or set of factors. Use Select/Clear All or click factor toggles to compare.',
     how:'Per-factor weekly active exposure from cs.snap_attrib[name].hist[].exp − bm exposure. Multi-line chart with toggle-able legends.',
     source:'cs.snap_attrib (per-factor weekly history).',
     caveats:'Lines only render for factors with ≥2 weeks of data. "All" toggle can be slow on long-history files; pick 5-10 factors for clarity.',
-    related:'cardFacRisk · cardFacButt · cardFacContribBars'
+    related:'cardFacRisk · cardFacButt · cardFacContribBars · cardCorr'
+  },
+  // 2026-04-30 (audit, item #5): promoted to first-class.
+  cardCorr:{
+    title:'Factor Correlation Matrix',
+    what:'Pearson correlation of factor active exposures over the selected period. Red = anti-correlated (one rises when the other falls), indigo = co-moving, mid-gray = uncorrelated. Use to spot crowded factor families and unintended factor pairs.',
+    how:'For each factor pair, compute Pearson r over the {weekly|monthly} active-exposure series across the selected period (3M / 6M / 1Y / 3Y / All). Diagonal = 1 by definition. Self-pairs filtered. Zero-variance factors skipped.',
+    source:'cs.snap_attrib[name].hist (active exposure = exp − bench_exp). Window length controlled by the period dropdown.',
+    caveats:'Needs ≥4 weekly observations (or 3 monthly) per factor; otherwise the row/column is dropped. r values are static — period changes recompute. CSV export available via the toolbar.',
+    related:'cardFacHist (time-series view) · cardFacRisk (snapshot) · cardFacContribBars'
+  },
+  // 2026-04-30 (audit, item #5): promoted to first-class.
+  cardRiskDecomp:{
+    title:'Risk Decomposition Tree',
+    what:'Hierarchical view of total tracking error: Factor Risk + Stock-Specific Risk at the top, then drilled into top factor groups (Value/Growth, Market Behavior, Profitability, Secondary) on the factor side and top-7 holdings on the idio side. The bars are sized by the magnitude of contribution.',
+    how:'Total TE pulled from cs.sum.te. Factor / Idio split from cs.sum.pct_factor + pct_specific. Per-factor contribution from cs.factors[].c. Per-holding contribution from cs.hold[].tr. Top-7 holdings sorted by |tr| desc.',
+    source:'cs.sum (totals + split), cs.factors[] (per-factor TE %), cs.hold[] (per-holding TE %).',
+    caveats:'Tree is read-only — no click-to-drill yet. Top-7 idio holdings is a heuristic cut; actual long-tail can be larger. Factor groupings follow the FAC_GROUPS map. Bench-only sectors do not appear in the idio side.',
+    related:'cardTEStacked (time-series view) · cardFacContribBars · cardHoldRisk · TE drill modal'
   },
   cardThisWeek:{
     title:'This Week',
@@ -881,7 +902,7 @@ const _ABOUT_REG={
     how:'x = h.a (active weight = port − bench). y = h.tr (FactSet %T, total TE contribution, signed). Bubble area ∝ |h.mcr| (FactSet %S, the stock-specific component of that holding\'s TE). Color = sign of h.tr (red = adds risk, green = diversifies).',
     source:'cs.hold[] (FactSet "Security" section). All four encodings — x/y/size/color — come from primitive FactSet fields, no derived values.',
     caveats:'Latest snapshot only — no period dimension at the holding level (B114 backlog). Bench-only holdings show with negative active weight; if their TE contribution is also small, they cluster near the origin. Bubble size is per-holding idio TE — different from cardFacRisk where bubble is per-factor σ.',
-    related:'cardFacRisk (per-factor sibling) · cardMCR · cardHoldings · TE drill modal'
+    related:'cardFacRisk (per-factor sibling) · cardHoldings · TE drill modal'
   },
   cardCashHist:{
     title:'Cash Weight Over Time',
@@ -891,14 +912,11 @@ const _ABOUT_REG={
     caveats:'Some FactSet exports may not ship the [Cash] sector row consistently — missing weeks render as gaps in the line. Negative cash values render in the below-zero red strip (rare but possible from short-term funding flows or settlement timing).',
     related:'cardThisWeek (current cash in summary cards)'
   },
-  cardCalHeat:{
-    title:'TE Calendar Heatmap',
-    what:'GitHub-style calendar of weekly tracking-error intensity across the strategy\'s entire history. Each cell = one week; color = magnitude of week-over-week TE change (|ΔTE|, default) or absolute TE level. Pattern-detects clusters of high-volatility weeks, dead periods, and regime shifts. Doubles as a navigation device — click any cell to jump the global week selector to that week.',
-    how:'Cells laid out as years (rows) × ISO weeks 1–53 (cols). |ΔTE| computed as |te[i] − te[i−1]| from cs.hist.sum (marked ᵉ — derived). TE-level mode shows raw te value. Color scale uses 5 sequential bins so outliers don\'t flatten the rest. Selected week gets a white outline. Click handler calls changeWeek(cellDate) which updates _selectedWeek and triggers a full re-render.',
-    source:'cs.hist.sum[].d (week date) + cs.hist.sum[].te (tracking error). Same primitive series that powers cardRiskHistTrends miniTE. ΔTE is computed in this tile only — synth-marked.',
-    caveats:'Requires ≥2 weeks for any visible cells. First week always blank in |ΔTE| mode (no prior to diff against). Long-tail outlier weeks compressed by binning — hover for exact value. ISO week numbering may put a few late-December weeks in W53 (rare). Click-to-jump is the only interactive — pan/zoom disabled.',
-    related:'cardRiskHistTrends (line view) · cardTEStacked (TE decomposition) · cardBetaHist · TE drill modal'
-  }
+  // 2026-04-30 (audit, item #1): cardCalHeat registry entry deleted as orphan.
+  // Tile removed in commit fd31b26 — visualization didn't add much over the
+  // existing TE charts. Spec preserved at viz-specs/cardCalendarHeatmap-spec.md
+  // for future reuse (the calendar-heatmap pattern remains useful for other
+  // cyclic-time-series tiles, e.g. holdings turnover, factor regime shifts).
 };
 function openAbout(tileId){
   const m=document.getElementById('aboutModal');
@@ -4861,33 +4879,35 @@ function rFacRisk(s){
   if(!div)return;
   const facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
   if(!facs.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
-  // KPI strip — Idio vs Factor share of total TE.
-  // 2026-04-30 v3 (user feedback "5th and 6th data items there's room"):
-  // Added two more KPI cards — Beta (current vs prior week delta) and
-  // Active Share (current + prior delta). Both pull from cs.sum + hist.sum.
+  // KPI strip — six factor-specific stats (Beta + Active Share were
+  // user-flagged as irrelevant to a FACTOR snapshot tile and replaced
+  // with two factor-native cards: Top OW factor + Top UW factor by
+  // active exposure σ. These directly answer "what's the dominant factor
+  // bet, and where's the biggest hedge?" — questions only this tile
+  // can answer.)
   if(kpi){
     const idioPct=s.sum?.pct_specific;
     const facPct=s.sum?.pct_factor;
     const te=s.sum?.te;
-    const beta=s.sum?.beta;
-    const actS=s.sum?.as;
     const matCount=facs.filter(f=>Math.abs(f.c||0)>0.5).length;
-    // Prior-week deltas (for the two new cards)
-    const histSum=(s.hist&&s.hist.sum)||[];
-    const prev=histSum.length>=2?histSum[histSum.length-2]:null;
-    const betaDelta=prev?.beta!=null&&beta!=null?+(beta-prev.beta).toFixed(3):null;
-    const asDelta=prev?.as!=null&&actS!=null?+(actS-prev.as).toFixed(2):null;
     const teText=te!=null?f2(te,2)+'%':'—';
-    const betaText=beta!=null?f2(beta,2):'—';
-    const betaSub=betaDelta==null?'vs benchmark':(`Δ ${betaDelta>=0?'+':''}${betaDelta} wk`);
-    const asText=actS!=null?f2(actS,1)+'%':'—';
-    const asSub=asDelta==null?'unique vs bench':(`Δ ${asDelta>=0?'+':''}${asDelta}pp wk`);
+    // Sort by signed active exposure to find Top OW (most positive σ) and
+    // Top UW (most negative σ). Filter out factors with very tiny exposures
+    // so a near-zero outlier doesn't claim the headline.
+    const expSorted=[...facs].filter(f=>isFinite(f.a)).sort((a,b)=>(b.a||0)-(a.a||0));
+    const topOW=expSorted.find(f=>(f.a||0)>0.05);
+    const topUW=[...expSorted].reverse().find(f=>(f.a||0)<-0.05);
+    const shortFac=n=>n==='Medium-Term Momentum'?'Mom (M-T)':n==='Exchange Rate Sensitivity'?'FX Sens':n==='Market Sensitivity'?'Mkt Sens':n==='Dividend Yield'?'Div Yld':n==='Earnings Yield'?'Earn Yld':n==='Profitability'?'Profit':n;
+    const owText=topOW?shortFac(topOW.n):'—';
+    const owSub=topOW?(topOW.a>=0?'+':'')+f2(topOW.a,2)+'σ · '+(topOW.c>=0?'+':'')+f2(topOW.c,1)+'% TE':'no significant overweight';
+    const uwText=topUW?shortFac(topUW.n):'—';
+    const uwSub=topUW?(topUW.a>=0?'+':'')+f2(topUW.a,2)+'σ · '+(topUW.c>=0?'+':'')+f2(topUW.c,1)+'% TE':'no significant underweight';
     kpi.innerHTML=
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Total TE</span><span style="font-size:14px;font-weight:700;color:var(--pri);line-height:1.1;margin-top:1px">${teText}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">latest</span></div>`+
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(168,85,247,0.06);border:1px solid var(--grid);border-radius:6px;min-width:120px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Idiosyncratic</span><span style="font-size:14px;font-weight:700;color:var(--acc);line-height:1.1;margin-top:1px">${idioPct!=null?f2(idioPct,1)+'% of TE':'—'}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${idioPct!=null&&te!=null?'MCR '+f2(te*idioPct/100,1):''}</span></div>`+
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.06);border:1px solid var(--grid);border-radius:6px;min-width:120px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Factor</span><span style="font-size:14px;font-weight:700;color:var(--pri);line-height:1.1;margin-top:1px">${facPct!=null?f2(facPct,1)+'% of TE':'—'}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${facPct!=null&&te!=null?'MCR '+f2(te*facPct/100,1):''}</span></div>`+
-      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(34,211,238,0.06);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Beta</span><span style="font-size:14px;font-weight:700;color:#22d3ee;line-height:1.1;margin-top:1px">${betaText}</span><span style="font-size:9px;color:${betaDelta>0.005?'var(--neg)':betaDelta<-0.005?'var(--pos)':'var(--txt)'};margin-top:1px">${betaSub}</span></div>`+
-      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(16,185,129,0.05);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Active Share</span><span style="font-size:14px;font-weight:700;color:var(--pos);line-height:1.1;margin-top:1px">${asText}</span><span style="font-size:9px;color:${asDelta<-0.05?'var(--neg)':asDelta>0.05?'var(--pos)':'var(--txt)'};margin-top:1px">${asSub}</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(239,68,68,0.06);border:1px solid var(--grid);border-radius:6px;min-width:128px;${topOW?'cursor:pointer':''}"${topOW?` onclick="oDrF('${topOW.n.replace(/'/g,"\\\\'")}')" title="Drill into ${topOW.n}"`:''}><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Top OW factor</span><span style="font-size:14px;font-weight:700;color:var(--neg);line-height:1.1;margin-top:1px">${owText}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${owSub}</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(16,185,129,0.05);border:1px solid var(--grid);border-radius:6px;min-width:128px;${topUW?'cursor:pointer':''}"${topUW?` onclick="oDrF('${topUW.n.replace(/'/g,"\\\\'")}')" title="Drill into ${topUW.n}"`:''}><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Top UW factor</span><span style="font-size:14px;font-weight:700;color:var(--pos);line-height:1.1;margin-top:1px">${uwText}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${uwSub}</span></div>`+
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(245,158,11,0.05);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Material factors</span><span style="font-size:14px;font-weight:700;color:#f59e0b;line-height:1.1;margin-top:1px">${matCount}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">|TE| > 0.5%</span></div>`;
   }
   // Quadrant: x = active σ (latest), y = TE contribution % (signed),
@@ -5505,9 +5525,10 @@ function rCountryChart(s,divId){
   // active-weight bar (which duplicated info already in the map + table).
   // The heatmap shows which countries drive which factor exposures — answers
   // "where is my Value tilt coming from?" at a glance.
-  // 2026-04-29: divId param so the same renderer powers both cardCountry's
-  // chart-view AND a Risk-tab tile (cardRiskCtryFactor). Defaults to the
-  // cardCountry chart-view div.
+  // 2026-04-29: divId param so the same renderer can power multiple tiles.
+  // Originally also served a separate Risk-tab tile (cardRiskCtryFactor)
+  // until that was removed in commit fd31b26 as redundant with the chart-view.
+  // Defaults to the cardCountry chart-view div.
   divId=divId||'countryChartDiv';
   if(!s.countries||!s.countries.length||!s.hold)return;
   const T=THEME();
@@ -5929,56 +5950,9 @@ function rTree(s){
   }
 }
 
-function rMCR(s){
-  // 2026-04-30 (user feedback): "marginal contribution to risk also must be
-  // presented elsewhere and if not needs a much better tile". Rebuilt with
-  // richer per-bar context — port wt and active wt are now in the hover plus
-  // visible as a sub-label, sector context shown, and the y-axis labels use
-  // tk(h) so the user sees TKR-REGION not the SEDOL.
-  let top=[...(s.hold||[])].filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,10);
-  let el=document.getElementById('mcrDiv');
-  if(!top.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No MCR data available</p>';return;}
-  top.sort((a,b)=>(b.mcr||0)-(a.mcr||0));
-  let priC=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#8b5cf6';
-  let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
-  // Use tk() ticker labels (TKR-REGION when SEDOL→ticker merge succeeded).
-  // Append a tiny port-wt suffix so the user can see relative size at a glance.
-  const yLabels=top.map(h=>tk(h)||h.t);
-  const barLabels=top.map(h=>{
-    const m=(h.mcr||0).toFixed(2);
-    const sgn=h.mcr>=0?'+':'';
-    const pwt=h.p!=null?` · ${(h.p||0).toFixed(1)}% port`:'';
-    return `${sgn}${m}${pwt}`;
-  });
-  Plotly.newPlot('mcrDiv',[{
-    y:yLabels,x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
-    marker:{color:top.map(h=>(h.mcr||0)>=0?priC:posC),line:{color:'rgba(15,23,42,0.5)',width:0.5}},
-    text:barLabels,textposition:'outside',textfont:{size:10,color:THEME().tick},
-    cliponaxis:false,
-    customdata:top.map(h=>[h.n||h.t,h.sec||'—',h.co||h.country||'—',h.p||0,h.a||0,h.tr||0,h.t||'']),
-    hovertemplate:'<b>%{customdata[0]}</b><br>Sector: %{customdata[1]} · Country: %{customdata[2]}<br>Port %{customdata[3]:.2f}% · Active %{customdata[4]:+.2f}%<br>MCR (stock-specific TE): %{x:.2f}<br>Total TE contrib: %{customdata[5]:+.2f}%<extra></extra>',
-    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:THEME().grid||'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans, system-ui'}}
-  }],{...plotBg,
-    margin:{...(plotBg.margin||{}),l:80,r:60},
-    yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category',tickfont:{...(plotBg.yaxis?.tickfont||{}),size:10}},
-    xaxis:{...plotBg.xaxis,title:'MCR (stock-specific TE component)',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1.5}
-  },plotCfg);
-  if(el&&el.on){el.on('plotly_click',function(d){let cd=d&&d.points&&d.points[0]&&d.points[0].customdata;let t=cd&&cd[6];if(t&&typeof oSt==='function')oSt(t);});}
-}
-function exportMcrCsv(){
-  if(!cs||!cs.hold){return;}
-  let rows=(cs.hold||[]).filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0));
-  let lines=['ticker,name,sector,port_pct,active_pct,mcr,te_contribution'];
-  rows.forEach(h=>{
-    let n=(h.n||'').replace(/"/g,'""');
-    let sec=(h.sec||'').replace(/"/g,'""');
-    lines.push(`"${h.t||''}","${n}","${sec}",${h.p||0},${h.a||0},${h.mcr||0},${h.tr||0}`);
-  });
-  let blob=new Blob([lines.join('\n')],{type:'text/csv'});
-  let url=URL.createObjectURL(blob);
-  let a=document.createElement('a');a.href=url;a.download=(cs.name||cs.id||'mcr')+'_mcr.csv';a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),100);
-}
+// 2026-04-30 (audit, item #1): cardMCR removed in earlier commit (2eff789).
+// Render functions rMCR + exportMcrCsv deleted as orphan code. Replaced by
+// cardHoldRisk on Holdings tab + the Top-10 chart at the bottom of Holdings.
 
 function rFRB(s){
   let facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.c));
@@ -6086,8 +6060,10 @@ function riskDecompTree(s,factorRisk,idioRisk){
   );
   let factorNode=mkNode('dt_factor','Factor Risk',f2(factorRisk,2)+'%',facPct,'#06b6d4',facKids);
   let idioNode=mkNode('dt_idio','Stock-Specific Risk',f2(idioRisk,2)+'%',idioPct,'#f59e0b',idioKids);
-  return'<div class="card" style="margin-bottom:16px">'+
-    '<div class="card-title">Risk Decomposition Tree</div>'+
+  return'<div class="card" id="cardRiskDecomp" style="margin-bottom:16px">'+
+    '<div class="flex-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px">'+
+    '<div class="card-title tip" style="margin:0" data-tip="Total TE decomposed into Factor Risk + Stock-Specific Risk, then drilled into the top contributors on each side. The percentages sum back to 100% of total tracking error." oncontextmenu="showNotePopup(event,\'cardRiskDecomp\');return false">Risk Decomposition Tree</div>'+
+    aboutBtn('cardRiskDecomp')+'</div></div>'+
     '<div style="padding:4px 0">'+
       '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid);margin-bottom:8px">'+
         '<span style="font-size:13px;font-weight:700;color:var(--txth)">Total Risk (TE)</span>'+
@@ -6099,136 +6075,10 @@ function riskDecompTree(s,factorRisk,idioRisk){
 }
 
 // ===== RISK TAB =====
-// 2026-04-30: cardCalHeat — TE Calendar Heatmap (per viz-specs/cardCalendarHeatmap-spec.md).
-// GitHub-style calendar of weekly TE intensity. Each cell = one week. Two metric modes:
-//   • |ΔTE|  — magnitude of week-over-week TE change (default; "when was risk shifting?")
-//   • TE     — absolute TE level ("when was risk highest?")
-// Click any cell → changeWeek(cellDate) → entire dashboard re-renders to that week.
-function rCalHeatCard(s){
-  const hist=(s&&s.hist&&s.hist.sum)||[];
-  const enough=hist.length>=2;
-  return `<div class="card" id="cardCalHeat" style="margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
-      <div class="card-title tip" data-tip="Calendar of weekly TE intensity. Each cell = one week; color = magnitude of ΔTE (default) or absolute TE level. Click any cell to jump the dashboard to that week. Right-click for notes." oncontextmenu="showNotePopup(event,'cardCalHeat');return false" style="margin-bottom:0">TE Calendar Heatmap <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'} · click to jump</span></div>
-      ${aboutBtn('cardCalHeat')}
-      <div style="margin-left:auto;display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Color</span>
-        <button class="pill" id="calheat-pill-dte" onclick="setCalHeatMetric('dte')" style="font-size:10px;padding:2px 7px">|ΔTE|</button>
-        <button class="pill" id="calheat-pill-te" onclick="setCalHeatMetric('te')" style="font-size:10px;padding:2px 7px">TE level</button>
-      </div>
-    </div>
-    ${enough?'<div id="calHeatDiv" style="height:160px;min-height:120px"></div><div id="calHeatLegend" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:9px;color:var(--txt);flex-wrap:wrap"></div>':'<div style="display:flex;align-items:center;justify-content:center;height:140px;color:var(--txt);font-size:11px">Need ≥2 weeks of TE history</div>'}
-  </div>`;
-}
-function setCalHeatMetric(m){
-  if(m!=='dte'&&m!=='te')return;
-  try{localStorage.setItem('rr.calheat.metric',m);}catch(e){}
-  rCalHeat();
-}
-function rCalHeat(){
-  const hist=(cs&&cs.hist&&cs.hist.sum)||[];
-  const div=document.getElementById('calHeatDiv');
-  if(!div||hist.length<2)return;
-  let metric='dte'; try{metric=localStorage.getItem('rr.calheat.metric')||'dte';}catch(e){}
-  // Sync pill state
-  const pDte=document.getElementById('calheat-pill-dte'); if(pDte)pDte.classList.toggle('active',metric==='dte');
-  const pTe=document.getElementById('calheat-pill-te'); if(pTe)pTe.classList.toggle('active',metric==='te');
-  // Build per-week records keyed by (year, ISO-week)
-  const wkMap=new Map();
-  hist.forEach((h,i)=>{
-    const dt=parseDate(h.d); if(!dt)return;
-    const yr=dt.getFullYear();
-    const wk=isoWeekNum(dt);
-    const dte=i>0?+(h.te-hist[i-1].te).toFixed(3):null;
-    wkMap.set(yr+'-'+wk,{d:h.d,te:h.te,dte,dteAbs:dte==null?null:Math.abs(dte)});
-  });
-  const years=[...new Set(hist.map(h=>+isoDate(h.d).slice(0,4)))].sort();
-  const cols=Array.from({length:53},(_,i)=>'W'+String(i+1).padStart(2,'0'));
-  const z=years.map(yr=>{
-    const row=new Array(53).fill(null);
-    for(let w=1;w<=53;w++){
-      const e=wkMap.get(yr+'-'+w);
-      if(e)row[w-1]=metric==='dte'?e.dteAbs:e.te;
-    }
-    return row;
-  });
-  // customdata: per-cell [date, te, dte] for hovertemplate
-  const customdata=years.map(yr=>{
-    const row=new Array(53).fill(null);
-    for(let w=1;w<=53;w++){
-      const e=wkMap.get(yr+'-'+w);
-      if(e)row[w-1]=[isoDate(e.d), e.te, e.dte==null?0:e.dte];
-    }
-    return row;
-  });
-  const colorscale=metric==='dte'
-    ? [[0,'rgba(99,102,241,0.10)'],[0.25,'rgba(99,102,241,0.30)'],[0.5,'rgba(99,102,241,0.55)'],[0.75,'rgba(99,102,241,0.80)'],[1,'rgba(99,102,241,1.0)']]
-    : [[0,'rgba(245,158,11,0.20)'],[0.5,'rgba(245,158,11,0.65)'],[1,'rgba(239,68,68,1.0)']];
-  // Selected-week outline shape
-  const shapes=[];
-  if(_selectedWeek){
-    const dt=parseDate(_selectedWeek);
-    if(dt){
-      const wk=isoWeekNum(dt), yr=dt.getFullYear();
-      const cIdx=wk-1, rIdx=years.indexOf(yr);
-      if(rIdx>=0&&cIdx>=0){
-        shapes.push({type:'rect',xref:'x',yref:'y',
-          x0:cIdx-0.45,x1:cIdx+0.45,y0:rIdx-0.45,y1:rIdx+0.45,
-          line:{color:'#fff',width:1.6}});
-      }
-    }
-  }
-  const hoverTpl=metric==='dte'
-    ? '<b>Week of %{customdata[0]}</b><br>TE %{customdata[1]:.2f}%  ·  ΔTEᵉ %{customdata[2]:+.2f}<br><i>Click to jump →</i><extra></extra>'
-    : '<b>Week of %{customdata[0]}</b><br>TE %{customdata[1]:.2f}%  ·  ΔTEᵉ %{customdata[2]:+.2f}<br><i>Click to jump →</i><extra></extra>';
-  Plotly.newPlot('calHeatDiv',[{
-    type:'heatmap', z, customdata,
-    x:cols, y:years.map(String),
-    colorscale, showscale:false,
-    xgap:2, ygap:2,
-    hovertemplate:hoverTpl,
-    hoverongaps:false,
-    hoverlabel:HOVERLABEL_THEME
-  }],{
-    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
-    font:{family:'DM Sans, system-ui',color:THEME().tick,size:10},
-    margin:{l:42,r:8,t:6,b:30},
-    hoverlabel:HOVERLABEL_THEME,
-    xaxis:{
-      tickmode:'array',
-      tickvals:[0,4,8,13,17,22,26,30,35,39,43,48],
-      ticktext:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-      showgrid:false, fixedrange:true, side:'bottom', tickfont:{size:9}
-    },
-    yaxis:{showgrid:false, fixedrange:true, tickfont:{size:10}},
-    shapes
-  },{displayModeBar:false,responsive:true});
-  // Click handler — jump global week selector
-  if(div.on){
-    div.on('plotly_click', evt=>{
-      const cd=evt&&evt.points&&evt.points[0]&&evt.points[0].customdata;
-      if(cd&&cd[0]){
-        // customdata[0] is YYYY-MM-DD; need original YYYYMMDD for changeWeek
-        const ymd=cd[0].replace(/-/g,'');
-        if(typeof changeWeek==='function')changeWeek(ymd);
-      }
-    });
-  }
-  // Legend strip
-  const legend=document.getElementById('calHeatLegend');
-  if(legend){
-    const valid=z.flat().filter(v=>v!=null&&isFinite(v));
-    const lo=valid.length?Math.min(...valid):0, hi=valid.length?Math.max(...valid):0;
-    const swatch=metric==='dte'?'#6366f1':'#f59e0b';
-    const swatchHi=metric==='dte'?'#6366f1':'#ef4444';
-    const label=metric==='dte'?'|ΔTE| %':'TE level %';
-    legend.innerHTML=`<span>${label}:</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${swatch};opacity:0.15"></span>${lo.toFixed(2)}</span>
-      <span style="opacity:0.4">→</span>
-      <span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${swatchHi};opacity:1"></span>${hi.toFixed(2)}</span>
-      <span style="margin-left:auto;color:var(--textDim);font-size:9px">ᵉ ΔTE is derived (te[i] − te[i−1])</span>`;
-  }
-}
+// 2026-04-30 (audit, item #1): cardCalHeat removed earlier (commit fd31b26).
+// Render functions rCalHeatCard, setCalHeatMetric, rCalHeat deleted as orphan
+// code (~135 lines). Visualization spec preserved at
+// viz-specs/cardCalendarHeatmap-spec.md for future reuse.
 
 // Historical Trends mini-charts (Risk tab top) — 4 sparklines: TE / Active Share / Beta / Holdings
 function riskHistoricalTrends(s){
@@ -6411,26 +6261,39 @@ function rRisk(){
 
   <!-- TE Stacked Area Chart (HERO, full width) -->
   <div class="card" id="cardTEStacked" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Weekly tracking error decomposed into factor vs stock-specific components. Drag range slider to zoom. Click for drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Factor vs Stock-Specific Decomposition</div>${aboutBtn('cardTEStacked')}</div>
-      <div style="display:flex;gap:8px;align-items:center"><span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} weeks</span><button class="export-btn" onclick="exportTEStackedCsv()">CSV</button></div>
+    <div class="flex-between" style="margin-bottom:6px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <div class="card-title tip" data-tip="Weekly tracking error decomposed into stock-specific (purple, bottom) + factor (indigo, top) — stacked area summing to the total TE line. Drag range slider to zoom. Click chart for the TE drill modal." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Decomposition Over Time</div>
+        ${aboutBtn('cardTEStacked')}
+        <span style="font-size:10px;color:var(--textDim);font-weight:400">stock-specific (purple) + factor (indigo) = total TE · ${s.hist.sum.length} wk</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${resetZoomBtn('teStackedDiv')}
+        <button class="export-btn" onclick="exportTEStackedCsv()" style="padding:3px 7px;font-size:11px">CSV</button>
+      </div>
     </div>
-    <div id="teStackedDiv" style="height:300px"></div>
+    <div id="teStackedDiv" class="chart-h-md"></div>
   </div>
 
-  <!-- Beta History (adjacent to TE chart) -->
-  <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
+  <!-- Beta History (adjacent to TE chart). 2026-04-30 (audit, item #4):
+       moved click-to-drill off the entire card onto an explicit "open ›"
+       button so the user can interact with the chart (zoom, hover, range)
+       without triggering the drill modal. -->
+  <div class="card" id="cardBetaHist" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span></div>
-      <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click the open-detail button for the drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div>${aboutBtn('cardBetaHist')}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${resetZoomBtn('riskBetaMultiDiv')}
+        <button onclick="oDrMetric('beta')" title="Open Beta drill modal" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--pri);cursor:pointer;font-family:inherit">open detail ›</button>
+      </div>
     </div>
-    <div id="riskBetaMultiDiv" style="height:180px"></div>
+    <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
   </div>
 
   <!-- Factor Contribution Bars with toggle -->
   <div class="card" id="cardFacContribBars" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>${aboutBtn('cardFacContribBars')}</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>${aboutBtn('cardFacContribBars')}${resetZoomBtn('riskFacBarDiv')}</div>
       <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
         <label tabindex="0" style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
           <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
@@ -6491,11 +6354,17 @@ function rRisk(){
       <th class="r tip" data-col="e" data-tip="Active factor exposure (portfolio − benchmark), in factor-std-dev units." onclick="sortTbl('tbl-risk-fac',1)">Active Exposure</th>
       <th class="r tip" data-col="c" data-tip="Percent of total portfolio tracking error attributable to this factor." onclick="sortTbl('tbl-risk-fac',2)">Contrib %</th>
       <th class="r tip" data-col="mcrTE" data-tip="Marginal contribution to TE = Total TE × |Contrib%|. Units: TE (bps or %)." onclick="sortTbl('tbl-risk-fac',3)">MCR to TE</th>
-      <th class="r tip" data-col="ret" data-tip="Factor return over the selected period." onclick="sortTbl('tbl-risk-fac',4)">Return %</th>
-      <th class="r tip" data-col="imp" data-tip="Per-factor return impact on the portfolio = factor return × exposure." onclick="sortTbl('tbl-risk-fac',5)">Impact</th>
+      <th class="r tip" data-col="ret" data-tip="Factor return for the latest weekly snapshot. (Period-aware return is on the Exposures Factor Performance Map.)" onclick="sortTbl('tbl-risk-fac',4)">Return %</th>
+      <th class="r tip" data-col="imp" data-tip="P&amp;L attribution = Exposure × Return for the period set by the global header selector. Cells with ᵉ are derived simple-sums (FactSet only ships compounded for &quot;Full&quot; period)." onclick="sortTbl('tbl-risk-fac',5)">Impact <span style="opacity:0.6;font-weight:400">(${getImpactPeriodLabel()})</span></th>
       <th class="r tip" data-col="trend" data-tip="Weekly active-exposure history for this factor.">Trend</th>
     </tr></thead><tbody>${facMCR.length?facMCR.map(f=>{
       let cls=f.e!=null?(f.e>0?'pos':'neg'):'';
+      // 2026-04-30 (audit, item #4): hook Impact column to global period
+      // selector via getImpactForPeriod — same machinery as cardFacDetail on
+      // Exposures so toggling the global Impact pill keeps both tables in sync.
+      const _impData=getImpactForPeriod(f.n,_impactPeriod);
+      const _impVal=_impData.v;
+      const _impTip=(_impData.note||'').replace(/"/g,'&quot;');
       // 2026-04-30 (user reported "Factors Exposure Trend column is empty"):
       // Same root cause as Correlation Matrix — cs.hist.fac empty in current
       // samples. Fall back to cs.snap_attrib[name].hist (active exposure
@@ -6516,7 +6385,7 @@ function rRisk(){
         <td class="r" data-col="c" data-sv="${f.c??''}">${f2(f.c,1)}</td>
         <td class="r" data-col="mcrTE" data-sv="${f.mcrTE??''}">${f2(f.mcrTE,3)}</td>
         <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-        <td class="r" data-col="imp" data-sv="${f.imp??''}" style="${f.imp!=null?(f.imp>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.imp,2)}</td>
+        <td class="r tip-cell" data-col="imp" data-sv="${_impVal??''}" data-tip="${_impTip}" style="${_impVal!=null?(_impVal>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(_impVal,2)}${_impData.derived?'<span style="color:var(--warn);font-size:9px;margin-left:2px" title="Derived simple-sum approximation (FactSet only ships compounded full_period_imp).">ᵉ</span>':''}</td>
         <td class="r" data-col="trend">${mkSparkline(sparkVals,60,22,null)}</td>
       </tr>`;
     }).join(''):'<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--txt);font-size:11px">No factor data</td></tr>'}
@@ -6527,8 +6396,12 @@ function rRisk(){
   <!-- User's literal ask: "when security has 2% contribution to risk from country, see which countries" -->
   <!-- Data source: cs.hold[].tr aggregated by h.country / h.currency / h.industry (security_ref enrichment) -->
   <div class="card" id="cardRiskByDim" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>${aboutBtn('cardRiskByDim')}</div>
+    <div class="flex-between" style="margin-bottom:6px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        <div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension</div>
+        ${aboutBtn('cardRiskByDim')}
+        <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400"></span>
+      </div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Dim</span>
         <button class="pill" id="rbd-pill-country" onclick="setRiskByDim('country')">Country</button>
@@ -6538,10 +6411,11 @@ function rRisk(){
         <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Min</span>
         <input type="range" id="rbd-thresh" min="0" max="3" step="0.1" value="0.5" oninput="setRiskByDimThresh(this.value)" style="width:80px;accent-color:var(--accent)">
         <span id="rbd-thresh-val" style="font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace;min-width:32px">0.5%</span>
+        ${resetZoomBtn('rbdChartDiv')}
         <button class="export-btn" onclick="exportRiskByDimCsv()" title="Download CSV">CSV</button>
       </div>
     </div>
-    <div id="rbdChartDiv" style="height:480px;min-height:200px"></div>
+    <div id="rbdChartDiv" class="chart-h-lg" style="min-height:280px"></div>
     <div id="rbdFooter" style="margin-top:6px;font-size:10px;color:var(--textDim);text-align:right"></div>
   </div>
 
@@ -6565,20 +6439,24 @@ function rRisk(){
           <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px">Cum Return</button>
         </div>
       </div>
-      <div style="display:flex;gap:6px">
+      <div style="display:flex;gap:6px;align-items:center">
+        ${resetZoomBtn('riskExpHistDiv')}
         <button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button>
         <button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>
       </div>
     </div>
     <div id="facExpToggles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">${facToggleHtml}</div>
-    <div id="riskExpHistDiv" style="height:280px"></div>
+    <div id="riskExpHistDiv" class="chart-h-md"></div>
   </div>
 
-  <!-- Factor Correlation Matrix -->
-  <div class="card">
+  <!-- Factor Correlation Matrix. 2026-04-30 (audit, item #5): promoted to
+       first-class — added id="cardCorr", ⓘ About, right-click notes,
+       reset-zoom. -->
+  <div class="card" id="cardCorr">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (e−bm) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray.">Factor Correlation Matrix</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (e−bm) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray." oncontextmenu="showNotePopup(event,'cardCorr');return false">Factor Correlation Matrix</div>${aboutBtn('cardCorr')}</div>
       <div style="display:flex;gap:8px;align-items:center">
+        ${resetZoomBtn('corrHeatPlot')}
         <select id="corrPeriod" onchange="rUpdateCorr()" style="font-size:11px;padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit">
           <option value="all" selected>All</option><option value="156">3Y</option><option value="52">1Y</option><option value="26">6M</option><option value="13">3M</option>
         </select>
@@ -7604,15 +7482,16 @@ function renderHoldTab(){
           <span style="font-size:10px;color:var(--textDim);font-weight:400">active wt × risk contrib · bubble = idio (|MCR|)</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
+          ${resetZoomBtn('holdRiskDiv')}
           ${aboutBtn('cardHoldRisk')}
         </div>
       </div>
-      <div id="holdRiskDiv" style="height:380px"></div>
+      <div id="holdRiskDiv" class="chart-h-lg"></div>
       <div id="holdRiskLegend" style="display:flex;gap:18px;justify-content:center;align-items:center;margin-top:6px;padding:6px 12px;font-size:10px;color:var(--txt);flex-wrap:wrap;border-top:1px solid var(--grid)"></div>
     </div>
     <div class="card" id="cardHoldings" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span>${_concPill}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="card-title tip" style="margin:0" data-tip="Full holdings table with view toggle (Table/Cards), sort, filter, search. Top-10 TE concentration pill shows what share of total tracking error the top 10 holdings drive. Right-click for notes." oncontextmenu="showNotePopup(event,'cardHoldings');return false">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>${aboutBtn('cardHoldings')}${_concPill}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${holdViewToggleHtml()}
           <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardHoldings');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportAllHoldings();this.closest('.dl-drop').classList.remove('open')">Export All CSV</div></div></div>
@@ -7665,11 +7544,11 @@ function renderHoldTab(){
     <div class="grid g2">
       <div class="card">
         <div class="card-title">Rank Distribution</div>
-        <div id="rankDistDiv" style="height:250px"></div>
+        <div id="rankDistDiv" class="chart-h-sm"></div>
       </div>
       <div class="card">
         <div class="card-title">Top 10 Holdings (Weight &amp; Active)</div>
-        <div id="holdConcDiv" style="height:360px"></div>
+        <div id="holdConcDiv" class="chart-h-md"></div>
       </div>
     </div>`;
 
@@ -7778,11 +7657,12 @@ function rHoldConc(){
   let top10=[...cs.hold].filter(h=>!isCash(h)&&isFinite(h.p)).sort((a,b)=>b.p-a.p).slice(0,10);
   if(!top10.length){Plotly.purge('holdConcDiv');return;}
   let short=s=>{if(!s)return'';s=s.replace(/\s+(Ltd\.?|Limited|Inc\.?|Co\.?,?\s*Ltd\.?|Corp\.?|Corporation|Company|plc|PLC|AG|SA|S\.A\.?|N\.V\.?|Holdings?|Group|Class [A-Z])$/gi,'').trim();return s.length>22?s.slice(0,21)+'…':s;};
-  let labels=top10.map(h=>short(h.n||h.t));
+  // 2026-04-30 (audit, item #8): tk(h) preferred for display labels (TKR-REGION) over raw h.t (SEDOL).
+  let labels=top10.map(h=>short(h.n||tk(h)));
   let vals=top10.map(h=>+(h.p||0));
   let colors=top10.map(h=>(h.a||0)>=0?'rgba(34,197,94,0.85)':'rgba(239,68,68,0.85)');
   let txt=top10.map(h=>f2(h.p)+'%  '+fp(h.a));
-  let cd=top10.map(h=>[h.t||'',h.n||'',h.sec||'—',+(h.a||0).toFixed(2),+(h.mcr||0).toFixed(2)]);
+  let cd=top10.map(h=>[tk(h)||h.t||'',h.n||'',h.sec||'—',+(h.a||0).toFixed(2),+(h.mcr||0).toFixed(2),h.t||'']);
   Plotly.newPlot('holdConcDiv',[{
     y:labels,x:vals,type:'bar',orientation:'h',
     marker:{color:colors,line:{color:'rgba(255,255,255,0.12)',width:1}},
@@ -7796,6 +7676,11 @@ function rHoldConc(){
     yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category'},
     xaxis:{...plotBg.xaxis,type:'linear',title:'Weight %',ticksuffix:'%',rangemode:'tozero'}
   },plotCfg);
+  // Wire bar click → holding drill modal (audit item #8 — was missing).
+  // customdata[5] is h.t (SEDOL) — use that for the lookup, not the display ticker.
+  document.getElementById('holdConcDiv').on('plotly_click',ev=>{
+    const sedol=ev?.points?.[0]?.customdata?.[5];if(sedol)oSt(sedol);
+  });
 }
 
 

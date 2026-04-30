@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>cardWeekOverWeek — visual mockup (preview only, not wired to data)</title>
+<!--
+  PURPOSE: Side-by-side preview of three candidate designs for the "cardWeekOverWeek" tile (NEW_TILE_CANDIDATES.md #1).
+  HOW TO USE: Open this file in a browser. No build, no server. All Plotly CDN, all token-matched to dashboard_v7.html.
+  STATUS: Mockup — uses synthetic but realistic numbers. NOT live data. Implementation lives in dashboard_v7.html later.
+  AUTHOR: data-viz subagent · 2026-04-30
+-->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+  /* ----- TOKENS COPIED FROM dashboard_v7.html (line 25-30) ----- */
+  :root{
+    --bg:#0b0e14; --card:#12161f; --cardBorder:#1e2433; --surf:#1e293b; --grid:#1e2433;
+    --txt:#94a3b8; --txth:#e2e8f0; --textBright:#f1f5f9; --textDim:#64748b;
+    --accent:#22d3ee; --pri:#6366f1; --accentDim:#4f46e5;
+    --acc:#8b5cf6; --pos:#10b981; --neg:#ef4444; --warn:#f59e0b;
+  }
+  body{
+    font-family:'DM Sans',system-ui,-apple-system,sans-serif;
+    background:var(--bg); color:var(--txt); margin:0; padding:24px;
+  }
+  .mono{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  h1{color:var(--textBright); font-size:18px; font-weight:700; letter-spacing:1px; margin:0 0 6px}
+  h2{color:var(--txth); font-size:14px; font-weight:600; margin:30px 0 12px; border-left:3px solid var(--accent); padding-left:10px}
+  .meta{color:var(--textDim); font-size:11px; margin-bottom:20px}
+  .meta b{color:var(--warn)}
+
+  /* ----- CARD WRAPPER (mirrors .card style) ----- */
+  .card{
+    background:var(--card); border:1px solid var(--cardBorder); border-radius:12px;
+    padding:16px 20px; margin-bottom:24px;
+  }
+  .card-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px}
+  .card-title{color:var(--textBright); font-size:13px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase}
+  .card-sub{color:var(--textDim); font-size:11px}
+  .badge{
+    background:var(--surf); color:var(--txth); padding:2px 8px; border-radius:10px;
+    font-size:10px; font-weight:600; border:1px solid var(--grid); margin-left:8px;
+  }
+
+  /* ----- KPI STRIP ----- */
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px}
+  .kpi{
+    background:var(--surf); border:1px solid var(--grid); border-radius:8px;
+    padding:10px 14px;
+  }
+  .kpi-label{color:var(--textDim); font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase}
+  .kpi-row{display:flex; align-items:baseline; gap:6px; margin-top:4px}
+  .kpi-val{color:var(--textBright); font-size:20px; font-weight:800}
+  .kpi-delta{font-size:11px; font-weight:600; padding:1px 6px; border-radius:4px}
+  .delta-up{background:rgba(239,68,68,.18); color:var(--neg)}
+  .delta-dn{background:rgba(16,185,129,.18); color:var(--pos)}
+  .delta-flat{background:rgba(148,163,184,.15); color:var(--txt)}
+  .kpi-prev{color:var(--textDim); font-size:11px; margin-left:auto}
+
+  /* ----- THREE-COLUMN MOVE LISTS ----- */
+  .cols{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px}
+  .col{background:var(--surf); border:1px solid var(--grid); border-radius:8px; padding:12px}
+  .col-h{
+    color:var(--txth); font-size:11px; font-weight:700; letter-spacing:1px;
+    text-transform:uppercase; margin-bottom:8px; padding-bottom:6px;
+    border-bottom:1px solid var(--grid); display:flex; justify-content:space-between
+  }
+  .col-h .count{color:var(--textDim); font-weight:500}
+  .row{display:grid; grid-template-columns:1fr auto auto; gap:8px; align-items:center;
+       padding:5px 0; border-bottom:1px dashed rgba(148,163,184,.1); font-size:12px}
+  .row:last-child{border-bottom:none}
+  .row .tk{color:var(--txth); font-weight:600}
+  .row .nm{color:var(--textDim); font-size:10px; display:block; margin-top:1px}
+  .row .wt{color:var(--txth); font-weight:600}
+  .row .te{font-size:11px}
+
+  /* ----- HORIZONTAL BAR (within row) ----- */
+  .hbar{
+    height:4px; border-radius:2px; background:var(--grid); position:relative; overflow:hidden;
+    margin-top:3px;
+  }
+  .hbar > span{position:absolute; top:0; bottom:0; left:50%; transform-origin:left center}
+  .hbar > span.neg{background:var(--pos); transform:translateX(-100%) scaleX(var(--scale,1))}
+  .hbar > span.pos{background:var(--neg); transform:scaleX(var(--scale,1))}
+
+  /* ----- FACTOR ROTATION FOOTER ----- */
+  .fac-rot{
+    margin-top:14px; padding-top:12px; border-top:1px solid var(--grid);
+    display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;
+  }
+  .fac-cell{display:flex; align-items:center; gap:10px}
+  .fac-name{color:var(--txth); font-size:12px; font-weight:600; min-width:110px}
+  .fac-arrow{font-size:14px; font-weight:800}
+  .fac-arrow.up{color:var(--neg)}
+  .fac-arrow.dn{color:var(--pos)}
+  .fac-arrow.flat{color:var(--txt)}
+  .fac-num{color:var(--textBright); font-size:12px; font-weight:600}
+  .fac-spark{flex:1; height:18px}
+
+  /* ----- PLOTLY CONTAINERS (option B) ----- */
+  .plot{height:280px; background:var(--card); border:1px solid var(--grid); border-radius:8px}
+
+  /* ----- DESIGN-NOTES BOX ----- */
+  .notes{
+    background:rgba(99,102,241,.06); border:1px solid var(--grid); border-left:3px solid var(--pri);
+    border-radius:6px; padding:10px 14px; font-size:11px; color:var(--txt); margin-top:10px;
+  }
+  .notes b{color:var(--pri)}
+
+  .switcher{
+    display:flex; gap:8px; margin-bottom:18px; padding:6px; background:var(--card);
+    border:1px solid var(--grid); border-radius:8px; width:fit-content;
+  }
+  .switcher button{
+    background:var(--surf); border:1px solid var(--grid); color:var(--txt);
+    padding:6px 14px; border-radius:6px; font-family:inherit; font-size:12px;
+    cursor:pointer; font-weight:600;
+  }
+  .switcher button.active{background:var(--pri); color:#fff; border-color:var(--pri)}
+
+  /* small triangle markers */
+  .arrow-up::before{content:"▲"; font-size:9px; margin-right:3px}
+  .arrow-dn::before{content:"▼"; font-size:9px; margin-right:3px}
+  .arrow-flat::before{content:"●"; font-size:9px; margin-right:3px; color:var(--txt)}
+
+  /* spark line container */
+  .spark-svg{display:inline-block; vertical-align:middle}
+</style>
+</head>
+<body>
+
+<h1>cardWeekOverWeek — visual mockup</h1>
+<div class="meta">
+  <b>Status: PREVIEW ONLY.</b> Synthetic numbers, not live. Live data wires from <code>cs.hist.sum</code> + <code>cs.hold</code> + <code>cs.hold_prev</code>.
+  Three design options below — A is the recommended one.
+</div>
+
+<!-- =================== OPTION A — RECOMMENDED =================== -->
+<h2>Option A — KPI strip + 3-col move list + factor rotation footer (RECOMMENDED)</h2>
+<div class="card" id="optA">
+  <div class="card-head">
+    <div>
+      <span class="card-title">Week-over-Week</span>
+      <span class="badge">2026-04-25 → 2026-04-18</span>
+    </div>
+    <div class="card-sub">Click any row to drill</div>
+  </div>
+
+  <!-- KPI STRIP -->
+  <div class="kpis">
+    <div class="kpi">
+      <div class="kpi-label">TRACKING ERROR</div>
+      <div class="kpi-row">
+        <span class="kpi-val mono">5.42</span>
+        <span class="kpi-delta delta-up arrow-up">+0.18</span>
+        <span class="kpi-prev mono">vs 5.24</span>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">ACTIVE SHARE</div>
+      <div class="kpi-row">
+        <span class="kpi-val mono">87.3%</span>
+        <span class="kpi-delta delta-up arrow-up">+0.6</span>
+        <span class="kpi-prev mono">vs 86.7</span>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">BETA</div>
+      <div class="kpi-row">
+        <span class="kpi-val mono">1.04</span>
+        <span class="kpi-delta delta-flat arrow-flat">±0.00</span>
+        <span class="kpi-prev mono">vs 1.04</span>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">HOLDINGS</div>
+      <div class="kpi-row">
+        <span class="kpi-val mono">142</span>
+        <span class="kpi-delta delta-up arrow-up">+3</span>
+        <span class="kpi-prev mono">vs 139</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3-COL MOVE LISTS -->
+  <div class="cols">
+    <!-- ADDED -->
+    <div class="col">
+      <div class="col-h">Added <span class="count">5 new</span></div>
+      <div class="row">
+        <div><span class="tk">SAP-DE</span><span class="nm">SAP SE</span></div>
+        <div class="wt mono">1.42%</div>
+        <div class="te mono" style="color:var(--neg)">+0.31</div>
+      </div>
+      <div class="row">
+        <div><span class="tk">DSV-DK</span><span class="nm">DSV A/S</span></div>
+        <div class="wt mono">0.94%</div>
+        <div class="te mono" style="color:var(--neg)">+0.18</div>
+      </div>
+      <div class="row">
+        <div><span class="tk">REL-IN</span><span class="nm">Reliance Industries</span></div>
+        <div class="wt mono">0.71%</div>
+        <div class="te mono" style="color:var(--neg)">+0.12</div>
+      </div>
+      <div class="row">
+        <div><span class="tk">7203-JP</span><span class="nm">Toyota Motor Corp</span></div>
+        <div class="wt mono">0.55%</div>
+        <div class="te mono" style="color:var(--neg)">+0.09</div>
+      </div>
+      <div class="row">
+        <div><span class="tk">ASML-NL</span><span class="nm">ASML Holding</span></div>
+        <div class="wt mono">0.31%</div>
+        <div class="te mono" style="color:var(--neg)">+0.05</div>
+      </div>
+    </div>
+
+    <!-- DROPPED -->
+    <div class="col">
+      <div class="col-h">Dropped <span class="count">2 exited</span></div>
+      <div class="row">
+        <div><span class="tk">005930-KR</span><span class="nm">Samsung Electronics</span></div>
+        <div class="wt mono">2.18%</div>
+        <div class="te mono" style="color:var(--pos)">−0.42</div>
+      </div>
+      <div class="row">
+        <div><span class="tk">TSM-TW</span><span class="nm">Taiwan Semi.</span></div>
+        <div class="wt mono">1.07%</div>
+        <div class="te mono" style="color:var(--pos)">−0.21</div>
+      </div>
+      <div class="row" style="opacity:.5; padding-top:18px">
+        <div style="font-size:10px; font-style:italic">Smaller exits hidden (5 more &lt; 0.5%)</div>
+        <div></div><div></div>
+      </div>
+    </div>
+
+    <!-- RESIZED -->
+    <div class="col">
+      <div class="col-h">Resized <span class="count">top 5 |Δwt|</span></div>
+      <div class="row">
+        <div><span class="tk">NESN-CH</span><span class="nm">Nestlé SA</span></div>
+        <div class="wt mono" style="color:var(--neg)">+0.84</div>
+        <div class="hbar"><span class="pos" style="--scale:0.7"></span></div>
+      </div>
+      <div class="row">
+        <div><span class="tk">SHEL-GB</span><span class="nm">Shell plc</span></div>
+        <div class="wt mono" style="color:var(--pos)">−0.62</div>
+        <div class="hbar"><span class="neg" style="--scale:0.52"></span></div>
+      </div>
+      <div class="row">
+        <div><span class="tk">NOVO-DK</span><span class="nm">Novo Nordisk</span></div>
+        <div class="wt mono" style="color:var(--neg)">+0.54</div>
+        <div class="hbar"><span class="pos" style="--scale:0.45"></span></div>
+      </div>
+      <div class="row">
+        <div><span class="tk">ROG-CH</span><span class="nm">Roche Holding</span></div>
+        <div class="wt mono" style="color:var(--pos)">−0.41</div>
+        <div class="hbar"><span class="neg" style="--scale:0.34"></span></div>
+      </div>
+      <div class="row">
+        <div><span class="tk">AZN-GB</span><span class="nm">AstraZeneca plc</span></div>
+        <div class="wt mono" style="color:var(--neg)">+0.36</div>
+        <div class="hbar"><span class="pos" style="--scale:0.30"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FACTOR ROTATION -->
+  <div class="fac-rot">
+    <div class="fac-cell">
+      <div class="fac-name">Quality</div>
+      <div class="fac-arrow up arrow-up"></div>
+      <div class="fac-num mono">+0.12σ</div>
+      <div class="fac-spark" id="sparkQual"></div>
+    </div>
+    <div class="fac-cell">
+      <div class="fac-name">Momentum</div>
+      <div class="fac-arrow dn arrow-dn"></div>
+      <div class="fac-num mono">−0.08σ</div>
+      <div class="fac-spark" id="sparkMom"></div>
+    </div>
+    <div class="fac-cell">
+      <div class="fac-name">Value</div>
+      <div class="fac-arrow up arrow-up"></div>
+      <div class="fac-num mono">+0.05σ</div>
+      <div class="fac-spark" id="sparkVal"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <b>Why this design wins:</b> the PM gets four answers in 3 seconds — (1) did risk increase, (2) did the portfolio composition change materially, (3) where, and (4) which factor bets shifted. Single-tile vertical scan. No tab-hopping. The 3 columns mirror how a PM thinks about turnover — added / dropped / resized — not how the data is shipped.
+  </div>
+</div>
+
+<!-- =================== OPTION B — DENSER, ALL-IN-ONE-CHART =================== -->
+<h2>Option B — Bubble chart of every position's |Δwt| × |ΔTE-contrib|</h2>
+<div class="card">
+  <div class="card-head">
+    <div>
+      <span class="card-title">Week-over-Week (chart-only)</span>
+      <span class="badge">x: Δwt &nbsp; y: Δ%T &nbsp; size: |total %T|</span>
+    </div>
+  </div>
+  <div class="plot" id="plotB"></div>
+  <div class="notes">
+    <b>Tradeoff:</b> dense + analytical, but the PM has to interpret the axes. Useful for the "stare at it" mode but worse for the morning-glance use case. Could be added as the second tab inside Option A — pill toggle "List | Scatter".
+  </div>
+</div>
+
+<!-- =================== OPTION C — TIMELINE STRIP =================== -->
+<h2>Option C — 13-week mini timeline of every metric</h2>
+<div class="card">
+  <div class="card-head">
+    <div>
+      <span class="card-title">Week-over-Week (timeline)</span>
+      <span class="badge">last 13 weeks · current marked</span>
+    </div>
+  </div>
+  <div style="display:grid; grid-template-columns:120px 1fr; row-gap:10px; column-gap:14px; align-items:center">
+    <div style="color:var(--txt); font-size:12px">Tracking Error</div>
+    <div class="plot" id="plotC1" style="height:60px"></div>
+    <div style="color:var(--txt); font-size:12px">Active Share</div>
+    <div class="plot" id="plotC2" style="height:60px"></div>
+    <div style="color:var(--txt); font-size:12px">Holdings count</div>
+    <div class="plot" id="plotC3" style="height:60px"></div>
+    <div style="color:var(--txt); font-size:12px">Cash %</div>
+    <div class="plot" id="plotC4" style="height:60px"></div>
+  </div>
+  <div class="notes">
+    <b>Tradeoff:</b> shows context (is this week typical?) but loses the holdings-level diff. Better as a follow-up tile (cardMetricTrends) than as the WoW-diff tile itself.
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<script>
+/* ===== sparklines (Option A, factor rotation) ===== */
+function spark(id, data, color){
+  const w=80, h=18, n=data.length;
+  const min=Math.min(...data), max=Math.max(...data);
+  const xs=data.map((_,i)=>(i/(n-1))*w);
+  const ys=data.map(v=>h-((v-min)/(max-min||1))*(h-2)-1);
+  const path = xs.map((x,i)=>`${i?'L':'M'}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+  document.getElementById(id).innerHTML =
+    `<svg width="${w}" height="${h}" class="spark-svg">
+       <path d="${path}" fill="none" stroke="${color}" stroke-width="1.5"/>
+       <circle cx="${xs[n-1]}" cy="${ys[n-1]}" r="2" fill="${color}"/>
+     </svg>`;
+}
+spark('sparkQual', [0.05, 0.04, 0.03, 0.02, 0.04, 0.06, 0.07, 0.05, 0.07, 0.08, 0.10, 0.11, 0.12], '#ef4444');
+spark('sparkMom',  [0.18, 0.15, 0.12, 0.10, 0.08, 0.07, 0.05, 0.04, 0.03, 0.02, 0.00, -0.05, -0.08], '#10b981');
+spark('sparkVal',  [-0.02, -0.01, 0.00, 0.01, 0.02, 0.03, 0.03, 0.04, 0.04, 0.04, 0.05, 0.05, 0.05], '#ef4444');
+
+/* ===== Option B — bubble scatter ===== */
+const positionsB = [
+  {tk:'NESN-CH',  dw: 0.84, dt: 0.21, sz: 4.2},
+  {tk:'SHEL-GB',  dw:-0.62, dt:-0.18, sz: 3.1},
+  {tk:'NOVO-DK',  dw: 0.54, dt: 0.14, sz: 2.8},
+  {tk:'ROG-CH',   dw:-0.41, dt:-0.09, sz: 2.2},
+  {tk:'AZN-GB',   dw: 0.36, dt: 0.08, sz: 1.9},
+  {tk:'SAP-DE',   dw: 1.42, dt: 0.31, sz: 1.4, added:true},
+  {tk:'DSV-DK',   dw: 0.94, dt: 0.18, sz: 0.9, added:true},
+  {tk:'005930-KR',dw:-2.18, dt:-0.42, sz: 0.0, dropped:true},
+  {tk:'TSM-TW',   dw:-1.07, dt:-0.21, sz: 0.0, dropped:true},
+  {tk:'REL-IN',   dw: 0.71, dt: 0.12, sz: 0.7, added:true},
+];
+const trace = {
+  x: positionsB.map(p=>p.dw),
+  y: positionsB.map(p=>p.dt),
+  text: positionsB.map(p=>p.tk),
+  textposition:'top center',
+  mode:'markers+text',
+  type:'scatter',
+  marker:{
+    size: positionsB.map(p=> Math.max(8, p.sz*5 + 8)),
+    color: positionsB.map(p=>{
+      if(p.added) return '#22d3ee';
+      if(p.dropped) return '#94a3b8';
+      return p.dt>0 ? '#ef4444' : '#10b981';
+    }),
+    opacity:0.75,
+    line:{color:'#0b0e14', width:1.5}
+  },
+  hovertemplate:'<b>%{text}</b><br>Δwt: %{x:.2f}%<br>Δ%T: %{y:.2f}<extra></extra>'
+};
+Plotly.newPlot('plotB', [trace], {
+  paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+  font:{color:'#cbd5e1', family:'DM Sans'},
+  xaxis:{title:{text:'Δ active weight (pp)', font:{size:11}}, gridcolor:'#1e2433', zerolinecolor:'#475569'},
+  yaxis:{title:{text:'Δ %T contribution', font:{size:11}}, gridcolor:'#1e2433', zerolinecolor:'#475569'},
+  margin:{l:50,r:20,t:10,b:40},
+  showlegend:false,
+  shapes:[
+    {type:'line', x0:0, x1:0, y0:-0.5, y1:0.5, line:{color:'#475569', dash:'dot', width:1}},
+    {type:'line', x0:-2.5, x1:1.5, y0:0, y1:0, line:{color:'#475569', dash:'dot', width:1}}
+  ],
+  annotations:[
+    {x:1.42,y:0.45, text:'Cyan = added · Grey = dropped', showarrow:false,
+     font:{size:9, color:'#64748b'}, xanchor:'right', yanchor:'top'}
+  ]
+}, {displayModeBar:false, responsive:true});
+
+/* ===== Option C — 13-week timelines ===== */
+function timeline(divId, values, color, currentValue){
+  const xs = values.map((_,i)=>i);
+  const main = {
+    x: xs, y: values, type:'scatter', mode:'lines+markers',
+    line:{color, width:2}, marker:{color, size:5},
+    hovertemplate:'wk %{x}<br>%{y:.2f}<extra></extra>'
+  };
+  const last = {
+    x:[xs[xs.length-1]], y:[values[values.length-1]],
+    type:'scatter', mode:'markers',
+    marker:{color, size:10, line:{color:'#fff', width:2}},
+    hoverinfo:'skip', showlegend:false
+  };
+  Plotly.newPlot(divId, [main, last], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{color:'#cbd5e1', family:'DM Sans', size:9},
+    xaxis:{visible:false}, yaxis:{showgrid:false, zeroline:false, tickfont:{size:9}, tickcolor:'#1e2433'},
+    margin:{l:30,r:10,t:5,b:5}, showlegend:false
+  }, {displayModeBar:false, staticPlot:false});
+}
+timeline('plotC1', [4.92,5.05,5.11,5.21,5.18,5.30,5.24,5.31,5.40,5.36,5.28,5.24,5.42], '#6366f1');
+timeline('plotC2', [85.1,85.4,85.8,86.0,86.3,86.4,86.6,86.7,86.9,86.8,86.6,86.7,87.3], '#22d3ee');
+timeline('plotC3', [136,138,138,139,140,141,140,139,140,141,140,139,142], '#a855f7');
+timeline('plotC4', [1.8,1.6,2.0,2.2,2.1,1.9,1.7,1.6,1.5,1.4,1.5,1.6,1.4], '#f59e0b');
+</script>
+
+</body>
+</html>

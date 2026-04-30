@@ -2091,34 +2091,49 @@ function rFacWaterfall(s){
   // Set chart container height — adapt to factor count, leave room for total badge
   const h=Math.min(900,Math.max(200,facs.length*30+60));
   el.style.height=h+'px';
+  // 2026-04-30 (user feedback "make it gtgt"): waterfall cleanup —
+  // (a) inline value labels on each bar so users don't need to hover for
+  //     the magnitude; format with explicit sign + 2dp + %
+  // (b) cumulative line in indigo (--pri) for cohesion with the rest of the
+  //     theme instead of the previous purple
+  // (c) bigger zero baseline for visual anchoring
+  // (d) cleaner title — drop the inline HTML tags Plotly used to render badly
+  // (e) explicit positive-side vs negative-side label positioning so values
+  //     never overlap the bar
+  const valLabels=vals.map(v=>(v>=0?'+':'')+v.toFixed(2)+'%');
   Plotly.newPlot('facButtDiv',[
-    // Primary bars (per-factor impact)
+    // Primary bars (per-factor impact) with inline value labels
     {
       y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
       name:'Per-factor impact',
       marker:{color:vals.map(v=>v>=0?posC:negC),line:{color:'rgba(15,23,42,0.5)',width:0.5}},
+      text:valLabels,
+      textposition:'outside',
+      textfont:{size:10,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
+      cliponaxis:false,
       hovertext:hovertext,hoverinfo:'text',
       hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
     },
-    // Cumulative running total (line + markers)
+    // Cumulative running total (line + markers in primary indigo for theme consistency)
     {
       y:facs.map(f=>f.n),x:cumVals,type:'scatter',mode:'lines+markers',
       name:'Running total',
-      line:{color:'rgba(168,85,247,0.85)',width:1.5,dash:'dot'},
-      marker:{size:5,color:'rgba(168,85,247,0.95)',symbol:'circle',line:{color:'rgba(15,23,42,0.5)',width:0.5}},
+      line:{color:'#6366f1',width:1.8,dash:'dot'},
+      marker:{size:6,color:'#6366f1',symbol:'diamond',line:{color:'rgba(15,23,42,0.6)',width:0.5}},
       hovertext:cumHover,hoverinfo:'text',
-      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#a78bfa',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#6366f1',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
     }
   ],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:11},
-    margin:{l:10,r:20,t:38,b:40},
+    margin:{l:10,r:60,t:42,b:42},
     yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',tickfont:{size:10,color:T.tickH},automargin:true},
-    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,range:[-xmax,xmax],title:`Active-return contribution (${yLab}, %)`,tickfont:{color:T.tick,size:9},tickformat:'+.2f'},
+    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,range:[-xmax*1.15,xmax*1.15],title:`Active-return contribution (${yLab}, %)`,tickfont:{color:T.tick,size:9},tickformat:'+.2f'},
     showlegend:false,
     annotations:[
-      {text:`<b>Total factor impact (${yLab}):</b> <span style="color:${totalImp>=0?'#10b981':'#ef4444'}">${totalImp>=0?'+':''}${f2(totalImp,2)}%</span> across ${facs.length} factors`,
-       x:0.5,y:1.06,xref:'paper',yref:'paper',showarrow:false,font:{size:11,color:T.tickH||'#cbd5e1'},xanchor:'center',yanchor:'bottom'}
+      // Cleaner title — plain text, no HTML, sign+color via separate spans
+      {text:`Total ${yLab} factor impact: ${totalImp>=0?'+':''}${f2(totalImp,2)}% across ${facs.length} factors  ·  diamond line = running cumulative`,
+       x:0.5,y:1.06,xref:'paper',yref:'paper',showarrow:false,font:{size:10.5,color:totalImp>=0?'#10b981':'#ef4444'},xanchor:'center',yanchor:'bottom'}
     ]
   },plotCfg);
   if(el.on){el.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrF==='function')oDrF(n);});}
@@ -6087,10 +6102,19 @@ function rRisk(){
     <div id="riskCtryHeatDiv" style="min-height:280px"></div>
   </div>
 
-  <!-- Factor Exposure Time Series with toggles -->
+  <!-- Factor Exposure / Return Time Series with toggles -->
   <div class="card" id="cardFacHist" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Active exposure (e − bm) time series for selected factors. Use Select/Clear All or click factor toggles. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacHist');return false" style="margin:0">Factor Exposure History</div>${aboutBtn('cardFacHist')}</div>
+    <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="card-title tip" data-tip="Time series for selected factors. Toggle metric: Active Exposure (e − bm), Factor Return (per-week pure return), or Cumulative Return (running sum). Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacHist');return false" style="margin:0">Factor History</div>
+        ${aboutBtn('cardFacHist')}
+        <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Metric</span>
+          <button class="pill" id="fac-hist-pill-exp" onclick="setFacHistMetric('exp')" style="font-size:10px;padding:2px 7px">Active Exp</button>
+          <button class="pill" id="fac-hist-pill-ret" onclick="setFacHistMetric('ret')" style="font-size:10px;padding:2px 7px">Factor Return</button>
+          <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px">Cum Return</button>
+        </div>
+      </div>
       <div style="display:flex;gap:6px">
         <button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button>
         <button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>
@@ -6392,11 +6416,24 @@ function setFacBarAll(v){
 }
 
 
+// 2026-04-30 (user feedback): added Factor Return + Cum Return modes alongside
+// Active Exposure. Persisted in localStorage so re-renders pick up the choice.
+let _facHistMetric=(typeof localStorage!=='undefined'&&localStorage.getItem('rr.facHistMetric'))||'exp';
+function setFacHistMetric(m){
+  if(!['exp','ret','cret'].includes(m))return;
+  _facHistMetric=m;
+  try{localStorage.setItem('rr.facHistMetric',m);}catch(e){}
+  updateFacExpChart();
+}
 function updateFacExpChart(){
   let s=cs;
   let allFacs=window._riskAllFacs||[];
   let facColors=window._riskFacColors||['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899'];
   let facHist=s.hist.fac||{};
+  let snap=s.snap_attrib||{};
+  // Sync metric pills
+  ['exp','ret','cret'].forEach(m=>{const p=document.getElementById('fac-hist-pill-'+m);if(p)p.classList.toggle('active',m===_facHistMetric);});
+  const metric=_facHistMetric;
   let traces=[];
   let colorIdx=0;
 
@@ -6404,17 +6441,37 @@ function updateFacExpChart(){
   let checkboxes=document.querySelectorAll('.fac-exp-chk');
   allFacs.forEach((f,i)=>{
     if(!FAC_PRIMARY.has(f.n))return;
-    // Find the matching checkbox by data-fac attribute or positional fallback
     let chk=document.querySelector(`.fac-exp-chk[data-fac="${CSS.escape(f.n)}"]`)||checkboxes[i];
     if(!chk||!chk.checked)return;
-    let hist=facHist[f.n];
-    if(!hist||!hist.length)return;
     let col=facColors[colorIdx++%facColors.length];
-    traces.push({
-      x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n,
-      line:{color:col,width:2},
-      hovertemplate:f.n+'<br>%{x|%b %Y}<br>Exposure: %{y:.3f}<extra></extra>'
-    });
+    if(metric==='exp'){
+      // Active Exposure: cs.hist.fac[name] → e - bm
+      let hist=facHist[f.n];
+      if(!hist||!hist.length)return;
+      traces.push({
+        x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n,
+        line:{color:col,width:2},
+        hovertemplate:f.n+'<br>%{x|%b %Y}<br>Active Exposure: %{y:.3f}<extra></extra>'
+      });
+    }else if(metric==='ret'||metric==='cret'){
+      // Factor Return / Cum Return: cs.snap_attrib[name].hist[].ret
+      const sa=snap[f.n];
+      if(!sa||!sa.hist||!sa.hist.length)return;
+      const dates=sa.hist.map(h=>isoDate(h.d));
+      const rets=sa.hist.map(h=>+(h.ret||0));
+      let yvals=rets;
+      let lbl='Factor Return';
+      if(metric==='cret'){
+        let cum=0;
+        yvals=rets.map(r=>{cum+=r;return +cum.toFixed(3);});
+        lbl='Cum Return';
+      }
+      traces.push({
+        x:dates,y:yvals,name:f.n,
+        line:{color:col,width:2},
+        hovertemplate:f.n+'<br>%{x|%b %Y}<br>'+lbl+': %{y:+.2f}%<extra></extra>'
+      });
+    }
   });
 
   // Non-primary group sub-checkboxes (Industry sectors, Country weights)
@@ -6456,8 +6513,9 @@ function updateFacExpChart(){
     el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:20px;text-align:center">No factors selected</p>';
     return;
   }
+  const yTitle=metric==='ret'?'Factor Return (%, weekly)':metric==='cret'?'Cumulative Factor Return (%)':'Active Exposure (σ)';
   Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
-    yaxis:{...plotBg.yaxis,title:'Active Exposure / Weight',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2},
+    yaxis:{...plotBg.yaxis,title:yTitle,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},
     legend:{orientation:'h',y:1.12,font:{size:10}},
     hovermode:'x unified'

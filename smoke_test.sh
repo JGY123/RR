@@ -106,8 +106,10 @@ fi
 echo
 echo -e "${BOLD}5. Git state${RESET}"
 cd "$SCRIPT_DIR"
-modified=$(git status --short 2>/dev/null | grep -c '^.M' || echo 0)
-untracked=$(git status --short 2>/dev/null | grep -c '^??' || echo 0)
+# grep -c always prints a number to stdout (even "0" when no matches);
+# the prior `|| echo 0` fallback duplicated the line and broke `-gt` later.
+modified=$(git status --short 2>/dev/null | grep -c '^.M' 2>/dev/null); modified=${modified:-0}
+untracked=$(git status --short 2>/dev/null | grep -c '^??' 2>/dev/null); untracked=${untracked:-0}
 if [ "$modified" -gt 0 ]; then
   echo -e "  ${YELLOW}—${RESET} ${modified} modified file(s) uncommitted (consider committing before risky edits)"
 fi

@@ -1830,7 +1830,7 @@ function rExp(){
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:none;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
@@ -1895,18 +1895,18 @@ function rExp(){
       </div></div>
       <div id="rnkTableWrap" style="overflow-x:auto"></div>
     </div>
-    <div class="card" id="cardChars">
+    <div class="card" id="cardChars" style="display:flex;flex-direction:column">
       <div class="flex-between">
-        <div style="display:flex;align-items:baseline;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
           <div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals (39 metrics shipped from FactSet Portfolio Characteristics). Click any row for the metric drill — TE / Beta / Active Share open with full historical chart; the rest show single-snapshot until parser-side history persistence (B114)." oncontextmenu="showNotePopup(event,'cardChars');return false">Portfolio Characteristics</div>
-          <span style="font-size:10px;color:var(--textDim);font-weight:400">portfolio vs benchmark · click a row for history · ↓ marks "lower-is-better" rows</span>
+          <span style="font-size:10px;color:var(--textDim);font-weight:400">39 metrics · click a row for history · ↓ marks "lower-is-better"</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           ${aboutBtn('cardChars')}
           <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
         </div>
       </div>
-      ${rChr(s.chars)}
+      <div style="flex:1;overflow-y:auto;max-height:520px;margin-top:6px">${rChr(s.chars)}</div>
     </div>
   </div>
 
@@ -2932,8 +2932,15 @@ function rWt(data,type,hold){
     const groupFn=type==='sec'?(h=>h.sec):(h=>(h.co?CMAP[h.co]||'Other':null));
     factorAgg=aggregateHoldingsBy(hold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});
   }
-  const aggTr=(name)=>factorAgg[name]?.tr ?? 0;
-  const aggMcr=(name)=>factorAgg[name]?.mcr ?? 0;
+  // Sector / region TE fallback: if no holdings are shipped for a bucket
+  // (v2 Security slim drops the long tail of bench-only names), the
+  // holdings-aggregated TE is 0. The PARSER ships d.tr from FactSet's
+  // section-aggregate row for every bucket — including bench-only ones —
+  // so fall back to that. Same for d.mcr (per-sector specific TE). User
+  // feedback 2026-04-30: "the sector without holdings don't have the risk
+  // breakdown while they obviously contribute to risk".
+  const aggTr=(name)=>{const v=factorAgg[name]?.tr; if(v!=null&&Math.abs(v)>0.01)return v; const d=data.find(x=>x.n===name); return d?.tr??0;};
+  const aggMcr=(name)=>{const v=factorAgg[name]?.mcr; if(v!=null&&Math.abs(v)>0.01)return v; const d=data.find(x=>x.n===name); return d?.mcr??0;};
   const aggCount=(name)=>factorAgg[name]?.count ?? 0;
   // Sort sectors by TE contribution descending; regions stay as-is
   let sorted=type==='sec'?[...data].sort((a,b)=>Math.abs(aggTr(b.n))-Math.abs(aggTr(a.n))):data;
@@ -3298,31 +3305,37 @@ function rFacTable(factors){
 // }
 // Returns dict keyed by bucket: { count, p, a, tr, mcr, factor:{fname: sum}, avg:{field: avgVal} }
 function aggregateHoldingsBy(holds, groupKeyFn, factorList, opts){
+  // 2026-04-30 (B116 cross-tile fix): TE / MCR / factor columns are PORTFOLIO
+  // properties — they don't change when the user toggles Universe pill. Only
+  // count / weight / rank-average columns respect the universe filter.
+  // Previously: mode='benchmark' silently under-reported TE columns by ~17x
+  // because filtering to h.b > 0 dropped portfolio holdings that contribute
+  // most of the actual TE. Same bug pattern bit cardCountry / cardSectors /
+  // cardGroups / cardRanks. Per April-27 anti-fabrication policy: TE is
+  // a single answer; the Universe pill never moves it.
   opts=opts||{};
   const mode=opts.mode||'portfolio';
   const avgFields=opts.avgFields||[];
   const byKey={};
   (holds||[]).forEach(h=>{
     if(isCash(h))return;
-    // Mode filter
-    if(mode==='portfolio'&&!((+h.p)>0))return;
-    if(mode==='benchmark'&&!((+h.b)>0))return;
-    // 'both' = no filter
     const raw=groupKeyFn(h);
     if(raw==null||raw==='')return;
-    // groupKeyFn may return a single key (string/number) OR an array of keys (multi-bucket membership, e.g. groups).
+    // Universe membership: gates count, weight sums, avg fields. NEVER gates TE.
+    const inUniverse = mode==='both'
+      || (mode==='portfolio'&&((+h.p)>0))
+      || (mode==='benchmark'&&((+h.b)>0));
+    // groupKeyFn may return a single key OR an array of keys (e.g. multi-bucket groups).
     const keys=Array.isArray(raw)?raw:[raw];
     keys.forEach(k=>{
       if(k==null||k==='')return;
       if(!byKey[k]){
-        byKey[k]={count:0,p:0,a:0,tr:0,mcr:0,factor:{},_avg_acc:{}};
+        byKey[k]={count:0,p:0,b:0,a:0,tr:0,mcr:0,factor:{},_avg_acc:{}};
         factorList.forEach(f=>byKey[k].factor[f]=0);
         avgFields.forEach(f=>byKey[k]._avg_acc[f]={sum:0,n:0});
       }
       const b=byKey[k];
-      b.count++;
-      b.p+=(+h.p||0);
-      b.a+=(+h.a||0);
+      // TE / MCR / factor — ALWAYS aggregate (portfolio-invariant risk decomposition).
       b.tr+=(+h.tr||0);
       b.mcr+=(+h.mcr||0);
       if(h.factor_contr){
@@ -3331,18 +3344,25 @@ function aggregateHoldingsBy(holds, groupKeyFn, factorList, opts){
           if(v!=null&&isFinite(v))b.factor[f]+=v;
         });
       }
-      avgFields.forEach(f=>{
-        const v=+h[f];
-        if(v!=null&&isFinite(v)){
-          b._avg_acc[f].sum+=v;
-          b._avg_acc[f].n+=1;
-        }
-      });
+      // Count / weights / avg fields — universe-filtered.
+      if(inUniverse){
+        b.count++;
+        b.p+=(+h.p||0);
+        b.b+=(+h.b||0);
+        b.a+=(+h.a||0);
+        avgFields.forEach(f=>{
+          const v=+h[f];
+          if(v!=null&&isFinite(v)){
+            b._avg_acc[f].sum+=v;
+            b._avg_acc[f].n+=1;
+          }
+        });
+      }
     });
   });
   // Finalize — compute avg, round
   Object.values(byKey).forEach(b=>{
-    b.p=+b.p.toFixed(2);b.a=+b.a.toFixed(2);b.tr=+b.tr.toFixed(2);b.mcr=+b.mcr.toFixed(2);
+    b.p=+b.p.toFixed(2);b.b=+b.b.toFixed(2);b.a=+b.a.toFixed(2);b.tr=+b.tr.toFixed(2);b.mcr=+b.mcr.toFixed(2);
     factorList.forEach(f=>{b.factor[f]=+b.factor[f].toFixed(2);});
     b.avg={};
     avgFields.forEach(f=>{
@@ -3509,7 +3529,7 @@ function renderRanksTable(){
   }).join('');
   const thead=`<thead><tr>
     <th class="tip" data-col="rank" data-tip="Quintile bucket (1=best per ${RNK_BY_LABELS[_rnkBy]} rank, 5=worst)." onclick="sortTbl('tbl-rnk',0)">Rank</th>
-    <th class="r tip" data-col="count" data-tip="Number of ${_aggMode} securities in this quintile." onclick="sortTbl('tbl-rnk',1)">Count</th>
+    <th class="r tip" data-col="count" data-tip="Number of securities in this quintile (counts the ${_aggMode==='portfolio'?'portfolio holdings':_aggMode==='benchmark'?'benchmark constituents':'union of port + bench'} matched to a Spotlight rank). Toggle the Universe pill in the page header to switch which universe is counted." onclick="sortTbl('tbl-rnk',1)">Securities</th>
     <th class="r tip" data-col="port" data-tip="Σ port weight of holdings in this quintile." onclick="sortTbl('tbl-rnk',2)">Port%</th>
     <th class="r tip" data-col="active" data-tip="Σ active weight (port − bench) of holdings in this quintile." onclick="sortTbl('tbl-rnk',3)">Active%</th>
     <th class="r tip" data-col="tr" data-tip="Σ TE contribution (%T) of holdings in this quintile. Source: CSV Security %T column." onclick="sortTbl('tbl-rnk',4)">TE Contrib%</th>
@@ -5025,6 +5045,10 @@ function toggleCountryView(v,btn){
   $('countryTableWrap').style.display=v==='table'?'block':'none';
   let regBtns=$('mapRegionBtns');if(regBtns)regBtns.style.display=v==='map'?'inline-flex':'none';
   let colorBtn=$('mapColorBtn');if(colorBtn)colorBtn.style.display=v==='map'?'flex':'none';
+  // 2026-04-30 (user feedback): Top-N pill is only relevant for table + chart;
+  // on the global map it filters semantically but adds visual confusion.
+  // Hide on map view.
+  let topNPill=$('ctryTopNPill');if(topNPill)topNPill.style.display=v==='map'?'none':'inline-flex';
   document.querySelectorAll('#cardCountry .toggle-btn').forEach(b=>b.classList.remove('active'));
   if(btn)btn.classList.add('active');
   if(v==='chart'&&cs){

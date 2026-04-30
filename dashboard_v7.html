@@ -146,24 +146,22 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 .skeleton-row{height:14px;margin:8px 0;border-radius:4px}
 .loading-overlay{position:absolute;inset:0;background:rgba(8,14,30,.8);display:flex;align-items:center;justify-content:center;border-radius:12px;z-index:10;font-size:12px;color:var(--txt)}
 
-/* Tooltips */
+/* Tooltips — 2026-04-30 v3 (user reported sector header tooltips cut off):
+   Switched from CSS ::after pseudo-elements to a portal singleton appended
+   to <body>. This escapes any `overflow:auto` parent containers (table
+   scrollers, modal contents, etc.) that previously clipped the popover.
+   The .tip element keeps its dotted-underline + cursor hint but no longer
+   carries the popover itself — JS positions a shared element via fixed
+   coordinates, clamped to the viewport so it never goes off-screen. */
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
-/* F2: styled-tooltip variant for table cells — same hover popover as .tip but no dotted underline (cleaner on numeric data cells) */
 td.tip-cell{position:relative;cursor:help}
-td.tip-cell::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;width:max-content;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;opacity:0;pointer-events:none;transition:opacity .15s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left}
-td.tip-cell:hover::after{opacity:1;transition-delay:.25s}
-td.tip-cell::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0f1623;opacity:0;pointer-events:none;transition:opacity .15s;z-index:301}
-td.tip-cell:hover::before{opacity:1;transition-delay:.25s}
-.tip::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;width:max-content;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;hyphens:auto;opacity:0;pointer-events:none;transition:opacity .15s;z-index:1000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left}
-.tip:hover::after{opacity:1;transition-delay:.25s}
-.tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0f1623;opacity:0;pointer-events:none;transition:opacity .15s;z-index:301}
-.tip:hover::before{opacity:1;transition-delay:.25s}
-/* 2026-04-30 (user feedback): tooltips were hover-only; user couldn't figure
-   out how to "open" the question mark. Click any .tip to PIN it open until
-   another click. Pinned state shows the same popover with a colored outline. */
-.tip.pinned::after{opacity:1!important;transition-delay:0s;pointer-events:auto}
-.tip.pinned::before{opacity:1!important;transition-delay:0s}
 .tip.pinned{outline:1px solid var(--pri);outline-offset:2px;border-radius:3px}
+#tip-portal{position:fixed;background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;hyphens:auto;opacity:0;pointer-events:none;transition:opacity .15s;z-index:10000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left;display:none}
+#tip-portal.shown{opacity:1;display:block}
+#tip-portal.pinned{pointer-events:auto}
+#tip-portal::before{content:'';position:absolute;width:0;height:0;border:5px solid transparent}
+#tip-portal[data-arrow="bottom"]::before{bottom:-10px;left:50%;transform:translateX(-50%);border-top-color:#0f1623}
+#tip-portal[data-arrow="top"]::before{top:-10px;left:50%;transform:translateX(-50%);border-bottom-color:#0f1623}
 
 /* Clickable rows */
 tr.clickable{cursor:pointer;transition:background .15s}
@@ -1852,8 +1850,9 @@ function rExp(){
             ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" data-fac-period="${p}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
           </div>
           ${aboutBtn('cardFacButt')}
-          <button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
           <button class="export-btn" id="facPerfCsv" onclick="exportFacAttribCsv()" style="padding:3px 8px;font-size:11px;display:${_facPerfView==='waterfall'?'inline-block':'none'}">CSV</button>
+          ${resetZoomBtn('facButtDiv')}
+          <button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
         </div>
       </div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
@@ -1941,19 +1940,31 @@ function rExp(){
   </div>
 
   <!-- Row 6: Quant Ranks + Characteristics -->
-  <div class="grid g2">
-    <div class="card" id="cardRanks">
-      <div class="flex-between" style="flex-wrap:wrap;gap:8px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). The 3 columns to the right of TE Contrib are average rank of the OTHER 3 categories per bucket. Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio vs Benchmark with the global Agg pill in the header to compare what's owned vs what's in the universe. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>${aboutBtn('cardRanks')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Rank</span>
+  <!-- 2026-04-30 v3 (user feedback): Spotlight tile cut off to the right when
+       in g2 (half-width). Moved to full-width row + added column-picker
+       dropdown that hides factor columns (shared _facCols state with cardSectors). -->
+  <div class="card" id="cardRanks" style="margin-bottom:16px">
+    <div class="flex-between" style="flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio / Benchmark / Both with the global Universe pill in the header. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+        ${aboutBtn('cardRanks')}
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-left:8px">Rank</span>
         <button class="pill" id="rnk-pill-over" onclick="setRanksBy('over')">Overall</button>
         <button class="pill" id="rnk-pill-rev" onclick="setRanksBy('rev')">Rev</button>
         <button class="pill" id="rnk-pill-val" onclick="setRanksBy('val')">Val</button>
         <button class="pill" id="rnk-pill-qual" onclick="setRanksBy('qual')">Qual</button>
-        <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks_by_'+_rnkBy)" style="padding:3px 7px;font-size:13px;margin-left:4px">⬇ CSV</button>
-      </div></div>
-      <div id="rnkTableWrap" style="overflow-x:auto"></div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${rnkColDropHtml()}
+        <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks_by_'+_rnkBy)" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
+        <button onclick="openRnkFullscreen()" title="Full screen" class="export-btn" style="padding:3px 8px;font-size:13px">⛶</button>
+      </div>
     </div>
+    <div id="rnkTableWrap" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- cardChars now in its own row, full width -->
+  <div>
     <div class="card" id="cardChars" style="display:flex;flex-direction:column">
       <div class="flex-between">
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
@@ -2148,6 +2159,12 @@ function rFacWaterfall(s){
   if(!facs0.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:40px">No factor impact data for selected period</p>';return;}
   const facs=[...facs0].sort((a,b)=>(b._imp||0)-(a._imp||0));
   const vals=facs.map(f=>+(f._imp||0));
+  // 2026-04-30 v3 (user feedback "y-axis labels need to be cleaned up"):
+  // shorten the long Axioma factor names so they fit cleanly on the y axis.
+  // Same shortening pattern used in cardFacRisk + cardFacContribBars +
+  // cardFacHist for consistency.
+  const shortFac=n=>n==='Medium-Term Momentum'?'Mom (M-T)':n==='Exchange Rate Sensitivity'?'FX Sens':n==='Market Sensitivity'?'Mkt Sens':n==='Dividend Yield'?'Div Yld':n==='Earnings Yield'?'Earn Yld':n==='Profitability'?'Profit':n;
+  const yLabels=facs.map(f=>shortFac(f.n));
   const totalImp=vals.reduce((a,b)=>a+b,0);
   // Cumulative running sum (top → bottom matches sort order)
   let cum=0;
@@ -2188,7 +2205,7 @@ function rFacWaterfall(s){
   Plotly.newPlot('facButtDiv',[
     // Cumulative line FIRST so bars render on top of it (Plotly stacks traces in order)
     {
-      y:facs.map(f=>f.n),x:cumVals,type:'scatter',mode:'lines+markers',
+      y:yLabels,x:cumVals,type:'scatter',mode:'lines+markers',
       name:'Running total',
       line:{color:'rgba(99,102,241,0.55)',width:1.4,dash:'dot'},
       marker:{size:5,color:'rgba(99,102,241,0.75)',symbol:'diamond',line:{color:'rgba(15,23,42,0.6)',width:0.5}},
@@ -2197,7 +2214,7 @@ function rFacWaterfall(s){
     },
     // Per-factor bars on top
     {
-      y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
+      y:yLabels,x:vals,type:'bar',orientation:'h',
       name:'Per-factor impact',
       marker:{color:vals.map(v=>v>=0?posC:negC),line:{color:'rgba(15,23,42,0.6)',width:0.6}},
       text:valLabels,
@@ -3699,6 +3716,37 @@ function setRanksBy(by){
   renderRanksTable();
 }
 const RNK_ALL=['over','rev','val','qual'];   // all 4 rank fields
+
+// 2026-04-30 v3 (user feedback "spotlight needs column-menu selection"):
+// Compact column picker for cardRanks — toggles the per-quintile factor
+// columns. Uses the same _facCols state as cardSectors so a hidden factor
+// stays hidden across both tiles (single source of truth).
+function rnkColDropHtml(){
+  const facItems=FAC_ALL_COLS.map(f=>{
+    const sh=f==='Medium-Term Momentum'?'Mom (M-T)':f==='Exchange Rate Sensitivity'?'FX Sens':f==='Market Sensitivity'?'Mkt Sens':f;
+    const checked=_facCols.includes(f);
+    return `<div><label style="display:flex;align-items:center;gap:7px;padding:4px 12px;cursor:pointer;white-space:nowrap"><input type="checkbox" ${checked?'checked':''} onchange="toggleFacCol('${f}',this.checked);renderRanksTable()" style="accent-color:#a855f7;cursor:pointer"><span style="font-size:11px;color:var(--txth)">${sh}</span></label></div>`;
+  }).join('');
+  return `<div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Toggle visible factor columns" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:11px">⚙ Cols</button><div class="dl-drop" style="min-width:180px;max-height:420px;overflow-y:auto"><div style="padding:6px 10px 2px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:var(--textDim);font-weight:600">Factor TE Breakdown</div>${facItems}</div></div>`;
+}
+
+function openRnkFullscreen(){
+  // Re-use the existing FS modal infrastructure with the rnk table content
+  const fs=$('fsModal'); if(!fs)return;
+  const cnt=$('fsContent')||fs;
+  const wrap=document.getElementById('rnkTableWrap');
+  if(!wrap)return;
+  // Clone the rendered table into the FS modal's chart slot
+  const fsChartDiv=document.getElementById('fsChartDiv');
+  if(fsChartDiv){
+    fsChartDiv.innerHTML=`<div style="overflow:auto;height:100%;padding:0 10px">${wrap.innerHTML}</div>`;
+  }
+  const fsTitle=document.getElementById('fsTitle');
+  if(fsTitle)fsTitle.textContent='Spotlight — '+(cs?.name||cs?.id||'');
+  fs.classList.add('show');
+  window._fsType='rnk';
+}
+
 function renderRanksTable(){
   const wrap=document.getElementById('rnkTableWrap');
   if(!wrap||!cs)return;
@@ -3730,10 +3778,14 @@ function renderRanksTable(){
     const b=agg[q]||{count:0,p:0,a:0,tr:0,mcr:0,factor:Object.fromEntries(RNK_FACTOR_COLS.map(f=>[f,0])),avg:Object.fromEntries(avgFields.map(f=>[f,null]))};
     rows.push({q,...b});
   }
+  // 2026-04-30 v3: filter factor columns by the shared _facCols visibility
+  // state. User can hide noisy factors via the ⚙ Cols dropdown; same state
+  // toggle as cardSectors so a hidden factor stays hidden across both tiles.
+  const visibleFactorCols=RNK_FACTOR_COLS.filter(f=>_facCols.includes(f));
   // Headers
   const avgHeads=avgFields.map((f,i)=>`<th class="r tip" data-col="avg_${f}" data-tip="Average ${RNK_BY_LABELS[f]} rank across the holdings in this bucket. ${_aggMode==='portfolio'?'Portfolio-owned':_aggMode==='benchmark'?'Benchmark constituents':'Both'} only — toggle Agg pill in header to flip universe." onclick="sortTbl('tbl-rnk',${6+i})">Avg ${RNK_BY_LABELS[f]}</th>`).join('');
-  const headFactors=RNK_FACTOR_COLS.map((f,i)=>{
-    const short=f==='Medium-Term Momentum'?'Momentum':f;
+  const headFactors=visibleFactorCols.map((f,i)=>{
+    const short=f==='Medium-Term Momentum'?'Momentum':f==='Exchange Rate Sensitivity'?'FX Sens':f==='Market Sensitivity'?'Mkt Sens':f;
     return`<th class="r tip" data-col="f_${i}" data-tip="Σ h.factor_contr['${f}'] across holdings in this bucket. Source: per-security factor contributions × group filter × ${_aggMode} mode." onclick="sortTbl('tbl-rnk',${6+avgFields.length+i})">${short}</th>`;
   }).join('');
   const thead=`<thead><tr>
@@ -3761,7 +3813,7 @@ function renderRanksTable(){
       const color=v==null?'':v<=2?'color:var(--pos)':v>=4?'color:var(--neg)':'color:var(--warn)';
       return`<td class="r" data-col="avg_${f}" data-sv="${v??''}" style="${color}">${txt}</td>`;
     }).join('');
-    const facCells=RNK_FACTOR_COLS.map((f,i)=>{
+    const facCells=visibleFactorCols.map((f,i)=>{
       const v=r.factor[f];
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
       const txt=empty||v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
@@ -4155,24 +4207,40 @@ function rAttribTable(){
   // Show top 20
   let top=items.slice(0,20);
   let typeIcon={country:'🌍',industry:'🏭',currency:'💱'};
+  // 2026-04-30 v3 (user feedback "could be spaced better, add more columns
+  // such as different periods"): per-row impact columns for 1M / 3M / 6M /
+  // 1Y in addition to the Full-period (compounded). Each cell uses
+  // getImpactForPeriod which is the same machinery cardFacDetail uses, so
+  // ᵉ markers appear on derived sums consistently. The full-page width
+  // gives us the columns to spare.
+  const periodCols=[['m1','1M'],['m3','3M'],['m6','6M'],['y1','1Y'],['all','Full']];
+  const cellHtml=(i,key)=>{
+    if(key==='all'){
+      const v=i.full_period_imp;
+      return v==null?'<td class="r" style="font-size:11px;color:var(--textDim)">—</td>':`<td class="r" style="font-size:11px;font-weight:600;color:${v>0?'var(--pos)':'var(--neg)'}">${fp(v,2)}%</td>`;
+    }
+    const ipd=getImpactForPeriod(i.name,key);
+    const v=ipd.v;
+    if(v==null)return '<td class="r" style="font-size:11px;color:var(--textDim)">—</td>';
+    return `<td class="r" style="font-size:11px;color:${v>0?'var(--pos)':'var(--neg)'}">${fp(v,2)}%${ipd.derived?'<span style="color:var(--warn);font-size:9px;margin-left:1px" title="Derived: simple sum of weekly contributions. ~25% under-report on high-volatility factors over long windows.">ᵉ</span>':''}</td>`;
+  };
   let rows=top.map(i=>{
-    let impCls=i.full_period_imp>0?'pos':'neg';
     let expCls=i.exp>0?'pos':i.exp<0?'neg':'';
     return`<tr class="clickable" onclick="oDrAttrib('${i.name.replace(/'/g,"\\'")}')">
       <td data-col="name"><span style="font-size:10px;margin-right:4px">${typeIcon[i.type]||''}</span><span style="color:var(--txth);font-weight:500">${i.name}</span></td>
       <td class="r ${expCls}" data-col="exp" data-sv="${i.exp??''}" style="font-size:11px">${fp(i.exp,2)}</td>
       <td class="r" data-col="dev" data-sv="${i.dev??''}" style="font-size:11px">${f2(i.dev,1)}</td>
-      <td class="r" data-col="imp" data-sv="${i.full_period_imp??''}" style="font-size:11px;font-weight:600;color:${i.full_period_imp>0?'var(--pos)':'var(--neg)'}">${fp(i.full_period_imp,2)}%</td>
+      ${periodCols.map(([k,_])=>cellHtml(i,k)).join('')}
     </tr>`;
   }).join('');
 
   $('attribTableArea').innerHTML=`<table id="tbl-attrib"><thead><tr>
     <th data-col="name" onclick="sortTbl('tbl-attrib',0)">Factor</th>
-    <th class="r" data-col="exp" onclick="sortTbl('tbl-attrib',1)">Exposure</th>
-    <th class="r" data-col="dev" onclick="sortTbl('tbl-attrib',2)">Std Dev</th>
-    <th class="r" data-col="imp" onclick="sortTbl('tbl-attrib',3)">Impact (%)</th>
+    <th class="r tip" data-tip="Active exposure to this factor (portfolio − benchmark, in factor σ units). Snapshot of latest week." data-col="exp" onclick="sortTbl('tbl-attrib',1)">Exposure</th>
+    <th class="r tip" data-tip="Factor's intrinsic volatility (σ, %). Higher = more volatile factor return per period." data-col="dev" onclick="sortTbl('tbl-attrib',2)">σ</th>
+    ${periodCols.map(([k,l],i)=>`<th class="r tip" data-tip="Cumulative active-return attribution for the ${l} window. ᵉ marker indicates simple sum (FactSet full_period_imp only authoritative for &quot;Full&quot;)." data-col="imp_${k}" onclick="sortTbl('tbl-attrib',${3+i})">${l}</th>`).join('')}
   </tr></thead><tbody>${rows}</tbody></table>
-  <p style="font-size:9px;color:var(--txt);margin-top:6px">${items.length} items · Impact = compounded return attribution over full period · Click any row or bar for time series</p>`;
+  <p style="font-size:9px;color:var(--txt);margin-top:6px">${items.length} items · Cumulative impact across 5 windows · ᵉ = simple sum (only Full uses FactSet's compounded full_period_imp) · click any row or bar for time series</p>`;
 
   // Chart: top 10 by impact as horizontal bar
   let chart10=items.slice(0,10);
@@ -4778,24 +4846,33 @@ function rFacRisk(s){
   if(!div)return;
   const facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
   if(!facs.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
-  // KPI strip — Idio vs Factor share of total TE
+  // KPI strip — Idio vs Factor share of total TE.
+  // 2026-04-30 v3 (user feedback "5th and 6th data items there's room"):
+  // Added two more KPI cards — Beta (current vs prior week delta) and
+  // Active Share (current + prior delta). Both pull from cs.sum + hist.sum.
   if(kpi){
     const idioPct=s.sum?.pct_specific;
     const facPct=s.sum?.pct_factor;
     const te=s.sum?.te;
+    const beta=s.sum?.beta;
+    const actS=s.sum?.as;
     const matCount=facs.filter(f=>Math.abs(f.c||0)>0.5).length;
-    const kpiCard=(label,value,sub,color)=>`<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">${label}</span><span style="font-size:14px;font-weight:700;color:${color||'var(--txth)'};line-height:1.1;margin-top:1px">${value}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${sub||''}</span></div>`;
-    kpi.innerHTML=
-      kpiCard('TE','total',te!=null?f2(te,2)+'%':'—','var(--pri)').replace('total',f2(te,2)+'%').replace(f2(te,2)+'%',(te!=null?f2(te,2)+'%':'—'))+
-      kpiCard('Idiosyncratic',idioPct!=null?f2(idioPct,1)+'%':'—',idioPct!=null&&te!=null?'MCR '+f2(te*idioPct/100,1):'','var(--acc)')+
-      kpiCard('Factor',facPct!=null?f2(facPct,1)+'%':'—',facPct!=null&&te!=null?'MCR '+f2(te*facPct/100,1):'','var(--pri)')+
-      kpiCard('Material factors',matCount,'|TE| > 0.5%','var(--txth)');
-    // Re-do TE card cleanly
+    // Prior-week deltas (for the two new cards)
+    const histSum=(s.hist&&s.hist.sum)||[];
+    const prev=histSum.length>=2?histSum[histSum.length-2]:null;
+    const betaDelta=prev?.beta!=null&&beta!=null?+(beta-prev.beta).toFixed(3):null;
+    const asDelta=prev?.as!=null&&actS!=null?+(actS-prev.as).toFixed(2):null;
     const teText=te!=null?f2(te,2)+'%':'—';
+    const betaText=beta!=null?f2(beta,2):'—';
+    const betaSub=betaDelta==null?'vs benchmark':(`Δ ${betaDelta>=0?'+':''}${betaDelta} wk`);
+    const asText=actS!=null?f2(actS,1)+'%':'—';
+    const asSub=asDelta==null?'unique vs bench':(`Δ ${asDelta>=0?'+':''}${asDelta}pp wk`);
     kpi.innerHTML=
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Total TE</span><span style="font-size:14px;font-weight:700;color:var(--pri);line-height:1.1;margin-top:1px">${teText}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">latest</span></div>`+
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(168,85,247,0.06);border:1px solid var(--grid);border-radius:6px;min-width:120px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Idiosyncratic</span><span style="font-size:14px;font-weight:700;color:var(--acc);line-height:1.1;margin-top:1px">${idioPct!=null?f2(idioPct,1)+'% of TE':'—'}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${idioPct!=null&&te!=null?'MCR '+f2(te*idioPct/100,1):''}</span></div>`+
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(99,102,241,0.06);border:1px solid var(--grid);border-radius:6px;min-width:120px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Factor</span><span style="font-size:14px;font-weight:700;color:var(--pri);line-height:1.1;margin-top:1px">${facPct!=null?f2(facPct,1)+'% of TE':'—'}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">${facPct!=null&&te!=null?'MCR '+f2(te*facPct/100,1):''}</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(34,211,238,0.06);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Beta</span><span style="font-size:14px;font-weight:700;color:#22d3ee;line-height:1.1;margin-top:1px">${betaText}</span><span style="font-size:9px;color:${betaDelta>0.005?'var(--neg)':betaDelta<-0.005?'var(--pos)':'var(--txt)'};margin-top:1px">${betaSub}</span></div>`+
+      `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(16,185,129,0.05);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Active Share</span><span style="font-size:14px;font-weight:700;color:var(--pos);line-height:1.1;margin-top:1px">${asText}</span><span style="font-size:9px;color:${asDelta<-0.05?'var(--neg)':asDelta>0.05?'var(--pos)':'var(--txt)'};margin-top:1px">${asSub}</span></div>`+
       `<div style="display:inline-flex;flex-direction:column;padding:6px 12px;background:rgba(245,158,11,0.05);border:1px solid var(--grid);border-radius:6px;min-width:96px"><span style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600">Material factors</span><span style="font-size:14px;font-weight:700;color:#f59e0b;line-height:1.1;margin-top:1px">${matCount}</span><span style="font-size:9px;color:var(--txt);margin-top:1px">|TE| > 0.5%</span></div>`;
   }
   // Quadrant: x = active σ (latest), y = TE contribution % (signed),
@@ -5569,16 +5646,22 @@ function rGroupChart(s,divId){
       colorbar:{title:{text:'Active<br>Wt %',font:{size:9,color:T.tick}},thickness:10,len:0.6,tickfont:{color:T.tick,size:9}}
     },
     textinfo:'label+value',
-    // 2026-04-30 (user feedback): label visibility was poor against the
-    // saturated green/red cell colors. Force pure white text with a strong
-    // dark text-stroke; expand templates to surface Active + TE contribution
-    // alongside the label so cells aren't visually empty.
+    // 2026-04-30 v3 (user re-flagged labels still not visible): Plotly
+    // applies textfont to leaf cells but parent-cell headers (CYCLICALS,
+    // GROWTH, etc.) need outsidetextfont. Both forced to bright white;
+    // size bumped 11→12. Also: textfont.weight gets passed through to
+    // the SVG via family weight — bumping size + bolding via texttemplate's
+    // <b> wrap was the previous attempt but Plotly doesn't always honor
+    // <b> on outside text. Set fonts explicitly.
     texttemplate:'<b>%{label}</b><br>%{value:.1f}% port  ·  %{customdata[4]:+.1f} act<br>TE %{customdata[6]:+.1f}',
-    textfont:{color:'#ffffff',family:'DM Sans, system-ui',size:11},
+    textfont:{color:'#ffffff',family:'DM Sans, system-ui',size:12},
+    insidetextfont:{color:'#ffffff',family:'DM Sans, system-ui',size:12},
+    outsidetextfont:{color:'#ffffff',family:'DM Sans, system-ui',size:13},
+    textposition:'middle center',
     customdata:customdata,
     hovertemplate:'<b>%{customdata[0]}</b> (%{customdata[1]})<br>Port: %{customdata[2]:.1f}%<br>Bench: %{customdata[3]:.1f}%<br>Active: %{customdata[4]:+.1f}%<br>TE Contrib: %{customdata[6]:+.1f}%<extra></extra>',
-    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
-    pathbar:{visible:false}
+    hoverlabel:HOVERLABEL_THEME,
+    pathbar:{visible:true,thickness:24,textfont:{color:'#ffffff',family:'DM Sans, system-ui',size:13}}
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{color:T.tick,family:'DM Sans, system-ui',size:10},
@@ -11314,23 +11397,79 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('#mapColorBtn')&&!e.target.closest('#mapColorPicker')){let p=$('mapColorPicker');if(p)p.style.display='none';}
 });
 
-// 2026-04-30 (user feedback): click any .tip to PIN the tooltip open. Click
-// elsewhere to dismiss. Avoids the "hover-only, can't read it on touch
-// devices, can't pause to absorb on desktop" problem the user flagged.
-// Click-eligible only when the .tip element has a data-tip attribute.
+// 2026-04-30 v3: portal-based tooltip — escapes overflow:auto parents that
+// were clipping the previous CSS ::after popover (user reported sector
+// column-header tooltips cut off). Singleton element appended to <body>;
+// position computed via getBoundingClientRect with viewport clamping.
+let _tipPortal=null;
+let _tipPinned=null;  // currently pinned source element (or null)
+function _tipPortalEl(){
+  if(_tipPortal)return _tipPortal;
+  _tipPortal=document.createElement('div');
+  _tipPortal.id='tip-portal';
+  document.body.appendChild(_tipPortal);
+  return _tipPortal;
+}
+function _showTipPortal(srcEl, opts={}){
+  const txt=srcEl.dataset.tip;
+  if(!txt)return;
+  const tip=_tipPortalEl();
+  tip.textContent=txt;
+  tip.classList.toggle('pinned', !!opts.pinned);
+  tip.classList.add('shown');
+  // Measure source + tip
+  const r=srcEl.getBoundingClientRect();
+  const tipR=tip.getBoundingClientRect();
+  // Default: above the source, centered horizontally
+  let placement='top';
+  let top=r.top - tipR.height - 10;
+  let left=r.left + r.width/2 - tipR.width/2;
+  // Flip below if no room above
+  if(top<8){placement='bottom'; top=r.bottom + 10;}
+  // Clamp horizontally to viewport (8px margin)
+  const vw=window.innerWidth;
+  if(left<8)left=8;
+  else if(left+tipR.width>vw-8)left=vw-tipR.width-8;
+  tip.style.top=top+'px';
+  tip.style.left=left+'px';
+  tip.dataset.arrow=placement==='top'?'bottom':'top';
+}
+function _hideTipPortal(){
+  if(!_tipPortal||_tipPinned)return;
+  _tipPortal.classList.remove('shown');
+}
+// Hover handler for any .tip[data-tip] / td.tip-cell[data-tip] element
+document.addEventListener('mouseover',e=>{
+  const src=e.target.closest('.tip[data-tip], .tip-cell[data-tip]');
+  if(src&&!_tipPinned)_showTipPortal(src);
+});
+document.addEventListener('mouseout',e=>{
+  const src=e.target.closest('.tip[data-tip], .tip-cell[data-tip]');
+  if(src&&!_tipPinned)_hideTipPortal();
+});
+// Click-to-pin: stays open until next click
 document.addEventListener('click',e=>{
-  const tip=e.target.closest('.tip[data-tip]');
+  const tip=e.target.closest('.tip[data-tip], .tip-cell[data-tip]');
   if(tip){
-    // Don't pin if user is clicking a button/link inside the tip (e.g. a
-    // table header that also sorts on click).
-    const wasPinned=tip.classList.contains('pinned');
+    const wasPinned=_tipPinned===tip;
     document.querySelectorAll('.tip.pinned').forEach(el=>el.classList.remove('pinned'));
-    if(!wasPinned)tip.classList.add('pinned');
-    // Don't preventDefault — sortTbl etc still fire (sort + pin together is fine)
-  }else{
+    if(wasPinned){
+      _tipPinned=null;
+      _hideTipPortal();
+    }else{
+      _tipPinned=tip;
+      tip.classList.add('pinned');
+      _showTipPortal(tip,{pinned:true});
+    }
+  }else if(_tipPinned&&!e.target.closest('#tip-portal')){
     document.querySelectorAll('.tip.pinned').forEach(el=>el.classList.remove('pinned'));
+    _tipPinned=null;
+    _hideTipPortal();
   }
 });
+// Reposition on scroll/resize while pinned
+window.addEventListener('scroll',()=>{if(_tipPinned)_showTipPortal(_tipPinned,{pinned:true});},true);
+window.addEventListener('resize',()=>{if(_tipPinned)_showTipPortal(_tipPinned,{pinned:true});});
 
 // ===== VALIDATION PANEL =====
 function showValidPanel(normalizedData,parseStats,issues,filename){

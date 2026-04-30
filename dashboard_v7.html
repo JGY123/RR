@@ -1930,16 +1930,14 @@ function rExp(){
     </div>
   </div>
 
-  <!-- Row 7: Scatter + Treemap -->
-  <div class="grid g2">
-    <div class="card" id="cardScatter">
-      <div class="flex-between"><div style="display:flex;align-items:baseline;gap:10px"><div class="card-title tip" data-tip="Stock-specific TE (x) vs total TE contribution (y). Bubble size = portfolio weight. Color = active weight (red = UW, green = OW). Click a dot for stock detail." oncontextmenu="showNotePopup(event,'cardScatter');return false">Stock-Specific TE vs Total TE Contribution</div><span style="font-size:10px;color:var(--textDim);font-weight:400">stock-specific × total · bubble = port wt</span></div><div style="display:flex;gap:6px;align-items:center">${aboutBtn('cardScatter')}</div>
-      <div class="export-bar" style="display:flex;gap:4px">
-        <button onclick="openFullScreen('scatter')" title="Full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
-        <button class="export-btn" title="Download CSV" onclick="exportScatCsv()">CSV</button>
-      </div></div>
-      <div id="scatDiv" style="height:320px"></div>
-    </div>
+  <!-- 2026-04-30 (user feedback "mcr vs te contribution might be redundant"):
+       cardScatter removed. The new cardHoldRisk on the Holdings tab provides
+       the same per-holding view with a stronger framing — active weight × TE
+       contribution × bubble size by |MCR|. cardScatter's stock-specific × total
+       was harder to read because total TE includes stock-specific TE (axes
+       were not orthogonal). cardTreemap now spans full width on this row. -->
+  <!-- Row 7: Treemap (full width) -->
+  <div>
     <div class="card" id="cardTreemap">
       <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div>${aboutBtn('cardTreemap')}</div></div>
       <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
@@ -5619,21 +5617,39 @@ function rTree(s){
 }
 
 function rMCR(s){
-  // Top 10 by |mcr| so short/hedging positions (negative MCR) show alongside risk-adders
+  // 2026-04-30 (user feedback): "marginal contribution to risk also must be
+  // presented elsewhere and if not needs a much better tile". Rebuilt with
+  // richer per-bar context — port wt and active wt are now in the hover plus
+  // visible as a sub-label, sector context shown, and the y-axis labels use
+  // tk(h) so the user sees TKR-REGION not the SEDOL.
   let top=[...(s.hold||[])].filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,10);
   let el=document.getElementById('mcrDiv');
   if(!top.length){if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No MCR data available</p>';return;}
-  top.sort((a,b)=>(b.mcr||0)-(a.mcr||0)); // positives at top, negatives at bottom
+  top.sort((a,b)=>(b.mcr||0)-(a.mcr||0));
   let priC=getComputedStyle(document.body).getPropertyValue('--pri').trim()||'#8b5cf6';
   let posC=getComputedStyle(document.body).getPropertyValue('--pos').trim()||'#10b981';
+  // Use tk() ticker labels (TKR-REGION when SEDOL→ticker merge succeeded).
+  // Append a tiny port-wt suffix so the user can see relative size at a glance.
+  const yLabels=top.map(h=>tk(h)||h.t);
+  const barLabels=top.map(h=>{
+    const m=(h.mcr||0).toFixed(2);
+    const sgn=h.mcr>=0?'+':'';
+    const pwt=h.p!=null?` · ${(h.p||0).toFixed(1)}% port`:'';
+    return `${sgn}${m}${pwt}`;
+  });
   Plotly.newPlot('mcrDiv',[{
-    y:top.map(h=>h.t),x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
-    marker:{color:top.map(h=>(h.mcr||0)>=0?priC:posC)},
-    text:top.map(h=>fp(h.mcr,2)),textposition:'outside',textfont:{size:10,color:THEME().tick},
-    customdata:top.map(h=>h.n||h.t),
-    hovertemplate:'<b>%{customdata}</b> (%{y})<br>MCR: %{x:.2f}%<extra></extra>'
-  }],{...plotBg,yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category'},xaxis:{...plotBg.xaxis,title:'MCR %',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1}},plotCfg);
-  if(el&&el.on){el.on('plotly_click',function(d){let t=d&&d.points&&d.points[0]&&d.points[0].y;if(t&&typeof oSt==='function')oSt(t);});}
+    y:yLabels,x:top.map(h=>h.mcr||0),type:'bar',orientation:'h',
+    marker:{color:top.map(h=>(h.mcr||0)>=0?priC:posC),line:{color:'rgba(15,23,42,0.5)',width:0.5}},
+    text:barLabels,textposition:'outside',textfont:{size:10,color:THEME().tick},
+    cliponaxis:false,
+    customdata:top.map(h=>[h.n||h.t,h.sec||'—',h.co||h.country||'—',h.p||0,h.a||0,h.tr||0,h.t||'']),
+    hovertemplate:'<b>%{customdata[0]}</b><br>Sector: %{customdata[1]} · Country: %{customdata[2]}<br>Port %{customdata[3]:.2f}% · Active %{customdata[4]:+.2f}%<br>MCR (stock-specific TE): %{x:.2f}<br>Total TE contrib: %{customdata[5]:+.2f}%<extra></extra>'
+  }],{...plotBg,
+    margin:{...(plotBg.margin||{}),l:80,r:60},
+    yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category',tickfont:{...(plotBg.yaxis?.tickfont||{}),size:10}},
+    xaxis:{...plotBg.xaxis,title:'MCR (stock-specific TE component)',zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:1.5}
+  },plotCfg);
+  if(el&&el.on){el.on('plotly_click',function(d){let cd=d&&d.points&&d.points[0]&&d.points[0].customdata;let t=cd&&cd[6];if(t&&typeof oSt==='function')oSt(t);});}
 }
 function exportMcrCsv(){
   if(!cs||!cs.hold){return;}

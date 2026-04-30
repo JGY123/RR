@@ -1113,7 +1113,14 @@ function activeStyle(v){
 function enrichHold(hold,sectors){
   return hold.map(h=>{
     let sec=sectors.find(s=>s.n===h.sec);
-    return{...h,reg:CMAP[h.co]||'Other',secRet:sec?sec.t:0};
+    // 2026-04-30 (data-integrity audit F1, RED): NEVER overwrite parser-shipped
+    // h.reg with stale CMAP lookup. CMAP is missing 11 EM countries (Korea,
+    // Saudi Arabia, UAE, Poland, Philippines, Hungary, Malaysia, Qatar, Peru,
+    // Argentina, Singapore — Korea alone is 18.9% port wt — the LARGEST EM
+    // country exposure!). Pre-fix bucketed those into "Other", which has no
+    // matching row in cs.regions, so 46+ holdings vanished from cardRegions.
+    // CMAP is now ONLY a fallback for files where the parser didn't ship reg.
+    return{...h, reg: h.reg || CMAP[h.co] || 'Other', secRet: sec?sec.t:0};
   });
 }
 
@@ -3364,7 +3371,8 @@ function rWt(data,type,hold){
   if(type==='reg'&&hold){
     hold.forEach(h=>{
       if(isCash(h)||!h.co)return;
-      let reg=CMAP[h.co]||'Other';
+      // 2026-04-30 (data-integrity F1): prefer parser-shipped h.reg over CMAP fallback.
+      let reg=h.reg||CMAP[h.co]||'Other';
       let w=h.p>0?h.p:0;
       let bw=h.b>0?h.b:0;
       if(h.over!=null){regOS[reg]=(regOS[reg]||0)+h.over;regOC[reg]=(regOC[reg]||0)+1;regOW[reg]=(regOW[reg]||0)+h.over*w;regOPW[reg]=(regOPW[reg]||0)+w;regOBW[reg]=(regOBW[reg]||0)+h.over*bw;regOBPW[reg]=(regOBPW[reg]||0)+bw;}
@@ -3378,7 +3386,8 @@ function rWt(data,type,hold){
   // ['over','rev','val','qual'] enables simple-avg ORVQ via factorAgg.avg under _avgMode==='avg'.
   let factorAgg={};
   if(hold&&(type==='sec'||type==='reg')){
-    const groupFn=type==='sec'?(h=>h.sec):(h=>(h.co?CMAP[h.co]||'Other':null));
+    // 2026-04-30 (data-integrity F1): prefer h.reg over CMAP fallback.
+    const groupFn=type==='sec'?(h=>h.sec):(h=>(h.reg||(h.co?CMAP[h.co]||'Other':null)));
     factorAgg=aggregateHoldingsBy(hold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});
   }
   // Sector / region TE fallback: if no holdings are shipped for a bucket
@@ -3546,6 +3555,20 @@ function rWt(data,type,hold){
     if(totalW<50){
       table+=`<div style="margin-top:8px;padding:6px 10px;background:rgba(245,158,11,.08);border-left:3px solid var(--warn);border-radius:0 4px 4px 0;font-size:10px;color:var(--warn)">
         &#9888; Region coverage: ${f2(totalW)}% of portfolio weight. This strategy's benchmark may not use the same regional classification scheme — most exposure may appear unclassified.</div>`;
+    }
+  }
+  // 2026-04-30 (data-integrity F10): under Universe→Bench, the # column
+  // reflects holdings-aggregated count from the slim file (~18-21% of true
+  // bench universe by count, ~57% by weight). Bench% column reads the
+  // parser-shipped aggregate (correct ~100%). Add a footnote so the user
+  // doesn't try to reconcile two columns that come from different sources.
+  if(_aggMode==='benchmark' && hold && cs && cs.sum && cs.sum.bh){
+    const ttlSeen = (hold||[]).filter(h=>!isCash(h) && (h.b||h.bw||0)>0).length;
+    const ttlBench = Math.round(cs.sum.bh);
+    const cov = ttlBench>0 ? Math.round(100*ttlSeen/ttlBench) : 0;
+    if(cov < 95){
+      table+=`<div style="margin-top:6px;padding:5px 9px;background:rgba(99,102,241,0.06);border-left:3px solid var(--pri);border-radius:0 4px 4px 0;font-size:10px;color:var(--txt)">
+        <span style="color:var(--pri);font-weight:600">ⓘ Bench mode</span> · # column shows ${ttlSeen.toLocaleString()} of ${ttlBench.toLocaleString()} bench constituents (${cov}% by count). Bench% column shows the FactSet aggregate truth (~100%). The gap is the slim-file long-tail (F9 part 2 pending FactSet).</div>`;
     }
   }
   return table;
@@ -8094,7 +8117,12 @@ function oDr(type,name,range){
   // Country breakdown for region drills
   let countryHtml='';
   if(type==='reg'){
-    let countries=cs.countries.filter(c=>(CMAP[c.n]||'Other')===name).sort((a,b)=>b.p-a.p);
+    // 2026-04-30 (data-integrity F1): build country→region map from holdings
+    // (parser-shipped h.reg) instead of relying on the stale CMAP dict, then
+    // fall back to CMAP for countries with no holdings shipped.
+    const _ctry2reg=Object.create(null);
+    (cs.hold||[]).forEach(h=>{if(h.co&&h.reg&&!_ctry2reg[h.co])_ctry2reg[h.co]=h.reg;});
+    let countries=cs.countries.filter(c=>(_ctry2reg[c.n]||CMAP[c.n]||'Other')===name).sort((a,b)=>b.p-a.p);
     if(countries.length){
       let cRows=countries.map(c=>`<tr class="clickable" onclick="closeDrill();oDrCountry('${c.n}')"><td>${c.n}</td><td class="r">${f2(c.p)}</td><td class="r">${f2(c.b)}</td><td class="r ${activeStyle(c.a)}">${fp(c.a)}</td></tr>`).join('');
       countryHtml=`<div style="margin-top:16px"><div class="card-title">Countries in ${name}</div>
@@ -10429,7 +10457,8 @@ function oDrCountry(name,factorContext){
   let m=$('countryModal');
   let holdings=cs.hold.filter(h=>h.co===name);
   let country=cs.countries.find(c=>c.n===name);
-  let region=CMAP[name]||'Other';
+  // 2026-04-30 (data-integrity F1): prefer parser-shipped h.reg over CMAP fallback.
+  let region=(holdings.find(h=>h.reg)||{}).reg||CMAP[name]||'Other';
   let regData=cs.regions.find(r=>r.n===region);
 
   const hasFactorCtx=!!factorContext;
@@ -10511,20 +10540,36 @@ function renderCountryAttribChart(name){
 // ===== UNOWNED DRILL =====
 function oDrUnowned(ticker){
   let m=$('unownedModal');
-  let u=cs.unowned.find(x=>x.t===ticker);
-  if(!u)return;
-  let secHold=cs.hold.filter(h=>h.reg===u.reg);
+  // 2026-04-30 (data-integrity F2, RED): cardUnowned now sources from
+  // cs.hold[] filtered to bench-only-with-bw>0 (via _unownedFromHold),
+  // NOT cs.unowned (which is parser orphan-bucket of detached cash/rights
+  // with all numeric fields null). The drill-modal lookup must match —
+  // previously: cs.unowned.find returned undefined → click did nothing.
+  let u = cs.hold.find(x =>
+    x.t === ticker &&
+    !((x.w || 0) > 0) &&
+    ((x.b || x.bw || 0) > 0)
+  );
+  if(!u) return;
+  // Normalize the field names the modal renders — accept both new (w/bw/pct_t)
+  // and legacy (p/b/tr) shapes; prefer the new fields where present.
+  const uB  = (u.b  != null ? u.b  : u.bw);
+  const uTR = (u.tr != null ? u.tr : u.pct_t);
+  const uReg = u.reg || '—';
+  const uName = u.n || '';
+  const uTkr = tk(u) || u.t;
+  let secHold=cs.hold.filter(h=>h.reg===u.reg && (h.w||h.p||0)>0);
 
   $('unownedContent').innerHTML=`
-    <h2>${u.t} — ${u.n}<button class="close" onclick="$('unownedModal').classList.remove('show')">&times;</button></h2>
+    <h2>${uTkr} — ${uName}<button class="close" onclick="$('unownedModal').classList.remove('show')">&times;</button></h2>
     <div class="grid g3" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(u.b)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(u.tr)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${u.reg||'—'}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(uB)}%</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(uTR)}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${uReg}</div></div>
     </div>
     <div class="card-title">Why This Stock Matters</div>
-    <p style="font-size:12px;color:var(--txt);margin-bottom:12px">This stock has a ${f2(u.b)}% weight in the benchmark but is not held in the portfolio. Its absence contributes ${fp(u.tr)} to tracking error. Consider whether this is an intentional underweight based on your investment thesis.</p>
-    ${secHold.length?`<div class="card-title" style="margin-top:16px">Your Holdings in ${u.reg} (${secHold.length})</div>
+    <p style="font-size:12px;color:var(--txt);margin-bottom:12px">${uB!=null?`This stock has a ${f2(uB)}% weight in the benchmark but is not held in the portfolio.`:'This stock is in the benchmark but not held in the portfolio.'} ${uTR!=null?`Its absence contributes ${fp(uTR)} to tracking error.`:''} Consider whether this is an intentional underweight based on your investment thesis.</p>
+    ${secHold.length?`<div class="card-title" style="margin-top:16px">Your Holdings in ${uReg} (${secHold.length})</div>
     <div style="max-height:200px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${secHold.slice(0,10).map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
   m.classList.add('show');
 }

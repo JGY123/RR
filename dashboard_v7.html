@@ -1534,7 +1534,10 @@ function toggleThisWeek(){
 }
 function _thisWeekHeaderHtml(title){
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-    <div class="card-title" style="margin:0">${title}</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <div class="card-title" style="margin:0">${title}</div>
+      ${aboutBtn('cardThisWeek')}
+    </div>
     <button onclick="toggleThisWeek()" title="Collapse / expand" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 8px;border-radius:5px;cursor:pointer;line-height:1"><span id="thisWeekCaret">${_thisWeekCollapsed?'▶':'▾'}</span></button>
   </div>`;
 }

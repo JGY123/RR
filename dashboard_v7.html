@@ -762,12 +762,12 @@ const _ABOUT_REG={
     related:'cardHoldings · cardMCR'
   },
   cardMCR:{
-    title:'Marginal Contribution to Risk (Top & Bottom)',
-    what:'Top 10 + Bottom 10 holdings ranked by |MCR|. Purple bars = adds risk. Green bars = reduces risk (negative MCR — typically short or hedging positions).',
-    how:'MCR = h.mcr (FactSet %S, the stock-specific TE component for each holding). Bars sorted by absolute value; top 10 always show the strongest contributors regardless of sign.',
-    source:'cs.hold[].mcr (FactSet Security section %S column).',
-    caveats:'Latest snapshot only — MCR not historized at the holding level. Trend would require parser-side hist persistence (B114 backlog).',
-    related:'cardScatter · cardHoldings · TE drill modal Idio breakdown'
+    title:'Top Idiosyncratic Risk Contributors',
+    what:'Top 10 holdings ranked by |MCR| — the stock-specific (idiosyncratic) component of each holding\'s tracking error. Bars carry inline labels with both the MCR value and the port weight, so a high-MCR holding driven by a small bet vs a large position is visually obvious.',
+    how:'MCR = h.mcr (FactSet %S, the stock-specific TE component for each holding). Sorted descending by signed MCR; magnitudes ranked by |h.mcr|. Hover surfaces full Sector / Country / Port / Active / Total TE context. Click a bar for the holding drill.',
+    source:'cs.hold[].mcr (FactSet Security section %S column). Ticker labels via tk(h) — TKR-REGION when SEDOL→Raw Factors merge succeeded, else SEDOL.',
+    caveats:'Latest snapshot only — per-holding MCR not historized (B114 backlog). Bench-only holdings often appear since their implied-underweight idio TE is positive. cardMCR vs cardHoldRisk: same source field, different framings — cardMCR is a top-N ranked list; cardHoldRisk is the per-holding quadrant scatter. Considering reframe as a TE-concentration tile (Herfindahl + Σ|h.mcr| share) so the two answer different questions.',
+    related:'cardHoldRisk · cardHoldings · TE drill modal Idio breakdown'
   },
   cardUnowned:{
     title:'Unowned Risk Contributors',
@@ -1963,9 +1963,9 @@ function rExp(){
        columns on cardFacDetail. cardMCR (holding-level top 10 by |MCR|) stays
        since it's a holding-level view not duplicated elsewhere. -->
   <div class="card" id="cardMCR">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions). Always shows latest holdings — historical MCR not persisted. Click a bar for stock detail." oncontextmenu="showNotePopup(event,'cardMCR');return false">Marginal Contribution to Risk (Top & Bottom)</div>${aboutBtn('cardMCR')}</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 holdings ranked by |MCR| — the stock-specific (idiosyncratic) component of each holding's tracking error. Bar labels show MCR + port wt at a glance. Click a bar for the holding drill." oncontextmenu="showNotePopup(event,'cardMCR');return false">Top Idiosyncratic Risk Contributors <span style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px">by |MCR|</span></div>${aboutBtn('cardMCR')}</div>
     <div class="export-bar"><button class="export-btn" onclick="exportMcrCsv()">CSV</button></div></div>
-    <div id="mcrDiv" style="height:300px"></div>
+    <div id="mcrDiv" style="height:360px"></div>
   </div>
 
   <!-- Row 10: Unowned Risk Contributors -->
@@ -5647,7 +5647,8 @@ function rMCR(s){
     text:barLabels,textposition:'outside',textfont:{size:10,color:THEME().tick},
     cliponaxis:false,
     customdata:top.map(h=>[h.n||h.t,h.sec||'—',h.co||h.country||'—',h.p||0,h.a||0,h.tr||0,h.t||'']),
-    hovertemplate:'<b>%{customdata[0]}</b><br>Sector: %{customdata[1]} · Country: %{customdata[2]}<br>Port %{customdata[3]:.2f}% · Active %{customdata[4]:+.2f}%<br>MCR (stock-specific TE): %{x:.2f}<br>Total TE contrib: %{customdata[5]:+.2f}%<extra></extra>'
+    hovertemplate:'<b>%{customdata[0]}</b><br>Sector: %{customdata[1]} · Country: %{customdata[2]}<br>Port %{customdata[3]:.2f}% · Active %{customdata[4]:+.2f}%<br>MCR (stock-specific TE): %{x:.2f}<br>Total TE contrib: %{customdata[5]:+.2f}%<extra></extra>',
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:THEME().grid||'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans, system-ui'}}
   }],{...plotBg,
     margin:{...(plotBg.margin||{}),l:80,r:60},
     yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category',tickfont:{...(plotBg.yaxis?.tickfont||{}),size:10}},
@@ -5658,7 +5659,7 @@ function rMCR(s){
 function exportMcrCsv(){
   if(!cs||!cs.hold){return;}
   let rows=(cs.hold||[]).filter(h=>!isCash(h)&&isFinite(h.mcr)&&h.mcr!==0).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0));
-  let lines=['ticker,name,sector,port_pct,active_pct,mcr_pct,te_contribution'];
+  let lines=['ticker,name,sector,port_pct,active_pct,mcr,te_contribution'];
   rows.forEach(h=>{
     let n=(h.n||'').replace(/"/g,'""');
     let sec=(h.sec||'').replace(/"/g,'""');

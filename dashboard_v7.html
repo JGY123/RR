@@ -1100,7 +1100,11 @@ function normalize(raw){
       // cardGroups, cardIndustries with real risk-contribution time series.
       ctry:h.ctry||h.countries||{},
       ind: h.ind ||h.industries||{},
-      grp: h.grp ||h.groups||{}
+      grp: h.grp ||h.groups||{},
+      // 2026-04-30: parser now ships per-metric chars history. Drives the
+      // cardChars drill modal time-series for every shipped metric (39 of
+      // them in GSC sample), not just TE/Beta/Active Share.
+      chars:h.chars||{}
     };
     // B115 (2026-04-27): hist.sum synthesis from hist.fac dates REMOVED.
     // The previous implementation fabricated hist.sum entries by stamping CURRENT week's
@@ -3374,7 +3378,7 @@ function rFacTable(factors){
     const ofFactor=(cs.sum?.pct_factor>0&&total!=null)?(total/cs.sum.pct_factor*100):null;
     const expVal=facObj?.a;
     return `<tr class="clickable" style="background:rgba(99,102,241,0.05);border-top:1px solid var(--grid);font-weight:600" onclick="toggleMacroExpand('${name}')">
-      <td data-col="name" style="font-size:11px;color:var(--txth)"><span style="display:inline-block;width:14px;color:var(--pri);font-size:10px">${open?'▾':'▸'}</span> ${name} <span style="font-size:9px;color:var(--textDim);margin-left:4px;font-weight:400">${subCount} ${name.toLowerCase()}${subCount===1?'':'ies'}</span></td>
+      <td data-col="name" style="font-size:11px;color:var(--txth)"><span style="display:inline-block;width:14px;color:var(--pri);font-size:10px">${open?'▾':'▸'}</span> ${name} <span style="font-size:9px;color:var(--textDim);margin-left:4px;font-weight:400">${subCount} ${({Country:'countries',Currency:'currencies',Industry:'industries'}[name]||name.toLowerCase()+'s')}</span></td>
       <td class="r" data-col="exp_active" data-sv="${expVal??''}" style="color:var(--txth)">${expVal!=null?fp(expVal,2):'—'}</td>
       <td class="r" data-col="te" data-sv="${total??''}" style="color:${total>0?'var(--neg)':total<0?'var(--pos)':'var(--txth)'};font-weight:700">${fp(total,1)}%</td>
       <td class="r" data-col="of_factor" data-sv="${ofFactor??''}" style="color:var(--txt);font-size:11px">${ofFactor!=null?(ofFactor>=0?'+':'')+f2(ofFactor,0)+'%':'—'}</td>
@@ -9759,7 +9763,7 @@ function oDrChar(metric,range){
     </div>
     ${histStrip}
     ${haveHist?histSection:noHistCallout}
-    <p style="margin-top:14px;font-size:9px;color:var(--textDim);line-height:1.5">Source: <code>cs.chars[].p</code> / <code>cs.chars[].b</code>${haveHist?` · history from <code>cs.hist.sum[].${histKey}</code> (${histAll.length} weeks shipped, latest ${histAll[histAll.length-1]?.d||'—'})`:' · per-week history not shipped for this metric (parser backlog B114)'}</p>`;
+    <p style="margin-top:14px;font-size:9px;color:var(--textDim);line-height:1.5">Source: <code>cs.chars[].p</code> / <code>cs.chars[].b</code>${haveHist?` · history from <code>${useCharsHist?`cs.hist.chars["${metric}"]`:`cs.hist.sum[].${histKey}`}</code> (${(useCharsHist?charsHist:histAll).length} weeks shipped, latest ${((useCharsHist?charsHist:histAll)[(useCharsHist?charsHist:histAll).length-1]?.d)||'—'})`:' · per-week history not shipped for this metric (parser backlog B114)'}</p>`;
   m.classList.add('show');
   if(haveHist){
     setTimeout(()=>renderCharHistChart(metric,histKey),0);

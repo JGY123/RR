@@ -102,6 +102,28 @@ Aggregation helper: `aggregateHoldingsBy(holds, groupKeyFn, factorList, opts)` (
 | Watchlist tickers | 🟢 sourced | localStorage `rr_flags_${strategyId}` |
 | Per-ticker p / a | 🟢 sourced | Joined to `cs.hold[]` at render time. EXITED chip when ticker no longer in `cs.hold[]`. |
 
+## cardChars (Portfolio Characteristics — 39 metrics, 2026-04-30 audit fixes)
+
+| Cell | Source class | Path |
+|---|---|---|
+| Portfolio value (`c.p`) | 🟢 sourced | `cs.chars[].p` — every metric extracted by parser `_build_chars()` (factset_parser.py L1239) from FactSet "Portfolio Characteristics" section. Header-driven; 39 :P/:B column pairs become 39 metric rows. |
+| Benchmark value (`c.b`) | 🟢 sourced or ⚫ empty | `cs.chars[].b`. NULL for portfolio-only metrics (TE, Active Share — no benchmark equivalent). |
+| Diff cell | 🟡 derived | Computed `c.p - c.b` at render time (rChr L3322). Cell color via `charDiffClass(metric, diff)` — flips for "lower-is-better" metrics in `CHAR_META.inverted` set. |
+| Group header (Risk/Valuation/etc) | 🟡 derived | `CHAR_META[c.m].group` static metadata. Unknown metrics fall through to "Other" bucket so new FactSet columns appear without code change. |
+| Per-row tooltip | 🟢 sourced (CHAR_META static) | `data-tip` from `CHAR_META[c.m].doc`. One-line definition per metric. |
+| Inverted (↓) marker | 🟢 sourced (CHAR_META static) | `CHAR_META[c.m].inverted === true`. Set: P/E variants, P/B, EV/SALES, EV/EBITDA, P/CF, P/S, Net Debt/Mcap, LT Debt to Capital. |
+| ● history-shipped marker | 🟡 derived | `CHAR_META[c.m].histKey` truthy. Set: TE/Beta/Active Share (3 of 39). Other 36 await parser-side history persistence (B114). |
+| Unit-aware formatter | 🟡 derived | `formatChar(metric, v)` reads `CHAR_META[metric].fmt` ∈ {pct, mult, beta, usdB, num}. |
+
+### Drill modal `oDrChar(metric, range)`
+
+| Cell | Source class | Path |
+|---|---|---|
+| Big Port / Bench / Diff stat cards | 🟢 sourced + 🟡 derived | Same fields as the row, formatted via `formatChar`. Diff color via `charDiffClass`. |
+| 5-stat history strip (Min/Avg/Max/σ/Pctile) | 🟢 sourced | Computed from `cs.hist.sum[].KEY` where KEY ∈ {te, beta, as} — sliced to the selected range (3M/6M/1Y/3Y/All). |
+| History line chart | 🟢 sourced | `cs.hist.sum[]` with the same KEY. Avg reference line via dotted shape. Y-axis tick suffix (% / x / B / —) from `CHAR_META[metric].fmt`. |
+| "No per-week history" callout | ⚫ empty (with explanation) | For metrics where `CHAR_META[metric].histKey` is unset. Names B114 explicitly so PMs see the gap → not silent. |
+
 ## cardRiskByDim — TE Contribution by Country / Currency / Industry (NEW B102, 2026-04-27)
 
 | Cell | Source class | Path |

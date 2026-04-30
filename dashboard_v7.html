@@ -858,6 +858,14 @@ const _ABOUT_REG={
     source:'cs.sum (parser-extracted from FactSet weekly Data row).',
     caveats:'Collapses via header chevron — preference persists per session. Click any sum-card for detailed drill.',
     related:'cardRiskHistTrends · TE/AS/Beta/Holdings/Idio/Factor sum-card modals'
+  },
+  cardCalHeat:{
+    title:'TE Calendar Heatmap',
+    what:'GitHub-style calendar of weekly tracking-error intensity across the strategy\'s entire history. Each cell = one week; color = magnitude of week-over-week TE change (|ΔTE|, default) or absolute TE level. Pattern-detects clusters of high-volatility weeks, dead periods, and regime shifts. Doubles as a navigation device — click any cell to jump the global week selector to that week.',
+    how:'Cells laid out as years (rows) × ISO weeks 1–53 (cols). |ΔTE| computed as |te[i] − te[i−1]| from cs.hist.sum (marked ᵉ — derived). TE-level mode shows raw te value. Color scale uses 5 sequential bins so outliers don\'t flatten the rest. Selected week gets a white outline. Click handler calls changeWeek(cellDate) which updates _selectedWeek and triggers a full re-render.',
+    source:'cs.hist.sum[].d (week date) + cs.hist.sum[].te (tracking error). Same primitive series that powers cardRiskHistTrends miniTE. ΔTE is computed in this tile only — synth-marked.',
+    caveats:'Requires ≥2 weeks for any visible cells. First week always blank in |ΔTE| mode (no prior to diff against). Long-tail outlier weeks compressed by binning — hover for exact value. ISO week numbering may put a few late-December weeks in W53 (rare). Click-to-jump is the only interactive — pan/zoom disabled.',
+    related:'cardRiskHistTrends (line view) · cardTEStacked (TE decomposition) · cardBetaHist · TE drill modal'
   }
 };
 function openAbout(tileId){
@@ -5453,6 +5461,135 @@ function riskDecompTree(s,factorRisk,idioRisk){
 }
 
 // ===== RISK TAB =====
+// 2026-04-30: cardCalHeat — TE Calendar Heatmap (per viz-specs/cardCalendarHeatmap-spec.md).
+// GitHub-style calendar of weekly TE intensity. Each cell = one week. Two metric modes:
+//   • |ΔTE|  — magnitude of week-over-week TE change (default; "when was risk shifting?")
+//   • TE     — absolute TE level ("when was risk highest?")
+// Click any cell → changeWeek(cellDate) → entire dashboard re-renders to that week.
+function rCalHeatCard(s){
+  const hist=(s&&s.hist&&s.hist.sum)||[];
+  const enough=hist.length>=2;
+  return `<div class="card" id="cardCalHeat" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      <div class="card-title tip" data-tip="Calendar of weekly TE intensity. Each cell = one week; color = magnitude of ΔTE (default) or absolute TE level. Click any cell to jump the dashboard to that week. Right-click for notes." oncontextmenu="showNotePopup(event,'cardCalHeat');return false" style="margin-bottom:0">TE Calendar Heatmap <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'} · click to jump</span></div>
+      ${aboutBtn('cardCalHeat')}
+      <div style="margin-left:auto;display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Color</span>
+        <button class="pill" id="calheat-pill-dte" onclick="setCalHeatMetric('dte')" style="font-size:10px;padding:2px 7px">|ΔTE|</button>
+        <button class="pill" id="calheat-pill-te" onclick="setCalHeatMetric('te')" style="font-size:10px;padding:2px 7px">TE level</button>
+      </div>
+    </div>
+    ${enough?'<div id="calHeatDiv" style="height:160px;min-height:120px"></div><div id="calHeatLegend" style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:9px;color:var(--txt);flex-wrap:wrap"></div>':'<div style="display:flex;align-items:center;justify-content:center;height:140px;color:var(--txt);font-size:11px">Need ≥2 weeks of TE history</div>'}
+  </div>`;
+}
+function setCalHeatMetric(m){
+  if(m!=='dte'&&m!=='te')return;
+  try{localStorage.setItem('rr.calheat.metric',m);}catch(e){}
+  rCalHeat();
+}
+function rCalHeat(){
+  const hist=(cs&&cs.hist&&cs.hist.sum)||[];
+  const div=document.getElementById('calHeatDiv');
+  if(!div||hist.length<2)return;
+  let metric='dte'; try{metric=localStorage.getItem('rr.calheat.metric')||'dte';}catch(e){}
+  // Sync pill state
+  const pDte=document.getElementById('calheat-pill-dte'); if(pDte)pDte.classList.toggle('active',metric==='dte');
+  const pTe=document.getElementById('calheat-pill-te'); if(pTe)pTe.classList.toggle('active',metric==='te');
+  // Build per-week records keyed by (year, ISO-week)
+  const wkMap=new Map();
+  hist.forEach((h,i)=>{
+    const dt=parseDate(h.d); if(!dt)return;
+    const yr=dt.getFullYear();
+    const wk=isoWeekNum(dt);
+    const dte=i>0?+(h.te-hist[i-1].te).toFixed(3):null;
+    wkMap.set(yr+'-'+wk,{d:h.d,te:h.te,dte,dteAbs:dte==null?null:Math.abs(dte)});
+  });
+  const years=[...new Set(hist.map(h=>+isoDate(h.d).slice(0,4)))].sort();
+  const cols=Array.from({length:53},(_,i)=>'W'+String(i+1).padStart(2,'0'));
+  const z=years.map(yr=>{
+    const row=new Array(53).fill(null);
+    for(let w=1;w<=53;w++){
+      const e=wkMap.get(yr+'-'+w);
+      if(e)row[w-1]=metric==='dte'?e.dteAbs:e.te;
+    }
+    return row;
+  });
+  // customdata: per-cell [date, te, dte] for hovertemplate
+  const customdata=years.map(yr=>{
+    const row=new Array(53).fill(null);
+    for(let w=1;w<=53;w++){
+      const e=wkMap.get(yr+'-'+w);
+      if(e)row[w-1]=[isoDate(e.d), e.te, e.dte==null?0:e.dte];
+    }
+    return row;
+  });
+  const colorscale=metric==='dte'
+    ? [[0,'rgba(99,102,241,0.10)'],[0.25,'rgba(99,102,241,0.30)'],[0.5,'rgba(99,102,241,0.55)'],[0.75,'rgba(99,102,241,0.80)'],[1,'rgba(99,102,241,1.0)']]
+    : [[0,'rgba(245,158,11,0.20)'],[0.5,'rgba(245,158,11,0.65)'],[1,'rgba(239,68,68,1.0)']];
+  // Selected-week outline shape
+  const shapes=[];
+  if(_selectedWeek){
+    const dt=parseDate(_selectedWeek);
+    if(dt){
+      const wk=isoWeekNum(dt), yr=dt.getFullYear();
+      const cIdx=wk-1, rIdx=years.indexOf(yr);
+      if(rIdx>=0&&cIdx>=0){
+        shapes.push({type:'rect',xref:'x',yref:'y',
+          x0:cIdx-0.45,x1:cIdx+0.45,y0:rIdx-0.45,y1:rIdx+0.45,
+          line:{color:'#fff',width:1.6}});
+      }
+    }
+  }
+  const hoverTpl=metric==='dte'
+    ? '<b>Week of %{customdata[0]}</b><br>TE %{customdata[1]:.2f}%  ·  ΔTEᵉ %{customdata[2]:+.2f}<br><i>Click to jump →</i><extra></extra>'
+    : '<b>Week of %{customdata[0]}</b><br>TE %{customdata[1]:.2f}%  ·  ΔTEᵉ %{customdata[2]:+.2f}<br><i>Click to jump →</i><extra></extra>';
+  Plotly.newPlot('calHeatDiv',[{
+    type:'heatmap', z, customdata,
+    x:cols, y:years.map(String),
+    colorscale, showscale:false,
+    xgap:2, ygap:2,
+    hovertemplate:hoverTpl,
+    hoverongaps:false
+  }],{
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    font:{family:'DM Sans, system-ui',color:THEME().tick,size:10},
+    margin:{l:42,r:8,t:6,b:30},
+    xaxis:{
+      tickmode:'array',
+      tickvals:[0,4,8,13,17,22,26,30,35,39,43,48],
+      ticktext:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+      showgrid:false, fixedrange:true, side:'bottom', tickfont:{size:9}
+    },
+    yaxis:{showgrid:false, fixedrange:true, tickfont:{size:10}},
+    shapes
+  },{displayModeBar:false,responsive:true});
+  // Click handler — jump global week selector
+  if(div.on){
+    div.on('plotly_click', evt=>{
+      const cd=evt&&evt.points&&evt.points[0]&&evt.points[0].customdata;
+      if(cd&&cd[0]){
+        // customdata[0] is YYYY-MM-DD; need original YYYYMMDD for changeWeek
+        const ymd=cd[0].replace(/-/g,'');
+        if(typeof changeWeek==='function')changeWeek(ymd);
+      }
+    });
+  }
+  // Legend strip
+  const legend=document.getElementById('calHeatLegend');
+  if(legend){
+    const valid=z.flat().filter(v=>v!=null&&isFinite(v));
+    const lo=valid.length?Math.min(...valid):0, hi=valid.length?Math.max(...valid):0;
+    const swatch=metric==='dte'?'#6366f1':'#f59e0b';
+    const swatchHi=metric==='dte'?'#6366f1':'#ef4444';
+    const label=metric==='dte'?'|ΔTE| %':'TE level %';
+    legend.innerHTML=`<span>${label}:</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${swatch};opacity:0.15"></span>${lo.toFixed(2)}</span>
+      <span style="opacity:0.4">→</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${swatchHi};opacity:1"></span>${hi.toFixed(2)}</span>
+      <span style="margin-left:auto;color:var(--textDim);font-size:9px">ᵉ ΔTE is derived (te[i] − te[i−1])</span>`;
+  }
+}
+
 // Historical Trends mini-charts (Risk tab top) — 4 sparklines: TE / Active Share / Beta / Holdings
 function riskHistoricalTrends(s){
   let hist=s.hist&&s.hist.sum||[];
@@ -5617,6 +5754,8 @@ function rRisk(){
       <div class="sub">${gt(s.hist.sum,'as')} trend</div>
     </div>
   </div>
+
+  ${rCalHeatCard(s)}
 
   ${riskHistoricalTrends(s)}
 
@@ -5792,6 +5931,7 @@ function rRisk(){
   // Stops one bad render from cascading into N silent blanks. Lesson from B102 ship.
   setTimeout(()=>{
     const riskFns=[
+      ['rCalHeat',()=>rCalHeat()],
       ['rRiskHistMinis',()=>rRiskHistMinis(s)],
       ['rTEStackedArea',()=>rTEStackedArea(s,factorRisk,idioRisk)],
       ['rMultiBeta',()=>rMultiBeta(s)],
@@ -10016,6 +10156,14 @@ function pf(s){if(!s||!String(s).trim())return null;let v=parseFloat(s);return i
 function r2(v){return v!=null?Math.round(v*100)/100:null;}
 function parseDate(d){if(!d)return null;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s)){return new Date(s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6));}return new Date(s);}
 function isoDate(d){if(!d)return d;var s=String(d).trim();if(s.length===8&&/^\d{8}$/.test(s))return s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6);var m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);if(m)return m[3]+'-'+m[1].padStart(2,'0')+'-'+m[2].padStart(2,'0');return s;}
+// ISO 8601 week number (1..53). Used by cardCalHeat to bucket weekly history
+// into a year × week grid. Standard "Thursday in week 1" definition.
+function isoWeekNum(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dn=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-dn);
+  const ys=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return Math.ceil(((t-ys)/86400000+1)/7);
+}
 function parseCSVLine(line){
   let result=[],cell='',inQ=false;
   for(let i=0;i<line.length;i++){

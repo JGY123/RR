@@ -115,6 +115,19 @@ Aggregation helper: `aggregateHoldingsBy(holds, groupKeyFn, factorList, opts)` (
 | ● history-shipped marker | 🟡 derived | `CHAR_META[c.m].histKey` truthy. Set: TE/Beta/Active Share (3 of 39). Other 36 await parser-side history persistence (B114). |
 | Unit-aware formatter | 🟡 derived | `formatChar(metric, v)` reads `CHAR_META[metric].fmt` ∈ {pct, mult, beta, usdB, num}. |
 
+## cardCalHeat (TE Calendar Heatmap, NEW 2026-04-30)
+
+| Cell | Source class | Path |
+|---|---|---|
+| Year × Week grid | 🟡 derived | Built from `cs.hist.sum[]` — every entry's `d` parsed via `parseDate` then bucketed by `(getFullYear, isoWeekNum)`. ISO 8601 week numbering (Thursday-anchored). Helper: `isoWeekNum(d)` near line 10026. |
+| Cell color (|ΔTE| mode, default) | 🟡 derived | `dteAbs = Math.abs(te[i] - te[i-1])`. **Marked ᵉ** in hover template ("ΔTEᵉ"). Synth marker rationale: ΔTE is a same-tile derivation that doesn't write to `cs.*` — derivation visible in code only. |
+| Cell color (TE level mode) | 🟢 sourced | `cs.hist.sum[].te` — same field as cardRiskHistTrends miniTE. |
+| Hover tooltip | 🟢 sourced + 🟡 derived | `customdata = [isoDate(d), te, dte]` per cell. `te` sourced; `dte` derived (marked ᵉ). |
+| Selected-week outline | UI state | `_selectedWeek` global → resolved to (year, week) and rendered as Plotly `shapes` rect. |
+| Click handler | UI behavior | `plotly_click` → `customdata[0]` → `changeWeek(YYYYMMDD)` (existing global). Triggers full re-render including this tile's selection outline. |
+| Color metric pill state | UI state | `localStorage.rr.calheat.metric` ∈ {`'dte'`, `'te'`}. Per CLAUDE.md hard rule #3 — preferences-only, never data. |
+| Legend strip values | 🟡 derived | min/max of currently-rendered `z` matrix flattened. Recomputed on every `rCalHeat()` call. |
+
 ### Drill modal `oDrChar(metric, range)`
 
 | Cell | Source class | Path |

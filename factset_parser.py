@@ -76,7 +76,8 @@ ALIASES = {
     "Period End Date":   "PERIOD_END",
     # Security-only classification cols
     "Redwood GICS Sector": "SEC_GICS",
-    "Redwood Region1":     "SEC_REGION",
+    "Redwood Region":      "SEC_REGION",   # 2026-04-30: was "Redwood Region1" — fixed; EM full-history ships header without trailing "1"
+    "Redwood Region1":     "SEC_REGION",   # legacy variant (some files used this header)
     "Redwood Country":     "SEC_COUNTRY",
     "Industry Rollup":     "SEC_INDUSTRY",
     "RWOOD_SUBGROUP":      "SEC_SUBGROUP",

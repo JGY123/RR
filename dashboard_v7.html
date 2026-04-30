@@ -2328,7 +2328,7 @@ function rExp(){
   <div class="card" id="cardUnowned">
     <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>${aboutBtn('cardUnowned')}</div>
     <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button></div></div>
-    ${rUnowned(s.unowned)}
+    ${rUnowned(_unownedFromHold(s))}
   </div>
 
   <!-- 2026-04-30 (user feedback): cardCorr stub removed from Exposures tab.
@@ -4432,6 +4432,31 @@ const UNOWNED_REG_LABEL={'Usa':'USA','English':'UK','Far East':'Asia Pacific ex-
 // Use tk(h) for TKR-REGION display. Drop the inert "Region" column (most
 // rows fell back to '\u2014' anyway since unowned[].reg isn't populated for the
 // v2 Security slim).
+// 2026-04-30 (B80 fix): cardUnowned now sources from cs.hold[] filtered to
+// bench-only-with-bw>0, NOT cs.unowned (which is parser's orphan-bucket of
+// rights/detached cash with all numeric fields null — see B80 in BACKLOG).
+// The actual "stocks not held that contribute most to TE" = bench-only
+// holdings where parser populates h.bw (from Raw Factors) and h.pct_t.
+function _unownedFromHold(s){
+  if(!s||!s.hold)return [];
+  return s.hold.filter(h=>{
+    if(isCash(h))return false;
+    const portW = +(h.p ?? h.w ?? 0);
+    const benchW = +(h.b ?? h.bw ?? 0);
+    return portW <= 0 && benchW > 0;
+  }).map(h=>({
+    t:    h.t,
+    n:    h.n,
+    sec:  h.sec,
+    co:   h.co || h.country,
+    b:    h.b ?? h.bw,
+    bw:   h.bw,
+    tr:   h.tr ?? h.pct_t,
+    pct_t: h.pct_t,
+    tkr_region: h.tkr_region,
+  }));
+}
+
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
   let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));

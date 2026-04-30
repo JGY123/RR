@@ -1,10 +1,66 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-30 (About-popup framework + cardChars audit RED→GREEN + header polish + Q121 brainstorm — all pushed to origin)
+last_updated: 2026-04-30 (EM full-history landed + parser data-integrity batch + cardWeekOverWeek + autonomous-hour polish)
 ---
 
-## Just finished (this session, 2026-04-30 — pre-format-change marathon push)
+## 2026-04-30 (afternoon) — EM full-history end-to-end + S1 cardWeekOverWeek shipped
+
+**Branch state:** `main` is clean. 7+ commits this session targeting the EM
+full-history file (91MB xlsx → 7.4 years of weekly data) and the strategic
+recommendations from STRATEGIC_RECOMMENDATIONS_2026-04-30.md.
+
+**Commits (most recent first):**
+- `888b309` feat: export_to_tableau.py (R2-Q20) + viz-specs/INDEX.md (R2-Q18)
+- `47ce0dd` feat: cardWeekOverWeek (S1) Option A — diff tile at top of Exposures
+- `cf12cb6` chore: doc-layer cleanup (W4) + freshness pill in header (W1)
+- `d5baa26` feat: apply audit R2-Q1-Q4 PM-default decisions + holdings count clarity
+- `07657cd` fix(parser): cs.sum.pe/bpe/pb/bpb fallback + drop empty group rows
+- `819c493` fix(parser+dashboard): EM 24-col Raw Factors + cross-tab Idio/Factor consistency
+- `73326ed` fix(parser): handle "%Y-%m-%d %H:%M:%S" datetime format — EM blocker
+
+**EM full-history validation:**
+- Verifier: 🟢 GREEN-LIGHT WITH NOTES (17/2/4 — was 14/5/5 pre-fixes)
+- 7.4 years × 383 weeks · 0 gaps >14 days
+- 40 port-held + 251 bench-only seen of 1,204 true bench (slim per F9 part 2)
+- Spotlight ranks populated · TSMC=2330-TW, Tencent=700-HK · Bench P/E populated
+- Risk tab Idio/Factor now matches Exposures (was 24.5pp divergence)
+
+**Strategic recommendations executed (STRATEGIC_RECOMMENDATIONS_2026-04-30.md):**
+- ✅ S1 — cardWeekOverWeek (the diff tile) shipped at top of Exposures
+- ✅ W1 — Freshness pill in header (color-coded staleness indicator)
+- ✅ W4 — Doc-layer cleanup (37 stale docs → docs/archive/, INDEX.md added)
+- ⏳ S2 — Data Quality sidebar (stub via openFreshnessDetail; full sidebar future)
+- ⏳ S3 — _ABOUT_REG split (deferred)
+- ⏳ W2 — Period-aware sweep across drill modals (deferred — bigger task)
+
+**Audit defaults applied (R2 questions):**
+- R2-Q1 ✅ cardWatchlist moved Exposures → Holdings
+- R2-Q2 ✅ cardBetaHist moved Risk → Exposures
+- R2-Q3 ✅ Bare Rank Distribution chart deleted (cardRanks supersedes)
+- R2-Q4 ✅ Top 10 Holdings upgraded to first-class (cardTop10 + About entry)
+- R2-Q12 (cardCorr period default) — pending
+- R2-Q18 ✅ viz-specs/INDEX.md auto-curated catalog
+- R2-Q20 ✅ export_to_tableau.py shipped (9 sections supported)
+
+**Parser changes that need FactSet feedback (relayed for the call):**
+- Date format `"YYYY-MM-DD HH:MM:SS"` triggered a parse_date fall-through
+  (now handled). Plain dates would be safer.
+- Raw Factors group_size=24 (added Bench. Ending Weight at offset 1) —
+  parser didn't know this layout. Now does.
+- 24-col Raw Factors HAS the F9 BM Weight ✓ but Security section is still
+  slim (251/1204 bench-only) — F9 part 2 incomplete.
+
+**For next session:**
+1. Hard-refresh dashboard, walk every tab on EM data — confirm cardWeekOverWeek
+   renders, freshness pill works, Risk tab now matches Exposures.
+2. When user kicks off the multi-account run (6 international + domestic
+   SCG), `./load_data.sh` should DTRT — parser is now format-tolerant.
+3. Open R2 questions still pending: Q5-Q11, Q13-Q17, Q19, Q21-Q30.
+
+---
+
+## 2026-04-30 (morning) — pre-format-change marathon push
 
 **Branch state:** `main` is clean and pushed to origin/main (JGY123). 11 commits landed today across two thematic batches — the format-change parser updates (morning) and the About-popup + cardChars audit + new-tile brainstorm (afternoon).
 

@@ -98,8 +98,14 @@ if [ -f "$JSON" ]; then
   check "latest_data.json is valid JSON" "python3 -c 'import json; json.load(open(\"$JSON\"))'"
   # Top-level shape: 4-element array
   check "top-level is 4-element array" "python3 -c 'import json; d=json.load(open(\"$JSON\")); assert isinstance(d, list) and len(d)==4'"
-  # First element has expected strategies
-  check "strategies dict has all 7 expected accounts" "python3 -c 'import json; d=json.load(open(\"$JSON\")); s=set(d[0].keys()); expected={\"ACWI\",\"IDM\",\"IOP\",\"EM\",\"GSC\",\"ISC\",\"SCG\"}; missing=expected-s; assert not missing, f\"missing: {missing}\"'"
+  # First element has at least one known strategy (single-account test files
+  # only ship one strategy at a time — multi-account run will ship all 7).
+  # 2026-04-30: relaxed from "must have all 7" → "must have at least one of
+  # the 7 known IDs" so single-strategy test files (e.g. EM full-history)
+  # don't fail this check.
+  check "strategies dict has at least one known account" "python3 -c 'import json; d=json.load(open(\"$JSON\")); s=set(d[0].keys()); known={\"ACWI\",\"IDM\",\"IOP\",\"EM\",\"GSC\",\"ISC\",\"SCG\"}; assert s & known, f\"no known strategies in {s}\"'"
+  # When in multi-account mode (>=2 strategies), all 7 should be present.
+  check "if multi-account: all 7 expected accounts" "python3 -c 'import json; d=json.load(open(\"$JSON\")); s=set(d[0].keys()); expected={\"ACWI\",\"IDM\",\"IOP\",\"EM\",\"GSC\",\"ISC\",\"SCG\"}; assert len(s) < 2 or not (expected - s), f\"multi-account but missing: {expected - s}\"'"
 fi
 
 # ===== 5. Git state =====

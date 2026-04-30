@@ -740,6 +740,83 @@ function openAbout(tileId){
 }
 // Tiny ⓘ button HTML for inclusion in tile headers
 const aboutBtn=tileId=>`<button onclick="openAbout('${tileId}')" title="About this tile — what it shows, how it's computed, source, caveats" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:1px 7px;border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;line-height:1.2">ⓘ</button>`;
+
+// 2026-04-30 (cardChars audit F1+F3+F5): static metadata for every shipped
+// portfolio characteristic. Drives: (a) histKey → which cs.hist.sum[].KEY to
+// plot in the drill modal — only TE/Beta/AS shipped today, parser backlog
+// B114 will add the rest; (b) group → metric grouping (Risk / Valuation /
+// Quality / Growth / Revisions / Size); (c) inverted → diff color flips for
+// "lower-is-better" valuation/leverage rows; (d) fmt → unit-aware formatter
+// ("18.3x", "$4.2B", "+2.1%"); (e) doc → per-row tooltip explaining what
+// the metric means. Unknown metrics fall through to defaults — safe by design.
+const CHAR_META={
+  'Tracking Error (%)':           {group:'Risk',histKey:'te',  fmt:'pct',doc:'Annualized active risk vs benchmark (Axioma factor model). Higher = portfolio diverges more from benchmark.'},
+  'Beta':                         {group:'Risk',histKey:'beta',fmt:'beta',doc:'Predicted sensitivity to benchmark moves. >1 amplifies; <1 dampens.'},
+  'Active Share (%)':             {group:'Risk',histKey:'as',  fmt:'pct',doc:'% of portfolio that differs from benchmark holdings. 100% = nothing in common; 0% = identical.'},
+  'Axioma- Historical Beta':      {group:'Risk',fmt:'beta',doc:'Realized beta vs benchmark from Axioma historical regression.'},
+  'Port. MPT Beta':               {group:'Risk',fmt:'beta',doc:'Modern Portfolio Theory beta — regression of portfolio returns against benchmark.'},
+  'Market Cap ($B)':              {group:'Size',fmt:'usdB',doc:'Weighted-average market cap of holdings.'},
+  '90D_ADV':                      {group:'Size',fmt:'num',doc:'90-day average daily $ volume — liquidity proxy.'},
+  'Short Interest Ratio':         {group:'Size',fmt:'num',doc:'Days to cover all short positions at average volume.'},
+  'Dividend Yield':               {group:'Valuation',fmt:'pct',doc:'Indicated annual dividend / price.'},
+  'P/E - NTM':                    {group:'Valuation',fmt:'mult',inverted:true,doc:'Price / Next-Twelve-Month earnings. Lower = cheaper.'},
+  'P/E using FY1 Est':            {group:'Valuation',fmt:'mult',inverted:true,doc:'Price / current fiscal-year EPS estimate. Lower = cheaper.'},
+  'P/E using FY2 Est':            {group:'Valuation',fmt:'mult',inverted:true,doc:'Price / next-fiscal-year EPS estimate. Lower = cheaper.'},
+  'Earnings Yield - NTM':         {group:'Valuation',fmt:'pct',doc:'Inverse of forward P/E. Higher = cheaper.'},
+  'FCF Yield - NTM':              {group:'Valuation',fmt:'pct',doc:'Free cash flow / market cap (NTM). Higher = more cash returned per $ invested.'},
+  'EV/SALES NTM':                 {group:'Valuation',fmt:'mult',inverted:true,doc:'Enterprise value / NTM sales. Lower = cheaper.'},
+  'EV/EBITDA NTM':                {group:'Valuation',fmt:'mult',inverted:true,doc:'Enterprise value / NTM EBITDA. Lower = cheaper.'},
+  'Price to Book - NTM':          {group:'Valuation',fmt:'mult',inverted:true,doc:'Price / book value (NTM). Lower = cheaper.'},
+  'Price to Cash Flow':           {group:'Valuation',fmt:'mult',inverted:true,doc:'Price / operating cash flow. Lower = cheaper.'},
+  'Price to Sales':               {group:'Valuation',fmt:'mult',inverted:true,doc:'Price / sales. Lower = cheaper.'},
+  'Hist 3Yr Sales Growth':        {group:'Growth',fmt:'pct',doc:'Trailing 3-year annualized sales growth.'},
+  'Hist 3Yr EPS Growth':          {group:'Growth',fmt:'pct',doc:'Trailing 3-year annualized EPS growth.'},
+  'Est 3-5 Yr EPS Growth':        {group:'Growth',fmt:'pct',doc:'Long-term EPS growth estimate (analyst consensus).'},
+  'Sales Revision 3 Months - FY1':{group:'Revisions',fmt:'pct',doc:'3-month change in FY1 sales estimate. Positive = upward revision.'},
+  'Sales Revision 6 Months - FY1':{group:'Revisions',fmt:'pct',doc:'6-month change in FY1 sales estimate.'},
+  '3 Mo EPS Revisions FY1':       {group:'Revisions',fmt:'pct',doc:'3-month change in FY1 EPS estimate. Positive = upward (good).'},
+  '6 Mo EPS Revisions FY1':       {group:'Revisions',fmt:'pct',doc:'6-month change in FY1 EPS estimate.'},
+  'Sales Revision 3 Months - FY2':{group:'Revisions',fmt:'pct',doc:'3-month change in FY2 sales estimate.'},
+  'Sales Revisions 6 Months - FY2':{group:'Revisions',fmt:'pct',doc:'6-month change in FY2 sales estimate.'},
+  '3 Mo EPS Revisions FY2':       {group:'Revisions',fmt:'pct',doc:'3-month change in FY2 EPS estimate.'},
+  'EPS Revisions 6 Months - FY2': {group:'Revisions',fmt:'pct',doc:'6-month change in FY2 EPS estimate.'},
+  'ROE NTM':                      {group:'Quality',fmt:'pct',doc:'Forward return on equity. Higher = more profitable.'},
+  'ROE Change (NTM-LTM)':         {group:'Quality',fmt:'pct',doc:'NTM ROE minus trailing ROE — improving (>0) or eroding profitability.'},
+  'Redwood ROIC - NTM':           {group:'Quality',fmt:'pct',doc:'Redwood proprietary return on invested capital, NTM.'},
+  'Operating Margin - NTM':       {group:'Quality',fmt:'pct',doc:'Operating income / sales (NTM). Higher = better.'},
+  'Net Margin NTM':               {group:'Quality',fmt:'pct',doc:'Net income / sales (NTM). Higher = better.'},
+  'ROE LTM':                      {group:'Quality',fmt:'pct',doc:'Trailing 12-month return on equity.'},
+  'ROA':                          {group:'Quality',fmt:'pct',doc:'Return on assets. Higher = better.'},
+  'Net Debt/Market Cap':          {group:'Quality',fmt:'pct',inverted:true,doc:'Net debt / market cap. Lower = less leveraged.'},
+  'LT Debt to Capital':           {group:'Quality',fmt:'pct',inverted:true,doc:'Long-term debt / total capital. Lower = less leveraged.'}
+};
+const CHAR_GROUP_ORDER=['Risk','Valuation','Quality','Growth','Revisions','Size'];
+function formatChar(metric,v){
+  if(v==null||!isFinite(v))return'—';
+  const fmt=(CHAR_META[metric]||{}).fmt||'num';
+  if(fmt==='pct') return(+v).toFixed(1)+'%';
+  if(fmt==='mult')return(+v).toFixed(1)+'x';
+  if(fmt==='usdB')return'$'+(+v).toFixed(1)+'B';
+  if(fmt==='beta')return(+v).toFixed(2);
+  return(+v).toFixed(2);
+}
+function formatCharDiff(metric,v){
+  if(v==null||!isFinite(v))return'—';
+  const fmt=(CHAR_META[metric]||{}).fmt||'num';
+  const sign=v>0?'+':'';
+  if(fmt==='pct') return sign+(+v).toFixed(1)+'%';
+  if(fmt==='mult')return sign+(+v).toFixed(1)+'x';
+  if(fmt==='usdB')return sign+'$'+(+v).toFixed(1)+'B';
+  if(fmt==='beta')return sign+(+v).toFixed(2);
+  return sign+(+v).toFixed(2);
+}
+// Inverted metrics flip the diff color: e.g. P/E +28% vs BM should render
+// red (more expensive, worse), not green.
+function charDiffClass(metric,diff){
+  if(diff==null||!isFinite(diff))return'';
+  const inverted=(CHAR_META[metric]||{}).inverted===true;
+  return (inverted?diff<0:diff>0)?'pos':'neg';
+}
 const rc=r=>r<=1?'var(--r1)':r<=2?'var(--r2)':r<=3?'var(--r3)':r<=4?'var(--r4)':'var(--r5)';
 const as=v=>{let a=Math.abs(v);return a>8?'color:var(--neg);font-weight:600':a>5?'color:var(--warn);font-weight:500':v>0?'color:var(--pos)':'color:var(--neg)'};
 const gt=(arr,key)=>{if(!arr||arr.length<2)return'<span class="trend flat">—</span>';let l=arr[arr.length-1][key],p=arr[arr.length-2][key];let d=l-p;return d>0.01?'<span class="trend up">&#9650;</span>':d<-0.01?'<span class="trend down">&#9660;</span>':'<span class="trend flat">&#9644;</span>'};
@@ -1669,8 +1746,16 @@ function rExp(){
       <div id="rnkTableWrap" style="overflow-x:auto"></div>
     </div>
     <div class="card" id="cardChars">
-      <div class="flex-between"><div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals. Click a metric for details.">Portfolio Characteristics</div>
-      <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button></div>
+      <div class="flex-between">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals (39 metrics shipped from FactSet Portfolio Characteristics). Click any row for the metric drill — TE / Beta / Active Share open with full historical chart; the rest show single-snapshot until parser-side history persistence (B114)." oncontextmenu="showNotePopup(event,'cardChars');return false">Portfolio Characteristics</div>
+          <span style="font-size:10px;color:var(--textDim);font-weight:400">portfolio vs benchmark · click a row for history · ↓ marks "lower-is-better" rows</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${aboutBtn('cardChars')}
+          <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
+        </div>
+      </div>
       ${rChr(s.chars)}
     </div>
   </div>
@@ -1884,11 +1969,16 @@ const _srt={};
 function sortTbl(id,col){
   let tbl=document.getElementById(id);if(!tbl)return;
   let tbody=tbl.querySelector('tbody');if(!tbody)return;
-  let rows=[...tbody.querySelectorAll('tr')];
+  let allRows=[...tbody.querySelectorAll('tr')];
+  // 2026-04-30 (cardChars F4 grouped layout): group-header rows are structural
+  // dividers (colspan="4", not data). When user sorts, drop them — the table
+  // collapses to a flat sorted view across all groups.
+  let dataRows=allRows.filter(r=>!r.classList.contains('grp-hdr'));
+  let grpRows=allRows.filter(r=>r.classList.contains('grp-hdr'));
   let key=id+':'+col;
   let asc=_srt[key]!==true;_srt[key]=asc;
   tbl.querySelectorAll('th').forEach((th,i)=>{th.classList.remove('sa','sd');if(i===col)th.classList.add(asc?'sa':'sd')});
-  rows.sort((a,b)=>{
+  dataRows.sort((a,b)=>{
     let ac=a.cells[col],bc=b.cells[col];
     let av=ac?.dataset?.sv??ac?.textContent?.trim()??'';
     let bv=bc?.dataset?.sv??bc?.textContent?.trim()??'';
@@ -1896,7 +1986,8 @@ function sortTbl(id,col){
     if(!isNaN(an)&&!isNaN(bn))return asc?an-bn:bn-an;
     return asc?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av));
   });
-  rows.forEach(r=>tbody.appendChild(r));
+  grpRows.forEach(r=>r.remove());
+  dataRows.forEach(r=>tbody.appendChild(r));
 }
 // Rank badge: Q{r} colored + sub-line R·V·Q (used in detail pop-ups)
 function rRVQ(h){
@@ -3316,12 +3407,35 @@ function filterByRank(rank){
 
 function rChr(chars){
   if(!chars.length)return'<p style="color:var(--txt);font-size:12px">No characteristic data</p>';
-  let rows=chars.map(c=>{
-    let diff=(c.b!=null&&c.p!=null&&isFinite(c.p)&&isFinite(c.b))?c.p-c.b:null;
-    let cls=diff!=null&&diff>0?'pos':diff!=null&&diff<0?'neg':'';
-    return`<tr class="clickable" onclick="oDrChar('${c.m}')"><td>${c.m}</td><td class="r" data-sv="${c.p??''}">${f2(c.p,1)}</td><td class="r" data-sv="${c.b??''}">${f2(c.b,1)}</td><td class="r ${cls}" data-sv="${diff??''}">${diff!=null?fp(diff,1):'—'}</td></tr>`;
+  // Build row HTML for one metric — shared between grouped and flat layouts.
+  const rowHtml=c=>{
+    const diff=(c.b!=null&&c.p!=null&&isFinite(c.p)&&isFinite(c.b))?c.p-c.b:null;
+    const cls=charDiffClass(c.m,diff);
+    const meta=CHAR_META[c.m]||{};
+    const docAttr=meta.doc?` class="tip" data-tip="${meta.doc.replace(/"/g,'&quot;')}"`:'';
+    const invMark=meta.inverted?' <span style="color:var(--textDim);font-size:9px;margin-left:3px" title="Lower is better — diff color is inverted">↓</span>':'';
+    const mEsc=c.m.replace(/'/g,"\\'");
+    const bCell=c.b!=null&&isFinite(c.b)?formatChar(c.m,c.b):'<span style="color:var(--textDim)" title="Portfolio-only metric — no benchmark equivalent">—</span>';
+    const histDot=meta.histKey?' <span style="color:var(--pos);font-size:9px;margin-left:3px" title="Per-week history shipped — drill plots a chart">●</span>':'';
+    return`<tr class="clickable" onclick="oDrChar('${mEsc}')"><td${docAttr}>${c.m}${invMark}${histDot}</td><td class="r" data-sv="${c.p??''}">${formatChar(c.m,c.p)}</td><td class="r" data-sv="${c.b??''}">${bCell}</td><td class="r ${cls}" data-sv="${diff??''}">${formatCharDiff(c.m,diff)}</td></tr>`;
+  };
+  // 2026-04-30 (cardChars F4): group rows by CHAR_META.group. Group headers
+  // are tiny uppercase mini-cap dividers (matches AUDIT_LEARNINGS.md design
+  // rule for section headers). Unknown metrics get bucketed into "Other"
+  // and rendered last so new FactSet columns are visible without code change.
+  const groups={};
+  chars.forEach(c=>{
+    const g=(CHAR_META[c.m]||{}).group||'Other';
+    (groups[g]=groups[g]||[]).push(c);
+  });
+  const order=CHAR_GROUP_ORDER.filter(g=>groups[g]&&groups[g].length).concat(Object.keys(groups).filter(g=>!CHAR_GROUP_ORDER.includes(g)));
+  const sectionRows=order.map(g=>{
+    const list=groups[g]||[];
+    if(!list.length)return'';
+    const hdr=`<tr class="grp-hdr" style="background:rgba(99,102,241,0.04)"><td colspan="4" style="padding:6px 8px 4px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.6px;font-weight:700;border-top:1px solid var(--grid)">${g} <span style="color:var(--textDim);font-weight:500;letter-spacing:0.2px;text-transform:none;margin-left:6px">${list.length} metric${list.length>1?'s':''}</span></td></tr>`;
+    return hdr+list.map(rowHtml).join('');
   }).join('');
-  return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r tip" data-tip="Portfolio value for this metric" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r tip" data-tip="Benchmark value (— if FactSet did not provide it)" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r tip" data-tip="Portfolio minus benchmark. Green = portfolio higher, red = lower. See metric tooltip for whether higher is better." onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r tip" data-tip="Portfolio value (units shown — % for ratios, x for multiples, $B for size)" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r tip" data-tip="Benchmark value (— if FactSet did not provide it; portfolio-only metrics like TE are NA on the BM side)" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r tip" data-tip="Portfolio − Benchmark. Color reflects whether higher is good (green) or lower is good (red — flagged with ↓ on the metric name)." onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${sectionRows}</tbody></table>`;
 }
 
 function rCountryTable(countries,hold){
@@ -8901,19 +9015,123 @@ function oDrGroup(groupName){
 }
 
 // ===== CHARACTERISTICS DRILL =====
-function oDrChar(metric){
-  let m=$('charModal');
-  let char=cs.chars.find(c=>c.m===metric);
+// 2026-04-30 (cardChars audit F1, SEV-1 fix):
+// Was: showed Port / Bench / Diff cards then a flat "No historical data
+// available" — same numbers already visible in the row, plus a misleading
+// disclaimer (the card-title tooltip promises "Click for details").
+// Now: branches on CHAR_META.histKey. For metrics with hist (TE/Beta/AS),
+// renders a Plotly time series with range buttons + window stats. For other
+// metrics, renders an honest "Per-week persistence pending B114" callout.
+let _charDrillRange='1Y';
+function oDrChar(metric,range){
+  if(range!=null)_charDrillRange=range;
+  const m=$('charModal');
+  const char=cs.chars.find(c=>c.m===metric);
   if(!char)return;
+  const meta=CHAR_META[metric]||{};
+  const histKey=meta.histKey;
+  const histAll=(cs.hist&&cs.hist.sum)||[];
+  const haveHist=histKey&&histAll.length>0;
+  const diff=(char.p!=null&&char.b!=null&&isFinite(char.p)&&isFinite(char.b))?char.p-char.b:null;
+  const cls=charDiffClass(metric,diff);
+  const groupBadge=meta.group?`<span style="font-size:10px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.6px;margin-left:10px;padding:2px 7px;border:1px solid var(--grid);border-radius:3px;vertical-align:middle">${meta.group}</span>`:'';
+  const invBadge=meta.inverted?`<span style="font-size:10px;color:var(--warn);margin-left:8px;font-weight:500;vertical-align:middle" title="Lower is better — diff color is inverted">↓ lower-is-better</span>`:'';
+  const docLine=meta.doc?`<p style="font-size:11px;color:var(--txt);margin:0 0 12px;line-height:1.5;padding-left:2px">${meta.doc}</p>`:'';
+
+  // Window stats + chart only when history is available
+  let histStrip='', histSection='';
+  if(haveHist){
+    const rangeMap={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
+    const pts=_charDrillRange==='All'?Infinity:(rangeMap[_charDrillRange]||52);
+    const sliced=pts===Infinity?histAll:histAll.slice(-pts);
+    const series=sliced.map(e=>e[histKey]).filter(v=>v!=null&&isFinite(v));
+    let sMin=null,sMax=null,sAvg=null,sSd=null,sLast=null,sPctile=null;
+    if(series.length){
+      sMin=Math.min(...series); sMax=Math.max(...series);
+      sAvg=series.reduce((a,b)=>a+b,0)/series.length;
+      sSd=series.length>1?Math.sqrt(series.reduce((a,v)=>a+(v-sAvg)**2,0)/series.length):null;
+      sLast=series[series.length-1];
+      sPctile=series.filter(v=>v<=sLast).length/series.length*100;
+    }
+    const cs1='text-align:center;padding:8px 6px;min-height:62px;display:flex;flex-direction:column;justify-content:center';
+    const lbl='font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:4px';
+    const big='font-size:14px;font-weight:700;color:var(--txth);line-height:1.1';
+    histStrip=`
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:14px;margin-bottom:6px">
+        <div class="card" style="${cs1}"><div style="${lbl}">Window Min</div><div style="${big}">${formatChar(metric,sMin)}</div></div>
+        <div class="card" style="${cs1}"><div style="${lbl}">Avg</div><div style="${big}">${formatChar(metric,sAvg)}</div></div>
+        <div class="card" style="${cs1}"><div style="${lbl}">Window Max</div><div style="${big}">${formatChar(metric,sMax)}</div></div>
+        <div class="card" style="${cs1}"><div style="${lbl}"><span style="text-transform:none">σ</span></div><div style="${big}">${sSd!=null?formatChar(metric,sSd):'—'}</div></div>
+        <div class="card" style="${cs1}"><div style="${lbl}">Pctile (latest)</div><div style="font-size:14px;font-weight:700;line-height:1.1;color:${sPctile==null?'var(--txt)':sPctile>75?'var(--neg)':sPctile<25?'var(--pos)':'var(--txth)'}">${sPctile!=null?Math.round(sPctile)+'%':'—'}</div></div>
+      </div>`;
+    const mEsc=metric.replace(/'/g,"\\'");
+    const rangeBtns=['3M','6M','1Y','3Y','All'].map(r=>`<button class="range-btn${_charDrillRange===r?' active':''}" onclick="oDrChar('${mEsc}','${r}')">${r}</button>`).join('');
+    histSection=`<div class="card-title" style="margin-top:14px;display:flex;align-items:baseline;gap:10px"><span>${metric} — History</span><span style="font-size:10px;color:var(--textDim);font-weight:400">${histAll.length} weeks shipped · range filters the chart</span></div><div class="range-btns" style="margin-top:6px">${rangeBtns}</div><div id="charHistChart" style="height:240px;margin-bottom:6px"></div>`;
+  }
+
+  const noHistCallout=`<div style="margin-top:14px;padding:12px 14px;background:rgba(168,85,247,0.06);border:1px solid rgba(168,85,247,0.2);border-radius:6px;font-size:11px;color:var(--txt);line-height:1.55"><strong style="color:#a78bfa">No per-week history yet for this metric.</strong> Per-week persistence for fundamentals (P/E, ROE, sales growth, etc.) is on the parser backlog (item B114 in HISTORY_PERSISTENCE.md). Currently shipped historical metrics: <strong style="color:var(--txth)">Tracking Error · Beta · Active Share</strong>. Once B114 lands, this modal will plot every metric.</div>`;
+
   $('charContent').innerHTML=`
-    <h2>${metric}<button class="close" onclick="$('charModal').classList.remove('show')">&times;</button></h2>
-    <div class="grid g3" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Portfolio</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(char.p,1)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark</div><div style="font-size:20px;font-weight:700;color:var(--txt)">${f2(char.b,1)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Difference</div><div style="font-size:20px;font-weight:700;color:${(char.p-char.b)>=0?'var(--pos)':'var(--neg)'}">${fp(char.p-char.b,1)}</div></div>
+    <h2 style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">${metric}${invBadge}${groupBadge}<button class="close" onclick="$('charModal').classList.remove('show')" style="margin-left:auto">&times;</button></h2>
+    ${docLine}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px">
+      <div class="card" style="text-align:center;padding:14px 10px;border-top:2px solid var(--pri)">
+        <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:6px">Portfolio</div>
+        <div style="font-size:22px;font-weight:700;color:var(--txth);line-height:1">${formatChar(metric,char.p)}</div>
+      </div>
+      <div class="card" style="text-align:center;padding:14px 10px;border-top:2px solid var(--textDim)">
+        <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:6px">Benchmark</div>
+        <div style="font-size:22px;font-weight:700;color:var(--txt);line-height:1">${char.b!=null&&isFinite(char.b)?formatChar(metric,char.b):'—'}</div>
+        ${char.b==null||!isFinite(char.b)?'<div style="font-size:9px;color:var(--textDim);margin-top:4px">portfolio-only metric</div>':''}
+      </div>
+      <div class="card" style="text-align:center;padding:14px 10px;border-top:2px solid ${cls==='pos'?'var(--pos)':cls==='neg'?'var(--neg)':'var(--textDim)'}">
+        <div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:6px">Difference</div>
+        <div style="font-size:22px;font-weight:700;color:${cls==='pos'?'var(--pos)':cls==='neg'?'var(--neg)':'var(--txt)'};line-height:1">${formatCharDiff(metric,diff)}</div>
+        ${meta.inverted?'<div style="font-size:9px;color:var(--warn);margin-top:4px">↓ lower-is-better</div>':''}
+      </div>
     </div>
-    <p style="font-size:12px;color:var(--txt)">No historical data available for this characteristic.</p>`;
+    ${histStrip}
+    ${haveHist?histSection:noHistCallout}
+    <p style="margin-top:14px;font-size:9px;color:var(--textDim);line-height:1.5">Source: <code>cs.chars[].p</code> / <code>cs.chars[].b</code>${haveHist?` · history from <code>cs.hist.sum[].${histKey}</code> (${histAll.length} weeks shipped, latest ${histAll[histAll.length-1]?.d||'—'})`:' · per-week history not shipped for this metric (parser backlog B114)'}</p>`;
   m.classList.add('show');
+  if(haveHist){
+    setTimeout(()=>renderCharHistChart(metric,histKey),0);
+  }
+}
+function renderCharHistChart(metric,histKey){
+  const div=document.getElementById('charHistChart');
+  if(!div)return;
+  const histAll=(cs.hist&&cs.hist.sum)||[];
+  if(!histAll.length)return;
+  const rangeMap={All:Infinity,'3Y':156,'1Y':52,'6M':26,'3M':13};
+  const pts=_charDrillRange==='All'?Infinity:(rangeMap[_charDrillRange]||52);
+  const hist=pts===Infinity?histAll:histAll.slice(-pts);
+  const dates=hist.map(e=>isoDate(e.d));
+  const series=hist.map(e=>e[histKey]);
+  const T=THEME();
+  const meta=CHAR_META[metric]||{};
+  const fmt=meta.fmt;
+  const tickfmt=fmt==='beta'?'.2f':'.1f';
+  const ysuffix=fmt==='pct'?'%':fmt==='mult'?'x':fmt==='usdB'?'B':'';
+  const yprefix=fmt==='usdB'?'$':'';
+  const valid=series.filter(v=>v!=null&&isFinite(v));
+  const avg=valid.length?valid.reduce((a,b)=>a+b,0)/valid.length:null;
+  Plotly.newPlot('charHistChart',[
+    {x:dates,y:series,type:'scatter',mode:'lines',name:metric,
+      line:{color:'#6366f1',width:2.2},
+      fill:'tozeroy',fillcolor:'rgba(99,102,241,0.12)',
+      hovertemplate:'%{x|%b %d %Y}<br>'+metric+': '+yprefix+'%{y:'+tickfmt+'}'+ysuffix+'<extra></extra>',
+      connectgaps:false}
+  ],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{family:'DM Sans',color:T.tick,size:10},
+    margin:{l:54,r:18,t:8,b:32},
+    hovermode:'x unified',
+    showlegend:false,
+    xaxis:{...plotBg.xaxis,tickformat:'%b %y',nticks:8},
+    yaxis:{...plotBg.yaxis,tickformat:tickfmt,ticksuffix:ysuffix,tickprefix:yprefix},
+    shapes:avg!=null?[{type:'line',xref:'paper',x0:0,x1:1,y0:avg,y1:avg,line:{color:T.tick,dash:'dot',width:1}}]:[]
+  },modalPlotCfg);
 }
 
 

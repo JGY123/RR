@@ -65,6 +65,18 @@
 **What's there:** the snap_attrib dict already has 122+ keys including `BRL`, `Hungary`, `HUF`, `Semiconductors & Semiconductor Equipment`, `Oil, Gas & Consumable Fuels`, etc. These ARE granular per-currency/industry/country attribution rows.
 **Implication:** B110 (sub-factor drill on Country/Currency/Industry) doesn't need new CSV data — it just needs to consume the existing snap_attrib entries. **Big unblock for B110.**
 
+### F9 · Raw Factors section is missing Benchmark Weight column 🔥 BLOCKS FULL RUN
+**Status:** USER FLAGGED 2026-04-30 — must be fixed BEFORE the full multi-year multi-account run.
+**What's wrong:** the new Raw Factors section (group_size=23, parser updated 2026-04-30 commit `30f83b4`) ships per-security raw factor exposures, market cap, ADV, vol_52w, and Spotlight ranks (over/rev/val/qual/mom/stab) — **but no benchmark weight (BW) column.**
+**Why it matters:** the v2 Security slim drops the long tail of bench-only constituents from the Security section. The dashboard's universe-aware aggregators (Spotlight count, country/sector/group rank averages under "Bench" mode) need to know which holdings are in the benchmark and at what weight. Today's only sources of bench weight are:
+1. Security section (port + materially-large BM-only — long tail truncated, ~3.5% of total bench wt covered for major countries vs the actual ~61%).
+2. Section-aggregate rows (cs.sectors, cs.countries, cs.groups, cs.regions) — these have correct bench weight totals per bucket but no per-holding granularity.
+**Symptom on dashboard:** when user toggles Universe → Benchmark, holding counts and rank averages drop to a tiny subset because the parser only sees materially-large BM-only holdings. Cross-tile bug B116 (workaround landed 2026-04-30 commit `7d1b05a` — TE/MCR/factor stay invariant; counts and rank averages drop noisily under Bench mode).
+**Real fix:** add `BW` (or `Benchmark Weight`) as a per-period column in the Raw Factors section so we get **the full benchmark constituent universe** with its weights. Combined with SEDOL the parser can then merge bench weights onto every holding (including ones not in the slimmed Security section) and show truthful Bench-mode aggregates.
+**Ask to FactSet:** modify Raw Factors section to add a `Period Start Date:Benchmark Weight` column per period (matches existing convention). All benchmark constituents should have a row, even ones not held in any portfolio.
+**Coordination:** user's plan as of 2026-04-30 — abort the full run that just kicked off, ask FactSet to add this column, re-run.
+**Affected:** any tile using `aggregateHoldingsBy` with `mode='benchmark'` — cardSectors, cardCountry, cardGroups, cardRanks, cardChars (no), cardWatchlist (no), drill modals (yes).
+
 ---
 
 ## Closed / Resolved

@@ -6381,10 +6381,12 @@ function renderOneHoldCard(h){
   if(expanded){
     expandedHtml=`${_holdCardFactorBars(h)}<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--grid)"><div style="font-size:9px;color:var(--txt);text-transform:uppercase;letter-spacing:0.3px;margin-bottom:4px;font-weight:600">Quick Summary</div><div style="font-size:11px;color:var(--txth);line-height:1.5">${genHoldSummary(h)}</div></div>`;
   }
+  // Display proper ticker when SEDOL→ticker_region merge succeeded; fallback to h.t
+  const tkrDisplay=h.tkr_region||h.t;
   return `<div class="hold-card" data-hcard="${h.t}" style="background:var(--card);border:1px solid var(--grid);border-radius:8px;padding:10px 12px;${isBmOnly?'background:rgba(100,116,139,0.08);':''}position:relative;cursor:pointer" onclick="if(!event.target.closest('button,a'))oSt('${h.t}')">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:11px;font-weight:700;color:var(--txth);display:flex;align-items:center;gap:6px">${h.t}${isBmOnly?'<span style="background:var(--surf);color:var(--txt);font-size:9px;padding:1px 4px;border-radius:3px">BM</span>':''}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--txth);display:flex;align-items:center;gap:6px">${tkrDisplay}${isBmOnly?'<span style="background:var(--surf);color:var(--txt);font-size:9px;padding:1px 4px;border-radius:3px">BM</span>':''}</div>
         <div style="font-size:11px;color:var(--txth);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${h.n||''}">${shortName}</div>
       </div>
       ${flagBtn}
@@ -6533,8 +6535,11 @@ function renderHoldRows(){
     let isBmOnly=(!h.p||h.p===0)&&(h.b>0);
     let bmBadge=isBmOnly?`<span style="background:#334155;color:#94a3b8;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
     let newBadge=h.isNew?`<span style="background:#a78bfa;color:#0f172a;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
+    // Display the proper ticker when SEDOL→ticker_region merge succeeded;
+    // fall back to h.t (SEDOL) when not. Keep h.t in onclick for lookup.
+    const tkrDisplay=h.tkr_region||h.t;
     return`<tr style="cursor:pointer${isBmOnly?';background:rgba(100,116,139,0.1)':''}" onclick="oSt('${h.t}')">
-      <td style="color:var(--txth);font-weight:600;white-space:nowrap">${flagBtn} ${h.t}${bmBadge}${newBadge}</td>
+      <td style="color:var(--txth);font-weight:600;white-space:nowrap">${flagBtn} ${tkrDisplay}${bmBadge}${newBadge}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis">${h.n}${archPill}</td>
       <td><span class="chip">${h.sec||'—'}</span></td>
       ${_showIndustry?`<td style="font-size:11px;color:var(--txt)">${h.ind||h.industry||'—'}</td>`:''}

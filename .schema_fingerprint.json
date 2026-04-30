@@ -1,5 +1,21 @@
 {
-  "total_lines": 5069,
-  "sections_found": [],
-  "section_col_counts": {}
+  "total_lines": 3544,
+  "sections_found": [
+    "18 Style Snapshot",
+    "Country",
+    "Group",
+    "Industry",
+    "Region",
+    "Sector Weights",
+    "Security"
+  ],
+  "section_col_counts": {
+    "Sector Weights": 11143,
+    "Industry": 11143,
+    "Region": 11143,
+    "Country": 11143,
+    "Security": 11144,
+    "Group": 11143,
+    "18 Style Snapshot": 11143
+  }
 }

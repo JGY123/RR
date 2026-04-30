@@ -214,17 +214,33 @@ def safe_float(s):
         return None
 
 def parse_date(s):
-    """Normalize a date string to YYYYMMDD, handling multiple FactSet formats."""
+    """Normalize a date string to YYYYMMDD, handling multiple FactSet formats.
+
+    2026-04-30: EM full-history file ships per-period dates as
+    "2019-01-01 00:00:00" (ISO datetime with zero time component) — added
+    that format to the list. Without it, the parser fell back to the file's
+    run-date column, stamping every weekly hist entry with the same date and
+    making the week-selector / time-series charts unusable. Truncating to the
+    leading 10 chars BEFORE the format match also catches any future variant
+    that has trailing time / timezone garbage.
+    """
     if not s:
         return None
     s = str(s).strip()
     if not s:
         return None
-    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%Y%m%d", "%d-%b-%Y", "%d/%m/%Y"):
+    # Try as-is first (covers all the legacy formats)
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%m/%d/%Y", "%Y%m%d", "%d-%b-%Y", "%d/%m/%Y"):
         try:
             return datetime.strptime(s, fmt).strftime("%Y%m%d")
         except ValueError:
             continue
+    # Last resort: take leading 10 chars and try YYYY-MM-DD
+    if len(s) >= 10:
+        try:
+            return datetime.strptime(s[:10], "%Y-%m-%d").strftime("%Y%m%d")
+        except ValueError:
+            pass
     return None
 
 def _sub(a, b):

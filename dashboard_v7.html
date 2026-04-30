@@ -413,6 +413,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <button onclick="stepWeek(1)" style="background:none;border:none;color:var(--txt);cursor:pointer;font-size:14px;padding:0 4px;line-height:1" title="Next week">&#8250;</button>
     <button onclick="jumpToLatest()" id="latestBtn" style="display:none;background:var(--pri);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:600;padding:2px 7px;cursor:pointer;font-family:inherit;margin-left:2px">Latest</button>
   </div>
+  <!-- 2026-04-30 (W1, Strategic Recommendations): freshness pill in header.
+       Color-coded dot + days-ago text showing how stale the latest data is.
+       Click to open data-quality summary (planned full sidebar = S2). -->
+  <div id="freshnessWrap" title="Latest data refresh — click for details" onclick="openFreshnessDetail()" style="display:none;align-items:center;gap:5px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 8px;cursor:pointer">
+    <span id="freshnessDot" style="width:8px;height:8px;border-radius:50%;background:var(--pos)"></span>
+    <span id="freshnessText" style="font-size:10px;color:var(--textDim);font-weight:500">—</span>
+  </div>
   <button class="btn btn-sec btn-sm" id="glossaryBtn" style="font-size:13px;display:none" onclick="openGlossary()" title="Metric Glossary">&#9432;</button>
   <button class="btn btn-sec btn-sm" id="configBtn" style="font-size:13px" onclick="toggleConfig()" title="Settings">&#9881;</button>
 </div>
@@ -1354,6 +1361,59 @@ function refreshDataStamp(){
   ts.textContent='Report: '+dateStr+ageStr+genStr;
   ts.style.color=ageColor;
   ts.title=ageTitle;
+  // 2026-04-30 (W1): also update the visible header freshness pill.
+  refreshFreshnessPill(reportDateObj, dateStr);
+}
+
+// 2026-04-30 (W1, Strategic Recommendations): freshness pill in header.
+// Renders a small dot + text showing how stale the data is. Color follows the
+// same _thresholds.freshAmberDays / freshRedDays as the legacy data-stamp.
+// Click opens a quick details modal (full data-quality sidebar = S2 future).
+function refreshFreshnessPill(reportDateObj, dateStr){
+  const wrap=document.getElementById('freshnessWrap');
+  if(!wrap)return;
+  if(!reportDateObj||isNaN(reportDateObj)){
+    wrap.style.display='none';
+    return;
+  }
+  wrap.style.display='inline-flex';
+  const days=Math.max(0,Math.floor((Date.now()-reportDateObj.getTime())/86400000));
+  const amb=(typeof _thresholds!=='undefined'&&_thresholds.freshAmberDays)||8;
+  const red=(typeof _thresholds!=='undefined'&&_thresholds.freshRedDays)||21;
+  let dotColor='var(--pos)', label='fresh';
+  if(days>=red){dotColor='var(--neg)';label='stale';}
+  else if(days>=amb){dotColor='var(--warn)';label='aging';}
+  const dot=document.getElementById('freshnessDot');
+  const txt=document.getElementById('freshnessText');
+  if(dot)dot.style.background=dotColor;
+  if(txt)txt.textContent=days+'d · '+label;
+  wrap.title='Latest data: '+dateStr+' ('+days+' day'+(days===1?'':'s')+' ago) — '+label+'. Click for data-quality details.';
+}
+
+// Stub for the planned data-quality sidebar (S2 in STRATEGIC_RECOMMENDATIONS).
+// For now, just shows a brief alert summarizing what we know about the current
+// data — real sidebar with derivation chain coming in a follow-up.
+function openFreshnessDetail(){
+  if(!cs)return;
+  const s=cs.sum||{};
+  const lines=[
+    'Data Quality — '+(cs.name||cs.id||'unknown')+' as of '+(cs.current_date||'—'),
+    '',
+    '  TE: '+(s.te??'—')+'  ·  Beta: '+(s.beta??'—')+'  ·  Holdings: '+(s.h??'—')+' port + '+(cs.hold?cs.hold.filter(h=>!h.w||h.w<=0).length:0)+' bench-only seen of '+(s.bh??'—')+' true bench',
+    '',
+    '  Idio/Factor split: '+(s.pct_specific!=null?s.pct_specific+'% / '+s.pct_factor+'%':'—'),
+    '  '+(s._pct_specific_source?('  ⚠ derived: '+s._pct_specific_source):'  ✓ source-direct'),
+    '',
+    '  P/E: '+(s.pe??'—')+' (bench '+(s.bpe??'—')+')  ·  P/B: '+(s.pb??'—')+' (bench '+(s.bpb??'—')+')',
+    '  Mcap: '+(s.mcap?Math.round(s.mcap/1000)+'B':'—')+'  ·  Bench Mcap: '+(s.bmcap?Math.round(s.bmcap/1000)+'B':'—'),
+    '',
+    'Available history: '+(cs.available_dates?cs.available_dates.length+' weeks':'—'),
+    '  First: '+((cs.available_dates||[])[0]||'—'),
+    '  Latest: '+(cs.current_date||'—'),
+    '',
+    'Click "Settings ⚙ → Thresholds" to adjust freshness amber/red day cutoffs.'
+  ];
+  alert(lines.join('\n'));
 }
 
 function go(id,btn){

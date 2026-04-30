@@ -6170,12 +6170,34 @@ function rRiskHistMinis(s){
 function rRisk(){
   let s=cs;
   let totalTE=s.sum.te;
-  let facContribs=s.factors.map(f=>Math.abs(f.c||0));
-  let totalFacContrib=facContribs.reduce((a,v)=>a+v,0);
-  let factorRisk=+(totalTE*Math.min(totalFacContrib/100*1.2,0.85)).toFixed(2);
-  let idioRisk=+(totalTE-factorRisk).toFixed(2);
-  let factorPct=+(factorRisk/totalTE*100).toFixed(1);
-  let idioPct=+(idioRisk/totalTE*100).toFixed(1);
+  // 2026-04-30 (cross-tab integrity fix — was B99 backlog item):
+  // Risk-tab Idio/Factor split MUST come from cs.sum.pct_specific /
+  // cs.sum.pct_factor (the same source the Exposures tab + cardThisWeek read).
+  // Previous code computed a heuristic `totalTE * min(Σ|f.c|/100 * 1.2, 0.85)`
+  // which produced a DIFFERENT Idio/Factor split than Exposures — the user
+  // caught this as "Risk tab doesn't match Exposures." Same anti-pattern as
+  // the April crisis: silent fabrication where source data exists.
+  // Fall back to the heuristic only if the parser-shipped pct fields are
+  // both null (legacy files); when synth, the synth marker is already on
+  // cs.sum._pct_specific_source so downstream tiles can flag it.
+  let idioPct, factorPct, idioRisk, factorRisk;
+  if(s.sum.pct_specific!=null && s.sum.pct_factor!=null){
+    idioPct=+(s.sum.pct_specific).toFixed(1);
+    factorPct=+(s.sum.pct_factor).toFixed(1);
+    idioRisk=+(totalTE*idioPct/100).toFixed(2);
+    factorRisk=+(totalTE*factorPct/100).toFixed(2);
+  } else {
+    // Legacy fallback (pre-format-change files without pct_specific):
+    let facContribs=s.factors.map(f=>Math.abs(f.c||0));
+    let totalFacContrib=facContribs.reduce((a,v)=>a+v,0);
+    factorRisk=+(totalTE*Math.min(totalFacContrib/100*1.2,0.85)).toFixed(2);
+    idioRisk=+(totalTE-factorRisk).toFixed(2);
+    factorPct=+(factorRisk/totalTE*100).toFixed(1);
+    idioPct=+(idioRisk/totalTE*100).toFixed(1);
+  }
+  // Surface synth marker if parser derived pct_specific (e.g. 'sum_sector_mcr'
+  // path). The ᵉ flag tells PMs the split is approximate — not from source.
+  const _pctSynth = s.sum._pct_specific_source && s.sum._pct_specific_source !== 'native';
 
   // Factor MCR data (sorted by |c| desc, no idiosyncratic)
   let facMCR=s.factors.map(f=>{
@@ -6227,14 +6249,14 @@ function rRisk(){
       <div class="value" style="${totalTE>7?'color:var(--neg)':totalTE>5?'color:var(--warn)':''}">${f2(totalTE,1)}</div>
       <div class="sub">annualized tracking error</div>
     </div>
-    <div class="sum-card" onclick="oDrFacRiskBreak()" title="Top factor contributors">
+    <div class="sum-card" onclick="oDrFacRiskBreak()" title="${_pctSynth?'Factor share derived from '+s.sum._pct_specific_source+' — see ᵉ flag':'Top factor contributors'}">
       <div class="label">Factor Risk ↗</div>
-      <div class="value" style="color:var(--pri)">${factorPct}%</div>
+      <div class="value" style="color:var(--pri)">${factorPct}%${_pctSynth?'<span style="color:var(--warn);font-size:11px;margin-left:2px" title="Derived: pct_specific synthesized from '+s.sum._pct_specific_source+' (source CSV does not ship pct_specific directly).">ᵉ</span>':''}</div>
       <div class="sub">${f2(factorRisk,1)}% TE</div>
     </div>
-    <div class="sum-card" onclick="oDrMetric('idio')" title="Top stock-specific contributors">
+    <div class="sum-card" onclick="oDrMetric('idio')" title="${_pctSynth?'Idio share derived from '+s.sum._pct_specific_source+' — see ᵉ flag':'Top stock-specific contributors'}">
       <div class="label">Idiosyncratic ↗</div>
-      <div class="value" style="color:var(--acc)">${idioPct}%</div>
+      <div class="value" style="color:var(--acc)">${idioPct}%${_pctSynth?'<span style="color:var(--warn);font-size:11px;margin-left:2px" title="Derived: pct_specific synthesized from '+s.sum._pct_specific_source+' (source CSV does not ship pct_specific directly).">ᵉ</span>':''}</div>
       <div class="sub">${f2(idioRisk,1)}% TE</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('beta')" title="Beta detail">

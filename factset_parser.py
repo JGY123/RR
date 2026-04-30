@@ -911,28 +911,44 @@ class FactSetParserV3:
         if not schema or not rows or schema.num_groups == 0:
             return {}, RAW_FACTOR_ORDER
 
-        # Three-layout support:
+        # Four-layout support:
         #   group_size=13 (legacy):    [Period Start Date, v0..v11]
         #   group_size=14 (2026-04-28): [Period Start Date, v0..v11, SEDOLCHK_of_next]
-        #   group_size=23 (2026-04-30): NEW — fields moved from Security to Raw
-        #     Factors so Security can be slimmed. Layout:
+        #   group_size=23 (2026-04-30): fields moved from Security to Raw Factors:
         #       [Period Start Date, Market Cap, 90D_ADV, 52W_Vol,
         #        OVER, REV, VAL, QUAL, MOM, STAB,
         #        RawFactorExposure×12, SEDOLCHK]
-        # Date is always at offset 0; raw factor exposures (the 12 z-score
-        # loadings) shift between layouts.
+        #   group_size=24 (2026-04-30 EM full-history): adds Bench. Ending
+        #       Weight at offset 1 — this is the F9 ask FactSet shipped. The
+        #       per-period order observed (column-name discovery confirms):
+        #       [Period Start Date, Bench. Ending Weight, 90D_ADV, Market Cap,
+        #        52W_Vol, OVER, REV, VAL, QUAL, MOM, STAB,
+        #        RawFactorExposure×12, SEDOLCHK]
+        # Date is always at offset 0.
         if schema.group_size == 13:
             date_offset = 0
             value_offset = 1
             extra_offset = None  # No moved fields in this legacy layout
+            bw_offset    = None
         elif schema.group_size == 14:
             date_offset = 0
             value_offset = 1
             extra_offset = None
+            bw_offset    = None
         elif schema.group_size == 23:
             date_offset = 0
             extra_offset = 1   # mcap/adv/vol/OVER/REV/VAL/QUAL/MOM/STAB at offsets 1..9
             value_offset = 10  # 12 raw factor exposures at offsets 10..21
+            bw_offset    = None
+        elif schema.group_size == 24:
+            # 2026-04-30 EM full-history: F9 BM weight column added at offset 1.
+            # Order shifts: ADV at 2, mcap at 3, vol at 4 (note: ADV before mcap
+            # in this format vs. mcap before ADV in 23-col layout — verified
+            # against TSMC row data). Ranks at 5..10. Factor exposures at 11..22.
+            date_offset = 0
+            bw_offset   = 1    # NEW: per-period benchmark weight
+            extra_offset = 2   # adv/mcap/vol/OVER/REV/VAL/QUAL/MOM/STAB at offsets 2..10
+            value_offset = 11  # 12 raw factor exposures at offsets 11..22
         else:
             return {}, RAW_FACTOR_ORDER
 
@@ -968,17 +984,33 @@ class FactSetParserV3:
                     continue
                 exps = [safe_float(row[base + value_offset + i]) for i in range(12)]
                 period = {"d": d, "e": exps}
-                # 2026-04-30: extract the moved fields if present (group_size=23 layout)
+                # 2026-04-30: extract the moved fields. Layout differs by group_size.
                 if extra_offset is not None:
-                    period["mcap"]    = safe_float(row[base + 1])
-                    period["adv"]     = safe_float(row[base + 2])
-                    period["vol_52w"] = safe_float(row[base + 3])
-                    period["over"]    = safe_float(row[base + 4])
-                    period["rev"]     = safe_float(row[base + 5])
-                    period["val"]     = safe_float(row[base + 6])
-                    period["qual"]    = safe_float(row[base + 7])
-                    period["mom"]     = safe_float(row[base + 8])
-                    period["stab"]    = safe_float(row[base + 9])
+                    if schema.group_size == 23:
+                        # [date, mcap, adv, vol, OVER..STAB, exp×12, SEDOLCHK]
+                        period["mcap"]    = safe_float(row[base + 1])
+                        period["adv"]     = safe_float(row[base + 2])
+                        period["vol_52w"] = safe_float(row[base + 3])
+                        period["over"]    = safe_float(row[base + 4])
+                        period["rev"]     = safe_float(row[base + 5])
+                        period["val"]     = safe_float(row[base + 6])
+                        period["qual"]    = safe_float(row[base + 7])
+                        period["mom"]     = safe_float(row[base + 8])
+                        period["stab"]    = safe_float(row[base + 9])
+                    elif schema.group_size == 24:
+                        # [date, BW, ADV, mcap, vol, OVER..STAB, exp×12, SEDOLCHK]
+                        # Note: ADV at 2, mcap at 3 (swapped vs 23-col layout) —
+                        # confirmed from EM full-history file's column headers.
+                        period["bw"]      = safe_float(row[base + 1])  # F9 BM weight!
+                        period["adv"]     = safe_float(row[base + 2])
+                        period["mcap"]    = safe_float(row[base + 3])
+                        period["vol_52w"] = safe_float(row[base + 4])
+                        period["over"]    = safe_float(row[base + 5])
+                        period["rev"]     = safe_float(row[base + 6])
+                        period["val"]     = safe_float(row[base + 7])
+                        period["qual"]    = safe_float(row[base + 8])
+                        period["mom"]     = safe_float(row[base + 9])
+                        period["stab"]    = safe_float(row[base + 10])
                 periods.append(period)
 
             if not periods:
@@ -993,7 +1025,7 @@ class FactSetParserV3:
             # Surface the latest period's moved fields at the top level so
             # downstream code can read them without traversing hist[-1].
             last = periods[-1]
-            for k in ("mcap","adv","vol_52w","over","rev","val","qual","mom","stab"):
+            for k in ("mcap","adv","vol_52w","over","rev","val","qual","mom","stab","bw"):
                 if k in last:
                     entry[k] = last[k]
             out[ident] = entry
@@ -1074,7 +1106,11 @@ class FactSetParserV3:
                         h["raw_exp"]    = info.get("e")  # 12-element list of z-scores
                         # Merge the moved fields. Don't overwrite if Security
                         # still ships the field (legacy compat) — only fill blanks.
-                        for k in ("mcap","adv","vol_52w","over","rev","val","qual","mom","stab"):
+                        # 2026-04-30: 'bw' (Bench. Ending Weight) added — F9 fix.
+                        # When Security section's bw is null but Raw Factors has
+                        # it, take from Raw Factors. This unblocks B116 SEV-1 —
+                        # the Universe='benchmark' aggregator under-report.
+                        for k in ("mcap","adv","vol_52w","over","rev","val","qual","mom","stab","bw"):
                             if k in info and h.get(k) is None:
                                 h[k] = info[k]
                         matched += 1

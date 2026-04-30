@@ -887,11 +887,11 @@ const _ABOUT_REG={
   },
   cardCashHist:{
     title:'Cash Weight Over Time',
-    what:'Cash balance as a percentage of portfolio over the weekly history. Helps spot drift, large flows, and periods where cash drag may have affected returns.',
-    how:'cs.hist.sum[].cash plotted directly. Threshold band (red zone above the configured cashMax in Settings) shows when cash is in alert territory.',
-    source:'cs.hist.sum[] (parser-extracted from FactSet weekly Data row, "% Cash" or equivalent column when shipped). Current value also lives in cs.sum.cash.',
-    caveats:'Some FactSet exports may not ship the cash column for every week. Missing weeks render as gaps in the line. Click anywhere on the tile or the "Open Cash drill" button for the full Cash modal.',
-    related:'cardThisWeek (current cash in the page header) · TE drill (cash drag detection)'
+    what:'Cash balance as a percentage of portfolio over the weekly history with a 0–5% target band. Helps spot drift, large flows, and periods where cash drag may have affected returns. Self-contained — no drill modal; the band + alert chip in the header tell you everything you need.',
+    how:'Per-period cash extracted by parser from the [Cash] sector row\'s W column in the Sector Weights section (one value per group). Inside-band 0–5% rendered as a faint green strip; outside-band as a faint red strip. Alert chip in the header flips green / red based on current value vs the band.',
+    source:'cs.hist.sum[].cash (parser commit f1101cd added per-period extraction; 69/69 weeks populated for GSC sample). Current value: cs.sum.cash.',
+    caveats:'Some FactSet exports may not ship the [Cash] sector row consistently — missing weeks render as gaps in the line. Negative cash values render in the below-zero red strip (rare but possible from short-term funding flows or settlement timing).',
+    related:'cardThisWeek (current cash in summary cards)'
   },
   cardCalHeat:{
     title:'TE Calendar Heatmap',
@@ -921,6 +921,18 @@ function openAbout(tileId){
 }
 // Tiny ⓘ button HTML for inclusion in tile headers
 const aboutBtn=tileId=>`<button onclick="openAbout('${tileId}')" title="About this tile — what it shows, how it's computed, source, caveats" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:1px 7px;border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;line-height:1.2">ⓘ</button>`;
+
+// 2026-04-30 (user feedback): "all charts need to have reset button just like
+// the map to bring back from zoom." Plotly supports auto-reset by setting
+// xaxis.autorange & yaxis.autorange to true on relayout. This helper attaches
+// a tiny ⤾ button that calls Plotly.relayout on the given divId. Safe no-op
+// if the div isn't a Plotly chart yet.
+function resetPlotZoom(divId){
+  const d=document.getElementById(divId);
+  if(!d||typeof Plotly==='undefined')return;
+  try{ Plotly.relayout(divId,{'xaxis.autorange':true,'yaxis.autorange':true,'yaxis2.autorange':true,'xaxis2.autorange':true}); }catch(e){}
+}
+const resetZoomBtn=divId=>`<button onclick="resetPlotZoom('${divId}')" title="Reset zoom — back to full data range. (Double-clicking on the chart also resets.)" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1">⤾</button>`;
 
 // 2026-04-30 (cardChars audit F1+F3+F5): static metadata for every shipped
 // portfolio characteristic. Drives: (a) histKey → which cs.hist.sum[].KEY to
@@ -1985,11 +1997,13 @@ function rExp(){
        Performance bubble, factor pie inside TE modal, and the "% TE/% Fac"
        columns on cardFacDetail. cardMCR (holding-level top 10 by |MCR|) stays
        since it's a holding-level view not duplicated elsewhere. -->
-  <div class="card" id="cardMCR">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 holdings ranked by |MCR| — the stock-specific (idiosyncratic) component of each holding's tracking error. Bar labels show MCR + port wt at a glance. Click a bar for the holding drill." oncontextmenu="showNotePopup(event,'cardMCR');return false">Top Idiosyncratic Risk Contributors <span style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px">by |MCR|</span></div>${aboutBtn('cardMCR')}</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportMcrCsv()">CSV</button></div></div>
-    <div id="mcrDiv" style="height:360px"></div>
-  </div>
+  <!-- 2026-04-30 (user feedback): cardMCR removed. Same per-holding |MCR|
+       view is captured by cardHoldRisk on the Holdings tab (active wt × TE
+       contrib × bubble = |MCR|), which adds active-weight context as a
+       second dimension. The standalone bar list was a one-axis view of the
+       same data. Per "might be redundant... if it should still be included
+       it would need to be much improved" — the upgrade IS cardHoldRisk. -->
+  ${''}
 
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
@@ -1998,19 +2012,27 @@ function rExp(){
     ${rUnowned(s.unowned)}
   </div>
 
-  <!-- Row 11: Factor Correlation (placeholder — live heatmap on Risk tab) -->
-  <div class="card" id="cardCorr">
-    <div class="card-title tip" data-tip="Factor correlations computed from historical exposure data. Full heatmap available in Risk tab.">Factor Correlation Matrix</div>
-    <div style="overflow-x:auto;max-width:100%" id="corrMatrixCardArea"><p style="color:var(--txt);font-size:12px">Computed from historical factor data — see Risk tab.</p></div>
-  </div>
+  <!-- 2026-04-30 (user feedback): cardCorr stub removed from Exposures tab.
+       It was just a placeholder pointing to the live heatmap on the Risk tab.
+       Live tile lives in tab-risk; nothing of value lost. -->
 
-  <!-- Row 12: Factor Attribution (from 18 Style Snapshot) -->
+  <!-- Row 12: Factor Attribution (18 Style Snapshot) — 2026-04-30 v2:
+       period chips matching the global Impact selector, view toggle
+       (Table | Chart), reset zoom, full-screen. -->
   <div class="card" id="cardAttrib">
-    <div class="flex-between">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot. Shows how each country, industry, and currency contributed to portfolio returns over time. Click any row or bar for time series." oncontextmenu="showNotePopup(event,'cardAttrib');return false">Factor Attribution</div>${aboutBtn('cardAttrib')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
+    <div class="flex-between" style="flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot section. Shows how each country, industry, and currency contributed to portfolio returns over the selected period. Click any row or bar for time series." oncontextmenu="showNotePopup(event,'cardAttrib');return false">Factor Attribution</div>
+        ${aboutBtn('cardAttrib')}
+        <span style="font-size:10px;color:var(--textDim);font-weight:400">period: ${IMPACT_PERIOD_LABELS[_impactPeriod]||'—'} (uses global Impact selector)</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Period</span>
+          ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
+        </div>
         <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
-          <option value="all">All</option>
+          <option value="all">All categories</option>
           <option value="country">Countries</option>
           <option value="industry">Industries</option>
           <option value="currency">Currencies</option>
@@ -2020,11 +2042,18 @@ function rExp(){
           <option value="exp">By Exposure</option>
           <option value="dev">By Volatility</option>
         </select>
+        <div class="toggle-wrap" style="margin:0">
+          <button class="toggle-btn active" onclick="toggleAttribView('table',this)">Table</button>
+          <button class="toggle-btn" onclick="toggleAttribView('chart',this)">Chart</button>
+        </div>
+        ${resetZoomBtn('attribChartDiv')}
         <button class="export-btn" onclick="exportCSV('#tbl-attrib','attribution')" title="Download CSV">CSV</button>
       </div>
     </div>
-    <div id="attribTableArea"></div>
-    <div id="attribChartDiv" style="height:280px;margin-top:12px"></div>
+    <div id="attribTableArea" style="margin-top:8px"></div>
+    <div id="attribChartArea" style="display:none;margin-top:8px">
+      <div id="attribChartDiv" style="height:380px"></div>
+    </div>
   </div>
 
   <!-- Row 13: Region Active Weights (de-prioritized, bottom of page) -->
@@ -2039,19 +2068,30 @@ function rExp(){
     <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
   </div>
 
-  <!-- 2026-04-30 (user feedback): Cash card at the bottom of the page,
-       time-series only (per "its card should only show a time series of weight"). -->
-  <div class="card" id="cardCashHist" style="margin-top:16px">
-    <div class="flex-between" style="margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div class="card-title tip" data-tip="Cash weight % over time. Sourced from cs.hist.sum[].cash (when shipped) — the portfolio's cash balance per week. Click for the Cash drill modal." oncontextmenu="showNotePopup(event,'cardCashHist');return false">Cash Weight Over Time</div>
-        ${aboutBtn('cardCashHist')}
-        <span style="font-size:10px;color:var(--textDim);font-weight:400">current ${isHistWeek?'—':f2(s.sum.cash,1)+'%'}${s.sum.cash!=null&&!isHistWeek?(s.sum.cash>(_thresholds.cashMax??_thresholdsDefault.cashMax)?` · <span style="color:var(--warn)">above ${_thresholds.cashMax??_thresholdsDefault.cashMax}% alert threshold</span>`:''):''}</span>
+  <!-- 2026-04-30 (user feedback v3): Cash card simplified — chart + alert only.
+       No drill modal needed (per "this is one of the only tiles that should
+       just simply show what you have including an alert if it's not between
+       0-5"). The 0-5% target band is rendered as a faint shaded strip; current
+       cash position annotated with a colored marker dot.  -->
+  ${(()=>{
+    const cur=s.sum.cash;
+    const inBand=cur!=null&&cur>=0&&cur<=5;
+    const alertHtml=cur==null||isHistWeek?''
+      :inBand
+        ? `<span style="font-size:10px;color:var(--pos);font-weight:600;padding:2px 8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:14px">● in target band (0–5%)</span>`
+        : `<span style="font-size:10px;color:var(--neg);font-weight:600;padding:2px 8px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.3);border-radius:14px">⚠ ${cur<0?'cash is negative':'cash above 5% target'}</span>`;
+    return `<div class="card" id="cardCashHist" style="margin-top:16px">
+      <div class="flex-between" style="margin-bottom:6px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <div class="card-title tip" data-tip="Cash weight % over time, with 0–5% target band. Source: cs.hist.sum[].cash extracted per period from the [Cash] sector row." oncontextmenu="showNotePopup(event,'cardCashHist');return false">Cash Weight Over Time</div>
+          ${aboutBtn('cardCashHist')}
+          <span style="font-size:11px;color:var(--txth);font-weight:600">current ${isHistWeek?'—':f2(cur,1)+'%'}</span>
+          ${alertHtml}
+        </div>
       </div>
-      <button class="btn btn-sec btn-sm" onclick="oDrMetric('cash')" style="font-size:11px">Open Cash drill ›</button>
-    </div>
-    <div id="cashHistDiv" style="height:160px"></div>
-  </div>`;
+      <div id="cashHistDiv" style="height:160px"></div>
+    </div>`;
+  })()}`;
 
   $('tab-exposures').innerHTML=html;
   // Render charts after DOM update.
@@ -2071,7 +2111,7 @@ function rExp(){
       ['hookGrpViewRestore',()=>hookGrpViewRestore()],
       ['rScat',()=>rScat(s)],
       ['rTree',()=>rTree(s)],
-      ['rMCR',()=>rMCR(s)],
+      // ['rMCR',()=>rMCR(s)],  // 2026-04-30: cardMCR removed — see cardHoldRisk on Holdings tab
       ['rAttribTable',()=>rAttribTable()],
       ['renderRanksTable',()=>renderRanksTable()],   // cardRanks rebuild — populates #rnkTableWrap
     ];
@@ -4027,17 +4067,42 @@ function benchOnlySecHtml(s){
 }
 
 const UNOWNED_REG_LABEL={'Usa':'USA','English':'UK','Far East':'Asia Pacific ex-Japan'};
+// 2026-04-30 (user feedback): cap to top 10 by |TE| (or fewer if shorter list).
+// Use tk(h) for TKR-REGION display. Drop the inert "Region" column (most
+// rows fell back to '\u2014' anyway since unowned[].reg isn't populated for the
+// v2 Security slim).
 function rUnowned(unowned){
   if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
   let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
-  let rows=sorted.map(u=>{
+  const top=sorted.slice(0,10);  // cap to top 10 (or fewer if shorter)
+  let rows=top.map(u=>{
     let tEsc=(u.t||'').replace(/'/g,"\\'");
-    let regLbl=UNOWNED_REG_LABEL[u.reg]||u.reg||'\u2014';
     let bVal=u.b!=null?u.b:(u.bw!=null?u.bw:null);
     let trVal=u.tr!=null?u.tr:(u.pct_t!=null?u.pct_t:null);
-    return `<tr class="clickable" onclick="oDrUnowned('${tEsc}')"><td data-col="t" data-sv="${u.t||''}" style="color:var(--txth);font-weight:500">${u.t||''}</td><td data-col="n" data-sv="${(u.n||'').toLowerCase()}">${u.n||''}</td><td data-col="reg" data-sv="${regLbl}">${regLbl}</td><td class="r" data-col="bw" data-sv="${bVal??''}">${bVal!=null?f2(bVal):'\u2014'}</td><td class="r" data-col="tr" data-sv="${trVal??''}" style="color:var(--txth);font-weight:600">${trVal!=null?fp(trVal):'\u2014'}</td></tr>`;
+    const sec=u.sec||'\u2014';
+    const co=u.co||u.country||'\u2014';
+    const lblTicker=tk(u);
+    return `<tr class="clickable" onclick="oDrUnowned('${tEsc}')">
+      <td data-col="t" data-sv="${u.t||''}" style="color:var(--txth);font-weight:600">${lblTicker}</td>
+      <td data-col="n" data-sv="${(u.n||'').toLowerCase()}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.n||''}</td>
+      <td data-col="sec" data-sv="${sec}" style="font-size:11px;color:var(--txt)">${sec}</td>
+      <td data-col="co" data-sv="${co}" style="font-size:11px;color:var(--txt)">${co}</td>
+      <td class="r" data-col="bw" data-sv="${bVal??''}">${bVal!=null?f2(bVal,2)+'%':'\u2014'}</td>
+      <td class="r" data-col="tr" data-sv="${trVal??''}" style="color:var(--neg);font-weight:600">${trVal!=null?fp(trVal,2)+'%':'\u2014'}</td>
+    </tr>`;
   }).join('');
-  return`<table id="tbl-unowned"><thead><tr><th data-col="t" onclick="sortTbl('tbl-unowned',0)">Ticker</th><th data-col="n" onclick="sortTbl('tbl-unowned',1)">Name</th><th data-col="reg" onclick="sortTbl('tbl-unowned',2)">Region</th><th data-col="bw" class="r tip" data-tip="Benchmark weight of this unowned stock (% of benchmark)" onclick="sortTbl('tbl-unowned',3)">Bench Wt%</th><th data-col="tr" class="r tip" data-tip="Contribution of this unowned stock to tracking error (% of TE)" onclick="sortTbl('tbl-unowned',4)">TE Contrib</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const moreNote=sorted.length>10?`<p style="font-size:9px;color:var(--textDim);margin:6px 0 0">Showing top 10 of ${sorted.length} unowned BM-only holdings by |TE| contribution.</p>`:'';
+  return`<table id="tbl-unowned">
+    <thead><tr>
+      <th data-col="t" onclick="sortTbl('tbl-unowned',0)">Ticker</th>
+      <th data-col="n" onclick="sortTbl('tbl-unowned',1)">Name</th>
+      <th data-col="sec" onclick="sortTbl('tbl-unowned',2)">Sector</th>
+      <th data-col="co" onclick="sortTbl('tbl-unowned',3)">Country</th>
+      <th data-col="bw" class="r tip" data-tip="Benchmark weight of this unowned stock (% of benchmark). Implied active position is the negative of this." onclick="sortTbl('tbl-unowned',4)">Bench Wt</th>
+      <th data-col="tr" class="r tip" data-tip="Contribution of this unowned stock to tracking error (% of TE). Positive = the absence of this name adds risk to the portfolio." onclick="sortTbl('tbl-unowned',5)">TE Contrib</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>${moreNote}`;
 }
 
 
@@ -4050,6 +4115,20 @@ function classifyAttrib(name){
   return'industry';
 }
 
+// 2026-04-30: cardAttrib view toggle (Table | Chart). Mirrors the cardSectors,
+// cardCountry, cardGroups view-toggle pattern — only one visible at a time.
+// rAttribTable() already populates BOTH the table area AND the attribChartDiv,
+// so the toggle is purely a visibility flip.
+function toggleAttribView(v,btn){
+  const t=document.getElementById('attribTableArea');
+  const c=document.getElementById('attribChartArea');
+  if(t)t.style.display=v==='table'?'block':'none';
+  if(c)c.style.display=v==='chart'?'block':'none';
+  if(btn){btn.parentElement.querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
+  // Trigger Plotly resize when chart view is shown (Plotly miscalculates dims
+  // when div was display:none on first render)
+  if(v==='chart'){const div=document.getElementById('attribChartDiv');if(div&&typeof Plotly!=='undefined'){try{Plotly.Plots.resize(div);}catch(e){}}}
+}
 function rAttribTable(){
   let sa=cs.snap_attrib;
   if(!sa||!Object.keys(sa).length){
@@ -4474,32 +4553,41 @@ function rCashHist(s){
     return;
   }
   const T=THEME();
-  const cashMax=_thresholds.cashMax??_thresholdsDefault.cashMax;
-  const avg=valid.reduce((a,b)=>a+b,0)/valid.length;
+  // 2026-04-30 v3: 0-5% target band per user direction. Inside band = green
+  // shaded strip (in target). Outside band = red shaded strips above 5%
+  // and below 0%. The line itself is amber so it pops against either band.
+  const TARGET_LO=0, TARGET_HI=5;
+  const yMaxData=Math.max(...valid,TARGET_HI*1.1);
+  const yMinData=Math.min(...valid,0);
   Plotly.newPlot('cashHistDiv',[{
     x:dates,y:cash,type:'scatter',mode:'lines',name:'Cash %',
-    line:{color:'#f59e0b',width:2.2},
-    fill:'tozeroy',fillcolor:'rgba(245,158,11,0.10)',
+    line:{color:'#f59e0b',width:2.4},
     hovertemplate:'%{x|%b %d %Y}<br>Cash: %{y:.2f}%<extra></extra>',
     hoverlabel:HOVERLABEL_THEME,
     connectgaps:false
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
-    margin:{l:48,r:18,t:6,b:30},
+    margin:{l:48,r:60,t:6,b:30},
     hovermode:'x unified',
     showlegend:false,
     hoverlabel:HOVERLABEL_THEME,
-    xaxis:{...plotBg.xaxis,tickformat:'%b %y',nticks:8},
-    yaxis:{...plotBg.yaxis,tickformat:'.1f',ticksuffix:'%',title:'Cash %'},
+    xaxis:{...plotBg.xaxis,tickformat:'%b %y',nticks:6,tickangle:0,automargin:true},
+    yaxis:{...plotBg.yaxis,tickformat:'.1f',ticksuffix:'%',title:{text:'Cash %',font:{size:10,color:T.tick}},range:[Math.min(yMinData,-0.5),yMaxData]},
     shapes:[
-      // Avg dotted line
-      {type:'line',xref:'paper',x0:0,x1:1,y0:avg,y1:avg,line:{color:T.tick,dash:'dot',width:1}},
-      // cashMax threshold band (red zone)
-      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:cashMax,y1:Math.max(cashMax,Math.max(...valid))*1.05,fillcolor:'rgba(239,68,68,0.06)',line:{width:0},layer:'below'}
-    ],
+      // Target band (0-5%) — faint green shaded strip
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:TARGET_LO,y1:TARGET_HI,fillcolor:'rgba(16,185,129,0.06)',line:{width:0},layer:'below'},
+      // Above-target alert zone (>5%) — red strip
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:TARGET_HI,y1:yMaxData,fillcolor:'rgba(239,68,68,0.07)',line:{width:0},layer:'below'},
+      // Below-target alert zone (<0%) — red strip (cash should not be negative)
+      yMinData<0?{type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:Math.min(yMinData,-0.5),y1:0,fillcolor:'rgba(239,68,68,0.07)',line:{width:0},layer:'below'}:null,
+      // Target boundaries (dashed slate)
+      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_LO,y1:TARGET_LO,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}},
+      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_HI,y1:TARGET_HI,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}}
+    ].filter(Boolean),
     annotations:[
-      {x:1,xref:'paper',y:cashMax,yref:'y',text:`alert ${cashMax}%`,showarrow:false,font:{size:9,color:'rgba(239,68,68,0.8)'},xanchor:'right',xshift:-4,yanchor:'bottom'}
+      {x:1,xref:'paper',y:TARGET_HI,yref:'y',text:'5% target',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'},
+      {x:1,xref:'paper',y:TARGET_LO,yref:'y',text:'0%',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'}
     ]
   },modalPlotCfg);
 }
@@ -5700,11 +5788,22 @@ function rTree(s){
       cds.push(`<b>${k}</b><br>Holdings: ${b.count}<br>Weight: ${f2(b.wt,1)}%<br>Active: ${fp(b.active,1)}<br>TE: ${f2(b.te,1)}%<br>Avg Rank: ${avgQ}<br><i>Click to drill</i>`);
     });
   }
+  // 2026-04-30 (user reported "Holdings Treemap is blank"): with
+  // branchvalues:'total' Plotly requires the root value >= Σ children. Our
+  // root was 0 and children were positive — Plotly silently rendered 0
+  // visible rects (verified live: svg present but 0 rect children). Switch
+  // to branchvalues:'remainder' (Plotly default) so the root auto-sizes
+  // from the children.
+  // Also: textinfo:'label+value' so bucket cells render readable labels +
+  // size context, matching the cardGroups treemap visual style.
   Plotly.purge('treeDiv');
   Plotly.newPlot('treeDiv',[{type:'treemap',labels,parents,values,
-    marker:{colors,line:{width:1,color:T.grid}},textfont:{size:11,color:T.tickH},
-    customdata:cds,hovertemplate:'%{customdata}<extra></extra>',branchvalues:'total'
-  }],{...plotBg,margin:{l:5,r:5,t:5,b:5},height:360},plotCfg);
+    marker:{colors,line:{width:1,color:T.grid}},
+    textfont:{size:11,color:'#ffffff',family:'DM Sans, system-ui'},
+    textinfo:'label+value',
+    customdata:cds,hovertemplate:'%{customdata}<extra></extra>',
+    hoverlabel:HOVERLABEL_THEME
+  }],{...plotBg,margin:{l:5,r:5,t:5,b:5},height:360,hoverlabel:HOVERLABEL_THEME},plotCfg);
   let div=document.getElementById('treeDiv');
   if(div&&div.on)div.on('plotly_treemapclick',function(d){
     if(!d||!d.points||!d.points.length)return false;

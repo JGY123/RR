@@ -642,6 +642,10 @@ function getImpactForPeriod(factorName,period){
 const $=id=>document.getElementById(id);
 const f2=(v,d)=>{if(d==null)d=_prefs.precision==='full'?2:1;return(v==null||Number.isNaN(+v))?'—':Number(v).toFixed(d)};
 const fp=(v,d)=>{if(d==null)d=_prefs.precision==='full'?2:1;if(v==null||Number.isNaN(+v))return'—';let s=Number(v).toFixed(d);return v>0?'+'+s:s};
+// Display-ticker helper: prefer tkr_region (proper trading ticker like "TSM-US")
+// when the SEDOL→ticker_region merge succeeded; fall back to h.t (SEDOL).
+// Use this in DISPLAY contexts only — keep h.t in onclick lookups.
+const tk=h=>(h&&(h.tkr_region||h.t))||'';
 const rc=r=>r<=1?'var(--r1)':r<=2?'var(--r2)':r<=3?'var(--r3)':r<=4?'var(--r4)':'var(--r5)';
 const as=v=>{let a=Math.abs(v);return a>8?'color:var(--neg);font-weight:600':a>5?'color:var(--warn);font-weight:500':v>0?'color:var(--pos)':'color:var(--neg)'};
 const gt=(arr,key)=>{if(!arr||arr.length<2)return'<span class="trend flat">—</span>';let l=arr[arr.length-1][key],p=arr[arr.length-2][key];let d=l-p;return d>0.01?'<span class="trend up">&#9650;</span>':d<-0.01?'<span class="trend down">&#9660;</span>':'<span class="trend flat">&#9644;</span>'};
@@ -4911,7 +4915,7 @@ function rTree(s){
       if(val<=0)return;
       let cc=_treeColor==='rank'&&h.over!=null?_treeRankColor(h.over):(h.a||0)>=0?'#10b981':'#ef4444';
       labels.push(h.t);parents.push(_treeDrill);values.push(+val.toFixed(4));colors.push(cc);
-      cds.push(`<b>${h.n||h.t}</b> (${h.t})<br>Weight: ${f2(h.p,2)}%<br>Active: ${fp(h.a,2)}<br>TE: ${f2(Math.abs(h.tr||0),2)}%<br>Rank: ${h.over!=null?'Q'+Math.round(h.over):'\u2014'}`);
+      cds.push(`<b>${h.n||tk(h)}</b> (${tk(h)})<br>Weight: ${f2(h.p,2)}%<br>Active: ${fp(h.a,2)}<br>TE: ${f2(Math.abs(h.tr||0),2)}%<br>Rank: ${h.over!=null?'Q'+Math.round(h.over):'\u2014'}`);
     });
   }else{
     labels.push('Portfolio');parents.push('');values.push(0);colors.push(T.card);cds.push('Portfolio');
@@ -6063,11 +6067,11 @@ function oDrFRisk(name,range){
     <div class="grid g2">
       <div><div class="card-title">Top Exposed Holdings</div>
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">MCR</th></tr></thead>
-        <tbody>${top5.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${f2(h.mcr)}</td></tr>`).join('')}</tbody></table>
+        <tbody>${top5.map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${f2(h.mcr)}</td></tr>`).join('')}</tbody></table>
       </div>
       <div><div class="card-title">Bottom Exposed Holdings</div>
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th><th class="r">MCR</th></tr></thead>
-        <tbody>${bot5.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${f2(h.mcr)}</td></tr>`).join('')}</tbody></table>
+        <tbody>${bot5.map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td><td class="r">${f2(h.mcr)}</td></tr>`).join('')}</tbody></table>
       </div>
     </div>`;
   m.classList.add('show');
@@ -6648,7 +6652,7 @@ function oDr(type,name,range){
   let histHtml=`<div class="range-btns">${rangeBtns}</div><div id="drillHistDiv" style="height:250px;margin-bottom:16px"></div>`;
 
   let holdRows=holdings.sort((a,b)=>(b.tr||0)-(a.tr||0)).map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
+    <td style="color:var(--txth);font-weight:600">${tk(h)}</td><td>${h.n}</td>
     <td class="r">${f2(h.p)}</td><td class="r">${f2(h.b)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
     <td class="r">${f2(h.mcr)}</td>${rORVQCells(h)}
   </tr>`).join('');
@@ -6661,7 +6665,7 @@ function oDr(type,name,range){
       let shown=benchOnly.slice(0,25);
       let totalMissedWt=benchOnly.reduce((a,h)=>a+(h.b||0),0);
       let boRows=shown.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')">
-        <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td>
+        <td style="color:var(--txth);font-weight:600">${tk(h)}</td><td>${h.n}</td>
         <td class="r" style="color:var(--warn);font-weight:600">${f2(h.b,2)}%</td>
         <td class="r" style="color:var(--neg);font-weight:600">${fp(-(h.b||0),2)}%</td>
         ${rORVQCells(h)}
@@ -6819,11 +6823,11 @@ function oDrF(name,range){
     <div class="grid g3">
       <div><div class="card-title">Top Exposed</div>
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead>
-        <tbody>${top5.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')"><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
+        <tbody>${top5.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')"><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
       </div>
       <div><div class="card-title">Bottom Exposed</div>
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead>
-        <tbody>${bot5.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')"><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
+        <tbody>${bot5.map(h=>`<tr class="clickable" onclick="closeDrill();oSt('${h.t}')"><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table>
       </div>
       <div><div class="card-title">Correlations</div>${corrHtml}</div>
     </div>`;
@@ -7805,7 +7809,7 @@ function _setTEBox(name){
   if(_teActiveBox==='idio'){
     const top=(cs.hold||[]).filter(h=>!isCash(h)&&h.p>0&&isFinite(h.mcr)).sort((a,b)=>Math.abs(b.mcr||0)-Math.abs(a.mcr||0)).slice(0,5);
     if(!top.length){body='<div style="font-size:11px;color:var(--txt)">No per-holding MCR data — Security section is empty in current parse.</div>';}
-    else body=`<div style="display:grid;grid-template-columns:1fr;gap:3px">${top.map(h=>`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px solid var(--grid)"><span><span style="color:var(--txth);font-weight:600">${h.t}</span> <span style="color:var(--txt)">${(h.n||'').slice(0,32)}</span></span><span style="color:var(--acc);font-weight:600;font-family:'JetBrains Mono',monospace">MCR ${f2(h.mcr,1)}</span></div>`).join('')}</div>`;
+    else body=`<div style="display:grid;grid-template-columns:1fr;gap:3px">${top.map(h=>`<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;padding:3px 0;border-bottom:1px solid var(--grid)"><span><span style="color:var(--txth);font-weight:600">${tk(h)}</span> <span style="color:var(--txt)">${(h.n||'').slice(0,32)}</span></span><span style="color:var(--acc);font-weight:600;font-family:'JetBrains Mono',monospace">MCR ${f2(h.mcr,1)}</span></div>`).join('')}</div>`;
   }else if(_teActiveBox==='fac'){
     const factors=(cs.factors||[]).filter(f=>isFinite(f.c)&&Math.abs(f.c||0)>0.01).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
     const top=factors.slice(0,8);
@@ -7960,7 +7964,7 @@ function oDrMetric(metric,range){
     const topHtml=hasHoldings
       ? `<table style="font-size:11px;width:100%"><thead><tr><th>Ticker</th><th>Name</th><th class="r">MCR</th>${ORVQ_TH_PLAIN}</tr></thead>
         <tbody>${top.map(h=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oSt('${h.t}')">
-          <td style="color:var(--txth);font-weight:600">${h.t}</td>
+          <td style="color:var(--txth);font-weight:600">${tk(h)}</td>
           <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.n}</td>
           <td class="r" style="font-weight:700;color:var(--acc)">${f2(h.mcr,1)}</td>
           ${rORVQCells(h)}
@@ -8141,7 +8145,7 @@ function oDrMetric(metric,range){
         <div style="max-height:200px;overflow-y:auto">
         <table><thead><tr><th>Ticker</th><th>Name</th><th class="r">BM Wt</th><th class="r">Held?</th></tr></thead>
         <tbody>${top10bm.map(h=>`<tr>
-          <td style="color:var(--txth);font-weight:500">${h.t}</td><td>${h.n}</td>
+          <td style="color:var(--txth);font-weight:500">${tk(h)}</td><td>${h.n}</td>
           <td class="r">${f2(h.b)}%</td>
           <td class="r">${h.p>0?'<span style="color:var(--pos)">'+f2(h.p)+'%</span>':'<span style="color:var(--neg)">No</span>'}</td>
         </tr>`).join('')}</tbody></table>
@@ -8156,7 +8160,7 @@ function oDrMetric(metric,range){
     let secCounts={};
     eqHold.forEach(h=>{if(h.sec){secCounts[h.sec]=(secCounts[h.sec]||0)+1}});
     let secRows=Object.entries(secCounts).sort((a,b)=>b[1]-a[1]).map(([sec,ct])=>`<tr><td style="color:var(--txth)">${sec}</td><td class="r" style="font-weight:600">${ct}</td><td class="r" style="color:var(--txt)">${f2(ct/eqHold.length*100,1)}%</td></tr>`).join('');
-    let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}%</td></tr>`).join('');
+    let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}%</td></tr>`).join('');
     extraHtml=`<div class="grid g2" style="margin-top:16px">
       <div>
         <div class="card-title">Equity Holdings by Sector (${eqHold.length} names)</div>
@@ -8189,7 +8193,7 @@ function oDrMetric(metric,range){
   if(metric==='cash'){
     let cashHold=cs.hold.filter(h=>isCash(h));
     let totalCashWt=cashHold.reduce((a,h)=>a+h.p,0);
-    let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r" style="font-weight:600">${f2(h.p)}%</td></tr>`).join('');
+    let cashRows=cashHold.map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r" style="font-weight:600">${f2(h.p)}%</td></tr>`).join('');
     extraHtml=`<div style="margin-top:16px">
       <div class="card-title">Cash Composition</div>
       ${cashHold.length?`<table style="font-size:11px"><thead><tr><th>Ticker</th><th>Name</th><th class="r">Weight</th></tr></thead>
@@ -8630,7 +8634,7 @@ function oDrCountry(name,factorContext){
       return `<td class="r ${cls}" style="background:rgba(168,85,247,0.06);font-weight:600">${txt}</td>`;
     })():'';
     return`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td>
+    <td style="color:var(--txth);font-weight:600">${tk(h)}</td>
     <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis">${h.n}</td>
     <td><span class="chip">${h.sec||'—'}</span></td>
     <td class="r">${f2(h.p,1)}</td>
@@ -8710,7 +8714,7 @@ function oDrUnowned(ticker){
     <div class="card-title">Why This Stock Matters</div>
     <p style="font-size:12px;color:var(--txt);margin-bottom:12px">This stock has a ${f2(u.b)}% weight in the benchmark but is not held in the portfolio. Its absence contributes ${fp(u.tr)} to tracking error. Consider whether this is an intentional underweight based on your investment thesis.</p>
     ${secHold.length?`<div class="card-title" style="margin-top:16px">Your Holdings in ${u.reg} (${secHold.length})</div>
-    <div style="max-height:200px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${secHold.slice(0,10).map(h=>`<tr><td style="color:var(--txth)">${h.t}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
+    <div style="max-height:200px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${secHold.slice(0,10).map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
   m.classList.add('show');
 }
 
@@ -8726,7 +8730,7 @@ function oDrGroup(groupName){
 
   let sgRows=subgroups.map(sg=>`<tr><td>${sg.n}</td><td class="r">${f2(sg.p)}</td><td class="r">${f2(sg.b)}</td><td class="r ${activeStyle(sg.a)}">${fp(sg.a)}</td></tr>`).join('');
   let holdRows=holdings.slice(0,15).map(h=>`<tr class="clickable" onclick="$('groupModal').classList.remove('show');oSt('${h.t}')">
-    <td style="color:var(--txth);font-weight:600">${h.t}</td><td>${h.n}</td><td><span class="chip">${h.sec||'—'}</span></td>
+    <td style="color:var(--txth);font-weight:600">${tk(h)}</td><td>${h.n}</td><td><span class="chip">${h.sec||'—'}</span></td>
     <td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td>
     ${rORVQCells(h)}
   </tr>`).join('');

@@ -719,6 +719,142 @@ const _ABOUT_REG={
     source:'cs.hold[] (FactSet "Security" section). Ticker shown as TKR-REGION via tk(h) helper (h.tkr_region from SEDOL→Raw Factors merge); falls back to SEDOL.',
     caveats:'Includes active port + material BM-only (b > 0.5% or |tr| > 1%). New format: market cap, ADV, vol, ranks moved to Raw Factors and merged via SEDOL onto each holding.',
     related:'cardWatchlist · cardScatter · cardMCR'
+  },
+  cardGroups:{
+    title:'Redwood Groups',
+    what:'Redwood proprietary sector groupings (e.g. GROWTH, GROWTH CYCLICAL, DEFENSIVE) with per-group port/bench/active weight + |TE| share. Treemap view shows relative sizing; Table view sortable.',
+    how:'Group membership from FactSet SEC_SUBGROUP field on each holding (exclusive — every holding is in exactly one group). Group active weight = Σ h.a for holdings in group. |TE| share = Σ |h.tr| / total |TE|.',
+    source:'cs.groups[] (parser-aggregated from cs.hold[].sg). Groups taxonomy maintained in FactSet; updated via SEC_SUBGROUP weekly.',
+    caveats:'Different bucket logic from sectors (GICS) — same holding lives in one sector AND one Redwood group. The two views are complementary.',
+    related:'cardSectors (GICS taxonomy) · cardCountry'
+  },
+  cardRegions:{
+    title:'Region Active Weights',
+    what:'Geographic exposure rolled up to Redwood region buckets (Far East, English, Northern Europe, Western Europe, Southern Europe, Emerging Market, Australia-NZ). Heatmap shows active weight intensity.',
+    how:'Country → Region mapping in CMAP constant (e.g. Japan → Far East). Aggregated active = Σ active wt of countries in region. Holdings drill from region groups by country.',
+    source:'cs.regions[] (FactSet "Region" section). Mapping from CMAP applied at render time so country toggles propagate.',
+    caveats:'Coverage warning shown if mapped <50% of portfolio. Some FactSet country labels may not map (renders as "Other").',
+    related:'cardCountry (drilldown) · cardSectors'
+  },
+  cardRanks:{
+    title:'Spotlight (Quintile Distribution)',
+    what:'Holdings bucketed into quintiles by selected rank (Overall / Rev / Val / Qual). Q1 = best, Q5 = worst. Active toggle picks the rank dimension; Universe toggle (header pill) picks portfolio vs benchmark holdings.',
+    how:'Quintile assignments from FactSet (Spotlight ranks merged via SEDOL → Raw Factors group_size=23). Per-quintile: count, average other-3-ranks, port wt, bench wt, active wt, TE contrib. Per-quintile factor contribution columns sum from h.factor_contr.',
+    source:'cs.ranks[] (parser-built per-quintile aggregates). Per-holding rank from cs.hold[].over/rev/val/qual.',
+    caveats:'~23% of GSC holdings had null rank in last sample (no SEDOL match) — these render as separate "—" bucket rather than miscategorized.',
+    related:'cardChars · cardScatter · cardHoldings'
+  },
+  cardWatchlist:{
+    title:'My Watchlist',
+    what:'User-curated holdings list. Click ⚑ on any holding to cycle Watch / Reduce / Add. Persists across reloads via localStorage (preferences only — never data).',
+    how:'localStorage key "rr_watchlist_v1" stores per-strategy ticker → category map. On every render, current cs.hold[] is checked against the list; entries that have exited (no longer in cs.hold) grey out.',
+    source:'localStorage (preferences-only per CLAUDE.md hard rule #3 — no data caching). Holding details from cs.hold[].',
+    caveats:'Strategy-scoped — IDM watchlist independent from GSC. Cleared if user clicks Reset Preferences. Will be migrated to durable storage when professional environment lands (Phase 2 of MIGRATION_PLAN).',
+    related:'cardHoldings · cardMCR'
+  },
+  cardMCR:{
+    title:'Marginal Contribution to Risk (Top & Bottom)',
+    what:'Top 10 + Bottom 10 holdings ranked by |MCR|. Purple bars = adds risk. Green bars = reduces risk (negative MCR — typically short or hedging positions).',
+    how:'MCR = h.mcr (FactSet %S, the stock-specific TE component for each holding). Bars sorted by absolute value; top 10 always show the strongest contributors regardless of sign.',
+    source:'cs.hold[].mcr (FactSet Security section %S column).',
+    caveats:'Latest snapshot only — MCR not historized at the holding level. Trend would require parser-side hist persistence (B114 backlog).',
+    related:'cardScatter · cardHoldings · TE drill modal Idio breakdown'
+  },
+  cardUnowned:{
+    title:'Unowned Risk Contributors',
+    what:'Benchmark holdings the portfolio does NOT own, ranked by their tracking-error contribution if owned. Each represents an active short position the portfolio has by omission.',
+    how:'Filter cs.hold[] for h.b > 0 AND (h.p == null || h.p < 0.01). Sort descending by |%T|. Implicit active wt = -h.b.',
+    source:'cs.hold[] (FactSet Security section, materially-large BM-only holdings, b > 0.5% or |tr| > 1%).',
+    caveats:'Materiality threshold may hide small BM holdings. Click for stock detail; sector aggregate version in cardBenchOnlySec.',
+    related:'cardBenchOnlySec · cardHoldings'
+  },
+  cardTreemap:{
+    title:'Holdings Treemap',
+    what:'Visual map of holdings sized by your chosen metric, colored by another, grouped into your chosen taxonomy. Three pill toggles: group-by, size, color.',
+    how:'Plotly treemap. Group-by = sector / region / industry / group. Size = port wt / bench wt / |TE| / |MCR|. Color = active wt (red→green) / TE contrib (signed) / spotlight rank (Q1→Q5).',
+    source:'cs.hold[]. Group taxonomy attribute lookup based on selected pill.',
+    caveats:'Cash and bench-only holdings hidden by default. Click any rectangle for the holding drill.',
+    related:'cardSectors · cardGroups · cardHoldings'
+  },
+  cardAttrib:{
+    title:'Factor Attribution',
+    what:'Period attribution waterfall — return contribution from each macro factor (country, industry, currency, style) over the selected window. Click a row for the factor time-series drill.',
+    how:'Per-factor cumulative impact = Σ weekly imp values across the trailing window (or compounded full_period_imp if "Full"). Sorted descending by absolute impact.',
+    source:'cs.snap_attrib (per-factor weekly history with imp + cimp + exp). Period selector shared with Factor Performance Map.',
+    caveats:'18 Style Snapshot taxonomy — distinct from RiskM factors (Axioma). Returns/impacts are FactSet-side, no compounding adjustments client-side.',
+    related:'cardFacButt · cardFacDetail · cardRiskFacTbl'
+  },
+  cardRiskHistTrends:{
+    title:'Historical Trends',
+    what:'Four-metric trend glance across all available weeks: TE / Active Share / Beta / Holdings count. Each card shows latest value + sparkline + threshold band. Click for detailed drill.',
+    how:'Sparkline = inline SVG. Threshold band uses adjustable defaults via Settings → Thresholds (e.g. TE >8 = red zone). Trend dot color = comparison to 4-week trailing average.',
+    source:'cs.hist.sum[].te / .as / .beta / .h (parser-extracted from FactSet weekly Data rows).',
+    caveats:'Requires ≥2 weeks for sparklines; current GSC sample has 69. Drill modal opens with same 4-metric layout in larger format with date range buttons.',
+    related:'TE/AS/Beta/Holdings sum-card modals'
+  },
+  cardTEStacked:{
+    title:'Tracking Error — Decomposition Over Time',
+    what:'Weekly TE decomposed into idiosyncratic + factor-side contributions. Range slider for zoom. Click for detail drill.',
+    how:'Per-week: idio TE (stock-specific) + factor TE (Σ factor contributions) = total TE. Stacked-area chart with idio at bottom (purple) + factor stacked above + total TE line overlay.',
+    source:'cs.hist.sum[].te + parser-derived per-week idio/factor split (when shipped) or sector-aggregated MCR sums when only sector hist available.',
+    caveats:'Decomposition history requires hist.sec MCR data; falls back to total TE only when sector-level history missing. Synth markers (ᵉ) on derived points.',
+    related:'cardRiskHistTrends · cardFacContribBars · TE drill modal'
+  },
+  cardBetaHist:{
+    title:'Beta History — Predicted',
+    what:'Predicted beta over time across all 7 strategies. Multi-strategy line chart — see at a glance which strategies are running risk-on (β>1) vs risk-off.',
+    how:'Each strategy\'s hist.sum.beta plotted on the same date axis. Reference line at β=1. Hover for week + value.',
+    source:'For each strategy: cs.hist.sum[].beta (predicted Axioma beta).',
+    caveats:'Currently active strategies pulled from latest_data.json. Date range may differ across strategies (some have shorter history).',
+    related:'cardRiskHistTrends · Beta sum-card modal'
+  },
+  cardFacContribBars:{
+    title:'Factor Contributions',
+    what:'Factor-level TE contribution and active exposure as horizontal bars. Toggle TE / Exposure / Both. Click a bar for factor drill.',
+    how:'Per-factor: TE % (f.c) and active σ exposure (f.a). Bars sized by chosen metric; color signed (positive=red/adds, negative=green/diversifies).',
+    source:'cs.factors[] (FactSet RiskM section).',
+    caveats:'Same data as cardFacRisk + cardFacDetail — different visualization (bars vs scatter vs table).',
+    related:'cardFacRisk · cardFacDetail · cardRiskFacTbl'
+  },
+  cardRiskFacTbl:{
+    title:'Factor Exposures (Risk tab)',
+    what:'Sortable factor table with active exposure / TE / impact (period). Click any row for time-series drill (exposure history + return impact chart).',
+    how:'Same data primitives as cardFacDetail; arranged for the Risk tab\'s analyst-mode workflow. Period-aware impact via global selector.',
+    source:'cs.factors[] + cs.snap_attrib for impact period slicing.',
+    caveats:'Risk-tab variant of Exposures-tab cardFacDetail — both should agree by row.',
+    related:'cardFacDetail · cardFacRisk · cardFacContribBars'
+  },
+  cardRiskByDim:{
+    title:'Risk by Dimension',
+    what:'TE contribution decomposed by Country / Currency / Industry. Each bar = sum of holdings\' %T in that bucket. Click any bar to drill into the contributing securities.',
+    how:'Σ h.tr per bucket. Dimension toggle (3-state pill) switches the grouping attribute (h.co / h.ccy / h.ind). Sorted descending by |TE share|.',
+    source:'cs.hold[] aggregated by dimension.',
+    caveats:'Different from cardSectors (GICS sector) — uses Country / Currency / Industry instead. Currency exposure includes the implicit FX risk of holding non-USD assets.',
+    related:'cardSectors · cardCountry · cardRiskCtryFactor'
+  },
+  cardRiskCtryFactor:{
+    title:'Country × Factor TE Heatmap',
+    what:'Two-dimensional heatmap: country (rows) × factor (cols). Cell = signed factor TE contribution from that country. Red adds risk; green diversifies.',
+    how:'Σ h.factor_contr[fname] per country bucket, signed. Same source data as cardCountry chart view; transposed for at-a-glance pattern detection.',
+    source:'cs.hold[].factor_contr aggregated by h.co.',
+    caveats:'Click any cell to drill into the country\'s holdings filtered by factor context. Factor context propagates through to holding rows.',
+    related:'cardCountry · cardRiskByDim · cardFacRisk'
+  },
+  cardFacHist:{
+    title:'Factor Exposure History',
+    what:'Time series of active factor exposure (e − bm) for any factor or set of factors. Use Select/Clear All or click factor toggles to compare.',
+    how:'Per-factor weekly active exposure from cs.snap_attrib[name].hist[].exp − bm exposure. Multi-line chart with toggle-able legends.',
+    source:'cs.snap_attrib (per-factor weekly history).',
+    caveats:'Lines only render for factors with ≥2 weeks of data. "All" toggle can be slow on long-history files; pick 5-10 factors for clarity.',
+    related:'cardFacRisk · cardFacButt · cardFacContribBars'
+  },
+  cardThisWeek:{
+    title:'This Week',
+    what:'Top-of-Exposures snapshot: 6 sum-cards (TE / Active Share / Beta / Holdings / Idio / Factor) plus Top TE Contributors list. The portfolio at a glance.',
+    how:'Sum-cards pulled from cs.sum (latest week). Each card has its own drill modal with full historical detail and decomposition.',
+    source:'cs.sum (parser-extracted from FactSet weekly Data row).',
+    caveats:'Collapses via header chevron — preference persists per session. Click any sum-card for detailed drill.',
+    related:'cardRiskHistTrends · TE/AS/Beta/Holdings/Idio/Factor sum-card modals'
   }
 };
 function openAbout(tileId){
@@ -1660,7 +1796,7 @@ function rExp(){
   <!-- Row 3b: Factor Detail (full width below the two map tiles) -->
   <div class="card" id="cardFacDetail" style="margin-top:16px">
     <div class="flex-between" style="margin-bottom:6px">
-      <div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>${aboutBtn('cardFacDetail')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         ${facColDropHtml()}
@@ -1680,7 +1816,7 @@ function rExp(){
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div><span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
@@ -1721,7 +1857,7 @@ function rExp(){
 
   <!-- Row 5: Redwood Groups -->
   <div class="card" id="cardGroups">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div><span id="grpFilterChip"></span></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div>${aboutBtn('cardGroups')}<span id="grpFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
@@ -1734,7 +1870,7 @@ function rExp(){
   <!-- Row 6: Quant Ranks + Characteristics -->
   <div class="grid g2">
     <div class="card" id="cardRanks">
-      <div class="flex-between" style="flex-wrap:wrap;gap:8px"><div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). The 3 columns to the right of TE Contrib are average rank of the OTHER 3 categories per bucket. Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio vs Benchmark with the global Agg pill in the header to compare what's owned vs what's in the universe. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:8px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). The 3 columns to the right of TE Contrib are average rank of the OTHER 3 categories per bucket. Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio vs Benchmark with the global Agg pill in the header to compare what's owned vs what's in the universe. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>${aboutBtn('cardRanks')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Rank</span>
         <button class="pill" id="rnk-pill-over" onclick="setRanksBy('over')">Overall</button>
@@ -1771,7 +1907,7 @@ function rExp(){
       <div id="scatDiv" style="height:320px"></div>
     </div>
     <div class="card" id="cardTreemap">
-      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div>${aboutBtn('cardTreemap')}</div></div>
       <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
         <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Group</span>
           <div class="toggle-wrap" style="margin:0" id="treeDimWrap"><button class="toggle-btn active" data-dim="sec" onclick="setTreeDim('sec')" style="padding:1px 6px;font-size:9px">Sector</button><button class="toggle-btn" data-dim="co" onclick="setTreeDim('co')" style="padding:1px 6px;font-size:9px">Country</button><button class="toggle-btn" data-dim="grp" onclick="setTreeDim('grp')" style="padding:1px 6px;font-size:9px">Group</button><button class="toggle-btn" data-dim="rank" onclick="setTreeDim('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
@@ -1791,14 +1927,14 @@ function rExp(){
        columns on cardFacDetail. cardMCR (holding-level top 10 by |MCR|) stays
        since it's a holding-level view not duplicated elsewhere. -->
   <div class="card" id="cardMCR">
-    <div class="flex-between"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions). Always shows latest holdings — historical MCR not persisted. Click a bar for stock detail." oncontextmenu="showNotePopup(event,'cardMCR');return false">Marginal Contribution to Risk (Top & Bottom)</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 holdings by |MCR|. Purple = adds risk, green = reduces risk (negative MCR from short or hedging positions). Always shows latest holdings — historical MCR not persisted. Click a bar for stock detail." oncontextmenu="showNotePopup(event,'cardMCR');return false">Marginal Contribution to Risk (Top & Bottom)</div>${aboutBtn('cardMCR')}</div>
     <div class="export-bar"><button class="export-btn" onclick="exportMcrCsv()">CSV</button></div></div>
     <div id="mcrDiv" style="height:300px"></div>
   </div>
 
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
-    <div class="flex-between"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>${aboutBtn('cardUnowned')}</div>
     <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button></div></div>
     ${rUnowned(s.unowned)}
   </div>
@@ -1812,7 +1948,7 @@ function rExp(){
   <!-- Row 12: Factor Attribution (from 18 Style Snapshot) -->
   <div class="card" id="cardAttrib">
     <div class="flex-between">
-      <div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot. Shows how each country, industry, and currency contributed to portfolio returns over time. Click any row or bar for time series." oncontextmenu="showNotePopup(event,'cardAttrib');return false">Factor Attribution</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot. Shows how each country, industry, and currency contributed to portfolio returns over time. Click any row or bar for time series." oncontextmenu="showNotePopup(event,'cardAttrib');return false">Factor Attribution</div>${aboutBtn('cardAttrib')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
           <option value="all">All</option>
@@ -1834,7 +1970,7 @@ function rExp(){
 
   <!-- Row 13: Region Active Weights (de-prioritized, bottom of page) -->
   <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div><span id="regFilterChip"></span></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div>${aboutBtn('cardRegions')}<span id="regFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
@@ -5345,7 +5481,10 @@ function riskHistoricalTrends(s){
     </div>`;
   }).join('');
   return `<div class="card" id="cardRiskHistTrends" style="margin-bottom:16px">
-    <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:10px">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:0">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
+      ${aboutBtn('cardRiskHistTrends')}
+    </div>
     <div style="display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:16px">${cards}</div>
   </div>`;
 }
@@ -5480,7 +5619,7 @@ function rRisk(){
   <!-- TE Stacked Area Chart (HERO, full width) -->
   <div class="card" id="cardTEStacked" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:6px">
-      <div class="card-title tip" data-tip="Weekly tracking error decomposed into factor vs stock-specific components. Drag range slider to zoom. Click for drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Factor vs Stock-Specific Decomposition</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Weekly tracking error decomposed into factor vs stock-specific components. Drag range slider to zoom. Click for drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Factor vs Stock-Specific Decomposition</div>${aboutBtn('cardTEStacked')}</div>
       <div style="display:flex;gap:8px;align-items:center"><span style="font-size:10px;color:var(--txt)">${s.hist.sum.length} weeks</span><button class="export-btn" onclick="exportTEStackedCsv()">CSV</button></div>
     </div>
     <div id="teStackedDiv" style="height:300px"></div>
@@ -5489,7 +5628,7 @@ function rRisk(){
   <!-- Beta History (adjacent to TE chart) -->
   <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
-      <div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span></div>
       <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
     </div>
     <div id="riskBetaMultiDiv" style="height:180px"></div>
@@ -5498,7 +5637,7 @@ function rRisk(){
   <!-- Factor Contribution Bars with toggle -->
   <div class="card" id="cardFacContribBars" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>${aboutBtn('cardFacContribBars')}</div>
       <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
         <label tabindex="0" style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
           <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
@@ -5547,7 +5686,7 @@ function rRisk(){
   <!-- Factor Exposures Table -->
   <div class="card" id="cardRiskFacTbl" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>${aboutBtn('cardRiskFacTbl')}</div>
       <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
     </div>
     <table id="tbl-risk-fac"><thead><tr>
@@ -5580,7 +5719,7 @@ function rRisk(){
   <!-- Data source: cs.hold[].tr aggregated by h.country / h.currency / h.industry (security_ref enrichment) -->
   <div class="card" id="cardRiskByDim" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
-      <div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>${aboutBtn('cardRiskByDim')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Dim</span>
         <button class="pill" id="rbd-pill-country" onclick="setRiskByDim('country')">Country</button>
@@ -5602,7 +5741,7 @@ function rRisk(){
        pill, ⚙ Cols picker, and country picker (chart-only). -->
   <div class="card" id="cardRiskCtryFactor" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px;flex-wrap:wrap;gap:8px">
-      <div class="card-title tip" data-tip="Country × Factor TE heatmap. Cell color = signed factor TE contribution (red=adds risk, green=diversifies). Click any cell to drill into that country's holdings, sorted by the clicked factor. Same data source as cardCountry's chart view." oncontextmenu="showNotePopup(event,'cardRiskCtryFactor');return false" style="margin:0">Country × Factor TE Heatmap</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Country × Factor TE heatmap. Cell color = signed factor TE contribution (red=adds risk, green=diversifies). Click any cell to drill into that country's holdings, sorted by the clicked factor. Same data source as cardCountry's chart view." oncontextmenu="showNotePopup(event,'cardRiskCtryFactor');return false" style="margin:0">Country × Factor TE Heatmap</div>${aboutBtn('cardRiskCtryFactor')}</div>
       <div id="riskCtryHeatPickerSlot" style="display:flex;gap:6px;align-items:center"></div>
     </div>
     <div id="riskCtryHeatDiv" style="min-height:280px"></div>
@@ -5611,7 +5750,7 @@ function rRisk(){
   <!-- Factor Exposure Time Series with toggles -->
   <div class="card" id="cardFacHist" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div class="card-title tip" data-tip="Active exposure (e − bm) time series for selected factors. Use Select/Clear All or click factor toggles. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacHist');return false" style="margin:0">Factor Exposure History</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Active exposure (e − bm) time series for selected factors. Use Select/Clear All or click factor toggles. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacHist');return false" style="margin:0">Factor Exposure History</div>${aboutBtn('cardFacHist')}</div>
       <div style="display:flex;gap:6px">
         <button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button>
         <button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>
@@ -6421,7 +6560,7 @@ function watchlistCardHtml(s){
   // Empty state: show the tile with onboarding copy instead of hiding entirely
   if(!total){
     return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
-      <div class="flex-between"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div></div>
+      <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div>${aboutBtn('cardWatchlist')}</div></div>
       <div style="font-size:11px;color:var(--txt);padding:8px 6px">No tickers watchlisted yet \u2014 click the \u2691 flag icon on any holding row (Holdings tab) to add it.</div>
     </div>`;
   }
@@ -6446,7 +6585,7 @@ function watchlistCardHtml(s){
     return `<div style="margin-top:8px"><div style="font-size:10px;color:${col};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table id="${tblId}" style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr><th data-col="flag" style="width:22px"></th><th data-col="t" class="tip" data-tip="Ticker symbol" onclick="sortTbl('${tblId}',1)">Ticker</th><th data-col="n" class="tip" data-tip="Security name" onclick="sortTbl('${tblId}',2)">Name</th><th data-col="p" class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('${tblId}',3)">Port %</th><th data-col="a" class="r tip" data-tip="Active weight vs benchmark %" onclick="sortTbl('${tblId}',4)">Active %</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }).join('');
   return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
-    <div class="flex-between"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div>${aboutBtn('cardWatchlist')}</div>
     <div class="export-bar"><button class="export-btn" onclick="exportWatchlistCsv('${s.id}')">CSV</button></div></div>
     ${sections}
   </div>`;

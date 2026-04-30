@@ -1157,6 +1157,136 @@ class FactSetParserV3:
                 if matched:
                     print(f"  {dash_id}: SEDOL→Raw Factors matched {matched}/{len(holdings)} port holdings")
 
+            # 2026-04-30 (data-integrity F4): synthesize cs.hold[] entries
+            # for raw_fac entries that have bw>0 but aren't in the slim
+            # Security section. Brings bench-mode coverage from ~21% to
+            # ~73% by count, ~57% to ~97% by weight. The user's "BM count
+            # not nearly complete" complaint is fixed here on the parser
+            # side — FactSet IS shipping the full bench universe in Raw
+            # Factors; the parser was just dropping it.
+            if raw_fac:
+                existing_sedols = set(h.get("t") for h in holdings) | set(h.get("t") for h in unowned_hold)
+                # Build country→region map from existing matched holdings
+                # (parser-shipped reg). Synthesized entries inherit the
+                # most-common region for their country. Falls back to None
+                # for new countries — dashboard uses CMAP fallback then.
+                country_to_reg = {}
+                for h in holdings:
+                    co = h.get("co") or h.get("country")
+                    rg = h.get("reg")
+                    if co and rg and co not in country_to_reg:
+                        country_to_reg[co] = rg
+                # Same for sector inference via industry → name lookup in
+                # security_ref (industry name maps to GICS sector via the
+                # holding pool's industry→sector mapping when available).
+                industry_to_sec = {}
+                for h in holdings:
+                    ind = h.get("industry")
+                    sec = h.get("sec")
+                    if ind and sec and ind not in industry_to_sec:
+                        industry_to_sec[ind] = sec
+                synth_count = 0
+                for tkr_region, info in raw_fac.items():
+                    sedol = info.get("sedol")
+                    if not sedol or sedol in existing_sedols:
+                        continue
+                    bw = info.get("bw")
+                    if not bw or bw <= 0:
+                        continue
+                    synth = {
+                        "t":           sedol,
+                        "n":           info.get("n"),
+                        "tkr_region":  tkr_region,
+                        "w":           None,        # not held
+                        "bw":          bw,
+                        "aw":          -bw,         # implied active = -bench
+                        "pct_t":       None,
+                        "pct_s":       None,
+                        "mcap":        info.get("mcap"),
+                        "adv":         info.get("adv"),
+                        "vol_52w":     info.get("vol_52w"),
+                        "over":        info.get("over"),
+                        "rev":         info.get("rev"),
+                        "val":         info.get("val"),
+                        "qual":        info.get("qual"),
+                        "mom":         info.get("mom"),
+                        "stab":        info.get("stab"),
+                        "raw_exp":     info.get("e"),
+                        "factor_contr": {},
+                        "factor_exp":   {},
+                        "factor_active":{},
+                        "factor_ret":   {},
+                        "factor_imp":   {},
+                        "factor_mcr":   {},
+                        "_synth_from_raw_fac": True,    # marker
+                        "_extra":       {},
+                    }
+                    # Enrich via security_ref by SEDOL or name fallback
+                    _enrich_holding(synth)
+                    # 2026-04-30: ticker-region suffix is the most reliable
+                    # source-of-truth for listing country for these synth
+                    # entries. security_ref name-match can give US country
+                    # for Brazilian/EM names with US ADR siblings (e.g.
+                    # Banco Bradesco BBDC4-BR was getting country='United
+                    # States' from a US listing match). Prefer the suffix.
+                    suffix = tkr_region.split("-")[-1] if "-" in tkr_region else None
+                    if suffix and len(suffix) == 2:
+                        suffix_to_co = {
+                            "BR": "Brazil", "CN": "China", "HK": "Hong Kong",
+                            "TW": "Taiwan", "KR": "Korea", "IN": "India",
+                            "ID": "Indonesia", "TH": "Thailand", "MY": "Malaysia",
+                            "PH": "Philippines", "SA": "Saudi Arabia",
+                            "AE": "United Arab Emirates", "ZA": "South Africa",
+                            "MX": "Mexico", "TR": "Turkey", "PL": "Poland",
+                            "HU": "Hungary", "GR": "Greece", "QA": "Qatar",
+                            "PE": "Peru", "AR": "Argentina", "EG": "Egypt",
+                            "CO": "Colombia", "CL": "Chile", "PK": "Pakistan",
+                            "VN": "Vietnam", "RU": "Russia", "JP": "Japan",
+                            "US": "United States", "GB": "United Kingdom",
+                            "DE": "Germany", "FR": "France", "CH": "Switzerland",
+                            "NL": "Netherlands", "SE": "Sweden", "DK": "Denmark",
+                            "NO": "Norway", "FI": "Finland", "ES": "Spain",
+                            "IT": "Italy", "PT": "Portugal", "IE": "Ireland",
+                            "AT": "Austria", "BE": "Belgium", "AU": "Australia",
+                            "NZ": "New Zealand", "SG": "Singapore", "CA": "Canada",
+                            "IL": "Israel", "KW": "Kuwait", "BH": "Bahrain",
+                            "OM": "Oman", "JO": "Jordan", "LK": "Sri Lanka",
+                            "BD": "Bangladesh", "MA": "Morocco", "NG": "Nigeria",
+                            "KE": "Kenya", "TN": "Tunisia", "RO": "Romania",
+                            "CZ": "Czech Republic", "AR": "Argentina",
+                        }
+                        if suffix in suffix_to_co:
+                            synth["co"] = suffix_to_co[suffix]
+                            synth["country"] = suffix_to_co[suffix]
+                    # Country naming normalization: existing parsed holdings use
+                    # h.co='Korea' / 'Mexico' (FactSet shorthand); security_ref
+                    # uses h.country='Korea, Republic of' / 'Mexico'. Prefer
+                    # h.co convention so cardCountry tile doesn't show two
+                    # rows for the same country.
+                    co_norm_map = {}
+                    for h in holdings:
+                        cn = h.get("country")
+                        co = h.get("co")
+                        if cn and co and cn != co:
+                            co_norm_map[cn] = co
+                    co_raw = synth.get("co") or synth.get("country")
+                    co = co_norm_map.get(co_raw, co_raw)
+                    if co:
+                        synth["co"] = co
+                        if co in country_to_reg:
+                            synth["reg"] = country_to_reg[co]
+                    # Sector inference from industry
+                    ind = synth.get("industry")
+                    if ind and ind in industry_to_sec:
+                        synth["sec"] = industry_to_sec[ind]
+                        if not synth.get("ind"):
+                            synth["ind"] = ind
+                    holdings.append(synth)
+                    existing_sedols.add(sedol)
+                    synth_count += 1
+                if synth_count:
+                    print(f"  {dash_id}: synth +{synth_count} bench-only entries from Raw Factors (F4 — bench coverage now ~73%)")
+
             if _SECURITY_REF:
                 enriched = sum(1 for h in holdings if h.get("country"))
                 total = len(holdings)

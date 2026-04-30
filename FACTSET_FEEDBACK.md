@@ -65,17 +65,51 @@
 **What's there:** the snap_attrib dict already has 122+ keys including `BRL`, `Hungary`, `HUF`, `Semiconductors & Semiconductor Equipment`, `Oil, Gas & Consumable Fuels`, etc. These ARE granular per-currency/industry/country attribution rows.
 **Implication:** B110 (sub-factor drill on Country/Currency/Industry) doesn't need new CSV data — it just needs to consume the existing snap_attrib entries. **Big unblock for B110.**
 
-### F9 · Raw Factors section is missing Benchmark Weight column 🔥 BLOCKS FULL RUN
-**Status:** USER FLAGGED 2026-04-30 — must be fixed BEFORE the full multi-year multi-account run.
-**What's wrong:** the new Raw Factors section (group_size=23, parser updated 2026-04-30 commit `30f83b4`) ships per-security raw factor exposures, market cap, ADV, vol_52w, and Spotlight ranks (over/rev/val/qual/mom/stab) — **but no benchmark weight (BW) column.**
-**Why it matters:** the v2 Security slim drops the long tail of bench-only constituents from the Security section. The dashboard's universe-aware aggregators (Spotlight count, country/sector/group rank averages under "Bench" mode) need to know which holdings are in the benchmark and at what weight. Today's only sources of bench weight are:
-1. Security section (port + materially-large BM-only — long tail truncated, ~3.5% of total bench wt covered for major countries vs the actual ~61%).
-2. Section-aggregate rows (cs.sectors, cs.countries, cs.groups, cs.regions) — these have correct bench weight totals per bucket but no per-holding granularity.
-**Symptom on dashboard:** when user toggles Universe → Benchmark, holding counts and rank averages drop to a tiny subset because the parser only sees materially-large BM-only holdings. Cross-tile bug B116 (workaround landed 2026-04-30 commit `7d1b05a` — TE/MCR/factor stay invariant; counts and rank averages drop noisily under Bench mode).
-**Real fix:** add `BW` (or `Benchmark Weight`) as a per-period column in the Raw Factors section so we get **the full benchmark constituent universe** with its weights. Combined with SEDOL the parser can then merge bench weights onto every holding (including ones not in the slimmed Security section) and show truthful Bench-mode aggregates.
-**Ask to FactSet:** modify Raw Factors section to add a `Period Start Date:Benchmark Weight` column per period (matches existing convention). All benchmark constituents should have a row, even ones not held in any portfolio.
-**Coordination:** user's plan as of 2026-04-30 — abort the full run that just kicked off, ask FactSet to add this column, re-run.
-**Affected:** any tile using `aggregateHoldingsBy` with `mode='benchmark'` — cardSectors, cardCountry, cardGroups, cardRanks, cardChars (no), cardWatchlist (no), drill modals (yes).
+### F9 · Raw Factors section — BM Weight ✅ SHIPPED · long-tail bench universe ✅ SHIPPED
+**Status:** RESOLVED on FactSet's side as of EM full-history file (2026-04-30).
+**What was needed:** per-period Benchmark Weight column in Raw Factors + the full bench universe (long-tail bench-only constituents) included in the file.
+**What FactSet shipped:** EM full-history file (`em_full_history.xlsx`, 91MB) includes:
+- ✅ Raw Factors section group_size=24 with `Bench. Ending Weight` at offset 1
+- ✅ Full bench constituent universe in Raw Factors: 1,489 entries, 796 with bw>0
+- ✅ Tracked via parser commit `b57c659` (2026-04-30) — synthesizes cs.hold[] entries from raw_fac long-tail when SEDOL not in slim Security section
+**Result:** Bench-mode coverage 21% → 70% by count, 57% → 97% by weight. cardRegions / cardCountry / cardSectors / cardGroups / cardRanks all show truthful BM-mode counts.
+**Verification commits:**
+- Parser format support: `819c493` (2026-04-30) — handles 24-col Raw Factors layout
+- Long-tail synth fix: `b57c659` (2026-04-30) — synthesizes cs.hold[] entries when not in slim Security
+**Note:** the 30% by-count gap remaining (846 / 1,204) is FactSet's bench universe truncation policy (some micro-cap names with bw < some threshold are dropped from Raw Factors). Acceptable.
+
+---
+
+## Open items — what FactSet still needs to ship
+
+### F11 · Per-holding period return (Brinson attribution inputs) — STILL OPEN
+**Status:** C1 in verifier — known C-tier nice-to-have; not blocking.
+**What's needed:** `Period Return` column per security in the Security section (or Raw Factors). One number per security per period.
+**Why it matters:** Brinson attribution (sector contribution to portfolio active return) requires per-holding returns. Today the dashboard cannot compute Brinson; the cardAttrib waterfall is factor-only (FactSet 18 Style Snapshot data).
+**Ask to FactSet:** add `Period Start Date:Period Return` column to Security section (or Raw Factors) per period. Returns can be in % terms (close-to-close, USD, total return). One number per security per period.
+
+### F12 · pct_t / pct_s for bench-only synth holdings — RECOMMENDED, NOT BLOCKING
+**Status:** Identified during F4 fix work, 2026-04-30.
+**Context:** the parser now synthesizes 623 cs.hold[] entries from Raw Factors for the EM long-tail bench universe. Each entry gets bw, mcap, raw_exp, and Spotlight ranks. But pct_t (% of TE contribution) and pct_s (stock-specific TE %) come from the Security section's `%T` and `%S` columns — NOT shipped for long-tail bench-only names.
+**Symptom:** in cardUnowned (which lists bench-only names by |TE|), only the 196 names that ARE in slim Security have non-null pct_t. The 623 synth entries have null pct_t — they don't appear in cardUnowned despite having bench weight.
+**Ask to FactSet:** ship `%T_implied` (or equivalent) for every Raw Factors row — same %T calculation but applied to the implied-underweight TE contribution from each long-tail bench-only name. Allows ALL ~1,200 bench constituents to show in cardUnowned ranked by their TE contribution to the portfolio's tracking error.
+**Workaround if FactSet declines:** synthesize `pct_t = -bw × idiosyncratic_factor` parser-side. Approximate but better than zero.
+
+### F13 · Date format standardization — RECOMMENDED
+**Status:** Caught during EM full-history parse, 2026-04-30. Parser now handles both formats.
+**What we observed:** EM file ships per-period dates as `"2019-01-01 00:00:00"` (ISO datetime with zero time component). Earlier files shipped plain `"2019-01-01"`.
+**Why it matters:** the time suffix triggered a parser bug (parse_date fall-through to file run-date, collapsing all 7 years to one date). Bug fixed in commit `73326ed` but the underlying inconsistency is fragile.
+**Ask to FactSet:** standardize on plain `YYYY-MM-DD` (or `YYYYMMDD`) format. Drop the trailing `00:00:00` time component.
+
+### F14 · Portfolio-level pct_specific / pct_factor — RECOMMENDED, NOT BLOCKING
+**Status:** Caught during data-integrity audit, 2026-04-30.
+**Context:** the dashboard's Idio% / Factor% sum-cards on Risk + Exposures tabs need `% Specific Risk` and `% Factor Risk` at the portfolio-Data row level. The parser currently DERIVES these via `Σ sector mcr` (synth markers `_pct_specific_source: 'sum_sector_mcr'` are visible in JSON). Display shows ᵉ flag with hover explanation.
+**Ask to FactSet:** ship `% Specific Risk` and `% Factor Risk` directly at the portfolio-Data row in Portfolio Characteristics (or Security section's portfolio aggregate row). Removes the synth marker, eliminates a derivation-error class.
+
+### F15 · Country-of-RISK vs country-of-LISTING flag for ADRs — RECOMMENDED, MINOR
+**Status:** Caught during F4 synth work, 2026-04-30.
+**Context:** the EM bench includes ADRs of Brazilian/Chinese/etc. companies that are listed in US (e.g. NIO-US, MELI-US). Their ticker-region suffix is `-US` but their issuer domicile is EM. The dashboard needs both (one for listing exchange, one for "country of risk" attribution). Today we use the suffix.
+**Ask to FactSet:** add a `Country of Risk` column per security in Security or Raw Factors section. Lets the parser distinguish listing country from risk country.
 
 ---
 

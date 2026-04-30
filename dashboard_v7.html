@@ -158,6 +158,12 @@ td.tip-cell:hover::before{opacity:1;transition-delay:.25s}
 .tip:hover::after{opacity:1;transition-delay:.25s}
 .tip::before{content:'';position:absolute;bottom:calc(100% + 3px);left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:#0f1623;opacity:0;pointer-events:none;transition:opacity .15s;z-index:301}
 .tip:hover::before{opacity:1;transition-delay:.25s}
+/* 2026-04-30 (user feedback): tooltips were hover-only; user couldn't figure
+   out how to "open" the question mark. Click any .tip to PIN it open until
+   another click. Pinned state shows the same popover with a colored outline. */
+.tip.pinned::after{opacity:1!important;transition-delay:0s;pointer-events:auto}
+.tip.pinned::before{opacity:1!important;transition-delay:0s}
+.tip.pinned{outline:1px solid var(--pri);outline-offset:2px;border-radius:3px}
 
 /* Clickable rows */
 tr.clickable{cursor:pointer;transition:background .15s}
@@ -2981,7 +2987,7 @@ function rWt(data,type,hold){
       facContribCells=RNK_FACTOR_COLS.map((f,i)=>{
         const v=factorAgg[d.n]?.factor?.[f]??0;
         const cls=v>0.01?'neg':v<-0.01?'pos':'';
-        const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+        const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
         return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
       }).join('');
     }
@@ -3561,7 +3567,7 @@ function renderRanksTable(){
     const facCells=RNK_FACTOR_COLS.map((f,i)=>{
       const v=r.factor[f];
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
-      const txt=empty||Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      const txt=empty||v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}">${txt}</td>`;
     }).join('');
     return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${RNK_BY_LABELS[_rnkBy]} rank ${r.q}" onclick="filterByRank(${r.q})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.q});}"><td data-col="rank" data-sv="${r.q}"><span style="color:${rc(r.q)};font-weight:600">${r.q}</span></td><td class="r" data-col="count" data-sv="${r.count}">${r.count}</td><td class="r" data-col="port" data-sv="${r.p}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a}">${actTxt}</td><td class="r ${trCls}" data-col="tr" data-sv="${r.tr}">${trTxt}</td><td class="r ${idioCls}" data-col="idio" data-sv="${r.mcr}">${idioTxt}</td>${avgCells}${facCells}</tr>`;
@@ -3682,7 +3688,7 @@ function rCountryTable(countries,hold){
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
       const v=factorAgg[c.n]?.factor?.[f]??0;
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
-      const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
     }).join(''):'';
     const cnt=hold?(factorAgg[c.n]?.count ?? 0):null;
@@ -3785,7 +3791,7 @@ function rGroupTable(groups,hold){
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
       const v=factorAgg[gn]?.factor?.[f]??0;
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
-      const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
     }).join(''):'';
     const cnt=hold?(factorAgg[gn]?.count ?? 0):null;
@@ -9254,7 +9260,7 @@ function oDrCountry(name,factorContext){
     const factorCell=hasFactorCtx?(()=>{
       const v=factorVal(h);
       const cls=v>0.005?'neg':v<-0.005?'pos':'';
-      const txt=Math.abs(v)<0.005?'—':(v>0?'+':'')+v.toFixed(2);
+      const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
       return `<td class="r ${cls}" style="background:rgba(168,85,247,0.06);font-weight:600">${txt}</td>`;
     })():'';
     return`<tr class="clickable" onclick="$('countryModal').classList.remove('show');oSt('${h.t}')">
@@ -10480,6 +10486,24 @@ document.addEventListener('click',e=>{
 document.addEventListener('click',e=>{
   if(!e.target.closest('.dl-wrap'))document.querySelectorAll('.dl-drop.open').forEach(m=>m.classList.remove('open'));
   if(!e.target.closest('#mapColorBtn')&&!e.target.closest('#mapColorPicker')){let p=$('mapColorPicker');if(p)p.style.display='none';}
+});
+
+// 2026-04-30 (user feedback): click any .tip to PIN the tooltip open. Click
+// elsewhere to dismiss. Avoids the "hover-only, can't read it on touch
+// devices, can't pause to absorb on desktop" problem the user flagged.
+// Click-eligible only when the .tip element has a data-tip attribute.
+document.addEventListener('click',e=>{
+  const tip=e.target.closest('.tip[data-tip]');
+  if(tip){
+    // Don't pin if user is clicking a button/link inside the tip (e.g. a
+    // table header that also sorts on click).
+    const wasPinned=tip.classList.contains('pinned');
+    document.querySelectorAll('.tip.pinned').forEach(el=>el.classList.remove('pinned'));
+    if(!wasPinned)tip.classList.add('pinned');
+    // Don't preventDefault — sortTbl etc still fire (sort + pin together is fine)
+  }else{
+    document.querySelectorAll('.tip.pinned').forEach(el=>el.classList.remove('pinned'));
+  }
 });
 
 // ===== VALIDATION PANEL =====

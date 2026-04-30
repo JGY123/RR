@@ -615,39 +615,55 @@ function _histEndIdx(hist){
   }
   return hist.length-1;
 }
+// 2026-04-30 (data spot-check finding): trailing-period sums under-report
+// vs FactSet's full_period_imp by ~25% relative for high-volatility factors
+// (e.g., Medium-Term Momentum 69wk: dashboard sum 4.32% vs FactSet 5.70%).
+// The simple sum misses cross-period interaction terms that FactSet's
+// geometric-link attribution captures. We MUST flag these as derived (ᵉ)
+// and prefer full_period_imp when shipped. Returned object now includes
+// `derived:true` when the value is a simple sum so callers can mark it.
 function getImpactForPeriod(factorName,period){
-  if(!cs||!cs.snap_attrib)return{v:null,note:''};
+  if(!cs||!cs.snap_attrib)return{v:null,note:'',derived:false};
   const sa=cs.snap_attrib[factorName];
-  if(!sa)return{v:null,note:''};
+  if(!sa)return{v:null,note:'',derived:false};
   const hist=sa.hist||[];
-  if(!hist.length)return{v:null,note:''};
+  if(!hist.length)return{v:null,note:'',derived:false};
   const endIdx=_histEndIdx(hist);
   if(period==='latest'||!period){
     const last=hist[endIdx];
-    if(!last)return{v:sa.imp,note:''};
-    return{v:last.imp,note:`Week: ${last.d_start||last.d}→${last.d_end||last.d}`};
+    if(!last)return{v:sa.imp,note:'',derived:false};
+    return{v:last.imp,note:`Week: ${last.d_start||last.d}→${last.d_end||last.d}`,derived:false};
   }
   if(period==='all'){
-    // Full-period compounded impact when available — only meaningful at "latest"
+    // Full-period compounded impact when available — FactSet's authoritative
+    // value, includes geometric-link interaction terms. Strongly preferred.
     if(!_selectedWeek&&sa.full_period_imp!=null){
       const first=hist[0],last=hist[hist.length-1];
-      return{v:sa.full_period_imp,note:`Full period: ${first?.d_start||''}→${last?.d_end||''}`};
+      return{v:sa.full_period_imp,note:`Full period (FactSet compounded): ${first?.d_start||''}→${last?.d_end||''}`,derived:false};
     }
-    // Fallback / historical: sum from start to selected end
+    // Fallback / historical: simple sum of weekly contributions. Approximation —
+    // misses cross-period interaction terms that proper attribution captures.
     const slice=hist.slice(0,endIdx+1);
     const total=slice.reduce((s,p)=>s+(+p.imp||0),0);
     const first=slice[0],last=slice[slice.length-1];
-    return{v:+total.toFixed(3),note:`Sum of ${slice.length} periods: ${first?.d_start||''}→${last?.d_end||''}`};
+    return{v:+total.toFixed(3),note:`Σ of ${slice.length} weekly contributions (approximation — true compounded impact requires FactSet full_period_imp): ${first?.d_start||''}→${last?.d_end||''}`,derived:true};
   }
   // Trailing N weeks ending at selected week (or latest)
   const n=IMPACT_PERIOD_WEEKS[period];
-  if(!n)return{v:null,note:''};
+  if(!n)return{v:null,note:'',derived:false};
   const startIdx=Math.max(0,endIdx-n+1);
   const slice=hist.slice(startIdx,endIdx+1);
-  if(!slice.length)return{v:null,note:''};
+  if(!slice.length)return{v:null,note:'',derived:false};
   const total=slice.reduce((s,p)=>s+(+p.imp||0),0);
   const first=slice[0],last=slice[slice.length-1];
-  return{v:+total.toFixed(3),note:`Trailing ${slice.length} weeks: ${first?.d_start||first?.d||''}→${last?.d_end||last?.d||''}`};
+  // Trailing-period: simple sum. FactSet does NOT ship a rolling compounded
+  // number for arbitrary windows, so the only options are:
+  //  (a) simple sum (current — additive approximation, ~25% under-report on
+  //      high-vol factors at long windows)
+  //  (b) geometric link of weekly contributions (smaller error but still
+  //      missing the cross-period interaction terms FactSet uses)
+  // Both are approximations. Mark derived:true so callers can render ᵉ.
+  return{v:+total.toFixed(3),note:`Σ of ${slice.length} weekly contributions (simple sum — geometric link not available for trailing windows): ${first?.d_start||first?.d||''}→${last?.d_end||last?.d||''}`,derived:true};
 }
 
 // ===== HELPERS =====
@@ -3369,7 +3385,7 @@ function rFacTable(factors){
       <td class="r${f._c_synth?' tip-cell':''}" data-col="te" data-sv="${f.c??''}"${f._c_synth?` data-tip="DERIVED: TE contribution synthesized as |Active|×σ × scale-to-pct_factor. Source CSV doesn't ship this field today (FACTSET_FEEDBACK F5). For Size: |${f.a}|×${f.dev}×scale ≈ ${f2(f.c,2)}. This is a sanity-check estimate, not a real reported value."`:''}>${f2(f.c,1)}%${f._c_synth?'<span style="color:var(--warn);font-size:9px;margin-left:2px" title="Derived value — see tooltip">ᵉ</span>':''}</td>
       <td class="r" data-col="of_factor" data-sv="${ofFactor??''}" style="color:var(--txt);font-size:11px">${ofFactor!=null?(ofFactor>=0?'+':'')+f2(ofFactor,0)+'%':'—'}</td>
       <td class="r" data-col="ret" data-sv="${f.ret??''}" style="${f.ret!=null?(f.ret>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(f.ret,2)}</td>
-      <td class="r tip-cell" data-col="imp" data-sv="${impVal??''}" data-tip="${impTipText}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(impVal,2)}</td>
+      <td class="r tip-cell" data-col="imp" data-sv="${impVal??''}" data-tip="${impTipText}" style="${impVal!=null?(impVal>0?'color:var(--pos)':'color:var(--neg)'):''}">${fp(impVal,2)}${impData.derived?'<span style="color:var(--warn);font-size:9px;margin-left:2px" title="Derived: simple sum of weekly contributions. True compounded impact requires FactSet full_period_imp (only shipped for &quot;Full&quot; period). Approximation can under-report by ~25% on high-volatility factors over long windows.">ᵉ</span>':''}</td>
     </tr>`;
   };
 

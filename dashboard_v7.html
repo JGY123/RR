@@ -865,6 +865,14 @@ const _ABOUT_REG={
     caveats:'Collapses via header chevron — preference persists per session. Click any sum-card for detailed drill.',
     related:'cardRiskHistTrends · TE/AS/Beta/Holdings/Idio/Factor sum-card modals'
   },
+  cardHoldRisk:{
+    title:'Holdings Risk Snapshot',
+    what:'Per-holding sibling of the Factor Risk Snapshot. Quadrant scatter — every equity holding placed by active weight (x) vs TE contribution (y), bubble sized by stock-specific TE (|MCR|, the idio component). Color = adds risk vs diversifies. Top-right cluster = high-conviction OW bets that drive risk; bottom-right = OW positions that paradoxically diversify (good); top-left = UW where the absence still costs you (the unowned-risk story).',
+    how:'x = h.a (active weight = port − bench). y = h.tr (FactSet %T, total TE contribution, signed). Bubble area ∝ |h.mcr| (FactSet %S, the stock-specific component of that holding\'s TE). Color = sign of h.tr (red = adds risk, green = diversifies).',
+    source:'cs.hold[] (FactSet "Security" section). All four encodings — x/y/size/color — come from primitive FactSet fields, no derived values.',
+    caveats:'Latest snapshot only — no period dimension at the holding level (B114 backlog). Bench-only holdings show with negative active weight; if their TE contribution is also small, they cluster near the origin. Bubble size is per-holding idio TE — different from cardFacRisk where bubble is per-factor σ.',
+    related:'cardFacRisk (per-factor sibling) · cardScatter (different y-axis: stock-specific × total TE) · cardMCR · TE drill modal'
+  },
   cardCalHeat:{
     title:'TE Calendar Heatmap',
     what:'GitHub-style calendar of weekly tracking-error intensity across the strategy\'s entire history. Each cell = one week; color = magnitude of week-over-week TE change (|ΔTE|, default) or absolute TE level. Pattern-detects clusters of high-volatility weeks, dead periods, and regime shifts. Doubles as a navigation device — click any cell to jump the global week selector to that week.',
@@ -5286,6 +5294,95 @@ function rGroupChart(s,divId){
   });
 }
 
+// 2026-04-30 (user feedback after cardFacRisk legend): "have another similar
+// chart in the holdings tab that has active weight contribution to risk and
+// the size idio". Holdings-side sibling of cardFacRisk:
+//   x = active weight (UW ← → OW)
+//   y = TE contribution % (signed adds/diversifies)
+//   bubble = |stock-specific TE| (idio component, h.mcr)
+//   color = adds risk vs diversifies (sign of h.tr)
+function rHoldRisk(s){
+  const div=document.getElementById('holdRiskDiv');
+  if(!div||!s||!s.hold)return;
+  const eq=s.hold.filter(h=>!isCash(h)&&isFinite(h.a)&&isFinite(h.tr));
+  if(!eq.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings data</p>';return;}
+  // Sort by |TE| so top contributors get text labels; lower-impact ones are dots only
+  const ranked=[...eq].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
+  const N_LABELED=Math.min(20,ranked.length);
+  const labelSet=new Set(ranked.slice(0,N_LABELED).map(h=>h.t));
+  const T=THEME();
+  const xVals=eq.map(h=>h.a||0);
+  const yVals=eq.map(h=>h.tr||0);
+  // Bubble size from |mcr| (stock-specific TE). Sqrt scaled like cardFacRisk.
+  const mcrVals=eq.map(h=>Math.abs(h.mcr||0));
+  const sizes=mcrVals.map(m=>Math.max(8,Math.min(48,Math.sqrt(m)*9+8)));
+  const colors=eq.map(h=>{const c=h.tr||0;if(c>=0){const t=Math.min(1,Math.abs(c)/8);return `rgba(239,68,68,${0.55+t*0.4})`;}const t=Math.min(1,Math.abs(c)/3);return `rgba(34,197,94,${0.55+t*0.4})`;});
+  const labels=eq.map(h=>labelSet.has(h.t)?(tk(h)||h.t):'');
+  const tickers=eq.map(h=>h.t);
+  const hovertext=eq.map(h=>{
+    const dirHtml=(h.tr||0)>=0?'<span style="color:#fca5a5">▲ adds risk</span>':'<span style="color:#86efac">▼ diversifies</span>';
+    const sgnA=(h.a||0)>=0?'+':'';
+    const sgnT=(h.tr||0)>=0?'+':'';
+    return `<b>${tk(h)||h.t} — ${(h.n||'').slice(0,40)}</b><br>Active wt: ${sgnA}${f2(h.a||0,2)}% · ${dirHtml}<br>TE contrib: ${sgnT}${f2(h.tr||0,2)}%<br>Idio (|<span style="text-transform:none">MCR</span>|): ${f2(Math.abs(h.mcr||0),2)}<br>Sector: ${h.sec||'—'} · Country: ${h.co||'—'}`;
+  });
+  const xMax=Math.max(0.5,...xVals.map(Math.abs))*1.18;
+  const yMax=Math.max(0.5,...yVals.map(Math.abs))*1.3;
+  const shapes=[
+    {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(239,68,68,0.04)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:-yMax,y1:0,fillcolor:'rgba(99,102,241,0.03)',line:{width:0},layer:'below'},
+    {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:-yMax,y1:0,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
+    {type:'line',xref:'x',yref:'y',x0:0,x1:0,y0:-yMax,y1:yMax,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}},
+    {type:'line',xref:'x',yref:'y',x0:-xMax,x1:xMax,y0:0,y1:0,line:{color:'rgba(148,163,184,0.45)',width:1,dash:'dot'}}
+  ];
+  const annotations=[
+    {x:xMax,y:yMax,xref:'x',yref:'y',text:'OW · adds risk',xanchor:'right',yanchor:'top',font:{size:9,color:'rgba(239,68,68,0.7)'},showarrow:false},
+    {x:-xMax,y:yMax,xref:'x',yref:'y',text:'UW yet adds (unowned risk)',xanchor:'left',yanchor:'top',font:{size:9,color:'rgba(245,158,11,0.7)'},showarrow:false},
+    {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW · diversifies',xanchor:'right',yanchor:'bottom',font:{size:9,color:'rgba(99,102,241,0.7)'},showarrow:false},
+    {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · risk-off',xanchor:'left',yanchor:'bottom',font:{size:9,color:'rgba(34,197,94,0.7)'},showarrow:false}
+  ];
+  Plotly.newPlot('holdRiskDiv',[{
+    type:'scatter',mode:'markers+text',
+    x:xVals,y:yVals,text:labels,textposition:'top center',
+    textfont:{size:9,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
+    marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},
+    hovertext:hovertext,hoverinfo:'text',
+    customdata:tickers,
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+  }],{
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{family:'DM Sans, system-ui',color:T.tick,size:10},
+    margin:{l:60,r:20,t:30,b:50},
+    xaxis:{title:{text:'Active Weight % — UW ← → OW',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
+    yaxis:{title:{text:'Risk Contribution (% TE) — adds ↑ / diversifies ↓',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f'},
+    shapes,annotations,showlegend:false
+  },{displayModeBar:false,responsive:true});
+  if(div.on){div.on('plotly_click',function(d){
+    if(d&&d.points&&d.points[0]){
+      const t=d.points[0].customdata||d.points[0].text;
+      if(t&&typeof oSt==='function')oSt(t);
+    }
+  });}
+  // Bubble + color legend (same pattern as cardFacRisk)
+  let lg=document.getElementById('holdRiskLegend');
+  if(lg){
+    lg.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px"><span style="color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px;font-weight:600">Bubble size</span>
+        <svg width="80" height="22" style="overflow:visible">
+          <circle cx="10" cy="11" r="6" fill="rgba(148,163,184,0.4)" stroke="rgba(15,23,42,0.7)" stroke-width="1"></circle>
+          <circle cx="34" cy="11" r="9" fill="rgba(148,163,184,0.5)" stroke="rgba(15,23,42,0.7)" stroke-width="1"></circle>
+          <circle cx="62" cy="11" r="13" fill="rgba(148,163,184,0.6)" stroke="rgba(15,23,42,0.7)" stroke-width="1"></circle>
+        </svg>
+        <span style="font-size:10px">|<span style="text-transform:none">MCR</span>| stock-specific TE — bigger bubble = more idiosyncratic risk</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px"><span style="color:var(--textDim);text-transform:uppercase;letter-spacing:0.4px;font-size:9px;font-weight:600">Color</span>
+        <span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgba(239,68,68,0.85)"></span><span>adds risk</span>
+        <span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:rgba(34,197,94,0.85);margin-left:6px"></span><span>diversifies</span>
+        <span style="margin-left:10px;color:var(--textDim);font-size:9px">labels show top ${N_LABELED} by |TE|</span>
+      </div>`;
+  }
+}
+
 function rScat(s){
   let el=document.getElementById('scatDiv');
   let hold=(s.hold||[]).filter(h=>h.p>0&&!isCash(h)&&isFinite(h.mcr)&&isFinite(h.tr));
@@ -7053,6 +7150,21 @@ function renderHoldTab(){
   const _concLabel=_top10Pct==null?'':_top10Pct>=70?'highly concentrated':_top10Pct>=50?'concentrated':_top10Pct>=30?'moderate':'diversified';
   const _concPill=_top10Pct!=null?`<span class="tip" data-tip="What share of total |TE contribution| the top 10 holdings drive. ${_concLabel}." style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(99,102,241,0.08);border:1px solid var(--grid);margin-left:8px"><span style="color:var(--textDim)">Top-10 TE</span><span style="color:${_concColor};font-weight:700">${_top10Pct}%</span></span>`:'';
   let html=`${weekBannerHtml()}
+    <!-- 2026-04-30 (user feedback): Holdings sibling of cardFacRisk —
+         active wt × TE contrib quadrant, sized by stock-specific TE -->
+    <div class="card" id="cardHoldRisk" style="margin-bottom:16px">
+      <div class="flex-between" style="margin-bottom:6px">
+        <div style="display:flex;align-items:baseline;gap:10px">
+          <div class="card-title tip" data-tip="Per-holding quadrant — sibling of Factor Risk Snapshot. X = active weight (UW ← → OW). Y = TE contribution (signed). Bubble size = stock-specific TE (|MCR|, the idio component). Click any bubble for the holding drill." oncontextmenu="showNotePopup(event,'cardHoldRisk');return false">Holdings Risk Snapshot</div>
+          <span style="font-size:10px;color:var(--textDim);font-weight:400">active wt × risk contrib · bubble = idio (|MCR|)</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${aboutBtn('cardHoldRisk')}
+        </div>
+      </div>
+      <div id="holdRiskDiv" style="height:380px"></div>
+      <div id="holdRiskLegend" style="display:flex;gap:18px;justify-content:center;align-items:center;margin-top:6px;padding:6px 12px;font-size:10px;color:var(--txt);flex-wrap:wrap;border-top:1px solid var(--grid)"></div>
+    </div>
     <div class="card" id="cardHoldings" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span>${_concPill}</div>
@@ -7117,7 +7229,11 @@ function renderHoldTab(){
     </div>`;
 
   $('tab-holdings').innerHTML=html;
-  setTimeout(()=>{rRankDist();rHoldConc()},50);
+  setTimeout(()=>{
+    rRankDist();
+    rHoldConc();
+    try{rHoldRisk(cs);}catch(e){console.error('rHoldRisk failed:',e);}
+  },50);
 }
 
 function renderHoldRows(){

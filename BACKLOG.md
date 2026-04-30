@@ -16,6 +16,27 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 
 ---
 
+## B116 · Universe='benchmark' aggregator under-report — cross-tile SEV-1 (NEEDS PM DECISION)
+- **Origin:** cardCountry audit 2026-04-30, finding F2 (SEV-1). Same pattern affects cardSectors / cardGroups / cardRanks — wherever `aggregateHoldingsBy(...,{mode:'benchmark'})` is used.
+- **Symptom:** When user toggles Universe → Benchmark, the # column and Factor TE Breakdown columns silently under-report by ~17x for major countries (e.g., GSC US: agg=3.58 vs c.b=61.12). Verified against `latest_data.json`.
+- **Root cause:** v2 Security slim (per CLAUDE.md "Upcoming FactSet format change") — `cs.hold[]` only ships portfolio + materially-large BM-only holdings. Aggregating by `h.b > 0` captures only the small subset, not the full benchmark constituent universe.
+- **Fix options (PM decision):**
+  - **(a) Honest hide** — when `_aggMode==='benchmark'`, hide the # column and Factor TE Breakdown columns entirely. Bench% column stays (reads `c.b` directly, correct). Less data, no wrong data. Recommended per April-27 anti-fabrication rules.
+  - **(b) Qualifier chip** — render the columns with "(only top BM-only shown)" qualifier and visual de-emphasis (italic / lower opacity).
+  - **(c) Parser-side surface** — if FactSet ships per-bucket factor breakdowns at the aggregate level (`c.factor_breakdown` etc.), use those instead of holding-level aggregation. Requires parser dig + verification on next CSV sample.
+- **Size:** S (option a, ~30 lines × 4 tiles = ~120 lines) or M (option b/c, more invasive).
+- **Surfaced:** ceec116 commit message; tracking here for resolution.
+
+---
+
+## B115 · cardCountry header KPI strip — match cardFacRisk gold (DEFERRED)
+- **Origin:** cardCountry audit 2026-04-30, finding F3 (SEV-2).
+- **Items:** subtitle row ("geographic exposure · click any country to drill · N/M mapped"), inline KPI strip (Largest |Active| country, Largest |TE| country, Country count). Lift skeleton from `#facRiskKpi`.
+- **Size:** S (~30 lines + a `_buildCtryKpi(s)` helper).
+- **Blockers:** none. Deferred only on prioritization.
+
+---
+
 ## B114 · History persistence — append-only architecture
 - **Origin:** user direction during marathon, 2026-04-27. "We are building everything to be ready to ingest and show the full history which is long. Many would have 15 years of data. Once the massive run lands and is confirmed parsed, history doesn't change. Future uploads are appends."
 - **Full design:** `HISTORY_PERSISTENCE.md` at repo root.

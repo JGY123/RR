@@ -6199,7 +6199,9 @@ function watchlistCardHtml(s){
     let f=flags[t];if(!groups[f])return;
     let h=holdMap[t];
     let exited=!h;
-    groups[f].push({t,f,n:(h&&h.n)||t,p:exited?null:+(h.p||0),a:exited?null:+(h.a||0),exited});
+    // Display ticker (TKR-REGION) when SEDOL→ticker_region merge succeeded; fallback to SEDOL
+    let displayT=h?(h.tkr_region||h.t):t;
+    groups[f].push({t,displayT,f,n:(h&&h.n)||t,p:exited?null:+(h.p||0),a:exited?null:+(h.a||0),exited});
   });
   Object.values(groups).forEach(arr=>arr.sort((x,y)=>Math.abs(y.a||0)-Math.abs(x.a||0)));
   let total=tickers.length;
@@ -6217,7 +6219,7 @@ function watchlistCardHtml(s){
     let exitTag=item.exited?' <span style="font-size:9px;color:var(--warn);background:rgba(245,158,11,0.15);padding:1px 4px;border-radius:3px;margin-left:4px">EXITED</span>':'';
     let tEsc=(item.t||'').replace(/'/g,"\\'");
     let nameEsc=(item.n||'').replace(/"/g,'&quot;');
-    return `<tr class="clickable" onclick="oSt('${tEsc}')" style="cursor:pointer;opacity:${item.exited?'0.65':'1'}"><td data-col="flag" data-sv="${item.f}" style="color:${col};font-weight:600;width:22px;padding:4px 6px;text-align:center">${FLAG_ICONS[item.f]||''}</td><td data-col="t" data-sv="${item.t||''}" style="font-weight:600;color:var(--txth);padding:4px 6px;width:80px">${item.t}${exitTag}</td><td data-col="n" data-sv="${(item.n||'').toLowerCase()}" title="${nameEsc}" style="color:var(--txt);padding:4px 6px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.n}</td><td class="r" data-col="p" data-sv="${item.p??''}" style="padding:4px 6px;width:60px">${pCell}</td><td class="r" data-col="a" data-sv="${item.a??''}" style="color:${actCol};padding:4px 6px;width:60px;font-weight:600">${aCell}</td></tr>`;
+    return `<tr class="clickable" onclick="oSt('${tEsc}')" style="cursor:pointer;opacity:${item.exited?'0.65':'1'}"><td data-col="flag" data-sv="${item.f}" style="color:${col};font-weight:600;width:22px;padding:4px 6px;text-align:center">${FLAG_ICONS[item.f]||''}</td><td data-col="t" data-sv="${item.t||''}" style="font-weight:600;color:var(--txth);padding:4px 6px;width:80px">${item.displayT||item.t}${exitTag}</td><td data-col="n" data-sv="${(item.n||'').toLowerCase()}" title="${nameEsc}" style="color:var(--txt);padding:4px 6px;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.n}</td><td class="r" data-col="p" data-sv="${item.p??''}" style="padding:4px 6px;width:60px">${pCell}</td><td class="r" data-col="a" data-sv="${item.a??''}" style="color:${actCol};padding:4px 6px;width:60px;font-weight:600">${aCell}</td></tr>`;
   };
   let sections=[
     {key:'watch',label:'Watch'},
@@ -6444,10 +6446,20 @@ function holdViewToggleHtml(){
 }
 
 function renderHoldTab(){
+  // 2026-04-30 (Q42): "Top-10 TE explained" concentration pill — shows what
+  // share of total |TE contribution| the top 10 holdings drive. PMs get an
+  // instant read on whether risk is concentrated or diffuse.
+  const _eqHold=cs.hold.filter(h=>!isCash(h)&&isFinite(h.tr));
+  const _allTE=_eqHold.reduce((a,h)=>a+Math.abs(h.tr||0),0);
+  const _top10TE=[..._eqHold].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0)).slice(0,10).reduce((a,h)=>a+Math.abs(h.tr||0),0);
+  const _top10Pct=_allTE>0?Math.round(_top10TE/_allTE*100):null;
+  const _concColor=_top10Pct==null?'var(--txt)':_top10Pct>=70?'var(--neg)':_top10Pct>=50?'#f59e0b':_top10Pct>=30?'#fbbf24':'var(--pos)';
+  const _concLabel=_top10Pct==null?'':_top10Pct>=70?'highly concentrated':_top10Pct>=50?'concentrated':_top10Pct>=30?'moderate':'diversified';
+  const _concPill=_top10Pct!=null?`<span class="tip" data-tip="What share of total |TE contribution| the top 10 holdings drive. ${_concLabel}." style="display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:999px;background:rgba(99,102,241,0.08);border:1px solid var(--grid);margin-left:8px"><span style="color:var(--textDim)">Top-10 TE</span><span style="color:${_concColor};font-weight:700">${_top10Pct}%</span></span>`:'';
   let html=`${weekBannerHtml()}
     <div class="card" id="cardHoldings" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span></div>
+        <div class="card-title" style="margin:0">Portfolio Holdings (${fh.length}) <span style="font-size:10px;font-weight:400;color:var(--txt)">${fh.some(h=>isCash(h))?`· ${fh.filter(h=>!isCash(h)).length} equity`:''}</span>${_concPill}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${holdViewToggleHtml()}
           <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardHoldings');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportAllHoldings();this.closest('.dl-drop').classList.remove('open')">Export All CSV</div></div></div>
@@ -6779,7 +6791,47 @@ function oDr(type,name,range){
   },50);
 }
 
-function closeDrill(){$('drillModal').classList.remove('show')}
+function closeDrill(){$('drillModal').classList.remove('show');document.removeEventListener('keydown',_drillKeyHandler);_drillFocusedRow=null;}
+
+// 2026-04-30 (Q63): keyboard navigation inside drill modals.
+// Esc closes; ↑/↓ move focus through clickable rows; Enter activates the focused row.
+let _drillFocusedRow=null;
+function _drillKeyHandler(e){
+  const modal=document.getElementById('drillModal');
+  if(!modal||!modal.classList.contains('show'))return;
+  if(e.key==='Escape'){e.preventDefault();closeDrill();return;}
+  if(e.key!=='ArrowDown'&&e.key!=='ArrowUp'&&e.key!=='Enter')return;
+  const rows=Array.from(modal.querySelectorAll('tr.clickable'));
+  if(!rows.length)return;
+  const cur=_drillFocusedRow!=null?rows.indexOf(_drillFocusedRow):-1;
+  if(e.key==='Enter'&&_drillFocusedRow){
+    e.preventDefault();
+    _drillFocusedRow.click();
+    return;
+  }
+  e.preventDefault();
+  rows.forEach(r=>{r.style.outline='';r.style.background='';});
+  let nextIdx;
+  if(e.key==='ArrowDown')nextIdx=Math.min(rows.length-1,cur+1);
+  else nextIdx=Math.max(0,cur-1);
+  _drillFocusedRow=rows[nextIdx];
+  _drillFocusedRow.style.outline='2px solid var(--pri)';
+  _drillFocusedRow.style.outlineOffset='-2px';
+  _drillFocusedRow.style.background='rgba(99,102,241,0.08)';
+  _drillFocusedRow.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+// Wire up the listener whenever drillModal opens. Hook the show class via mutation observer.
+(function(){
+  const m=document.getElementById('drillModal');
+  if(!m)return;
+  const obs=new MutationObserver(()=>{
+    if(m.classList.contains('show')){
+      _drillFocusedRow=null;
+      document.addEventListener('keydown',_drillKeyHandler);
+    }
+  });
+  obs.observe(m,{attributes:true,attributeFilter:['class']});
+})();
 
 function oDrF(name,range){
   let m=$('drillModal');

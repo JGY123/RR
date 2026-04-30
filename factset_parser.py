@@ -1072,6 +1072,19 @@ class FactSetParserV3:
             countries  = self._extract_group_table("Country", acct)
             regions    = self._extract_group_table("Region", acct)
             groups     = self._extract_group_table("Group", acct)
+            # 2026-04-30: filter out group-aggregate rows that ship as completely
+            # null (every numeric field None). Common case: a legacy sector name
+            # like "Telecommunication Services" is retired by the GICS taxonomy
+            # but FactSet still ships an empty row. Renders as a useless empty
+            # row in cardSectors / cardCountry. Drop them at parse time.
+            def _drop_all_null(items):
+                num_fields = ('p','b','a','tr','mcr')
+                return [x for x in items if any(x.get(k) is not None for k in num_fields)]
+            sectors    = _drop_all_null(sectors)
+            industries = _drop_all_null(industries)
+            countries  = _drop_all_null(countries)
+            regions    = _drop_all_null(regions)
+            groups     = _drop_all_null(groups)
             holdings, unowned_hold = self._extract_security(acct)
             snap       = self._extract_snapshot(acct)
             raw_fac, raw_fac_labels = self._extract_raw_factors(acct)
@@ -1199,10 +1212,22 @@ class FactSetParserV3:
                         "historical": hist_beta,
                         "mpt":        mpt_beta,
                     },
-                    "pe":    current_rm.get("pe"),
-                    "pb":    current_rm.get("pb"),
-                    "bpe":   current_rm.get("bpe"),
-                    "bpb":   current_rm.get("bpb"),
+                    # 2026-04-30: when RiskM section doesn't ship P/E (newer
+                    # format folds RiskM → 18 Style Snapshot), fall back to
+                    # Portfolio Characteristics metrics (pc_metrics has P/E -
+                    # NTM, Price to Book - NTM, etc. with both port + bench).
+                    "pe":    (current_rm.get("pe")
+                              if current_rm.get("pe") is not None
+                              else (pc_metrics.get("P/E - NTM",{}) or {}).get("p")),
+                    "pb":    (current_rm.get("pb")
+                              if current_rm.get("pb") is not None
+                              else (pc_metrics.get("Price to Book - NTM",{}) or {}).get("p")),
+                    "bpe":   (current_rm.get("bpe")
+                              if current_rm.get("bpe") is not None
+                              else (pc_metrics.get("P/E - NTM",{}) or {}).get("b")),
+                    "bpb":   (current_rm.get("bpb")
+                              if current_rm.get("bpb") is not None
+                              else (pc_metrics.get("Price to Book - NTM",{}) or {}).get("b")),
                     "total_risk":   current_rm.get("total_risk"),
                     "bm_risk":      current_rm.get("bm_risk"),
                     # pct_specific / pct_factor: sourced from RiskM when present.

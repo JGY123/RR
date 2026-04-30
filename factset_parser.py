@@ -1101,13 +1101,27 @@ class FactSetParserV3:
             b_hist_beta = pcb("Axioma- Historical Beta")
             b_mpt_beta  = pcb("Port. MPT Beta")
 
-            # Cash from Sector Weights [Cash] row, if present
+            # Cash from Sector Weights [Cash] row, if present.
+            # 2026-04-30: ALSO build cash_by_date — per-period cash % across the
+            # full history, so cardCashHist (Exposures-tab time-series tile) can
+            # plot cash drift over time. Was previously latest-only.
             cash = None
+            cash_by_date = {}
             for r in self.section_rows.get("Sector Weights", []):
                 if len(r) > 5 and r[1].strip() == acct and r[5].strip() == "[Cash]":
                     sch = self.schemas.get("Sector Weights")
                     if sch and sch.num_groups:
+                        # Latest week (last group)
                         cash = safe_float(sch.get_group_value(r, "W", sch.num_groups - 1))
+                        # Per-period: walk every group, key by Period Start Date.
+                        # get_group_value expects the canonical alias, not the raw column name.
+                        for gi in range(sch.num_groups):
+                            d_raw = sch.get_group_value(r, "PERIOD_START", gi)
+                            d_parsed = parse_date(d_raw) if d_raw else None
+                            if d_parsed:
+                                w = safe_float(sch.get_group_value(r, "W", gi))
+                                if w is not None:
+                                    cash_by_date[d_parsed] = w
                     break
 
             s = {
@@ -1172,7 +1186,7 @@ class FactSetParserV3:
                 "factors": self._build_factor_list(current_rm, snap, factor_names),
                 "chars":   self._build_chars(pc_metrics, current_rm, mcap, bmcap),
                 "hist": {
-                    "summary": [self._hist_entry(pc) for pc in pc_rows],
+                    "summary": [self._hist_entry(pc, cash_by_date) for pc in pc_rows],
                     "fac":  self._build_hist_fac(riskm_rows),
                     # 2026-04-28: per-period group history. Each value is a list of
                     # {d, p, b, a, mcr, tr, over, rev, val, qual, mom, stab} entries
@@ -1299,19 +1313,24 @@ class FactSetParserV3:
 
         return chars
 
-    def _hist_entry(self, pc_row):
+    def _hist_entry(self, pc_row, cash_by_date=None):
         pcm = pc_row.get("_metrics", {}) if pc_row else {}
         def v(metric):
             m = pcm.get(metric)
             return m["p"] if m else None
+        d = pc_row.get("d")
+        # 2026-04-30: cash extracted from Sector Weights [Cash] row per period
+        # in _assemble; passed in via cash_by_date dict so per-period cash %
+        # populates hist.summary[].cash (drives cardCashHist time-series tile).
+        cash = (cash_by_date or {}).get(d) if d else None
         return {
-            "d":    pc_row.get("d"),
+            "d":    d,
             "te":   v("Predicted Tracking Error (Std Dev)"),
             "beta": v("Axioma- Predicted Beta to Benchmark"),
             "h":    v("# of Securities"),
             "as":   v("Port. Ending Active Share"),
             "sr":   None,
-            "cash": None,
+            "cash": cash,
         }
 
     def _build_hist_fac(self, riskm_rows):

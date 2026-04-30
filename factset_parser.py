@@ -651,15 +651,24 @@ class FactSetParserV3:
 
     # ------------- Security (wildcard-driven factor column extraction)
 
-    def _extract_security(self, acct_code):
+    def _extract_security(self, acct_code, period_offset=0):
         """Extract holdings. Uses wildcard prefixes to capture all factor-family
         columns into sub-dicts. Unknown columns go to _extra.
         Returns (holdings, unowned). Both empty if Security section missing —
         e.g., 2026-04-28 inception-to-date pulls omit Security to keep file size
-        sane (per-holding × inception = millions of rows)."""
+        sane (per-holding × inception = millions of rows).
+
+        period_offset: 0 = current week (default, last group), -1 = prior week
+        (second-to-last group). cardWeekOverWeek tile uses period_offset=-1 to
+        get the prior week's holdings for the diff view. If period_offset goes
+        before the first group (e.g., -1 on a single-period file), returns
+        empty — the dashboard renders an empty-state banner."""
         schema = self.schemas.get("Security")
         rows = self.section_rows.get("Security", [])
         if not schema or not rows or schema.num_groups == 0:
+            return [], []
+        target_g = schema.num_groups - 1 + period_offset
+        if target_g < 0:
             return [], []
 
         FIXED_FIELD_MAP = {
@@ -702,8 +711,7 @@ class FactSetParserV3:
                 continue
             dispatch[offset] = ("extra", raw_name)
 
-        last_g = schema.num_groups - 1
-        group_start = schema.group_start + last_g * schema.group_size
+        group_start = schema.group_start + target_g * schema.group_size
 
         holdings = []
         unowned = []
@@ -1086,6 +1094,24 @@ class FactSetParserV3:
             regions    = _drop_all_null(regions)
             groups     = _drop_all_null(groups)
             holdings, unowned_hold = self._extract_security(acct)
+            # 2026-04-30 (S1 cardWeekOverWeek): also extract prior week's
+            # holdings for the diff tile. Slim subset {t,n,w,bw,aw,pct_t,pct_s}
+            # — enough for added/dropped/resized + KPI deltas. If only one
+            # period in file, prev_holdings = [] (renderer shows empty state).
+            prev_holdings_full, _ = self._extract_security(acct, period_offset=-1)
+            hold_prev = [
+                {
+                    "t": h.get("t"),
+                    "n": h.get("n"),
+                    "w": h.get("w"),
+                    "bw": h.get("bw"),
+                    "aw": h.get("aw"),
+                    "pct_t": h.get("pct_t"),
+                    "pct_s": h.get("pct_s"),
+                }
+                for h in prev_holdings_full
+                if h.get("t") and not h["t"].startswith("CASH_")
+            ]
             snap       = self._extract_snapshot(acct)
             raw_fac, raw_fac_labels = self._extract_raw_factors(acct)
             # Fallback: 2026-04-28 — FactSet folded RiskM into 18 Style Snapshot.
@@ -1258,6 +1284,7 @@ class FactSetParserV3:
                 "regions":    regions,
                 "groups":     groups,
                 "hold":       holdings,
+                "hold_prev":  hold_prev,   # 2026-04-30: prior-week slim for cardWeekOverWeek
                 "ranks":      ranks,
                 "snap_attrib": snap,
                 "factors": self._build_factor_list(current_rm, snap, factor_names),

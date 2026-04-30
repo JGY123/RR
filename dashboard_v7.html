@@ -139,6 +139,46 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 @media(min-width:1600px){.g2-wide{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}}
 @media(max-width:1599px){.g2-wide{display:block}.g2-wide>.card{margin-bottom:16px}}
 
+/* 2026-04-30 (S1 cardWeekOverWeek Option A): Week-over-Week tile classes —
+   KPI strip + 3-column move list (added / dropped / resized) + factor
+   rotation footer. Token-matched to the rest of the dashboard. */
+.wow-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+.wow-kpi{background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:10px 14px}
+.wow-kpi-label{color:var(--textDim);font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase}
+.wow-kpi-row{display:flex;align-items:baseline;gap:6px;margin-top:4px}
+.wow-kpi-val{color:var(--txth);font-size:20px;font-weight:800;font-family:'JetBrains Mono','SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums}
+.wow-kpi-delta{font-size:11px;font-weight:600;padding:1px 6px;border-radius:4px}
+.wow-delta-up{background:rgba(239,68,68,.18);color:var(--neg)}
+.wow-delta-dn{background:rgba(16,185,129,.18);color:var(--pos)}
+.wow-delta-flat{background:rgba(148,163,184,.15);color:var(--txt)}
+.wow-kpi-prev{color:var(--textDim);font-size:11px;margin-left:auto;font-family:'JetBrains Mono','SF Mono',monospace}
+.wow-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.wow-col{background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:12px}
+.wow-col-h{color:var(--txth);font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--grid);display:flex;justify-content:space-between}
+.wow-col-h .count{color:var(--textDim);font-weight:500}
+.wow-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:5px 0;border-bottom:1px dashed rgba(148,163,184,.1);font-size:12px;cursor:pointer}
+.wow-row:last-child{border-bottom:none}
+.wow-row:hover{background:rgba(99,102,241,.04);border-radius:4px;padding-left:4px}
+.wow-row .tk{color:var(--txth);font-weight:600}
+.wow-row .nm{color:var(--textDim);font-size:10px;display:block;margin-top:1px}
+.wow-row .wt{color:var(--txth);font-weight:600;font-family:'JetBrains Mono','SF Mono',monospace;font-variant-numeric:tabular-nums}
+.wow-row .te{font-size:11px;font-family:'JetBrains Mono','SF Mono',monospace;font-variant-numeric:tabular-nums}
+.wow-hbar{height:4px;border-radius:2px;background:var(--grid);position:relative;overflow:hidden;margin-top:3px;width:60px}
+.wow-hbar > span{position:absolute;top:0;bottom:0;left:50%;transform-origin:left center}
+.wow-hbar > span.neg{background:var(--pos);transform:translateX(-100%) scaleX(var(--scale,1))}
+.wow-hbar > span.pos{background:var(--neg);transform:scaleX(var(--scale,1))}
+.wow-fac-rot{margin-top:14px;padding-top:12px;border-top:1px solid var(--grid);display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.wow-fac-cell{display:flex;align-items:center;gap:10px}
+.wow-fac-name{color:var(--txth);font-size:12px;font-weight:600;min-width:110px}
+.wow-fac-arrow{font-size:14px;font-weight:800}
+.wow-fac-arrow.up{color:var(--neg)}
+.wow-fac-arrow.dn{color:var(--pos)}
+.wow-fac-arrow.flat{color:var(--txt)}
+.wow-fac-num{color:var(--txth);font-size:12px;font-weight:600;font-family:'JetBrains Mono','SF Mono',monospace}
+.wow-fac-spark{flex:1;height:18px;display:flex;align-items:center}
+.wow-empty{padding:30px;text-align:center;color:var(--textDim);font-size:12px}
+@media(max-width:1024px){.wow-kpis{grid-template-columns:repeat(2,1fr)}.wow-cols{grid-template-columns:1fr}.wow-fac-rot{grid-template-columns:1fr}}
+
 /* Transitions & Animations */
 .tab-content{opacity:0;transition:opacity .3s ease}
 .tab-content.active{opacity:1}
@@ -793,6 +833,15 @@ const _ABOUT_REG={
   // Tile removed in commit 2eff789; per-holding |MCR| now lives on
   // cardHoldRisk (Holdings tab) as bubble-size encoding + bottom Top-10
   // chart. Spec preserved in tile-specs/cardMCR-audit-2026-04-23.md.
+  // 2026-04-30 (S1, Strategic Recommendations): the diff tile.
+  cardWeekOverWeek:{
+    title:'Week over Week',
+    what:'What changed this week — 4 KPI deltas (TE/AS/Beta/Holdings), 3-column move list (Added/Dropped/Resized top 5 by |Δwt|), and factor rotation footer for the 3 factors with the biggest active-exposure shift. Click any holding row to drill.',
+    how:'KPI deltas from cs.hist.sum[-1] vs cs.hist.sum[-2]. Added = SEDOLs port-held in current week but not in cs.hold_prev. Dropped = SEDOLs port-held in prior week but not in current. Resized = |Δwt| ≥ 0.10% threshold (configurable via WOW_RESIZE_THRESH constant). Factor rotation = top-3 |Δ active exposure| from cs.snap_attrib[name].hist last 2 entries.',
+    source:'cs.hold (current week) + cs.hold_prev (prior week, parser-slimmed copy of the second-to-last main-date Security section) + cs.hist.sum for KPI strip + cs.snap_attrib[name].hist for factor rotation. All fields primitive FactSet values — no derived synthesis.',
+    caveats:'hold_prev is a slim subset {t,n,w,bw,aw,pct_t,pct_s} — not full holding detail. No drill modal in v1 (deferred). First-ingest: renders empty-state when hold_prev is empty array. When user is viewing a historical week (_selectedWeek set), tile renders with note pointing back to latest. Resize threshold 0.10% absolute weight change — anything below is filtered as noise.',
+    related:'cardThisWeek · cardRiskHistTrends · cardHoldRisk'
+  },
   // 2026-04-30 (audit R2-Q4, default B): Top 10 Holdings upgraded to first-class.
   cardTop10:{
     title:'Top 10 Holdings',
@@ -1809,6 +1858,155 @@ function _riskAlertClick(idx){
   if(_lastAlerts[idx]&&_lastAlerts[idx].action)_lastAlerts[idx].action();
 }
 
+// ============================================================================
+// 2026-04-30 (S1 cardWeekOverWeek Option A): the "what changed this week" tile.
+// Top of Exposures tab. Three sections:
+//   1. KPI strip (4 cards): Δ TE / Δ Active Share / Δ Beta / Δ Holdings count
+//   2. Three-column move list: Added / Dropped / Resized (top 5 |Δwt|)
+//   3. Factor rotation footer (top 3 by |Δexp|): name, arrow, σ delta, sparkline
+// Data: cs.hist.sum[-1] vs [-2] for KPIs. cs.hold vs cs.hold_prev for move list.
+// Resize threshold: 0.10% absolute weight change (the noise floor).
+// First-ever ingest: empty hold_prev → renders empty-state banner.
+// ============================================================================
+const WOW_RESIZE_THRESH = 0.10;  // % absolute Δwt to count as "resized"
+function _wowDelta(curr, prev, decimals, riskMode){
+  // riskMode: 'risk' = up is bad (red); 'neutral' = no color preference
+  if(curr==null||prev==null||!isFinite(curr)||!isFinite(prev)){
+    return {label:'—', cls:'wow-delta-flat'};
+  }
+  const d=+(curr-prev).toFixed(decimals);
+  if(d===0||(decimals===2&&Math.abs(d)<0.005))return {label:'±'+(0).toFixed(decimals),cls:'wow-delta-flat'};
+  let cls;
+  if(riskMode==='risk')cls=(d>0)?'wow-delta-up':'wow-delta-dn';
+  else cls=(d>0)?'wow-delta-up':'wow-delta-dn';
+  const sign=d>0?'+':'';
+  return {label:sign+d.toFixed(decimals), cls};
+}
+function rWeekOverWeek(s){
+  const hist=(s&&s.hist&&s.hist.sum)||[];
+  const prevHold=s&&s.hold_prev||[];
+  const currHold=(s&&s.hold)||[];
+  // Empty state — no prior week
+  if(hist.length<2 && (!prevHold||!prevHold.length)){
+    return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
+      <div class="flex-between" style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff: this week vs last week. KPI deltas + holdings moves + factor rotation. Renders only when prior week's data is available." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false">Week over Week</div>${aboutBtn('cardWeekOverWeek')}</div>
+      </div>
+      <div class="wow-empty">First observation — no prior week to compare against. Tile will populate once a second weekly snapshot is ingested.</div>
+    </div>`;
+  }
+  // Hist-week guard: WoW is "latest vs prior", not user-selected vs whatever
+  if(_selectedWeek){
+    return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
+      <div class="flex-between" style="margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff is anchored at the latest week vs the prior week. Switch back to latest to see the diff." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false">Week over Week</div>${aboutBtn('cardWeekOverWeek')}</div>
+      </div>
+      <div class="wow-empty" style="font-size:11px">WoW diff shows latest week only. <a href="javascript:jumpToLatest()" style="color:var(--pri)">Return to latest week</a> to see the diff.</div>
+    </div>`;
+  }
+  // Build KPI deltas from hist.sum
+  const last=hist[hist.length-1]||{};
+  const prev=hist[hist.length-2]||{};
+  const fmtDate=d=>{if(!d||d.length!==8)return d||'—';return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);};
+  const dateBadge=`${fmtDate(prev.d)} → ${fmtDate(last.d)}`;
+  const kpis=[
+    {key:'te',   label:'Tracking Error', dec:2, riskMode:'risk',    fmt:v=>v!=null?(+v).toFixed(2):'—'},
+    {key:'as',   label:'Active Share',   dec:1, riskMode:'neutral', fmt:v=>v!=null?(+v).toFixed(1)+'%':'—'},
+    {key:'beta', label:'Beta',           dec:2, riskMode:'neutral', fmt:v=>v!=null?(+v).toFixed(2):'—'},
+    {key:'h',    label:'Holdings',       dec:0, riskMode:'neutral', fmt:v=>v!=null?String(Math.round(v)):'—'},
+  ];
+  const kpiHtml=kpis.map(k=>{
+    const d=_wowDelta(last[k.key], prev[k.key], k.dec, k.riskMode);
+    return `<div class="wow-kpi">
+      <div class="wow-kpi-label">${k.label}</div>
+      <div class="wow-kpi-row">
+        <span class="wow-kpi-val">${k.fmt(last[k.key])}</span>
+        <span class="wow-kpi-delta ${d.cls}">${d.label}</span>
+        <span class="wow-kpi-prev">vs ${k.fmt(prev[k.key])}</span>
+      </div>
+    </div>`;
+  }).join('');
+  // Build move lists (added/dropped/resized) — keyed by SEDOL
+  const prevByT=new Map(prevHold.filter(h=>h&&h.t).map(h=>[h.t,h]));
+  const currByT=new Map(currHold.filter(h=>h&&h.t&&!isCash(h)).map(h=>[h.t,h]));
+  const portKey=h=>(h.w||h.p||0);
+  const isPortHeld=h=>portKey(h)>0;
+  const added=[...currByT.values()].filter(h=>isPortHeld(h)&&!prevByT.has(h.t)||(prevByT.has(h.t)&&!isPortHeld(prevByT.get(h.t))&&isPortHeld(h)));
+  const dropped=[...prevByT.values()].filter(h=>isPortHeld(h)&&(!currByT.has(h.t)||!isPortHeld(currByT.get(h.t))));
+  const resized=[...currByT.values()].filter(h=>{
+    if(!isPortHeld(h)||!prevByT.has(h.t))return false;
+    const p=prevByT.get(h.t);
+    if(!isPortHeld(p))return false;
+    return Math.abs(portKey(h)-portKey(p))>=WOW_RESIZE_THRESH;
+  }).map(h=>{const p=prevByT.get(h.t);return{...h, _dwt:portKey(h)-portKey(p)};}).sort((a,b)=>Math.abs(b._dwt)-Math.abs(a._dwt));
+  added.sort((a,b)=>portKey(b)-portKey(a));
+  dropped.sort((a,b)=>portKey(b)-portKey(a));
+  // Render rows
+  const rowHtml=(h, mode)=>{
+    const tk=h.tkr_region||h.t||'';
+    const nm=(h.n||'').slice(0,28);
+    const escT=(h.t||'').replace(/'/g,"\\'");
+    if(mode==='resized'){
+      const dwt=h._dwt;
+      const sign=dwt>0?'+':'';
+      const col=dwt>0?'var(--neg)':'var(--pos)';
+      const maxDwt=Math.max(...resized.map(r=>Math.abs(r._dwt)),0.5);
+      const scale=Math.abs(dwt)/maxDwt;
+      const dir=dwt>0?'pos':'neg';
+      return `<div class="wow-row" onclick="oSt('${escT}')"><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt" style="color:${col}">${sign}${dwt.toFixed(2)}</div><div class="wow-hbar"><span class="${dir}" style="--scale:${scale.toFixed(2)}"></span></div></div>`;
+    }
+    const wt=portKey(h);
+    const tr=h.pct_t||h.tr||0;
+    const trCol=tr>0?'var(--neg)':(tr<0?'var(--pos)':'var(--txt)');
+    const trSign=tr>0?'+':'';
+    return `<div class="wow-row" onclick="oSt('${escT}')"><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt">${wt.toFixed(2)}%</div><div class="te" style="color:${trCol}">${trSign}${tr.toFixed(2)}</div></div>`;
+  };
+  const addCol=`<div class="wow-col"><div class="wow-col-h">Added <span class="count">${added.length} new</span></div>${added.length?added.slice(0,7).map(h=>rowHtml(h,'added')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No new positions this week</div>'}${added.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${added.length-7} more...</div>`:''}</div>`;
+  const dropCol=`<div class="wow-col"><div class="wow-col-h">Dropped <span class="count">${dropped.length} exited</span></div>${dropped.length?dropped.slice(0,7).map(h=>rowHtml(h,'dropped')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No exits this week</div>'}${dropped.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${dropped.length-7} more...</div>`:''}</div>`;
+  const resizeCol=`<div class="wow-col"><div class="wow-col-h">Resized <span class="count">top ${Math.min(5,resized.length)} |Δwt|</span></div>${resized.length?resized.slice(0,5).map(h=>rowHtml(h,'resized')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No material weight changes (≥0.10%)</div>'}</div>`;
+  // Factor rotation footer — top 3 by |Δexp|
+  const facRot=(()=>{
+    const facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a||f.e));
+    const sa=s.snap_attrib||{};
+    const ranked=facs.map(f=>{
+      const fhist=(sa[f.n]||{}).hist||[];
+      if(fhist.length<2)return null;
+      const lastP=fhist[fhist.length-1]||{};
+      const prevP=fhist[fhist.length-2]||{};
+      const lastAct=(lastP.exp!=null&&lastP.bench_exp!=null)?(lastP.exp-lastP.bench_exp):f.a;
+      const prevAct=(prevP.exp!=null&&prevP.bench_exp!=null)?(prevP.exp-prevP.bench_exp):null;
+      if(lastAct==null||prevAct==null)return null;
+      const dExp=+(lastAct-prevAct).toFixed(3);
+      // Build sparkline of last 12 weeks of active exposure
+      const tail=fhist.slice(-12).map(p=>(p.exp!=null&&p.bench_exp!=null)?(p.exp-p.bench_exp):null).filter(v=>v!=null);
+      return {n:f.n, dExp, tail};
+    }).filter(x=>x).sort((a,b)=>Math.abs(b.dExp)-Math.abs(a.dExp));
+    const top3=ranked.slice(0,3);
+    if(!top3.length)return '';
+    return `<div class="wow-fac-rot">${top3.map(f=>{
+      const arrow=f.dExp>0?'▲':(f.dExp<0?'▼':'●');
+      const dir=f.dExp>0?'up':(f.dExp<0?'dn':'flat');
+      const sign=f.dExp>0?'+':'';
+      const facShort=(f.n.length>14?f.n.slice(0,12)+'…':f.n);
+      const spark=mkSparkline?mkSparkline(f.tail,80,18,null):'';
+      return `<div class="wow-fac-cell"><div class="wow-fac-name" title="${f.n}">${facShort}</div><div class="wow-fac-arrow ${dir}">${arrow}</div><div class="wow-fac-num">${sign}${f.dExp.toFixed(2)}σ</div><div class="wow-fac-spark">${spark}</div></div>`;
+    }).join('')}</div>`;
+  })();
+  return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
+    <div class="flex-between" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="card-title tip" data-tip="What changed this week — KPI deltas (TE/AS/Beta/Holdings count), 3-column move list (Added/Dropped/Resized top 5 by |Δwt|), and factor rotation footer for the 3 factors with the biggest active-exposure shift. Click any row to drill into that holding." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false" style="margin:0">Week over Week</div>
+        ${aboutBtn('cardWeekOverWeek')}
+        <span style="font-size:10px;color:var(--textDim);font-weight:400">${dateBadge}</span>
+      </div>
+      <span style="font-size:9px;color:var(--textDim)">Δwt threshold: ${WOW_RESIZE_THRESH.toFixed(2)}%</span>
+    </div>
+    <div class="wow-kpis">${kpiHtml}</div>
+    <div class="wow-cols">${addCol}${dropCol}${resizeCol}</div>
+    ${facRot}
+  </div>`;
+}
+
 // ===== EXPOSURES TAB =====
 function rExp(){
   let s=cs;
@@ -1881,6 +2079,10 @@ function rExp(){
        there). _lastAlerts still computed for any code that depends on it. -->
   ${(()=>{_lastAlerts=detectRiskAlerts(s);return '';})()}
   ${whatChangedBannerHtml(s)}
+  <!-- 2026-04-30 (S1, Strategic Recommendations): cardWeekOverWeek — the diff
+       tile. PM walks in Monday morning, scans this for 90s, knows what
+       changed. Lives at top of Exposures, above cardThisWeek. -->
+  ${rWeekOverWeek(s)}
   <!-- 2026-04-30 (audit R2-Q1, default A): cardWatchlist moved to Holdings tab.
        Watchlist is a per-holding curation activity (flags set via ⚑ on Holdings
        rows) — putting it on the same tab as the source of those flags is more

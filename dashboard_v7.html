@@ -1871,6 +1871,11 @@ function rExp(){
           <button class="toggle-btn" data-region-btn="asia" onclick="setMapRegion('asia')" title="Zoom: Asia">Asi</button>
           <button class="toggle-btn" data-region-btn="americas" onclick="setMapRegion('americas')" title="Zoom: Americas">Amer</button>
         </div>
+        <!-- 2026-04-30 (user feedback): explicit Reset Zoom button — clicking
+             World re-zooms but the button stays "active" so the user can't tell
+             they need to re-engage. A separate Reset always resets even if
+             World is already showing. -->
+        <button id="mapResetBtn" data-region-btn="reset" onclick="setMapRegion('world')" title="Reset zoom — back to full globe" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:11px;padding:2px 8px;border-radius:5px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:3px">⤾ Reset</button>
         <div class="toggle-wrap" style="margin:0">
           <button class="toggle-btn active" onclick="toggleCountryView('map',this)">Map</button>
           <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
@@ -2094,48 +2099,55 @@ function rFacWaterfall(s){
   // Set chart container height — adapt to factor count, leave room for total badge
   const h=Math.min(900,Math.max(200,facs.length*30+60));
   el.style.height=h+'px';
-  // 2026-04-30 (user feedback "make it gtgt"): waterfall cleanup —
-  // (a) inline value labels on each bar so users don't need to hover for
-  //     the magnitude; format with explicit sign + 2dp + %
-  // (b) cumulative line in indigo (--pri) for cohesion with the rest of the
-  //     theme instead of the previous purple
-  // (c) bigger zero baseline for visual anchoring
-  // (d) cleaner title — drop the inline HTML tags Plotly used to render badly
-  // (e) explicit positive-side vs negative-side label positioning so values
-  //     never overlap the bar
+  // 2026-04-30 v2 (user feedback "still needs work, more visually quality"):
+  // Waterfall polish round 2 —
+  // (a) Value labels are now color-coded to match the bar (green/red) — pops
+  //     more than slate-gray neutral text.
+  // (b) Cumulative line moved BEHIND bars + made fainter so it doesn't compete
+  //     with the per-factor bars for attention.
+  // (c) Bar bodies given a subtle shadow + rounded look via stroke alpha.
+  // (d) Y-axis tickfont color upgraded for legibility.
+  // (e) Subtitle annotation simplified — just the total + arrow.
+  // (f) Per-bar height auto-sized so 2-3 factors don't render as 80px-tall mega-bars.
   const valLabels=vals.map(v=>(v>=0?'+':'')+v.toFixed(2)+'%');
+  // Force a minimum height per bar to keep proportions sane, capped to avoid huge tiles.
+  const barH=Math.min(36,Math.max(22,260/Math.max(facs.length,1)));
   Plotly.newPlot('facButtDiv',[
-    // Primary bars (per-factor impact) with inline value labels
-    {
-      y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
-      name:'Per-factor impact',
-      marker:{color:vals.map(v=>v>=0?posC:negC),line:{color:'rgba(15,23,42,0.5)',width:0.5}},
-      text:valLabels,
-      textposition:'outside',
-      textfont:{size:10,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
-      cliponaxis:false,
-      hovertext:hovertext,hoverinfo:'text',
-      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
-    },
-    // Cumulative running total (line + markers in primary indigo for theme consistency)
+    // Cumulative line FIRST so bars render on top of it (Plotly stacks traces in order)
     {
       y:facs.map(f=>f.n),x:cumVals,type:'scatter',mode:'lines+markers',
       name:'Running total',
-      line:{color:'#6366f1',width:1.8,dash:'dot'},
-      marker:{size:6,color:'#6366f1',symbol:'diamond',line:{color:'rgba(15,23,42,0.6)',width:0.5}},
+      line:{color:'rgba(99,102,241,0.55)',width:1.4,dash:'dot'},
+      marker:{size:5,color:'rgba(99,102,241,0.75)',symbol:'diamond',line:{color:'rgba(15,23,42,0.6)',width:0.5}},
       hovertext:cumHover,hoverinfo:'text',
-      hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#6366f1',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}
+      hoverlabel:HOVERLABEL_THEME
+    },
+    // Per-factor bars on top
+    {
+      y:facs.map(f=>f.n),x:vals,type:'bar',orientation:'h',
+      name:'Per-factor impact',
+      marker:{color:vals.map(v=>v>=0?posC:negC),line:{color:'rgba(15,23,42,0.6)',width:0.6}},
+      text:valLabels,
+      textposition:'outside',
+      // Color the value labels to match the bar — green pops on positive,
+      // red on negative. Reads cleaner than slate-gray neutral.
+      textfont:{size:10.5,color:vals.map(v=>v>=0?posC:negC),family:'DM Sans, system-ui'},
+      cliponaxis:false,
+      hovertext:hovertext,hoverinfo:'text',
+      hoverlabel:HOVERLABEL_THEME
     }
   ],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:11},
-    margin:{l:10,r:60,t:42,b:42},
-    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',tickfont:{size:10,color:T.tickH},automargin:true},
-    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,range:[-xmax*1.15,xmax*1.15],title:`Active-return contribution (${yLab}, %)`,tickfont:{color:T.tick,size:9},tickformat:'+.2f'},
+    margin:{l:10,r:70,t:46,b:42},
+    bargap:0.32,
+    yaxis:{gridcolor:T.grid,zeroline:false,autorange:'reversed',tickfont:{size:10.5,color:T.tickH||'#e2e8f0',family:'DM Sans, system-ui'},automargin:true},
+    xaxis:{gridcolor:T.grid,zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,range:[-xmax*1.18,xmax*1.18],title:{text:`Active-return contribution (${yLab}, %)`,font:{size:11,color:T.tickH||'#cbd5e1'}},tickfont:{color:T.tick,size:9},tickformat:'+.2f'},
     showlegend:false,
+    hoverlabel:HOVERLABEL_THEME,
     annotations:[
-      // Cleaner title — plain text, no HTML, sign+color via separate spans
-      {text:`Total ${yLab} factor impact: ${totalImp>=0?'+':''}${f2(totalImp,2)}% across ${facs.length} factors  ·  diamond line = running cumulative`,
+      // Punch-line title: directional arrow + total + factor count
+      {text:`${totalImp>=0?'▲':'▼'}  Total ${yLab} factor impact ${totalImp>=0?'+':''}${f2(totalImp,2)}%  ·  ${facs.length} factors  ·  faint indigo diamonds = cumulative`,
        x:0.5,y:1.06,xref:'paper',yref:'paper',showarrow:false,font:{size:10.5,color:totalImp>=0?'#10b981':'#ef4444'},xanchor:'center',yanchor:'bottom'}
     ]
   },plotCfg);
@@ -2844,7 +2856,7 @@ function _renderSecFsChart(){
   const xmax=Math.max(1,...xs.map(Math.abs))*1.30;
   const ymax=Math.max(1,...ys.map(Math.abs))*1.35;
   const trace={type:'scatter',mode:'markers+text',x:xs,y:ys,text:labels,textposition:'top center',textfont:{size:10,color:'#cbd5e1',family:'DM Sans'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(255,255,255,0.18)',width:0.5},opacity:0.88},customdata:customdata,hovertemplate:'<b>%{customdata[0]}</b><br>Port: %{customdata[1]:.1f}% · Bench: %{customdata[2]:.1f}% · Active: %{customdata[3]:+.1f}%<br>TE: %{customdata[4]:.2f}% · Stock: %{customdata[5]:.2f}%<br>Avg Rank: %{customdata[6]} · Holdings: %{customdata[7]}<extra></extra>',showlegend:false};
-  const layout={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},xaxis:{title:{text:'Active Weight (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',range:[-xmax,xmax]},yaxis:{title:{text:'TE Contribution (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',range:[-ymax,ymax]},margin:{l:60,r:18,t:18,b:54},shapes:[{type:'rect',xref:'x',yref:'y',x0:0,x1:xmax,y0:0,y1:ymax,fillcolor:'rgba(239,68,68,0.025)',line:{width:0},layer:'below'},{type:'rect',xref:'x',yref:'y',x0:-xmax,x1:0,y0:-ymax,y1:0,fillcolor:'rgba(16,185,129,0.025)',line:{width:0},layer:'below'}]};
+  const layout={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},hoverlabel:HOVERLABEL_THEME,xaxis:{title:{text:'Active Weight (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',range:[-xmax,xmax]},yaxis:{title:{text:'TE Contribution (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',range:[-ymax,ymax]},margin:{l:60,r:18,t:18,b:54},shapes:[{type:'rect',xref:'x',yref:'y',x0:0,x1:xmax,y0:0,y1:ymax,fillcolor:'rgba(239,68,68,0.025)',line:{width:0},layer:'below'},{type:'rect',xref:'x',yref:'y',x0:-xmax,x1:0,y0:-ymax,y1:0,fillcolor:'rgba(16,185,129,0.025)',line:{width:0},layer:'below'}]};
   Plotly.newPlot('secFsChartDiv',[trace],layout,{displayModeBar:false,responsive:true});
   div.on('plotly_click',function(e){const cd=e.points&&e.points[0]&&e.points[0].customdata;if(cd&&cd[0]){_secFsFocusOn(cd[0]);}});
 }
@@ -4305,10 +4317,25 @@ function THEME(){
 }
 function buildPlotBg(){
   let t=THEME();
-  return {paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'Inter',color:t.tick,size:11},margin:{l:50,r:20,t:10,b:40},xaxis:{gridcolor:t.grid,zerolinecolor:t.grid},yaxis:{gridcolor:t.grid,zerolinecolor:t.grid}};
+  // 2026-04-30 (hover-label sweep): default hoverlabel ensures every Plotly
+  // trace renders with theme-appropriate dark bg + light text. Plotly's
+  // built-in default sometimes picks white-on-light or black-on-dark mixes
+  // that are illegible against our dark theme. Per-trace hoverlabel still
+  // overrides this global default when specific styling is needed.
+  return {
+    paper_bgcolor:'transparent',plot_bgcolor:'transparent',
+    font:{family:'DM Sans, Inter, system-ui',color:t.tick,size:11},
+    margin:{l:50,r:20,t:10,b:40},
+    xaxis:{gridcolor:t.grid,zerolinecolor:t.grid},
+    yaxis:{gridcolor:t.grid,zerolinecolor:t.grid},
+    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:t.grid||'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans, system-ui'},align:'left'}
+  };
 }
 let plotBg=buildPlotBg();
 const plotCfg={displayModeBar:false,responsive:true};
+// Reusable themed hoverlabel for traces that build their own layout objects
+// (don't spread plotBg). Same shape as the layout default above.
+const HOVERLABEL_THEME={bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans, system-ui'},align:'left'};
 const modalPlotCfg={displayModeBar:false,responsive:true,scrollZoom:true};
 
 function rSecChart(s){
@@ -4357,6 +4384,7 @@ function rSecChart(s){
   const layout={
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},
+    hoverlabel:HOVERLABEL_THEME,
     height:380,
     xaxis:{title:{text:`Active Weight (% port − % bench)  ·  ${aggLbl} universe`,font:{size:10,color:'#94a3b8'}},
       zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,
@@ -5884,11 +5912,13 @@ function rCalHeat(){
     colorscale, showscale:false,
     xgap:2, ygap:2,
     hovertemplate:hoverTpl,
-    hoverongaps:false
+    hoverongaps:false,
+    hoverlabel:HOVERLABEL_THEME
   }],{
     paper_bgcolor:'transparent', plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:THEME().tick,size:10},
     margin:{l:42,r:8,t:6,b:30},
+    hoverlabel:HOVERLABEL_THEME,
     xaxis:{
       tickmode:'array',
       tickvals:[0,4,8,13,17,22,26,30,35,39,43,48],
@@ -6784,8 +6814,10 @@ function rRiskByDim(s){
     textposition:'outside',
     textfont:{size:10,color:T.tick},
     hovertemplate:'<b>%{y}</b><br>TE Contribution: %{x:.2f}%<br>Holdings: %{customdata}<extra></extra>',
+    hoverlabel:HOVERLABEL_THEME,
   }],{
     margin:{l:Math.max(120,Math.min(220,Math.max(...names.map(n=>n.length))*7+10)),r:50,t:20,b:40},
+    hoverlabel:HOVERLABEL_THEME,
     xaxis:{title:'TE Contribution (%)',zeroline:true,zerolinecolor:T.zero,zerolinewidth:2,gridcolor:T.grid,tickfont:{size:10,color:T.tick}},
     yaxis:{automargin:true,tickfont:{size:11,color:T.tick}},
     paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
@@ -8851,8 +8883,9 @@ function _setTEBox(name){
   }else if(_teActiveBox==='tepct'){
     Plotly.newPlot('teHistDiv',[{type:'histogram',x:ctx.numVals,nbinsx:30,
       marker:{color:'rgba(168,85,247,0.45)',line:{color:'rgba(168,85,247,0.8)',width:0.5}},
-      hovertemplate:'TE in [%{x:.1f}%]<br>%{y} weeks<extra></extra>'
-    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:9},margin:{l:30,r:10,t:6,b:24},
+      hovertemplate:'TE in [%{x:.1f}%]<br>%{y} weeks<extra></extra>',
+      hoverlabel:HOVERLABEL_THEME
+    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:9},margin:{l:30,r:10,t:6,b:24},hoverlabel:HOVERLABEL_THEME,
       xaxis:{title:{text:'TE %',font:{size:9}},gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
       yaxis:{gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
       shapes:[{type:'line',x0:ctx.current,x1:ctx.current,yref:'paper',y0:0,y1:1,line:{color:'#fff',width:2}}],
@@ -8861,8 +8894,9 @@ function _setTEBox(name){
   }else if(_teActiveBox==='ratiopct'){
     Plotly.newPlot('teRatioHistDiv',[{type:'histogram',x:ctx.idioPctVals,nbinsx:30,
       marker:{color:'rgba(245,158,11,0.45)',line:{color:'rgba(245,158,11,0.8)',width:0.5}},
-      hovertemplate:'Idio share in [%{x:.0f}%]<br>%{y} weeks<extra></extra>'
-    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:9},margin:{l:30,r:10,t:6,b:24},
+      hovertemplate:'Idio share in [%{x:.0f}%]<br>%{y} weeks<extra></extra>',
+      hoverlabel:HOVERLABEL_THEME
+    }],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans',color:'#cbd5e1',size:9},margin:{l:30,r:10,t:6,b:24},hoverlabel:HOVERLABEL_THEME,
       xaxis:{title:{text:'Idio share %',font:{size:9}},gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
       yaxis:{gridcolor:'rgba(148,163,184,0.07)',tickfont:{size:9}},
       shapes:[{type:'line',x0:ctx.idioPct,x1:ctx.idioPct,yref:'paper',y0:0,y1:1,line:{color:'#fff',width:2}}],

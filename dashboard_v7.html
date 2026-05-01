@@ -130,8 +130,10 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 .btn-sec{background:var(--surf);color:var(--txt);border:1px solid var(--grid)}.btn-sec:hover{color:var(--txth)}
 .btn-sm{padding:4px 10px;font-size:11px}
 .toggle-wrap{display:flex;gap:4px;margin-bottom:10px}
-.toggle-btn{padding:4px 12px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit}
-.toggle-btn.active{background:var(--pri);color:#fff;border-color:var(--pri)}
+/* 2026-05-01 polish: tighter toggle-button typography matching pill convention */
+.toggle-btn{padding:4px 12px;background:var(--surf);border:1px solid var(--cardBorder);color:var(--txt);border-radius:6px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:500;transition:all .15s ease}
+.toggle-btn:hover{color:var(--textBright);border-color:var(--pri)}
+.toggle-btn.active{background:var(--pri);color:#fff;border-color:var(--pri);font-weight:600}
 .flex-between{display:flex;justify-content:space-between;align-items:center}
 .upload-btn-sm{padding:6px 14px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit;transition:all .2s}
 .upload-btn-sm:hover{border-color:var(--pri);color:var(--txth)}
@@ -607,9 +609,19 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <button class="tab" id="tabHoldings" onclick="switchTab('holdings',this)">Holdings</button>
 </div>
 <div class="upload-zone" id="uploadZone">
-<label>Upload CSV or JSON<input type="file" accept=".csv,.txt,.json" onchange="upload(event)" hidden></label>
-<p id="uploadZoneText">Drop CSV or JSON file here</p>
-<p style="font-size:11px;opacity:.5">.csv &nbsp;·&nbsp; .txt &nbsp;·&nbsp; .json</p>
+  <!-- 2026-05-01 polish: presentation-grade splash. -->
+  <div style="text-align:center;max-width:480px">
+    <div style="display:inline-flex;align-items:center;gap:14px;padding-bottom:14px;border-bottom:1px solid var(--cardBorder);margin-bottom:20px">
+      <div style="font-size:18px;font-weight:800;letter-spacing:5px;color:var(--textBright)">ALGER</div>
+      <div style="width:4px;height:20px;background:linear-gradient(180deg,var(--accent),var(--pri));border-radius:2px"></div>
+      <div style="font-size:18px;font-weight:700;letter-spacing:2.5px;color:var(--textBright)">REDWOOD <span style="color:var(--accent)">RISK</span></div>
+    </div>
+    <h2 style="font-size:22px;font-weight:600;color:var(--textBright);margin:0 0 8px;letter-spacing:-0.3px">Portfolio Risk &amp; Factor Analytics</h2>
+    <p id="uploadZoneText" style="font-size:13px;color:var(--txt);margin-bottom:24px">Drop a FactSet CSV or pre-parsed JSON file to begin.</p>
+    <label style="display:inline-block">Upload File<input type="file" accept=".csv,.txt,.json" onchange="upload(event)" hidden></label>
+    <p style="font-size:10px;color:var(--textDim);margin-top:14px;letter-spacing:1px;text-transform:uppercase">Supported: .csv  ·  .txt  ·  .json</p>
+    <p style="font-size:10px;color:var(--textDim);margin-top:32px;font-style:italic">For large CSV files: run <code style="background:var(--surf);padding:2px 6px;border-radius:3px;font-family:'JetBrains Mono',monospace">./load_data.sh &lt;file&gt;.csv</code> from the terminal — handles parsing &amp; integrity checks automatically.</p>
+  </div>
 </div>
 <div id="content">
 <div id="validPanel" style="display:none;padding:16px 24px 0"></div>

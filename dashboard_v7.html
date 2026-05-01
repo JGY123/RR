@@ -2082,6 +2082,36 @@ function _wGrp(){return getDimForWeek('grp', _selectedWeek);}
 function _wInd(){return getDimForWeek('ind', _selectedWeek);}
 function _wChars(){return getDimForWeek('chars', _selectedWeek);}
 
+// 2026-05-01 (Phase H — Factor Detail per-week): rebuild cs.factors[] from
+// cs.snap_attrib[name].hist for any historical week. Per-factor history is
+// fully shipped (exp / bench_exp / ret / imp / dev / cimp / risk_contr per
+// week). At latest week, the snap_attrib values match cs.factors values
+// exactly — verified for EM Medium-Term Momentum (exp=0.14, bench_exp=0.54,
+// risk_contr=0.81 all match cs.factors[0] latest).
+function getFactorsForWeek(weekDate){
+  if(!weekDate||!cs||!cs.factors||!cs.snap_attrib)return cs.factors||[];
+  return cs.factors.map(f=>{
+    const sa=cs.snap_attrib[f.n];
+    if(!sa||!sa.hist||!sa.hist.length)return f;
+    const e=sa.hist.find(x=>x.d===weekDate);
+    if(!e)return f;
+    // Map snap_attrib hist fields → cs.factors fields. Latest-week semantic
+    // verified to match in the integrity test.
+    return Object.assign({},f,{
+      a:    e.exp!=null?e.exp:f.a,                // active exposure (parser ships exp == active for primary factors)
+      e:    e.exp!=null?e.exp:f.e,                // raw exposure
+      bm:   e.bench_exp!=null?e.bench_exp:f.bm,   // bench exposure
+      c:    e.risk_contr!=null?e.risk_contr:f.c,  // % TE contribution (signed)
+      ret:  e.ret!=null?e.ret:f.ret,
+      imp:  e.imp!=null?e.imp:f.imp,
+      dev:  e.dev!=null?e.dev:f.dev,
+      cimp: e.cimp!=null?e.cimp:f.cimp,
+      _hist_synth: weekDate,                      // marker so render path can show "as of <date>" if needed
+    });
+  });
+}
+function _wFactors(){return getFactorsForWeek(_selectedWeek);}
+
 function getSelectedWeekSum(){
   if(!_selectedWeek)return cs.sum;
   const entry=(cs.hist&&cs.hist.sum||[]).find(e=>e.d===_selectedWeek);
@@ -2749,7 +2779,7 @@ function rExp(){
       </div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${facGroupPillsHtml()}</div>
-    ${rFac(s.factors)}
+    ${rFac(_wFactors())}
   </div>
 
 

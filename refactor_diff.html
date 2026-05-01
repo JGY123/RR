@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>RR Refactor Diff</title>
+<style>
+  body { font-family:-apple-system,sans-serif; margin:20px; background:#0f172a; color:#e2e8f0; }
+  h1 { font-size:18px; margin-bottom:6px; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+  .pane { background:#1e293b; padding:12px; border-radius:8px; overflow-x:auto; max-height:80vh; }
+  .pane h2 { font-size:12px; text-transform:uppercase; color:#94a3b8; letter-spacing:0.5px; margin-bottom:8px; }
+  table { border-collapse:collapse; font-size:11px; width:100%; }
+  th { background:#334155; color:#cbd5e1; padding:4px 8px; text-align:left; }
+  td { padding:3px 8px; border-bottom:1px solid #334155; }
+  .diff-row td { background:rgba(239,68,68,0.18); }
+  .summary { background:#0c1322; padding:10px; border-radius:6px; font-family:'JetBrains Mono',monospace; font-size:12px; margin-bottom:12px; }
+  .ok { color:#10b981; }
+  .warn { color:#f59e0b; }
+  .err { color:#ef4444; }
+  input { background:#0f172a; color:#e2e8f0; border:1px solid #334155; padding:4px 8px; border-radius:4px; font-family:inherit; font-size:11px; width:300px; }
+  button { background:#6366f1; color:white; border:0; padding:4px 12px; border-radius:4px; cursor:pointer; font-family:inherit; font-size:11px; }
+  pre { background:#0c1322; padding:8px; border-radius:4px; font-size:10px; max-height:200px; overflow:auto; }
+</style>
+</head>
+<body>
+<h1>RR Refactor Visual Diff</h1>
+<p style="font-size:12px;color:#94a3b8">
+  Paste old <code>rWt(...)</code> output (left) and new <code>renderTable(spec)</code> output (right) — tool normalizes whitespace and reports cell-by-cell diff. Use this to confirm parity before committing each migration.
+</p>
+
+<div class="summary" id="summary">Paste two table HTML snippets to begin.</div>
+
+<div class="row">
+  <div class="pane">
+    <h2>Old (rWt / rCountryTable / etc.)</h2>
+    <textarea id="oldHtml" style="width:100%;height:120px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;padding:6px;border-radius:4px" placeholder="Paste old table HTML here"></textarea>
+    <div id="oldRender" style="margin-top:10px"></div>
+  </div>
+  <div class="pane">
+    <h2>New (renderTable(spec))</h2>
+    <textarea id="newHtml" style="width:100%;height:120px;background:#0f172a;color:#e2e8f0;border:1px solid #334155;padding:6px;border-radius:4px" placeholder="Paste new table HTML here"></textarea>
+    <div id="newRender" style="margin-top:10px"></div>
+  </div>
+</div>
+<button onclick="runDiff()">Compute Diff</button>
+<div id="diffOutput" style="margin-top:16px"></div>
+
+<script>
+function parseTable(html) {
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  const tbl = wrap.querySelector('table');
+  if (!tbl) return null;
+  return Array.from(tbl.querySelectorAll('tr')).map(tr =>
+    Array.from(tr.children).map(td => td.textContent.replace(/\s+/g,' ').trim())
+  );
+}
+
+function runDiff() {
+  const oldHtml = document.getElementById('oldHtml').value;
+  const newHtml = document.getElementById('newHtml').value;
+  document.getElementById('oldRender').innerHTML = oldHtml;
+  document.getElementById('newRender').innerHTML = newHtml;
+
+  const a = parseTable(oldHtml);
+  const b = parseTable(newHtml);
+  if (!a || !b) {
+    document.getElementById('summary').innerHTML = '<span class="err">Could not find &lt;table&gt; in one of the panes.</span>';
+    return;
+  }
+  let summary = `<span class="ok">old=${a.length} rows</span> · <span class="ok">new=${b.length} rows</span>`;
+  if (a.length !== b.length) summary += ' · <span class="err">ROW COUNT MISMATCH</span>';
+  document.getElementById('summary').innerHTML = summary;
+
+  // Cell-by-cell diff
+  const diffRows = [];
+  const maxRows = Math.max(a.length, b.length);
+  for (let i = 0; i < maxRows; i++) {
+    const ra = a[i] || [];
+    const rb = b[i] || [];
+    const maxCols = Math.max(ra.length, rb.length);
+    const cellDiffs = [];
+    for (let j = 0; j < maxCols; j++) {
+      if (ra[j] !== rb[j]) cellDiffs.push({col:j, old:ra[j]||'(missing)', new:rb[j]||'(missing)'});
+    }
+    if (cellDiffs.length) diffRows.push({row:i, cells:cellDiffs});
+  }
+
+  if (!diffRows.length) {
+    document.getElementById('diffOutput').innerHTML = '<div class="summary"><span class="ok">✓ IDENTICAL — every cell matches</span></div>';
+    return;
+  }
+
+  let out = `<div class="summary"><span class="warn">${diffRows.length} rows differ</span></div>`;
+  out += '<table style="background:#1e293b"><tr><th>Row</th><th>Col</th><th>Old</th><th>New</th></tr>';
+  for (const dr of diffRows) {
+    for (const cd of dr.cells) {
+      out += `<tr class="diff-row"><td>${dr.row}</td><td>${cd.col}</td><td><code>${escapeHtml(cd.old)}</code></td><td><code>${escapeHtml(cd.new)}</code></td></tr>`;
+    }
+  }
+  out += '</table>';
+  document.getElementById('diffOutput').innerHTML = out;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>

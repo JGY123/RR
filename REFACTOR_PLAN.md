@@ -35,18 +35,21 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 
 ## Phase plan + checkpoints
 
+**Updated 2026-05-01 14:00 — pivoted to lower-risk approach.** Audit revealed every existing renderer (`rWt`, `rCountryTable`, `rGroupTable`, `rChr`, `rAttribTable`) already emits `data-col="X"` on `<th>` and `<td>`. 146 such annotations across the file. That means we can ship **uniform column hide/show via CSS attribute selectors** without rewriting any renderer. This dramatically lowers risk: existing rendering stays exactly as-is, we add a sidecar layer.
+
 | Phase | Scope | Est. | Status |
 |---|---|---|---|
-| **A** | Audit current state — every tile + every table + their chrome. Update `TILE_CHROME_MATRIX.md` with truth. | 30 min | ☐ |
-| **B** | Build `TableSpec` + `renderTable` + `tableFilterPanel`. Migrate `cardSectors` as canary. Smoke test. | 2 hrs | ☐ |
-| **C** | Migrate `cardCountry`, `cardGroups`, `cardRegions`, `cardChars`, `cardAttrib`, `cardFacDetail` to TableSpec. Each ~30 min: declare spec, replace renderer call, remove old function. Net: −800 lines. | 3 hrs | ☐ |
-| **D** | Build `tileChrome()` contract. Migrate Tier-1 tiles. Then Tier-2/3 sweep. | 2 hrs | ☐ |
-| **E** | Build `OpenFullscreen` + Country (Map+Heat+Chart+Table tabs). Sector fullscreen + KPI summary tiles above. | 2 hrs | ☐ |
-| **F** | Universe-selector audit. "Both" double-counting check. | 1 hr | ☐ |
-| **G** | Scroll preservation on `changeWeek` / `setImpactPeriod`. | 30 min | ☐ |
-| **H** | Factor Detail per-week wiring + period selector. | 1 hr | ☐ |
-| **I** | Known data bug: Kongsberg false-exit in cardWeekOverWeek (hold_prev shorter than hold). | 30 min | ☐ |
-| **J** | Render-time linter for direct `cs.X` access in render paths. | 1 hr | ☐ |
+| **A** | Audit — DONE. See `REFACTOR_AUDIT.md`. | — | ✅ |
+| **B** | Build `tableColHide` framework: (1) auto-discover columns from rendered DOM via `th[data-col]`, (2) build a sidecar panel listing them as checkboxes, (3) hide via CSS rule `td[data-col="X"], th[data-col="X"] { display:none }`, (4) state persists in `rr.tableColHide.v1`. Apply to cardSectors as canary. | 1 hr | ☐ |
+| **C** | Apply `tableColHide` to every table that has `data-col` attrs: cardSectors, cardCountry, cardGroups, cardRegions, cardChars, cardAttrib, cardFacDetail, cardRiskFacTbl. One button placement, identical UX everywhere. | 30 min | ☐ |
+| **D** | Build `tileChrome()` contract. Migrate Tier-1 tiles to use it (drops ~800 lines of inline chrome assembly). Then Tier-2/3 sweep. | 2 hrs | ☐ |
+| **E** | `openTileFullscreen` improvements: per-tile registration so Country preserves Map view + adds Heat/Chart/Table tabs; Sector adds KPI summary tiles above table. | 2 hrs | ☐ |
+| **F** | Universe-selector audit — does "Both" double-count? Report findings before touching code. | 30 min | ☐ |
+| **G** | Scroll preservation on `changeWeek` (snapshot scrollY before render, restore after). | 30 min | ☐ |
+| **H** | Factor Detail per-week wiring + period selector + scroll-preserving update. | 1 hr | ☐ |
+| **I** | Known data bug: Kongsberg false-exit in cardWeekOverWeek (hold_prev shorter than hold — tickers in hold but missing from hold_prev get flagged "exited" wrongly). | 30 min | ☐ |
+| **J** | Render-time `console.warn` linter for direct `cs.sectors` / `cs.countries` / `cs.hold` access in render paths. Catches week-flow leaks. | 1 hr | ☐ |
+| **K** | Visual polish pass — once architecture is uniform, design polish across tiles. Spacing, typography, color harmony. | 1-2 hrs | ☐ |
 
 **Total: ~13 hrs.** Ships incrementally — each phase is a checkpoint with a working dashboard.
 

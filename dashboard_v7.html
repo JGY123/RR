@@ -1254,6 +1254,156 @@ function openTileFullscreen(tileId){
 }
 const fsTileBtn = tileId => `<button data-tile-fs-btn="${tileId}" onclick="openTileFullscreen('${tileId}')" title="Open tile in full screen" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">⛶</button>`;
 
+// ======================================================================
+// 2026-05-01 — UNIFORM COLUMN HIDE/SHOW FRAMEWORK (Phase B refactor)
+// ======================================================================
+// Existing renderers (rWt, rCountryTable, rGroupTable, rChr, rAttribTable)
+// already emit data-col="X" attributes on every <th> and <td>. This sidecar
+// hooks into that universal contract:
+//   1. After render, auto-discover columns from the table's <th data-col="X">
+//   2. Build a checkbox panel listing them (sticky column-0 excluded)
+//   3. Hide via injected CSS rule td[data-col="X"], th[data-col="X"] { display:none }
+//   4. State persists per-table in localStorage rr.tableColHide.v1
+//
+// One framework, every table participates by virtue of having data-col attrs.
+// Renderers are NOT touched.
+// ======================================================================
+const RR_TABLE_COL_HIDE_KEY = 'rr.tableColHide.v1';
+
+// Friendly labels for known data-col values. Renderers don't always set
+// human-readable th text (sometimes just "%" or symbols), so we provide
+// canonical labels here. Unknown cols fall back to the th's text.
+const COL_LABELS = {
+  'name':'Name','n':'Name','t':'Ticker','sec':'Sector','co':'Country','reg':'Region','grp':'Group','ind':'Industry',
+  'count':'# Holdings','port':'Port %','bench':'Bench %','active':'Active %',
+  'te_contrib':'TE Contrib','stock_te':'Stock TE','factor_te':'Factor TE','of_factor':'% of Factor','of_te':'% of TE',
+  'o':'O (Overall)','r':'R (Revision)','v':'V (Value)','q':'Q (Quality)',
+  'mom':'Momentum','stab':'Stability',
+  'f_0':'Momentum','f_1':'Value','f_2':'Growth','f_3':'Profitability','f_4':'Size','f_5':'Volatility',
+  'trend':'Trend','spark':'Spark','flag':'Flag','rank':'Rank','industry':'Industry',
+  'p':'Portfolio','b':'Benchmark','a':'Active','s':'Spread','tr':'TE %','mcr':'MCR',
+  'exp':'Exposure','dev':'σ Dev','imp':'Impact','ret':'Return','c':'Contrib %',
+  'mcrTE':'MCR to TE','m1':'1M Imp','m3':'3M Imp','m6':'6M Imp','y1':'1Y Imp','full':'Full Imp',
+  'metric':'Metric','diff':'Diff','metric_diff':'Diff',
+};
+
+function _loadTableColHide(){
+  try{ return JSON.parse(localStorage.getItem(RR_TABLE_COL_HIDE_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+function _saveTableColHide(map){
+  try{ localStorage.setItem(RR_TABLE_COL_HIDE_KEY, JSON.stringify(map)); }catch(e){}
+}
+window._tableColHide = _loadTableColHide();
+
+// Inject one CSS rule per (tableId × colKey) currently hidden. Idempotent.
+function _applyTableColHideCss(){
+  let st = document.getElementById('rr-tablecolhide-style');
+  if(!st){
+    st = document.createElement('style');
+    st.id = 'rr-tablecolhide-style';
+    document.head.appendChild(st);
+  }
+  const rules = [];
+  for(const [tableId, hiddenCols] of Object.entries(window._tableColHide||{})){
+    for(const col of hiddenCols||[]){
+      // Hide every cell with that data-col, scoped to this table's id (prevents
+      // collisions when the same data-col exists across multiple tables).
+      const safeCol = String(col).replace(/"/g, '\\"');
+      rules.push(`#${tableId} td[data-col="${safeCol}"], #${tableId} th[data-col="${safeCol}"] { display: none !important; }`);
+    }
+  }
+  st.textContent = rules.join('\n');
+}
+
+// Discover columns from a rendered table's <th data-col> attrs.
+// Returns [{key, label}] excluding columns flagged as sticky / always-visible.
+function discoverTableCols(tableId){
+  const tbl = document.getElementById(tableId);
+  if(!tbl) return [];
+  const ths = tbl.querySelectorAll('thead th[data-col], thead th[data-sv]');
+  const cols = [];
+  ths.forEach(th => {
+    const key = th.getAttribute('data-col');
+    if(!key) return;
+    // Skip sticky/identity columns (first column with name/identifier)
+    if(['n','name','t','metric','q','flag'].includes(key) && th.cellIndex === 0) return;
+    const labelFromTh = th.textContent.replace(/\s+/g,' ').trim().split(/\s+/).slice(0,3).join(' ').slice(0,30);
+    cols.push({ key, label: COL_LABELS[key] || labelFromTh || key });
+  });
+  return cols;
+}
+
+// Toggle a single column on a table.
+function toggleTableCol(tableId, colKey, visible){
+  const map = window._tableColHide || {};
+  const arr = new Set(map[tableId] || []);
+  if(visible) arr.delete(colKey);
+  else arr.add(colKey);
+  map[tableId] = Array.from(arr);
+  if(map[tableId].length === 0) delete map[tableId];
+  window._tableColHide = map;
+  _saveTableColHide(map);
+  _applyTableColHideCss();
+}
+
+// Reset all hidden cols on a table.
+function resetTableCols(tableId){
+  if(window._tableColHide) delete window._tableColHide[tableId];
+  _saveTableColHide(window._tableColHide || {});
+  _applyTableColHideCss();
+  // Refresh the panel checkboxes
+  document.querySelectorAll(`[data-col-hide-panel="${tableId}"] input[type=checkbox]`).forEach(cb => cb.checked = true);
+}
+
+// Build the column-hide checkbox panel for a table. Returns HTML for a popover
+// the tile chrome can show inline. Only renders columns that are hideable
+// (sticky cols and identity cols are excluded by discoverTableCols).
+function tableColHidePanelHtml(tableId){
+  // The panel populates lazily on first open — discoverTableCols needs the
+  // table to exist in DOM. Use a sentinel <div> with data-* and populate
+  // at click time.
+  return `<div class="col-hide-wrap" style="position:relative;display:inline-block">
+    <button onclick="toggleTableColHidePanel('${tableId}', this)" title="Hide / show columns" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">⚙ Cols</button>
+    <div data-col-hide-panel="${tableId}" style="display:none;position:absolute;top:28px;right:0;z-index:200;background:var(--card);border:1px solid var(--pri);border-radius:8px;padding:8px 10px;min-width:220px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+  </div>`;
+}
+
+function toggleTableColHidePanel(tableId, btn){
+  const panel = btn.parentElement.querySelector(`[data-col-hide-panel="${tableId}"]`);
+  if(!panel) return;
+  // Close other panels
+  document.querySelectorAll('[data-col-hide-panel]').forEach(p => { if(p !== panel) p.style.display = 'none'; });
+  if(panel.style.display === 'block'){ panel.style.display = 'none'; return; }
+  // Populate from current table
+  const cols = discoverTableCols(tableId);
+  if(!cols.length){
+    panel.innerHTML = '<div style="font-size:11px;color:var(--textDim);padding:4px">No hideable columns detected.</div>';
+  } else {
+    const hidden = new Set((window._tableColHide||{})[tableId] || []);
+    const items = cols.map(c => `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;cursor:pointer">
+      <input type="checkbox" ${hidden.has(c.key) ? '' : 'checked'} onchange="toggleTableCol('${tableId}','${c.key}', this.checked)">
+      <span style="color:var(--txth)">${c.label}</span>
+    </label>`).join('');
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:1px solid var(--grid);margin-bottom:6px">
+      <span style="font-size:10px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600">Columns</span>
+      <button onclick="resetTableCols('${tableId}')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--txth);cursor:pointer">Reset</button>
+    </div>${items}`;
+  }
+  panel.style.display = 'block';
+  // Close on outside click
+  setTimeout(() => {
+    const close = e => { if(!panel.contains(e.target) && e.target !== btn){ panel.style.display='none'; document.removeEventListener('click', close); } };
+    document.addEventListener('click', close);
+  }, 0);
+}
+
+// Apply CSS on every render so newly-rendered tables pick up persisted hidden state.
+// (Existing renderers already call applyTileHideOnRender after upd — we hook in
+// alongside it.)
+const _origApplyTileHideOnRender = (typeof applyTileHideOnRender === 'function') ? applyTileHideOnRender : null;
+// We'll call _applyTableColHideCss from within upd() — see the existing setTimeout block.
+
 // 2026-04-30 (cardChars audit F1+F3+F5): static metadata for every shipped
 // portfolio characteristic. Drives: (a) histKey → which cs.hist.sum[].KEY to
 // plot in the drill modal — only TE/Beta/AS shipped today, parser backlog
@@ -1955,6 +2105,10 @@ function upd(){
   // 2026-05-01 (R2-Q25 chrome sweep): re-apply hide state after every render
   // so user-collapsed tiles stay collapsed across week-selector / strategy-switch / tab-switch.
   setTimeout(applyTileHideOnRender,30);
+  // 2026-05-01 (Phase B refactor): re-apply column-hide CSS so hidden columns
+  // stay hidden after every render. CSS rules target [data-col="X"] which all
+  // existing renderers emit — no per-renderer change needed.
+  setTimeout(_applyTableColHideCss,30);
 }
 
 // ===== RISK ALERTS =====
@@ -2487,6 +2641,7 @@ function rExp(){
     <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Sector Active Weights</div><span id="secFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       ${aboutBtn('cardSectors')}
+      ${tableColHidePanelHtml('tbl-sec')}
       ${secColDropHtml()}
       <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>

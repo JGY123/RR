@@ -927,6 +927,15 @@ const _ABOUT_REG={
     caveats:'Latest snapshot only — no period dimension. Top-10 by weight, not by TE contribution (sister tile cardHoldRisk shows the TE quadrant). No drill modal access from this tile alone — click a bar.',
     related:'cardHoldRisk · cardHoldings · TE drill modal'
   },
+  // 2026-05-01 (R2-Q3 user override → B): Rank Distribution restored as first-class.
+  cardRankDist:{
+    title:'Rank Distribution',
+    what:'Portfolio weight distribution across the 5 quintiles (Q1=best to Q5=worst). PMs typically concentrate in Q1-Q2; weight in Q3-Q5 signals deliberate exceptions or risk pockets to investigate.',
+    how:'For each quintile r ∈ {1..5}, sums portfolio weight across all holdings with h.r === r. Renders a vertical-bar histogram colored by quintile. Source ranks come from cs.ranks (parser-aggregated from cs.hold[].r).',
+    source:'cs.ranks[] derived from cs.hold[].r (Spotlight Overall quintile). Each holding gets a quintile via FactSet OVER_WAvg rank.',
+    caveats:'Latest snapshot only. Different from cardRanks (Spotlight) on Exposures — that one is multi-dim (quintile × factor), this one is pure portfolio weight by quintile.',
+    related:'cardRanks (Spotlight on Exposures) · cardHoldings · cardHoldRisk'
+  },
   cardUnowned:{
     title:'Unowned Risk Contributors',
     what:'Benchmark holdings the portfolio does NOT own, ranked by their tracking-error contribution if owned. Each represents an active short position the portfolio has by omission.',
@@ -2172,20 +2181,9 @@ function rExp(){
        natural than parking it on Exposures (the portfolio-state-snapshot tab).
        Moved to renderHoldTab() above cardHoldings. -->
 
-  <!-- 2026-04-30 (audit R2-Q2, default A): cardBetaHist moved here from Risk
-       tab. Beta is a portfolio-state-snapshot metric, lives naturally with
-       the snapshot family on Exposures. Risk tab now focuses purely on TE
-       decomposition. -->
-  <div class="card" id="cardBetaHist" style="margin-bottom:16px">
-    <div class="flex-between" style="margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click the open-detail button for the drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div>${aboutBtn('cardBetaHist')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        ${resetZoomBtn('riskBetaMultiDiv')}
-        <button onclick="oDrMetric('beta')" title="Open Beta drill modal" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid var(--grid);background:var(--surf);color:var(--pri);cursor:pointer;font-family:inherit">open detail ›</button>
-      </div>
-    </div>
-    <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
-  </div>
+  <!-- 2026-05-01 (R2-Q2 user override → B): cardBetaHist stays on Risk tab.
+       Removed from Exposures. Risk-tab placement preserves Beta as a
+       risk-snapshot metric anchoring TE decomposition context. -->
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
   <div class="card" id="cardSectors" style="margin-bottom:16px">
@@ -2354,22 +2352,9 @@ function rExp(){
     <div id="rnkTableWrap" style="overflow-x:auto"></div>
   </div>
 
-  <!-- cardChars now in its own row, full width -->
-  <div>
-    <div class="card" id="cardChars" style="display:flex;flex-direction:column">
-      <div class="flex-between">
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-          <div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals (39 metrics shipped from FactSet Portfolio Characteristics). Click any row for the metric drill — TE / Beta / Active Share open with full historical chart; the rest show single-snapshot until parser-side history persistence (B114)." oncontextmenu="showNotePopup(event,'cardChars');return false">Portfolio Characteristics</div>
-          <span style="font-size:10px;color:var(--textDim);font-weight:400">39 metrics · click a row for history · ↓ marks "lower-is-better"</span>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${aboutBtn('cardChars')}
-          <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
-        </div>
-      </div>
-      <div style="flex:1;overflow-y:auto;max-height:520px;margin-top:6px">${rChr(s.chars)}</div>
-    </div>
-  </div>
+  <!-- 2026-05-01 (R2-Q5 user override → A): cardChars moved to Holdings tab.
+       PMs look at fundamentals alongside the holdings list — the natural
+       place for portfolio characteristics is next to the holdings table. -->
 
   <!-- 2026-04-30 (user feedback "mcr vs te contribution might be redundant"):
        cardScatter removed. The new cardHoldRisk on the Holdings tab provides
@@ -2514,7 +2499,7 @@ function rExp(){
       ['rScat',()=>rScat(s)],
       ['rTree',()=>rTree(s)],
       // ['rMCR',()=>rMCR(s)],  // 2026-04-30: cardMCR removed — see cardHoldRisk on Holdings tab
-      ['rMultiBeta',()=>rMultiBeta(s)],   // 2026-04-30 (audit R2-Q2): cardBetaHist moved Risk → Exposures
+      // 2026-05-01 (R2-Q2 user override): rMultiBeta moved back to Risk tab — removed from Exposures render queue.
       ['rAttribTable',()=>rAttribTable()],
       ['renderRanksTable',()=>renderRanksTable()],   // cardRanks rebuild — populates #rnkTableWrap
     ];
@@ -6726,10 +6711,16 @@ function rRisk(){
     <div id="teStackedDiv" class="chart-h-md"></div>
   </div>
 
-  <!-- 2026-04-30 (audit R2-Q2, default A): cardBetaHist moved to Exposures
-       (under sum-cards, above cardSectors). Beta is a portfolio-state-snapshot
-       metric — the Beta sum-card on Exposures already opens the same drill,
-       and Risk-tab now focuses purely on TE decomposition. -->
+  <!-- 2026-05-01 (R2-Q2 user override → B): cardBetaHist stays on Risk tab.
+       2026-05-01 (R2-Q10 user override → B): whole-card click restored —
+       click anywhere on the card opens the Beta drill modal. -->
+  <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
+    <div class="flex-between" style="margin-bottom:4px">
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span><span onclick="event.stopPropagation()">${resetZoomBtn('riskBetaMultiDiv')}</span></div>
+      <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
+    </div>
+    <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
+  </div>
 
   <!-- Factor Contribution Bars with toggle -->
   <div class="card" id="cardFacContribBars" style="margin-bottom:16px">
@@ -7999,23 +7990,48 @@ function renderHoldTab(){
       </div>`)}
     </div>
 
-    <!-- 2026-04-30 (audit R2-Q3, default A): bare 'Rank Distribution' chart
-         deleted — duplicates cardRanks (Spotlight) on Exposures tab which is
-         richer (5 quintiles + factor-contribution columns + universe pill). -->
-    <!-- 2026-04-30 (audit R2-Q4, default B): 'Top 10 Holdings' upgraded to
-         first-class — id="cardTop10", ⓘ About entry, click-to-drill via
-         oSt(SEDOL), tk(h) labels. -->
-    <div class="card" id="cardTop10" style="margin-bottom:16px">
-      <div class="flex-between" style="margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
-        <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('holdConcDiv')}</div>
+    <!-- 2026-05-01 (R2-Q3 user override → B): Rank Distribution restored as
+         first-class tile. Different from cardRanks Spotlight on Exposures —
+         this is a pure portfolio-rank histogram (how concentrated is the
+         portfolio in each quintile by weight). cardRanks is multi-dim
+         (quintile × factor). Both are useful. -->
+    <div class="grid g2">
+      <div class="card" id="cardRankDist" style="margin-bottom:16px">
+        <div class="flex-between" style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Portfolio weight distribution across the 5 quintiles (Q1=best to Q5=worst). PMs typically concentrate in Q1-Q2; Q3-Q5 weight signals deliberate exceptions or risk pockets. Click a bar to filter the holdings table by that quintile. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRankDist');return false" style="margin:0">Rank Distribution</div>${aboutBtn('cardRankDist')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · Q1=best</span></div>
+          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('rankDistDiv')}</div>
+        </div>
+        <div id="rankDistDiv" class="chart-h-sm"></div>
       </div>
-      <div id="holdConcDiv" class="chart-h-md"></div>
+      <!-- 2026-04-30 (audit R2-Q4, default B): 'Top 10 Holdings' upgraded to
+           first-class — id="cardTop10", ⓘ About entry, click-to-drill. -->
+      <div class="card" id="cardTop10" style="margin-bottom:16px">
+        <div class="flex-between" style="margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
+          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('holdConcDiv')}</div>
+        </div>
+        <div id="holdConcDiv" class="chart-h-md"></div>
+      </div>
+    </div>
+    <!-- 2026-05-01 (R2-Q5 user override → A): cardChars moved here from
+         Exposures. PMs look at fundamentals alongside the holdings list. -->
+    <div class="card" id="cardChars" style="display:flex;flex-direction:column;margin-bottom:16px">
+      <div class="flex-between">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+          <div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals (39 metrics shipped from FactSet Portfolio Characteristics). Click any row for the metric drill — TE / Beta / Active Share open with full historical chart; the rest show single-snapshot until parser-side history persistence (B114)." oncontextmenu="showNotePopup(event,'cardChars');return false">Portfolio Characteristics</div>
+          <span style="font-size:10px;color:var(--textDim);font-weight:400">39 metrics · click a row for history · ↓ marks "lower-is-better"</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          ${aboutBtn('cardChars')}
+          <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;max-height:520px;margin-top:6px">${rChr(cs.chars)}</div>
     </div>`;
 
   $('tab-holdings').innerHTML=html;
   setTimeout(()=>{
-    // 2026-04-30 (audit R2-Q3): rRankDist no longer called — tile deleted (cardRanks supersedes).
+    rRankDist();   // 2026-05-01 (R2-Q3 user override): restored
     rHoldConc();
     try{rHoldRisk(cs);}catch(e){console.error('rHoldRisk failed:',e);}
   },50);
@@ -8105,8 +8121,38 @@ function sortHold(col){
   hp=1;renderHoldTab();
 }
 
-// 2026-04-30 (audit R2-Q3, default A): rRankDist removed — tile deleted as
-// duplicate of cardRanks Spotlight on Exposures tab.
+// 2026-05-01 (R2-Q3 user override → B): rRankDist restored as first-class
+// tile on Holdings tab. Renders a vertical-bar quintile histogram colored
+// by quintile (Q1=green/best ... Q5=red/worst). Click a bar to drill.
+function rRankDist(){
+  const ranks = (cs && cs.ranks) || [];
+  if(!ranks.length){
+    const el = document.getElementById('rankDistDiv');
+    if(el) el.innerHTML = '<p style="text-align:center;color:var(--txt);padding:60px;font-size:11px">No quintile data — Spotlight ranks not populated for this strategy</p>';
+    return;
+  }
+  const colors = ranks.map(r => {
+    const c = String(rc(r.r)||'').match(/var\(--(r\d)\)/);
+    return c ? getComputedStyle(document.documentElement).getPropertyValue('--'+c[1]).trim() || '#94a3b8' : '#94a3b8';
+  });
+  Plotly.newPlot('rankDistDiv', [{
+    x: ranks.map(r => r.l),
+    y: ranks.map(r => r.p),
+    type: 'bar',
+    marker: { color: colors, line: { color: 'rgba(255,255,255,0.08)', width: 0.5 } },
+    text: ranks.map(r => f2(r.p)+'%'),
+    textposition: 'outside',
+    textfont: { size: 11, color: THEME().tick, family: 'DM Sans, system-ui' },
+    customdata: ranks.map(r => [r.r, r.ct, r.a]),
+    hovertemplate: '<b>%{x}</b><br>Port wt: %{y:.2f}%<br>Securities: %{customdata[1]}<br>Active wt: %{customdata[2]:+.2f}%<extra></extra>',
+    hoverlabel: HOVERLABEL_THEME,
+    cliponaxis: false
+  }], {
+    ...plotBg,
+    margin: { l: 50, r: 20, t: 14, b: 30 },
+    yaxis: { ...plotBg.yaxis, title: { text: 'Portfolio Weight %', font: { size: 10, color: THEME().tick } }, ticksuffix: '%', rangemode: 'tozero' }
+  }, plotCfg);
+}
 
 function rHoldConc(){
   let top10=[...cs.hold].filter(h=>!isCash(h)&&isFinite(h.p)).sort((a,b)=>b.p-a.p).slice(0,10);

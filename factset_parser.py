@@ -335,6 +335,21 @@ class SectionSchema:
             return None
         return self.group_start + group_index * self.group_size + self.group_cols[canonical]
 
+    def num_groups_for_row(self, row):
+        """How many complete groups actually fit in this specific row.
+
+        2026-05-01 (jagged-CSV fix): different ACCT rows can have different
+        widths (e.g. master CSV: header=9493 cols → 527 groups; IDM rows=11149
+        cols → 619 groups; ACWI rows=9979 cols → 554 groups). Iterating with
+        schema.num_groups overcounts for narrower rows (reads garbage/None
+        past actual data) and undercounts for wider rows (drops trailing
+        weeks). Use this method per-row to iterate only real groups.
+        """
+        if self.group_start is None or self.group_size <= 0:
+            return 0
+        row_groups = max(0, (len(row) - self.group_start) // self.group_size)
+        return min(row_groups, self.num_groups)
+
     def get_group_value(self, row, canonical, group_index):
         col = self.group_col_index(canonical, group_index)
         if col is None or col >= len(row):
@@ -400,6 +415,40 @@ class FactSetParserV3:
                 }
             if first and first != "Section":
                 self.section_rows.setdefault(first, []).append(row)
+
+        # 2026-05-01 (jagged-CSV fix): the Section header line sometimes has
+        # FEWER "Period Start Date" markers than the longest data row holds
+        # (observed in master CSV: header=9493 cols, IDM rows=11149 cols → 92
+        # weeks of trailing data silently dropped; ACWI rows=9979 cols → 27
+        # weeks dropped). Bump schema.num_groups to the max data-row width
+        # so the SCHEMA covers the longest row, then iterate per-row using
+        # schema.num_groups_for_row(row) which clamps to that specific row's
+        # actual width — this way ACWI's narrower rows don't read garbage
+        # past their data while IDM's wider rows recover the trailing weeks.
+        for sec_name, schema in self.schemas.items():
+            if schema.group_size <= 0 or schema.group_start is None:
+                continue
+            rows = self.section_rows.get(sec_name, [])
+            if not rows:
+                continue
+            header_groups = schema.num_groups
+            max_groups = max(
+                (len(r) - schema.group_start) // schema.group_size
+                for r in rows
+            )
+            if max_groups > header_groups:
+                schema.num_groups = max_groups
+                schema.total_cols = max(
+                    schema.total_cols,
+                    schema.group_start + max_groups * schema.group_size,
+                )
+                self.stats.setdefault("jagged_section_bump", {})[sec_name] = {
+                    "header_num_groups": header_groups,
+                    "row_num_groups": max_groups,
+                    "weeks_recovered": max_groups - header_groups,
+                }
+                if sec_name in self.stats.get("schemas_discovered", {}):
+                    self.stats["schemas_discovered"][sec_name]["num_groups"] = max_groups
 
     # ---------------------------------------------------------- extractors
 
@@ -580,7 +629,6 @@ class FactSetParserV3:
         if not schema or not rows or schema.num_groups == 0:
             return []
 
-        last_g = schema.num_groups - 1
         results = []
         for row in rows:
             if len(row) < 7 or row[1].strip() != acct_code:
@@ -588,6 +636,12 @@ class FactSetParserV3:
             level2 = row[5].strip() if len(row) > 5 else ""
             if level2 in ("Data", "@NA", "[Unassigned]", "[Cash]", ""):
                 continue
+            # 2026-05-01 (jagged-CSV fix): each row has its own actual group
+            # count — clamp to it so we don't read past the row's data.
+            row_ng = schema.num_groups_for_row(row)
+            if row_ng == 0:
+                continue
+            last_g = row_ng - 1
 
             def g(canonical, gi=last_g):
                 return safe_float(schema.get_group_value(row, canonical, gi))
@@ -612,9 +666,9 @@ class FactSetParserV3:
             }
             if entry["a"] is None and entry["p"] is not None and entry["b"] is not None:
                 entry["a"] = round(entry["p"] - entry["b"], 2)
-            # Per-period history — same 12 fields × num_groups
+            # Per-period history — same 12 fields × per-row num_groups
             hist = []
-            for gi in range(schema.num_groups):
+            for gi in range(row_ng):
                 d = gd("PERIOD_START", gi)
                 if not d: continue
                 hist.append({
@@ -668,9 +722,10 @@ class FactSetParserV3:
         rows = self.section_rows.get("Security", [])
         if not schema or not rows or schema.num_groups == 0:
             return [], []
-        target_g = schema.num_groups - 1 + period_offset
-        if target_g < 0:
-            return [], []
+        # 2026-05-01 (jagged-CSV fix): target_g must be computed per-row
+        # using row's own width — rows for narrower accounts (e.g. ACWI in a
+        # mixed file) end before the schema's max group count. Computed
+        # inside the per-row loop below.
 
         FIXED_FIELD_MAP = {
             "PERIOD_START": "d",
@@ -712,8 +767,9 @@ class FactSetParserV3:
                 continue
             dispatch[offset] = ("extra", raw_name)
 
-        group_start = schema.group_start + target_g * schema.group_size
-
+        # 2026-05-01 (jagged-CSV): group_start now computed per-row using
+        # the row's actual num_groups (some ACCTs have narrower rows than
+        # schema.num_groups; reading at schema's last group reads garbage/None).
         holdings = []
         unowned = []
         for row in rows:
@@ -725,6 +781,13 @@ class FactSetParserV3:
                 continue
             if ticker in ("Data", "@NA", "[Unassigned]"):
                 continue
+            row_ng = schema.num_groups_for_row(row)
+            if row_ng == 0:
+                continue
+            row_target_g = row_ng - 1 + period_offset
+            if row_target_g < 0:
+                continue
+            group_start = schema.group_start + row_target_g * schema.group_size
 
             h = {
                 "t": ticker,
@@ -846,8 +909,9 @@ class FactSetParserV3:
             if not item or item in ("Data", "@NA"):
                 continue
 
+            row_ng = schema.num_groups_for_row(row)
             periods = []
-            for g in range(schema.num_groups):
+            for g in range(row_ng):
                 def gv(cn):
                     return safe_float(schema.get_group_value(row, cn, g))
                 d_start = parse_date(schema.get_group_value(row, "PERIOD_START", g))
@@ -983,8 +1047,9 @@ class FactSetParserV3:
             # SEDOLCHK is at fixed col 7 (outside the group).
             sedol = row[7].strip() if len(row) > 7 else None
 
+            row_ng = schema.num_groups_for_row(row)
             periods = []
-            for gi in range(schema.num_groups):
+            for gi in range(row_ng):
                 base = schema.group_start + gi * schema.group_size
                 if base + value_offset + 11 >= len(row):
                     continue
@@ -1047,7 +1112,6 @@ class FactSetParserV3:
         rows = self.section_rows.get(section_name, [])
         if not schema or not rows or schema.num_groups == 0:
             return []
-        last_g = schema.num_groups - 1
         out = []
         for row in rows:
             if len(row) < 7 or row[1].strip() != acct_code:
@@ -1055,6 +1119,10 @@ class FactSetParserV3:
             label = row[5].strip() if len(row) > 5 else ""
             if label in ("Data", "@NA", ""):
                 continue
+            row_ng = schema.num_groups_for_row(row)
+            if row_ng == 0:
+                continue
+            last_g = row_ng - 1
             def g(cn):
                 return safe_float(schema.get_group_value(row, cn, last_g))
             out.append({
@@ -1333,11 +1401,14 @@ class FactSetParserV3:
                 if len(r) > 5 and r[1].strip() == acct and r[5].strip() == "[Cash]":
                     sch = self.schemas.get("Sector Weights")
                     if sch and sch.num_groups:
-                        # Latest week (last group)
-                        cash = safe_float(sch.get_group_value(r, "W", sch.num_groups - 1))
+                        # 2026-05-01 (jagged-CSV): clamp to this row's actual width.
+                        row_ng = sch.num_groups_for_row(r)
+                        if row_ng == 0: break
+                        # Latest week (last group of THIS row, not schema)
+                        cash = safe_float(sch.get_group_value(r, "W", row_ng - 1))
                         # Per-period: walk every group, key by Period Start Date.
                         # get_group_value expects the canonical alias, not the raw column name.
-                        for gi in range(sch.num_groups):
+                        for gi in range(row_ng):
                             d_raw = sch.get_group_value(r, "PERIOD_START", gi)
                             d_parsed = parse_date(d_raw) if d_raw else None
                             if d_parsed:

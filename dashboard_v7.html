@@ -501,12 +501,18 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Impact</span>
     <select id="impactPeriodSel" onchange="setImpactPeriod(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px"></select>
   </div>
-  <!-- Global universe pill — drives every grouping tile: which holdings to sum (TE, factor-contrib) and average over (ORVQ ranks) -->
-  <div id="aggModeWrap" title="Universe: which holdings to count/sum/average across every grouping tile. Port = portfolio-owned (h.p>0), Bench = benchmark constituents (h.b>0), Both = union. Drives ORVQ averaging universe too — combines with the Wtd/Avg pill." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
+  <!-- 2026-05-01 (Phase F UX combo A+D+E): Universe pill — relabeled,
+       per-pill hover tooltips, status strip below shows current count.
+       Audit: UNIVERSE_AUDIT.md confirmed no double-counting — labels were
+       confusing because user expected "Both" = "Port + Bench" arithmetic
+       when actually it's the union (= Bench when Port ⊂ Bench). New labels
+       make the semantics explicit. -->
+  <div id="aggModeWrap" title="Universe: which holdings the count / weight / ORVQ-average columns aggregate across. TE / MCR / factor_contr columns are universe-INVARIANT (B116) — they show the same value regardless of pill choice." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
     <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Universe</span>
-    <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" style="font-size:10px;padding:2px 7px">Port</button>
-    <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" style="font-size:10px;padding:2px 7px">Bench</button>
-    <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" style="font-size:10px;padding:2px 7px">Both</button>
+    <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" title="Port-Held: only holdings with h.p > 0 (portfolio positions). Excludes bench-only constituents." style="font-size:10px;padding:2px 7px">Port-Held</button>
+    <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" title="In Benchmark: every constituent of the benchmark (h.b > 0). INCLUDES the portfolio overlap. For pure bench-not-port, see the cardUnowned tile." style="font-size:10px;padding:2px 7px">In Bench</button>
+    <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" title="All Holdings: union of Port-Held + In Benchmark = every non-cash row in cs.hold[]. No double-counting (each holding counted exactly once)." style="font-size:10px;padding:2px 7px">All</button>
+    <span id="universeStatus" style="font-size:9px;color:var(--textDim);margin-left:8px;padding-left:8px;border-left:1px solid var(--grid)" title="Current count of holdings included by the Universe filter. Click to refresh."></span>
   </div>
   <!-- Global avg-method pill — controls ORVQ rank averaging method. Sums and counts use the Universe pill alone. -->
   <div id="avgModeWrap" title="ORVQ rank averaging: Wtd = holding-weight-weighted (port-weight under Port/Both, bench-weight under Bench). Avg = simple mean across the active universe." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
@@ -2160,6 +2166,8 @@ function upd(){
   // stay hidden after every render. CSS rules target [data-col="X"] which all
   // existing renderers emit — no per-renderer change needed.
   setTimeout(_applyTableColHideCss,30);
+  // 2026-05-01 (Phase F UX combo E): update Universe pill status strip count.
+  setTimeout(_updateUniverseStatusStrip,30);
 }
 
 // ===== RISK ALERTS =====
@@ -4625,6 +4633,30 @@ function setAggMode(m){
     const p=document.getElementById('agg-pill-'+x);
     if(p)p.classList.toggle('active',x===_aggMode);
   });
+  _updateUniverseStatusStrip();
+}
+
+// 2026-05-01 (Phase F UX combo E): persistent status strip showing how many
+// holdings the current universe filter includes. Educates users on what
+// "Port-Held / In Bench / All" actually mean numerically.
+function _updateUniverseStatusStrip(){
+  const el=document.getElementById('universeStatus');
+  if(!el||!cs)return;
+  const holds=cs.hold||[];
+  const port=holds.filter(h=>!isCash(h)&&((+h.p||+h.w||0)>0)).length;
+  const bench=holds.filter(h=>!isCash(h)&&((+h.b||+h.bw||0)>0)).length;
+  const all=holds.filter(h=>!isCash(h)).length;
+  const overlap=holds.filter(h=>!isCash(h)&&((+h.p||+h.w||0)>0)&&((+h.b||+h.bw||0)>0)).length;
+  let now=port,label='Port-Held';
+  if(_aggMode==='benchmark'){now=bench;label='In Bench';}
+  else if(_aggMode==='both'){now=all;label='All';}
+  el.textContent=`${label} = ${now.toLocaleString()} names`;
+  el.title=`Universe counts (${cs.id||cs.name||'current'}):\n` +
+    `  Port-Held = ${port.toLocaleString()} (h.p > 0)\n` +
+    `  In Bench  = ${bench.toLocaleString()} (h.b > 0; INCLUDES the ${overlap.toLocaleString()} port↔bench overlap)\n` +
+    `  All       = ${all.toLocaleString()} (union — every non-cash holding)\n\n` +
+    `Note: TE / MCR / factor_contr columns are universe-INVARIANT (B116 fix). ` +
+    `Only count, port wt, bench wt, active wt, and ORVQ rank averages flip with the pill.`;
 }
 
 // Quant Ranks state — toggleable rank category (Overall / Rev / Val / Qual)

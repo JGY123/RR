@@ -1,7 +1,54 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-05-01 18:30 (post-presentation refactor sweep — 10 phase tags, organization spine, all immediate user-direction items shipped)
+last_updated: 2026-05-01 19:35 (post-presentation refactor sweep + Phase K design polish — 13 phase tags, design system shipped, 11 of 11 phases done)
+---
+
+## 2026-05-01 19:00–19:35 — Phase K design polish (the final hour)
+
+After the session-wrap at 18:40, user gave one more hour with the direction:
+"keep going 1 more hour of heavy lift and then rest." Focused on Phase K
+(design polish) since architecture is solid and visual cohesion is what
+deployment-ready needs.
+
+**5 commits, 3 tags this hour:**
+- `refactor.20260501.1900.phase-K1-design-tokens` — design tokens + canonical
+  `.tile-btn` / `.export-btn` (unified) + chrome helper sweep
+- `refactor.20260501.1920.phase-K-empty-stat` — `.empty-state` + `.stat-card`
+  class sweep (9 + 2 occurrences)
+- `refactor.20260501.1935.phase-K-final-polish` — `.modal-close-btn` +
+  `.section-label` sweep (10 + 16 occurrences)
+
+**Design system tokens added to :root:**
+- Spacing scale: `--space-{xs,sm,md,lg,xl,2xl}`
+- Typography scale: `--text-{xs,sm,md,lg,xl,2xl,3xl,display}`
+- Font weights: `--w-{normal,medium,semibold,bold}`
+- Border radii: `--radius-{sm,md,lg,xl}`
+- Wash backgrounds: `--pri-wash` / `--acc-wash` / `--pos-wash` / `--neg-wash` / `--warn-wash`
+- Hairline + Shadows: `--hairline`, `--shadow-{sm,md,lg}`
+
+**Canonical CSS classes added:**
+- `.tile-btn` — small inline action button (used by aboutBtn, resetZoomBtn, resetViewBtn, hideTileBtn, fsTileBtn, tableColHide, tileChromeStrip CSV+FS)
+- `.tile-chrome` — flex container for chrome button clusters
+- `.export-btn` — UNIFIED with .tile-btn so both visual roles match
+- `.section-label` — small uppercase eyebrow text (16 inline-styled spans replaced)
+- `.empty-state` + `.empty-state-hint` — consistent "no data" rendering
+- `.stat-card` + `.stat-label` / `.stat-value` / `.stat-sub` + `.clickable` variant — KPI tile
+- `.kpi-strip` — flex container for stat cards
+- `.modal-close-btn` — full-screen modal close button (10 inline-styled buttons replaced)
+- `.modal-title` — modal heading typography
+- `.num-tabular` — JetBrains Mono + tabular-nums
+
+**Net effect:**
+- ~40 inline-style copies eliminated
+- Visual result IDENTICAL plus improved hover/focus states everywhere
+- Future visual changes ship from one place (edit the class definition)
+- Token system in place for any future spacing/typography adjustments
+
+**DESIGN_AUDIT.md** (subagent output) shipped — documents 6 categories of
+remaining drift (most addressed; Plotly hardcoded greys + spacing scale
+adoption queued for next session).
+
 ---
 
 ## 2026-05-01 (afternoon-evening) — Post-presentation refactor sweep

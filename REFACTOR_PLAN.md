@@ -86,6 +86,10 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | 2026-05-01 18:10 | item 2A | — | `refactor.20260501.1810.item-2A-sector-fs-summary` | Sector fullscreen: 9 summary stat tiles (Top Risk, Top Diversifier, Largest OW, Largest UW, Biggest Port, Biggest Bench, Σ \|Active\|, etc.). Flows per-week. |
 | 2026-05-01 18:20 | item 4 | — | `refactor.20260501.1820.item-4-fac-perf-yaxis` | Factor Performance y-axis: smart tick decimals based on value range, % suffix matches title unit. |
 | 2026-05-01 18:30 | D helper | — | `refactor.20260501.1830.phase-D-helper` | tileChromeStrip() helper — single source of truth. Migrations gradual (per-tile as touched). |
+| 2026-05-01 18:40 | session wrap | — | `refactor.20260501.1840.session-wrap` | REFACTOR_PLAN + SESSION_STATE + dev_dashboard final updates. |
+| 2026-05-01 19:00 | K.1-3 design tokens | — | `refactor.20260501.1900.phase-K1-design-tokens` | --space-*, --text-*, --w-*, --radius-*, washes, hairline, shadows added to :root. .tile-btn / .export-btn unified. 5 chrome helpers + tableColHide + tileChromeStrip swept to .tile-btn class. DESIGN_AUDIT.md from subagent. |
+| 2026-05-01 19:20 | K.4-5 empty + stat | — | `refactor.20260501.1920.phase-K-empty-stat` | .empty-state class swept across 9 inline empty-state strings. .stat-card class swept across 2 inline stat() helpers (sector full-page summary). |
+| 2026-05-01 19:35 | K.6 polish final | — | `refactor.20260501.1935.phase-K-final-polish` | .modal-close-btn (10 occurrences), .section-label (16 occurrences) swept. Phase K complete. |
 
 ## Status summary (post-2026-05-01 session)
 
@@ -100,16 +104,18 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 
 **Outstanding:**
 - Phase D — `tileChromeStrip()` helper SHIPPED (2026-05-01 18:30). Tile-by-tile migration is gradual (each commit that touches a tile's chrome can swap to the helper).
-- Phase K — design polish pass: typography, spacing, color harmony. Architecture is uniform now, this is the natural next sweep.
+- ~~Phase K — design polish~~ — SHIPPED 2026-05-01 19:00–19:35. Tokens + 10 canonical classes + ~40 inline styles eliminated.
 - Per-holding factor TE breakdown for historical weeks — data not shipped per-week from FactSet, currently shows "—" with explanation. Would require parser-side per-week per-holding factor_contr extraction (would balloon file size). Deferred to FactSet conversation.
 - Phase F UX (combo A+D+E) — SHIPPED 2026-05-01 17:55.
 - Item #2A sector full-page summary tiles — SHIPPED 2026-05-01 18:10.
 - Item #4 Factor Performance y-axis — SHIPPED 2026-05-01 18:20.
 
 **Next session priorities (ordered by leverage):**
-1. Begin tileChromeStrip migration sweep — start with Tier-1 tiles (cardSectors / cardCountry / cardWeekOverWeek). Each migration verifies the helper handles the tile's chrome shape.
-2. Phase K design polish pass — typography (size/weight ladder), spacing rhythm, color harmony, hover states. Architecture is solid, this is purely visual.
-3. Per-tile audit cadence resume — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep.
+1. **tileChromeStrip migration sweep** — start with Tier-1 tiles (cardSectors / cardCountry / cardWeekOverWeek). Each migration verifies the helper handles the tile's chrome shape.
+2. **Per-tile audit cadence resume** — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep.
+3. **Plotly THEME() color cleanup** — DESIGN_AUDIT.md flagged hardcoded `#94a3b8` greys scattered across Plotly chart code. Replace with `getComputedStyle(document.body).getPropertyValue('--textDim')` so charts re-theme correctly.
+4. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` / `gap: Xpx` to `var(--space-*)` tokens.
+5. **Per-tile design pass** — apply `.stat-card` / `.empty-state` / `.section-label` to remaining inline-styled patterns (cardThisWeek bullets, cardWeekOverWeek headers, drill modals).
 
 ---
 

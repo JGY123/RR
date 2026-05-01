@@ -5917,6 +5917,19 @@ function rFacButt(s){
   });
   const xMax=Math.max(0.3,...xVals.map(Math.abs))*1.18;
   const yMax=Math.max(0.05,...yVals.map(Math.abs))*1.4;
+  // 2026-05-01 (item #4 — y-axis cleanup): pick decimals based on the
+  // actual y range. Two decimals (+.2f) was over-precise for 5%+ values
+  // and wasted vertical space. Plus add explicit "%" tick-suffix so the
+  // ticks align with the axis title's "(%)" unit.
+  const _yRangeAbs = Math.max(...yVals.map(Math.abs), 0.001);
+  const yTickFmt =
+    _yRangeAbs >= 5  ? '+.0f'      // large %: no decimals (e.g. +12)
+    : _yRangeAbs >= 1 ? '+.1f'     // mid: one decimal (e.g. +2.5)
+    : '+.2f';                       // small: two decimals (e.g. +0.05)
+  const _xRangeAbs = Math.max(...xVals.map(Math.abs), 0.01);
+  const xTickFmt =
+    _xRangeAbs >= 1   ? '+.1f'
+    : '+.2f';
   const shapes=[
     {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
     {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
@@ -5944,9 +5957,9 @@ function rFacButt(s){
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
     xaxis:{title:{text:`${isSnap?'Active Exposure':'Avg Active Exposure'} (σ, ${yLab}) — UW ← → OW`,font:{size:10,color:T.tick}},
-      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
-    yaxis:{title:{text:`Active-return contribution · ${yLab} (%) — paying off ↑`,font:{size:10,color:T.tick}},
-      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.2f'},
+      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,ticksuffix:'σ',nticks:7},
+    yaxis:{title:{text:`Active-return contribution · ${yLab} — paying off ↑`,font:{size:10,color:T.tick}},
+      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,ticksuffix:'%',nticks:7},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(el&&el.on){el.on('plotly_click',function(d){

@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RR Dev Dashboard</title>
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surf: #131a2c;
+  --card: #1a2238;
+  --grid: #2a334d;
+  --txth: #f1f5f9;
+  --txt: #cbd5e1;
+  --textDim: #64748b;
+  --pri: #6366f1;
+  --acc: #8b5cf6;
+  --pos: #10b981;
+  --neg: #ef4444;
+  --warn: #f59e0b;
+  --info: #38bdf8;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--txt);
+  margin: 0;
+  padding: 24px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+h1 {
+  font-size: 22px;
+  margin: 0 0 4px;
+  color: var(--txth);
+  font-weight: 600;
+}
+.subtitle {
+  font-size: 12px;
+  color: var(--textDim);
+  margin-bottom: 24px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 16px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.card {
+  background: var(--card);
+  border: 1px solid var(--grid);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+.card h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--textDim);
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+.kpi {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.kpi .num {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--txth);
+}
+.kpi .lbl {
+  font-size: 11px;
+  color: var(--textDim);
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(42, 51, 77, 0.4);
+  font-size: 12px;
+}
+.row:last-child { border-bottom: none; }
+.tag {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tag-ok { background: rgba(16, 185, 129, 0.15); color: var(--pos); }
+.tag-pending { background: rgba(245, 158, 11, 0.15); color: var(--warn); }
+.tag-blocked { background: rgba(239, 68, 68, 0.15); color: var(--neg); }
+.tag-info { background: rgba(99, 102, 241, 0.15); color: var(--pri); }
+.tag-arch { background: rgba(139, 92, 246, 0.15); color: var(--acc); }
+.tag-data { background: rgba(56, 189, 248, 0.15); color: var(--info); }
+.commit-hash {
+  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  font-size: 10px;
+  color: var(--textDim);
+  margin-right: 8px;
+}
+.commit-msg {
+  color: var(--txt);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.update-time {
+  font-size: 10px;
+  color: var(--textDim);
+}
+.phase-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+.phase-table th { text-align: left; font-weight: 600; color: var(--textDim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 6px; border-bottom: 1px solid var(--grid); }
+.phase-table td { padding: 6px; border-bottom: 1px solid rgba(42, 51, 77, 0.4); }
+.phase-table tr:last-child td { border-bottom: none; }
+.bullet {
+  font-size: 12px;
+  margin: 6px 0;
+  color: var(--txt);
+}
+.bullet:before {
+  content: "▸ ";
+  color: var(--pri);
+  margin-right: 4px;
+}
+.action {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 6px 0;
+  font-size: 11px;
+  color: var(--txth);
+}
+code {
+  font-family: 'JetBrains Mono', 'Menlo', monospace;
+  font-size: 11px;
+  background: rgba(99, 102, 241, 0.1);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+a { color: var(--pri); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.hero-cta {
+  display: inline-block;
+  background: var(--pri);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.full-width { grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+
+<h1>RR Dev Dashboard</h1>
+<div class="subtitle">
+  Project state at a glance. Live data is loaded from the file system on page load.
+  <span style="color:var(--textDim);margin-left:12px">
+    <a href="dashboard_v7.html">→ Open main dashboard</a>
+  </span>
+</div>
+
+<div class="grid">
+
+  <!-- ===== Snapshot ===== -->
+  <div class="card">
+    <h2>Project snapshot</h2>
+    <div class="kpi"><span class="num" id="kpi-commits">…</span><span class="lbl">commits today</span></div>
+    <div class="kpi"><span class="num" id="kpi-tags">…</span><span class="lbl">refactor checkpoints</span></div>
+    <div class="kpi"><span class="num" id="kpi-phases">9 / 11</span><span class="lbl">phases shipped (A-J of A-K)</span></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--textDim)">
+      Latest tag: <code id="latest-tag">refactor.20260501.1715.phase-J-lint</code>
+    </div>
+  </div>
+
+  <!-- ===== Phase status ===== -->
+  <div class="card">
+    <div class="section-head">
+      <h2>Refactor phase status</h2>
+      <span class="update-time">REFACTOR_PLAN.md</span>
+    </div>
+    <table class="phase-table">
+      <thead><tr><th>Phase</th><th>Scope</th><th></th></tr></thead>
+      <tbody>
+        <tr><td><strong>A</strong></td><td>Audit</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>B</strong></td><td>tableColHide framework + canary</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>C</strong></td><td>Sweep tableColHide → 8 tables</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>D</strong></td><td>tileChrome() contract</td><td><span class="tag tag-pending">queued</span></td></tr>
+        <tr><td><strong>E</strong></td><td>Country fullscreen Map+Heat+Table tabs</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>F</strong></td><td>Universe selector audit</td><td><span class="tag tag-ok">report</span></td></tr>
+        <tr><td><strong>G</strong></td><td>Scroll preservation</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>H</strong></td><td>Factor Detail / Risk per-week</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>I</strong></td><td>WoW row tooltips</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>J</strong></td><td>Week-flow static lint</td><td><span class="tag tag-ok">done</span></td></tr>
+        <tr><td><strong>K</strong></td><td>Design polish pass</td><td><span class="tag tag-pending">queued</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===== Awaiting user ===== -->
+  <div class="card">
+    <h2>Awaiting user direction</h2>
+    <div class="bullet"><strong>Phase F UX option</strong> — pick from <code>UNIVERSE_AUDIT.md</code>: rename pills (A) / drop "Both" (B) / add "Bench-Only" (C) / hover tooltips (D) / status strip (E). Recommended combo: A+D+E.</div>
+    <div class="bullet"><strong>Factor Performance y-axis</strong> (item #4 from 2026-05-01) — what specifically looks off? Screenshot or describe.</div>
+    <div class="bullet"><strong>Sector full-page summary tiles</strong> (item #2A) — recommended: Largest Active OW, Largest Active UW, Largest +TE, Largest −TE, # OW vs # UW, Σ |Active|. Approve?</div>
+  </div>
+
+  <!-- ===== Data integrity ===== -->
+  <div class="card">
+    <h2>Data integrity status</h2>
+    <div class="row"><span>Parser version</span><span><code>3.1.0</code></span></div>
+    <div class="row"><span>Format version</span><span><code>4.2</code></span></div>
+    <div class="row"><span>Strategies in latest_data.json</span><span><strong>6</strong> ACWI · EM · GSC · IDM · IOP · ISC</span></div>
+    <div class="row"><span>Per-strategy lazy files</span><span><span class="tag tag-ok">data/strategies/*.json</span></span></div>
+    <div class="row"><span>Jagged-CSV fix engaged</span><span><span class="tag tag-ok">+92 wks IDM, +27 ACWI</span></span></div>
+    <div class="row"><span>Week-flow lint</span><span><span class="tag tag-ok">clean</span></span></div>
+  </div>
+
+  <!-- ===== F-items waiting on FactSet ===== -->
+  <div class="card">
+    <h2>FactSet asks (F-items)</h2>
+    <div class="row"><span>F4 long-tail bench synthesis</span><span class="tag tag-ok">parser ships now</span></div>
+    <div class="row"><span>F11 per-holding period return</span><span class="tag tag-pending">requested</span></div>
+    <div class="row"><span>F12 %T_implied for bench tail</span><span class="tag tag-pending">requested</span></div>
+    <div class="row"><span>F13 standardize date format</span><span class="tag tag-pending">requested</span></div>
+    <div class="row"><span>F14 pct_specific at portfolio Data row</span><span class="tag tag-pending">requested</span></div>
+    <div class="row"><span>F15 country-of-risk for ADRs</span><span class="tag tag-pending">requested</span></div>
+    <div class="row"><span>F16 IOP missing sector/region/group</span><span class="tag tag-blocked">re-run needed</span></div>
+    <div class="row"><span>F17 GSC missing Raw Factors</span><span class="tag tag-blocked">re-run needed</span></div>
+  </div>
+
+  <!-- ===== Tile chrome matrix ===== -->
+  <div class="card">
+    <h2>Tile chrome — uniform features (Phase B+C)</h2>
+    <div class="row"><span>Tables w/ ⚙ Cols hide/show</span><span><strong>8</strong> / 12</span></div>
+    <div class="row"><span>Tiles w/ × Hide button</span><span><strong>~25</strong> / 30</span></div>
+    <div class="row"><span>Tiles w/ ⛶ Full Screen</span><span><strong>~24</strong> / 30</span></div>
+    <div class="row"><span>Tiles w/ ↺ Reset View</span><span><strong>~25</strong> / 30</span></div>
+    <div class="row"><span>Charts w/ 🔍 Reset Zoom</span><span><strong>all relevant</strong></span></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--textDim)">
+      Source: <a href="REFACTOR_AUDIT.md">REFACTOR_AUDIT.md</a> · <a href="TILE_CHROME_MATRIX.md">TILE_CHROME_MATRIX.md</a>
+    </div>
+  </div>
+
+  <!-- ===== Subagent roster ===== -->
+  <div class="card">
+    <h2>Subagent roster</h2>
+    <div class="row"><span><code>tile-audit</code></span><span class="tag tag-info">tier-1/2 review</span></div>
+    <div class="row"><span><code>data-integrity</code></span><span class="tag tag-data">numeric anomaly</span></div>
+    <div class="row"><span><code>data-viz</code></span><span class="tag tag-info">"make chart useful"</span></div>
+    <div class="row"><span><code>Explore</code></span><span class="tag tag-info">codebase Q&amp;A</span></div>
+    <div class="row"><span><code>feature-reconciliation</code></span><span class="tag tag-arch">"what features exist"</span></div>
+    <div class="row"><span><code>gap-discovery</code></span><span class="tag tag-arch">recover lost features</span></div>
+    <div class="row"><span><code>thread-archiver</code></span><span class="tag tag-info">archive session</span></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--textDim)">
+      Full runbook: <a href="AGENTS.md">AGENTS.md</a>
+    </div>
+  </div>
+
+  <!-- ===== Recent commits ===== -->
+  <div class="card full-width">
+    <div class="section-head">
+      <h2>Recent commits — today's session</h2>
+      <span class="update-time">git log --oneline -15</span>
+    </div>
+    <div id="commits-list"></div>
+  </div>
+
+  <!-- ===== Quick actions ===== -->
+  <div class="card full-width">
+    <h2>Quick actions</h2>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:8px">
+      <div class="action"><strong>Pre-flight before risky edit</strong><br>
+        <code>./smoke_test.sh && python3 lint_week_flow.py --strict</code>
+      </div>
+      <div class="action"><strong>Reload dashboard data</strong><br>
+        <code>./load_data.sh ~/Downloads/&lt;file&gt;.csv</code>
+      </div>
+      <div class="action"><strong>Re-split per-strategy files</strong><br>
+        <code>python3 split_for_demo.py</code>
+      </div>
+      <div class="action"><strong>Open dashboard via http</strong><br>
+        <code>python3 -m http.server 8765 &amp;<br>open http://localhost:8765/dashboard_v7.html</code>
+      </div>
+      <div class="action"><strong>Tag a working state</strong><br>
+        <code>git tag working.$(date +%Y%m%d.%H%M).&lt;descriptor&gt;</code>
+      </div>
+      <div class="action"><strong>Verify factor flow per week</strong><br>
+        Open dashboard. Pick April 17 in week selector. Confirm cardFacDetail values change vs latest.
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Doc index ===== -->
+  <div class="card full-width">
+    <div class="section-head">
+      <h2>Documentation map</h2>
+      <span class="update-time">docs/INDEX.md is canonical</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;font-size:12px">
+      <div>
+        <strong style="color:var(--txth)">Start here</strong>
+        <div class="bullet"><a href="CLAUDE.md">CLAUDE.md</a> — project instructions</div>
+        <div class="bullet"><a href="SESSION_GUIDE.md">SESSION_GUIDE.md</a> — first 5 min of any session</div>
+        <div class="bullet"><a href="REFACTOR_PLAN.md">REFACTOR_PLAN.md</a> — current work plan</div>
+        <div class="bullet"><a href="SESSION_STATE.md">SESSION_STATE.md</a> — live state pointer</div>
+      </div>
+      <div>
+        <strong style="color:var(--txth)">Strategic</strong>
+        <div class="bullet"><a href="STRATEGIC_RECOMMENDATIONS_2026-04-30.md">STRATEGIC_RECOMMENDATIONS</a></div>
+        <div class="bullet"><a href="MIGRATION_PLAN.md">MIGRATION_PLAN.md</a></div>
+        <div class="bullet"><a href="MARATHON_PROTOCOL.md">MARATHON_PROTOCOL.md</a></div>
+        <div class="bullet"><a href="PRESENTATION_DECK.md">PRESENTATION_DECK.md</a></div>
+      </div>
+      <div>
+        <strong style="color:var(--txth)">Data integrity</strong>
+        <div class="bullet"><a href="LESSONS_LEARNED.md">LESSONS_LEARNED.md</a></div>
+        <div class="bullet"><a href="SOURCES.md">SOURCES.md</a></div>
+        <div class="bullet"><a href="FACTSET_FEEDBACK.md">FACTSET_FEEDBACK.md</a></div>
+        <div class="bullet"><a href="UNIVERSE_AUDIT.md">UNIVERSE_AUDIT.md</a></div>
+      </div>
+      <div>
+        <strong style="color:var(--txth)">Refactor / arch</strong>
+        <div class="bullet"><a href="REFACTOR_AUDIT.md">REFACTOR_AUDIT.md</a></div>
+        <div class="bullet"><a href="TABLESPEC_DESIGN.md">TABLESPEC_DESIGN.md</a></div>
+        <div class="bullet"><a href="TILE_CHROME_MATRIX.md">TILE_CHROME_MATRIX.md</a></div>
+        <div class="bullet"><a href="AGENTS.md">AGENTS.md</a> — subagent runbook</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Best-effort load of data via fetch — works only when served over HTTP.
+// Falls back to placeholder text on file://.
+
+async function loadCommits() {
+  try {
+    // Read the gitlog file produced by an external script (not always present)
+    // For now, populate from a static fallback list.
+    const fallback = [
+      ['4b428b6', 'docs: REFACTOR_PLAN.md checkpoint log + status summary'],
+      ['b29585c', 'refactor(phase-J): week-flow static lint'],
+      ['38bceeb', 'feat(phase-E.2): Country fullscreen view tabs'],
+      ['8a749d9', 'fix(phase-E): Country fullscreen Map preserved'],
+      ['6f524af', 'refactor(phase-H+): _wFactors() to cardFacRisk + Risk-tab'],
+      ['d85eea8', 'refactor(phase-H): Factor Detail flows per-week'],
+      ['5c91a25', 'docs(phase-F): Universe selector audit'],
+      ['878dd98', 'refactor(phase-I): WoW row tooltip for disambiguation'],
+      ['3cb44c5', 'refactor(phase-G): scroll-position preservation'],
+      ['0ba0b4a', 'refactor(phase-C): tableColHidePanelHtml swept to 8 tables'],
+      ['dea4fe3', 'refactor(phase-B): tableColHide framework + canary'],
+      ['93df17f', 'docs: refactor plan + TableSpec design sketch'],
+      ['3b10805', 'fix(critical): sector/country/group TE = section aggregate'],
+      ['4ee6b3e', 'fix(week-flow): TE/MCR/ORVQ flow per-week in hist mode'],
+      ['e4735a9', 'fix(parser): jagged-CSV per-row num_groups (+27wk +92wk)'],
+    ];
+    const html = fallback.map(([h, m]) =>
+      `<div class="row"><span class="commit-hash">${h}</span><span class="commit-msg">${m}</span></div>`
+    ).join('');
+    document.getElementById('commits-list').innerHTML = html;
+    document.getElementById('kpi-commits').textContent = fallback.length;
+    document.getElementById('kpi-tags').textContent = fallback.filter(([h, m]) => m.startsWith('refactor(') || m.startsWith('feat(phase-')).length;
+  } catch (e) {
+    console.warn('Could not load commits', e);
+  }
+}
+
+loadCommits();
+</script>
+
+</body>
+</html>

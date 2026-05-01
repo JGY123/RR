@@ -1,6 +1,6 @@
 # RR Documentation Index
 
-**Updated:** 2026-04-30 (post-doc-cleanup)
+**Updated:** 2026-05-01 (post-presentation refactor sweep)
 **Purpose:** Single navigator for all RR documentation. Anything not listed here is in `docs/archive/`.
 
 ---
@@ -10,9 +10,12 @@
 | File | What it is |
 |---|---|
 | `CLAUDE.md` | Project instructions (cwd-rooted; Claude Code reads this on every session) |
+| `SESSION_GUIDE.md` | **NEW 2026-05-01.** Operational checklist for the first 5 minutes of any new RR session — what to read, what to verify, what to commit. |
 | `SESSION_STATE.md` | Live "where are we right now" file. Updated at every checkpoint. |
+| `REFACTOR_PLAN.md` | **NEW 2026-05-01.** Active refactor — 11 phases (A–K), checkpoint log, ground rules. Read before any architectural change. |
 | `BACKLOG.md` | Append-only feature/work queue. 22 active items, structured by ID. |
 | `CHANGELOG.md` | High-level user-visible changes (per release tag) |
+| `dev_dashboard.html` | **NEW 2026-05-01.** Visual project state — open `python3 -m http.server 8765` then `http://localhost:8765/dev_dashboard.html` |
 
 ---
 
@@ -35,7 +38,9 @@
 | `LESSONS_LEARNED.md` | The April 2026 data-integrity crisis story + the 8 anti-patterns + the 8 right ways. **Read before touching the parser or render code.** |
 | `SOURCES.md` | Per-cell provenance index. Update when render code changes. |
 | `DATA_SPOT_CHECK_2026-04-30.md` | Most recent data-integrity audit — 5 derived-value classes, FactSet vs dashboard math comparison. |
-| `FACTSET_FEEDBACK.md` | Open issues to relay to FactSet (F1–F9). |
+| `FACTSET_FEEDBACK.md` | Open issues to relay to FactSet (F1–F17). |
+| `UNIVERSE_AUDIT.md` | **NEW 2026-05-01.** "Both" pill audit — no double-counting bug, 5 UX options for relabeling. |
+| `lint_week_flow.py` | **NEW 2026-05-01.** Static lint catches direct `cs.X` access in render functions. Runs in smoke_test.sh. |
 
 ---
 
@@ -108,8 +113,31 @@ If you need any archived doc, it's still in git history + `docs/archive/`.
 ## 🚀 Quick-start commands
 
 ```bash
-./load_data.sh ~/Downloads/<file>.csv  # parse → verify → open dashboard
-./smoke_test.sh --quick                # ~1.5s pre-flight check
-python3 verify_factset.py              # FactSet asks audit (auto-runs in load_data.sh)
-python3 -m pytest test_parser.py -x -q # parser regression suite (17 tests)
+./load_data.sh ~/Downloads/<file>.csv          # parse → verify → open dashboard
+./smoke_test.sh --quick                        # ~1.5s pre-flight check (now includes week-flow lint)
+python3 verify_factset.py                      # FactSet asks audit (auto-runs in load_data.sh)
+python3 lint_week_flow.py                      # NEW: catches direct cs.X access in render functions
+python3 lint_week_flow.py --strict             # NEW: exits 1 on findings (CI gate)
+python3 -m pytest test_parser.py -x -q         # parser regression suite (89 tests)
+
+# Local dashboard server (Safari-compatible)
+python3 -m http.server 8765                    # serve via http://localhost:8765
+open http://localhost:8765/dashboard_v7.html   # main dashboard
+open http://localhost:8765/dev_dashboard.html  # NEW: project-state view
 ```
+
+---
+
+## 🤖 Subagent runbook
+
+See `AGENTS.md` (NEW 2026-05-01) for the full subagent roster + when to spawn each.
+
+Quick reference for the most-used:
+| Agent | Spawn when | Output |
+|---|---|---|
+| `tile-audit` | Tier-1/2 tile review | `tile-specs/{id}-audit.md` |
+| `data-integrity` | Numeric anomaly, parser/normalize/render touch | GREEN/YELLOW/RED audit report |
+| `data-viz` | "make this chart more useful" | `viz-specs/{chart-id}-spec.md` |
+| `Explore` | Quick codebase question | Inline answer |
+| `feature-reconciliation` | "what features do we actually have" | `FEATURE_RECONCILIATION.md` |
+| `gap-discovery` | "where did feature X go" (after lost work) | `GAP_INVENTORY.md` |

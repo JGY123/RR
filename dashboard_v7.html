@@ -2307,8 +2307,8 @@ function thisWeekCardHtml(s){
   // The next 3 bullets ride on s.sectors / s.hold / s.factors which are LATEST-only;
   // suppress them in historical-week mode so we never label latest composition with a past date.
   if(!isHistWeek){
-  // Top OW + UW sectors
-  let sortedSecs=(s.sectors||[]).filter(x=>x.n&&!/cash/i.test(x.n)&&isFinite(x.a)).sort((a,b)=>(b.a||0)-(a.a||0));
+  // Top OW + UW sectors — only runs in latest mode (gated above)
+  let sortedSecs=(s.sectors||[]).filter(x=>x.n&&!/cash/i.test(x.n)&&isFinite(x.a)).sort((a,b)=>(b.a||0)-(a.a||0));   // lint-week-flow:ignore (latest-only branch)
   if(sortedSecs.length){
     let topOW=sortedSecs[0];
     if((topOW.a||0)>=1) stateBullets.push(`Largest overweight is <strong>${topOW.n}</strong> at ${fp(topOW.a,1)}% vs benchmark.`);
@@ -2323,7 +2323,7 @@ function thisWeekCardHtml(s){
   }
   // Factor tilts > 0.5σ
   let sigma=_thresholds.factorSigma??_thresholdsDefault.factorSigma;
-  let allBigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>=sigma).sort((a,b)=>Math.abs(b.a||0)-Math.abs(a.a||0));
+  let allBigFac=(s.factors||[]).filter(f=>Math.abs(f.a||0)>=sigma).sort((a,b)=>Math.abs(b.a||0)-Math.abs(a.a||0));   // lint-week-flow:ignore (latest-only branch — sectors/factors here are inside if(!isHistWeek))
   let bigFac=allBigFac.slice(0,3);
   if(bigFac.length){
     let names=bigFac.map(f=>`${f.n} ${fp(f.a,2)}\u03c3`).join(', ');
@@ -2549,9 +2549,10 @@ function rWeekOverWeek(s){
   const addCol=`<div class="wow-col"><div class="wow-col-h">Added <span class="count">${added.length} new</span></div>${added.length?added.slice(0,7).map(h=>rowHtml(h,'added')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No new positions this week</div>'}${added.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${added.length-7} more...</div>`:''}</div>`;
   const dropCol=`<div class="wow-col"><div class="wow-col-h">Dropped <span class="count">${dropped.length} exited</span></div>${dropped.length?dropped.slice(0,7).map(h=>rowHtml(h,'dropped')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No exits this week</div>'}${dropped.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${dropped.length-7} more...</div>`:''}</div>`;
   const resizeCol=`<div class="wow-col"><div class="wow-col-h">Resized <span class="count">top ${Math.min(5,resized.length)} |Δwt|</span></div>${resized.length?resized.slice(0,5).map(h=>rowHtml(h,'resized')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No material weight changes (≥0.10%)</div>'}</div>`;
-  // Factor rotation footer — top 3 by |Δexp|
+  // Factor rotation footer — top 3 by |Δexp|. Only renders in latest mode
+  // (moveListsHtml hidden in hist mode); s.factors here is latest-only by design.
   const facRot=(()=>{
-    const facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a||f.e));
+    const facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a||f.e));   // lint-week-flow:ignore (latest-only block, see comment above)
     const sa=s.snap_attrib||{};
     const ranked=facs.map(f=>{
       const fhist=(sa[f.n]||{}).hist||[];
@@ -5904,7 +5905,7 @@ function rFacRisk(s){
   if(!div)return;
   // 2026-05-01 (Phase H): per-week factor data via _wFactors() (snap_attrib
   // → cs.factors shape). Auto-falls-back to s.factors when no week selected.
-  const sourceFactors = (typeof _wFactors==='function' ? _wFactors() : (s.factors||[]));
+  const sourceFactors = (typeof _wFactors==='function' ? _wFactors() : (s.factors||[]));   // lint-week-flow:ignore (fallback path)
   const facs=sourceFactors.filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
   if(!facs.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
   // KPI strip — six factor-specific stats (Beta + Active Share were
@@ -7221,7 +7222,7 @@ function rRisk(){
   let totalTE=ws.te;
   // 2026-05-01 (Phase H): factor table on Risk tab also flows per-week via
   // _wFactors(). cardFacContribBars reads from this as well.
-  const _facsForWeek=(typeof _wFactors==='function')?_wFactors():(s.factors||[]);
+  const _facsForWeek=(typeof _wFactors==='function')?_wFactors():(s.factors||[]);   // lint-week-flow:ignore (fallback path)
   // 2026-04-30 (cross-tab integrity fix — was B99 backlog item):
   // Risk-tab Idio/Factor split MUST come from cs.sum.pct_specific /
   // cs.sum.pct_factor (the same source the Exposures tab + cardThisWeek read).
@@ -7240,7 +7241,7 @@ function rRisk(){
     factorRisk=+(totalTE*factorPct/100).toFixed(2);
   } else {
     // Legacy fallback (pre-format-change files without pct_specific):
-    let facContribs=s.factors.map(f=>Math.abs(f.c||0));
+    let facContribs=s.factors.map(f=>Math.abs(f.c||0));   // lint-week-flow:ignore (legacy fallback only)
     let totalFacContrib=facContribs.reduce((a,v)=>a+v,0);
     factorRisk=+(totalTE*Math.min(totalFacContrib/100*1.2,0.85)).toFixed(2);
     idioRisk=+(totalTE-factorRisk).toFixed(2);
@@ -7277,7 +7278,7 @@ function rRisk(){
     let grpId='facGrp_'+f.n.replace(/[^a-z0-9]/gi,'_');
     let isIndustry=/industr/i.test(f.n);
     let isCountry=/countr/i.test(f.n);
-    let items=isIndustry?s.sectors.map(sec=>sec.n):isCountry?(s.countries||[]).map(c=>c.n):[];
+    let items=isIndustry?s.sectors.map(sec=>sec.n):isCountry?(s.countries||[]).map(c=>c.n):[];   // lint-week-flow:ignore (sector/country name list for checkbox labels — list doesn't change per week)
     let subHtml=items.length?items.map(item=>`<label style="display:flex;align-items:center;gap:4px;padding:3px 4px;font-size:11px;cursor:pointer;border-radius:3px;white-space:nowrap"><input type="checkbox" class="fac-sub-chk" data-grp="${f.n}" data-item="${item.replace(/"/g,'&quot;')}" onchange="updateFacExpChart()"><span style="color:var(--txth)">${item}</span></label>`).join('')
       :`<p style="font-size:11px;color:var(--txt);padding:4px 2px;margin:0">No components available</p>`;
     return`<div style="position:relative;display:inline-block">
@@ -7568,7 +7569,7 @@ function rRisk(){
       </div>
     </div>
     <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
-      ${s.factors.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" ${FAC_PRIMARY.has(f.n)?'checked':''} onchange="rUpdateCorr()"><span style="color:${FAC_PRIMARY.has(f.n)?'var(--txth)':'var(--txt)'}">${f.n}</span></label>`).join('')}
+      ${s.factors.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" ${FAC_PRIMARY.has(f.n)?'checked':''} onchange="rUpdateCorr()"><span style="color:${FAC_PRIMARY.has(f.n)?'var(--txth)':'var(--txt)'}">${f.n}</span></label>`).join('')}   <!-- lint-week-flow:ignore (factor name list for correlation checkboxes; list doesn't change per week) -->
     </div>
     <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%"><div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--txt);font-size:11px">Computing correlation…</div></div>
     <div id="corrInsights" style="margin-top:8px;font-size:11px"></div>

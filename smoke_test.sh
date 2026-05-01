@@ -108,9 +108,23 @@ if [ -f "$JSON" ]; then
   check "if multi-account: all 7 expected accounts" "python3 -c 'import json; d=json.load(open(\"$JSON\")); s=set(d[0].keys()); expected={\"ACWI\",\"IDM\",\"IOP\",\"EM\",\"GSC\",\"ISC\",\"SCG\"}; assert len(s) < 2 or not (expected - s), f\"multi-account but missing: {expected - s}\"'"
 fi
 
-# ===== 5. Git state =====
+# ===== 5. Week-flow lint =====
 echo
-echo -e "${BOLD}5. Git state${RESET}"
+echo -e "${BOLD}5. Week-flow lint (Phase J)${RESET}"
+if [ -f "$SCRIPT_DIR/lint_week_flow.py" ]; then
+  if python3 "$SCRIPT_DIR/lint_week_flow.py" --strict >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${RESET} no direct cs.X access in render functions"
+    PASS=$((PASS+1))
+  else
+    echo -e "  ${YELLOW}—${RESET} suspect direct cs.X access detected — run \`python3 lint_week_flow.py\` for details"
+  fi
+else
+  echo -e "  ${YELLOW}—${RESET} lint_week_flow.py missing, skipping"
+fi
+
+# ===== 6. Git state =====
+echo
+echo -e "${BOLD}6. Git state${RESET}"
 cd "$SCRIPT_DIR"
 # grep -c always prints a number to stdout (even "0" when no matches);
 # the prior `|| echo 0` fallback duplicated the line and broke `-gt` later.

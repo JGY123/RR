@@ -3779,15 +3779,15 @@ function rWt(data,type,hold){
     const groupFn=type==='sec'?(h=>h.sec):(h=>(h.reg||(h.co?CMAP[h.co]||'Other':null)));
     factorAgg=aggregateHoldingsBy(aggHold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});
   }
-  // Sector / region TE fallback: if no holdings are shipped for a bucket
-  // (v2 Security slim drops the long tail of bench-only names), the
-  // holdings-aggregated TE is 0. The PARSER ships d.tr from FactSet's
-  // section-aggregate row for every bucket — including bench-only ones —
-  // so fall back to that. Same for d.mcr (per-sector specific TE). User
-  // feedback 2026-04-30: "the sector without holdings don't have the risk
-  // breakdown while they obviously contribute to risk".
-  const aggTr=(name)=>{const v=factorAgg[name]?.tr; if(v!=null&&Math.abs(v)>0.01)return v; const d=data.find(x=>x.n===name); return d?.tr??0;};
-  const aggMcr=(name)=>{const v=factorAgg[name]?.mcr; if(v!=null&&Math.abs(v)>0.01)return v; const d=data.find(x=>x.n===name); return d?.mcr??0;};
+  // 2026-05-01 (CRITICAL FIX): the FactSet section-aggregate row is the source
+  // of truth for sector / region TE contribution. Per-holding pct_t summed
+  // across holdings double-counts (observed: ACWI Industrials holdings-sum
+  // = 55.4% but section aggregate = 47.6%; total holdings-sum = 137% > 100%).
+  // Prefer d.tr / d.mcr from the per-week dim entry (which IS the section
+  // aggregate). Fall back to holdings-sum only if the dim entry doesn't
+  // ship the field. Applies to BOTH latest and historical week modes.
+  const aggTr=(name)=>{const d=data.find(x=>x.n===name); if(d?.tr!=null)return d.tr; const v=factorAgg[name]?.tr; return (v!=null&&Math.abs(v)>0.01)?v:0;};
+  const aggMcr=(name)=>{const d=data.find(x=>x.n===name); if(d?.mcr!=null)return d.mcr; const v=factorAgg[name]?.mcr; return (v!=null&&Math.abs(v)>0.01)?v:0;};
   const aggCount=(name)=>factorAgg[name]?.count ?? 0;
   // Sort sectors by TE contribution descending; regions stay as-is
   let sorted=type==='sec'?[...data].sort((a,b)=>Math.abs(aggTr(b.n))-Math.abs(aggTr(a.n))):data;
@@ -4666,15 +4666,19 @@ function rCountryTable(countries,hold){
   // show TE=0 even though the source aggregate row has the correct value.
   // Same pattern rWt + rGroupTable already use; restoring parity here.
   const _coByName=Object.fromEntries((countries||[]).map(c=>[c.n,c]));
+  // 2026-05-01 (CRITICAL FIX): section aggregate is source of truth — same
+  // double-count fix as rWt() / rGroupTable().
   const aggTr=(name)=>{
+    const c=_coByName[name];
+    if(c?.tr!=null) return c.tr;
     const v=factorAgg[name]?.tr;
-    if(v!==undefined && v!==null && Math.abs(v)>0.005)return v;
-    return _coByName[name]?.tr ?? 0;
+    return (v!==undefined && v!==null && Math.abs(v)>0.005) ? v : 0;
   };
   const aggMcr=(name)=>{
+    const c=_coByName[name];
+    if(c?.mcr!=null) return c.mcr;
     const v=factorAgg[name]?.mcr;
-    if(v!==undefined && v!==null && Math.abs(v)>0.005)return v;
-    return _coByName[name]?.mcr ?? 0;
+    return (v!==undefined && v!==null && Math.abs(v)>0.005) ? v : 0;
   };
   const rankCell=(avg,col)=>{
     let c=avg!=null?rc(Math.round(avg)):'#334155';
@@ -4799,8 +4803,9 @@ function rGroupTable(groups,hold){
   // aggregate when holdings sum is zero — same pattern as cardSectors.
   let factorAgg={};
   if(aggHold){factorAgg=aggregateHoldingsBy(aggHold,h=>(h.subg||h.sg||null),RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
-  const aggTr=(name)=>{const v=factorAgg[name]?.tr; if(v!=null&&Math.abs(v)>0.01)return v; const g=displayGroups.find(x=>x.n===name); return g?.tr??0;};
-  const aggMcr=(name)=>{const v=factorAgg[name]?.mcr; if(v!=null&&Math.abs(v)>0.01)return v; const g=displayGroups.find(x=>x.n===name); return g?.mcr??0;};
+  // 2026-05-01 (CRITICAL FIX): section aggregate is source of truth.
+  const aggTr=(name)=>{const g=displayGroups.find(x=>x.n===name); if(g?.tr!=null)return g.tr; const v=factorAgg[name]?.tr; return (v!=null&&Math.abs(v)>0.01)?v:0;};
+  const aggMcr=(name)=>{const g=displayGroups.find(x=>x.n===name); if(g?.mcr!=null)return g.mcr; const v=factorAgg[name]?.mcr; return (v!=null&&Math.abs(v)>0.01)?v:0;};
   const hasTE=isHistMode||(aggHold&&aggHold.some(h=>h.tr!=null||h.mcr!=null));
   const maxTE=hasTE?Math.max(...displayGroups.map(g=>Math.abs(aggTr(g.n))),0.01):1;
   let rows=displayGroups.map(g=>{

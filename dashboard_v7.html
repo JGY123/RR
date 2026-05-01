@@ -733,7 +733,12 @@ function setImpactPeriod(p){
   if(!IMPACT_PERIOD_LABELS[p])return;
   _impactPeriod=p;
   try{localStorage.setItem('rr.impactPeriod',p);}catch(e){}
-  if(typeof upd==='function')upd();
+  // 2026-05-01 (Phase G): preserve scroll on period change too — same UX
+  // expectation as week-selector.
+  if(typeof upd==='function'){
+    if(typeof _withScrollPreserved==='function')_withScrollPreserved(upd);
+    else upd();
+  }
 }
 // Compute factor Impact for the given period from snap_attrib history.
 // Returns { v, note } where note is a human-readable date range for the cell title attribute.
@@ -1975,11 +1980,27 @@ function initImpactPeriodSelector(){
   }).join('');
 }
 
+// 2026-05-01 (Phase G): scroll-position preservation. User feedback:
+// "If I am viewing the Factor Detail tile and I change the week selector, I
+//  should remain in the same part of the page viewing that tile. I should not
+//  be kicked back to the top and forced to scroll down again."
+// Snapshot scrollY before re-render, restore after. Two callers below.
+function _withScrollPreserved(fn){
+  const sx = window.scrollX, sy = window.scrollY;
+  fn();
+  // Two restores — once after the synchronous innerHTML write, once after
+  // the post-render setTimeout chain (charts etc.) so layout shifts don't
+  // strand the user 50px off.
+  window.scrollTo(sx, sy);
+  setTimeout(() => window.scrollTo(sx, sy), 60);
+  setTimeout(() => window.scrollTo(sx, sy), 250);
+}
+
 function changeWeek(date){
   const isLatest=!date||date===_availDates[_availDates.length-1];
   _selectedWeek=isLatest?null:date;
   $('latestBtn').style.display=isLatest?'none':'inline';
-  upd();
+  _withScrollPreserved(upd);
 }
 
 function stepWeek(dir){
@@ -1995,7 +2016,7 @@ function jumpToLatest(){
   const sel=$('weekSel');
   if(sel&&_availDates.length)sel.value=_availDates[_availDates.length-1];
   $('latestBtn').style.display='none';
-  upd();
+  _withScrollPreserved(upd);
 }
 
 // Returns the currently selected week's hist.sum entry (or current stats object)

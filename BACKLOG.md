@@ -1,7 +1,7 @@
 ---
 name: RR Backlog
 purpose: Append-only feature/work queue. Non-trivial items surfaced from audits, specs, and user direction. Not a roadmap — a capture surface. Priority is assigned when items get scheduled.
-last_updated: 2026-04-27 (marathon in flight — B109–B113 surfaced from cardFacDetail review; B103 subsumed into B111)
+last_updated: 2026-05-01 (Round 2 inquisitor follow-ups added — see "Audit follow-ups" section)
 ---
 
 # RR Backlog
@@ -13,6 +13,75 @@ Non-trivial work items (anything that isn't a ≤5-line trivial fix). Trivial fi
 - Each item has: ID · title · origin · rough size · blockers · notes.
 - When an item ships, move to "Shipped" section at bottom.
 - When a batch of audits produces many items, group them under one header to avoid bureaucracy.
+
+---
+
+## 🔭 Audit follow-ups (Round 2 deferred picks — 2026-05-01)
+
+Items surfaced by `INQUISITOR_QUEUE_R2_2026-04-30.md` user replies on 2026-05-01. Each defers past the team presentation; user picked these explicitly but we ran out of time pre-demo. Not blockers; nice-to-haves.
+
+### B117 · cardCorr default period 1Y weekly + pre-cache 3M weekly + 3Y monthly
+- **Origin:** R2-Q12 user pick: "1Y weekly which you have to pre-calculate once you have all the data you also need 3 month weekly and 3 year monthly pre-calculated and perhaps a few more — let's make sure it works"
+- **What:** cardCorr today computes correlation matrix on every period-dropdown change (~50ms-2s depending on factor count). Pre-compute the popular variants once per data load: {3M weekly, 1Y weekly, 3Y monthly, All}. Cache as `cs._corr_cache[period]`. Default dropdown to 1Y weekly.
+- **Size:** S (~30 lines + parser-side maybe).
+- **Blockers:** none. Defer for post-demo.
+
+### B118 · cardRiskFacTbl Return column period-aware
+- **Origin:** R2-Q13 user pick: "B although you can try convince otherwise."
+- **Counterargument worth raising:** the Return column shows the FACTOR's return for the period — so making it period-aware means cumulative return over the global Impact period (3M / 6M / 1Y / All). The cumulative return doesn't simply linear-aggregate the per-week returns; it should be `Π(1 + r_t) - 1`. We have the per-week returns from `cs.snap_attrib[name].hist[].ret` so this is doable.
+- **Implementation:** new helper `getReturnForPeriod(factorName, period)` that geometric-links the per-week returns over the period window. Update cardRiskFacTbl Return column header to show "(period)" label. Same for cardFacDetail.
+- **Size:** M (~60 lines + helper). Cross-tile sweep with cardFacDetail.
+- **Blockers:** none.
+
+### B119 · Mockup mechanism enhancements (dynamic + selection buttons + nav)
+- **Origin:** R2-Q15 user pick: "make sure that this like everything else is dynamic and updates when selecting a different week. in general when showing that html it would be cool if it could have all kind of yes/no selection buttons that indicates to you the selection or maintain some kind of note where you can look or i can paste and there should be a next button to go the next question"
+- **What:** Upgrade the `viz-specs/{tile}-mockup.html` template to:
+  - **Dynamic data**: read from `latest_data.json` (or a frozen snapshot) so changing the strategy/week selector updates the mockup
+  - **Selection buttons**: each candidate design has Yes/No/Maybe buttons that capture user pick → write to `viz-specs/{tile}-decisions.json`
+  - **Notes area**: free-text input that saves to localStorage; user can paste back to me
+  - **Next button**: navigates between candidates / between mockups in the queue
+- **Size:** L (~3-4 hours — dynamic data wiring, decision capture, navigation framework).
+- **Blockers:** none. Big design-tooling investment, defer until next 2-3 mockups stack up.
+
+### B120 · Tile chrome capability sweep (Reset View + Hide + Full Screen + PNG everywhere)
+- **Origin:** R2-Q25 user pick: "give list of all tiles with buttons that they have vs buttons they could have, I can check any tile that needs more functionality such as hide, full screen etc."
+- **Reference:** `TILE_CHROME_MATRIX.md` (shipped 2026-05-01) — 30 tiles × 10 affordances grid. User checks ☐→☑ on what to add.
+- **Sub-batches once user marks the matrix:**
+  - **B120.1** — Sweep Reset View (↺) across all chart tiles. Framework already shipped (commit 1848840). Per-tile: register custom handler in `window._tileDefaults['cardX']` + add `${resetViewBtn('cardX')}` to header.
+  - **B120.2** — Add Full Screen (⛶) to chart tiles missing it. Generalize `openSecFullscreen` / `openCountryFullscreen` into `openTileFullscreen(tileId)`.
+  - **B120.3** — Add Hide (×) collapse-button to all tiles. New mechanism: collapse state in localStorage `rr.collapsed.{tileId}` + smooth height transition.
+  - **B120.4** — Add PNG export to all tiles via existing `screenshotCard(selector)`. Uniform `${pngBtn('cardX')}` helper.
+- **Size:** M-L total (~6-8 hours across the 4 sub-batches).
+- **Blockers:** B120.3 needs a Hide-state spec first.
+
+### B121 · Period-aware sweep across drill modals
+- **Origin:** R2-Q23 user pick: "yes — consistency win."
+- **What:** every drill modal has an "Impact" or "Return" column. Today some honor the global Impact period selector, some don't. Audit and standardize.
+- **Affected modals:** TE drill, Idio drill, Beta drill, AS drill, Factor drill, Country drill, Group drill, Sector drill, Holding drill (oSt).
+- **Size:** M (~3 hours — audit + per-modal fix).
+- **Blockers:** none.
+
+### B122 · cardCorr formal tile audit
+- **Origin:** R2-Q24 user pick: "yes."
+- **What:** Run the standard tile-audit subagent against cardCorr (now first-class as of commit 819c493). Add to MARATHON_PROTOCOL.md.
+- **Size:** S (~30 min for audit + ~30 min for any fixes).
+- **Blockers:** none.
+
+### B123 · Tableau-pattern mini-explainer doc
+- **Origin:** R2-Q21 user pick: "need to learn more about each and ideally if you can show examples or direct to links where it's visual."
+- **What:** Doc explaining the 7 Tableau patterns I flagged (bullet, marimekko, slope, highlight tables, dot plots, reference bands, annotated histograms) with:
+  - One-paragraph explanation each
+  - Link to a public example (Storytelling with Data / Bloomberg article / Tableau gallery)
+  - "Where it'd fit in RR" — concrete tile candidate
+- **Size:** S (~1 hour).
+- **Blockers:** none. Can ship pre-coffee any morning.
+
+### B124 · Audit cadence policy refinement
+- **Origin:** R2-Q22 user pick: "a, b, c at least until there is full confidence and then report and recommend how to go once."
+- **What:** Combo audit cadence — per-batch (every commit) + bi-weekly + triggered. After 4-6 weeks of clean audits, agent reports back and recommends "drop to triggered-only" or "continue rolling".
+- **Mechanism:** automated tile-audit subagent run after every 5+ commits. Bi-weekly cron-style nudge. User can manually trigger an audit any time. Agent writes a MARATHON_AUDIT_LOG.md entry with each pass.
+- **Size:** M (~2 hours for the agent-trigger mechanism + log format).
+- **Blockers:** none. Wire after the dust settles post-demo.
 
 ---
 

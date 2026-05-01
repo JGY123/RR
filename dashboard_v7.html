@@ -905,10 +905,31 @@ const _ABOUT_REG={
     caveats:'Strategy-scoped — IDM watchlist independent from GSC. Cleared if user clicks Reset Preferences. Will be migrated to durable storage when professional environment lands (Phase 2 of MIGRATION_PLAN).',
     related:'cardHoldings'
   },
-  // 2026-04-30 (audit, item #1): cardMCR registry entry deleted as orphan.
-  // Tile removed in commit 2eff789; per-holding |MCR| now lives on
-  // cardHoldRisk (Holdings tab) as bubble-size encoding + bottom Top-10
-  // chart. Spec preserved in tile-specs/cardMCR-audit-2026-04-23.md.
+  // 2026-05-01 (R2-Q14 user override → C): cardMCR retired-stub with hidden flag.
+  // Preserves design-intent record + cross-refs from other tiles' related: lists.
+  cardMCR:{
+    hidden: true,
+    title: 'MCR — Top Idiosyncratic Risk Contributors',
+    retired_reason: 'Per-holding |MCR| now ships natively on cardHoldRisk (Holdings tab) as bubble-size encoding + the cardTop10 horizontal-bar chart. Standalone MCR tile was redundant with both.',
+    replaced_by: 'cardHoldRisk (Holdings tab) · cardTop10 (Holdings tab)',
+    what: 'Top 10 holdings ranked by |MCR| — the stock-specific (idiosyncratic) component of each holding\'s tracking error.',
+  },
+  // 2026-05-01 (R2-Q14 user override → C): cardCalHeat retired-stub.
+  cardCalHeat:{
+    hidden: true,
+    title: 'TE Calendar Heatmap',
+    retired_reason: 'Visualization didn\'t add much over the existing TE charts (cardRiskHistTrends + cardTEStacked). Calendar-heatmap pattern preserved at viz-specs/cardCalendarHeatmap-spec.md for future reuse on cyclic-time-series tiles.',
+    replaced_by: 'cardRiskHistTrends · cardTEStacked',
+    what: 'GitHub-style calendar of weekly TE intensity. Each cell = one week; color = magnitude of |ΔTE| (default) or absolute TE level. Click any cell to jump the week selector.',
+  },
+  // 2026-05-01 (R2-Q14 user override → C): cardRiskCtryFactor retired-stub.
+  cardRiskCtryFactor:{
+    hidden: true,
+    title: 'Country × Factor TE Heatmap',
+    retired_reason: 'Duplicated cardCountry chart-view (same renderer rCountryChart, same data). Removed in commit fd31b26 to reduce Risk-tab clutter.',
+    replaced_by: 'cardCountry (Chart view on Exposures tab)',
+    what: 'Two-dimensional heatmap: country (rows) × factor (cols). Cell = signed factor TE contribution from that country.',
+  },
   // 2026-04-30 (S1, Strategic Recommendations): the diff tile.
   cardWeekOverWeek:{
     title:'Week over Week',
@@ -1074,6 +1095,23 @@ function openAbout(tileId){
   if(!m||!c)return;
   const e=_ABOUT_REG[tileId];
   if(!e){c.innerHTML=`<h2>About<button class="close" onclick="$('aboutModal').classList.remove('show')">&times;</button></h2><p style="color:var(--txt);font-size:12px">No reference yet for ${tileId}. Add to _ABOUT_REG.</p>`;m.classList.add('show');return;}
+  // 2026-05-01 (R2-Q14 user override → C): retired tiles get a stub entry
+  // with hidden:true flag — preserves design intent + cross-refs from other
+  // tiles' related: lists. Show a "RETIRED" banner instead of the normal sections.
+  if(e.hidden){
+    c.innerHTML=`
+      <h2>${e.title}<button class="close" onclick="$('aboutModal').classList.remove('show')">&times;</button></h2>
+      <div style="background:rgba(245,158,11,0.10);border-left:3px solid var(--warn);padding:10px 14px;border-radius:0 6px 6px 0;margin-bottom:14px;font-size:12px;color:var(--warn)">
+        <strong>RETIRED TILE</strong> — this view is no longer rendered in the dashboard. Reference preserved for context.
+      </div>
+      <div style="font-size:12px;color:var(--txt);line-height:1.6">
+        <p style="margin:0 0 8px"><strong style="color:var(--textDim);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">Why retired</strong><br>${e.retired_reason||'No reason given.'}</p>
+        ${e.replaced_by?`<p style="margin:0 0 8px"><strong style="color:var(--pri);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">Replaced by</strong><br>${e.replaced_by}</p>`:''}
+        ${e.what?`<p style="margin:0 0 8px"><strong style="color:var(--textDim);text-transform:uppercase;font-size:9px;letter-spacing:0.5px">What it showed</strong><br>${e.what}</p>`:''}
+      </div>`;
+    m.classList.add('show');
+    return;
+  }
   c.innerHTML=`
     <h2>${e.title}<button class="close" onclick="$('aboutModal').classList.remove('show')">&times;</button></h2>
     <div style="font-size:12px;color:var(--txth);line-height:1.6">
@@ -1099,6 +1137,27 @@ function resetPlotZoom(divId){
   try{ Plotly.relayout(divId,{'xaxis.autorange':true,'yaxis.autorange':true,'yaxis2.autorange':true,'xaxis2.autorange':true}); }catch(e){}
 }
 const resetZoomBtn=divId=>`<button onclick="resetPlotZoom('${divId}')" title="Reset zoom — back to full data range. (Double-clicking on the chart also resets.)" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1">⤾</button>`;
+
+// 2026-05-01 (R2-Q9 + Q11 user override): "Reset to Default View" — separate
+// from Reset Zoom. Resets ALL chart state: zoom AND any tile-specific filters
+// (factor checkboxes, threshold sliders, view toggles, etc.). Each tile
+// registers its own reset handler in window._tileDefaults — this button
+// calls that handler if registered, otherwise falls back to zoom-only.
+window._tileDefaults = window._tileDefaults || {};
+function resetTileToDefaults(tileId){
+  const handler = window._tileDefaults[tileId];
+  if(handler && typeof handler === 'function'){
+    try{ handler(); }
+    catch(e){ console.error('Reset handler failed for '+tileId, e); }
+  } else {
+    // Fallback: just reset zoom on the tile's chart div if we can find one
+    const tile = document.getElementById(tileId);
+    if(!tile) return;
+    const charts = tile.querySelectorAll('[id$="Div"]');
+    charts.forEach(c => resetPlotZoom(c.id));
+  }
+}
+const resetViewBtn = tileId => `<button onclick="resetTileToDefaults('${tileId}')" title="Reset to default view — clears any filters, view toggles, and zoom on this tile" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">↺</button>`;
 
 // 2026-04-30 (cardChars audit F1+F3+F5): static metadata for every shipped
 // portfolio characteristic. Drives: (a) histKey → which cs.hist.sum[].KEY to

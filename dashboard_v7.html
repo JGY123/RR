@@ -31,6 +31,158 @@
 --prof:#fb923c;--upload:#8b5cf6;--uploadBg:#8b5cf620;--zero:#1e2433;
 --fac-bar-pos:rgba(99,102,241,.22);--fac-bar-neg:rgba(245,158,11,.22);
 --r1:#10b981;--r2:#22c55e;--r3:#eab308;--r4:#f97316;--r5:#ef4444;
+/* --- 2026-05-01 (Phase K design polish): design-token scales --- */
+/* Spacing scale (use these instead of hard-coded px values) */
+--space-xs:4px; --space-sm:6px; --space-md:8px; --space-lg:12px; --space-xl:16px; --space-2xl:24px;
+/* Typography scale */
+--text-xs:9px; --text-sm:10px; --text-md:11px; --text-base:12px; --text-lg:13px; --text-xl:15px; --text-2xl:18px; --text-3xl:22px; --text-display:28px;
+/* Font weights */
+--w-normal:400; --w-medium:500; --w-semibold:600; --w-bold:700;
+/* Border radii */
+--radius-sm:4px; --radius-md:6px; --radius-lg:8px; --radius-xl:12px;
+/* Subtle wash backgrounds (for emphasis without solid fills) */
+--pri-wash:rgba(99,102,241,0.06); --pri-wash-strong:rgba(99,102,241,0.12); --pri-border:rgba(99,102,241,0.30);
+--acc-wash:rgba(139,92,246,0.06); --acc-border:rgba(139,92,246,0.30);
+--pos-wash:rgba(16,185,129,0.10); --neg-wash:rgba(239,68,68,0.10); --warn-wash:rgba(245,158,11,0.10);
+/* Hairline (consistent 1px border across the app) */
+--hairline:1px solid var(--cardBorder);
+--hairline-soft:1px solid rgba(30,36,51,0.6);
+/* Elevation shadows */
+--shadow-sm:0 1px 2px rgba(0,0,0,0.20);
+--shadow-md:0 4px 12px rgba(0,0,0,0.30);
+--shadow-lg:0 12px 36px rgba(0,0,0,0.45);
+}
+
+/* ======================================================================
+   2026-05-01 (Phase K design polish): canonical tile-chrome button class.
+   Every chrome button (aboutBtn, resetViewBtn, hideTileBtn, fsTileBtn,
+   resetZoomBtn, tableColHide ⚙ button) uses .tile-btn so visual changes
+   ship from one place.
+   ====================================================================== */
+.tile-btn {
+  background: none;
+  border: 1px solid var(--grid);
+  color: var(--textDim);
+  font-size: var(--text-md);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  font-weight: var(--w-semibold);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.tile-btn:hover {
+  color: var(--txth);
+  border-color: var(--pri);
+  background: var(--pri-wash);
+}
+.tile-btn:focus-visible {
+  outline: 2px solid var(--pri);
+  outline-offset: 1px;
+}
+.tile-btn:disabled, .tile-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* The chrome cluster container — consistent gap across all tiles */
+.tile-chrome {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Card title — canonical typography for tile headers */
+.card-title-canonical {
+  font-size: var(--text-lg);
+  font-weight: var(--w-semibold);
+  color: var(--txth);
+  letter-spacing: 0.1px;
+  margin: 0;
+}
+
+/* Section label — small uppercase eyebrow text used above sub-sections
+   (e.g., "Universe" pill label, "Period" selector label, "TE Decomposition"
+   group headers). Replaces ~30 inline-styled spans across tiles. */
+.section-label {
+  font-size: var(--text-xs);
+  color: var(--textDim);
+  font-weight: var(--w-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+/* Empty-state — consistent "no data" rendering across tiles. */
+.empty-state {
+  font-size: var(--text-md);
+  color: var(--textDim);
+  font-style: italic;
+  text-align: center;
+  padding: var(--space-2xl) var(--space-lg);
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+}
+.empty-state .empty-state-hint {
+  font-size: var(--text-sm);
+  font-style: normal;
+  opacity: 0.75;
+}
+
+/* Stat card — used in KPI strips (sum-cards, sector full-page summary tiles,
+   risk decomposition, etc.). Replaces inline-styled boxes scattered across
+   the dashboard with a single canonical look. */
+.stat-card {
+  background: var(--pri-wash);
+  border: 1px solid var(--cardBorder);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color .15s, background .15s;
+}
+.stat-card.clickable { cursor: pointer; }
+.stat-card.clickable:hover {
+  border-color: var(--pri);
+  background: var(--pri-wash-strong);
+}
+.stat-card .stat-label {
+  font-size: var(--text-xs);
+  color: var(--textDim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: var(--w-semibold);
+}
+.stat-card .stat-value {
+  font-size: var(--text-2xl);
+  color: var(--txth);
+  font-weight: var(--w-semibold);
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.stat-card .stat-sub {
+  font-size: var(--text-sm);
+  color: var(--textDim);
+  margin-top: 1px;
+}
+
+/* KPI strip — flex container for groups of stat cards */
+.kpi-strip {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* Numeric tabular display — used for prices, percentages, weights anywhere
+   columns of numbers should align cleanly. */
+.num-tabular {
+  font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
 }
 body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
 .mono{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
@@ -288,9 +440,33 @@ tr.clickable:active td{background:rgba(99,102,241,.12)}
 .thresh-good{border-left:3px solid var(--pos)}
 
 /* Export buttons */
-.export-bar{display:flex;gap:6px;align-items:center}
-.export-btn{padding:3px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:4px;cursor:pointer;font-size:10px;font-family:inherit;transition:all .15s}
-.export-btn:hover{border-color:var(--pri);color:var(--txth)}
+.export-bar{display:flex;gap:var(--space-sm);align-items:center}
+/* 2026-05-01 (Phase K design polish): .export-btn now matches .tile-btn
+   visually so all small inline action buttons share one look. The two
+   classes coexist (some legacy markup uses each); change either definition
+   and both ship the new look. */
+.export-btn{
+  background: none;
+  border: 1px solid var(--grid);
+  color: var(--textDim);
+  font-size: var(--text-md);
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  font-weight: var(--w-semibold);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.export-btn:hover{
+  color: var(--txth);
+  border-color: var(--pri);
+  background: var(--pri-wash);
+}
+.export-btn:focus-visible{
+  outline: 2px solid var(--pri);
+  outline-offset: 1px;
+}
 /* Download icon dropdown */
 .dl-wrap{position:relative;display:inline-block}
 .dl-drop{display:none;position:absolute;right:0;top:calc(100% + 2px);background:var(--card);border:1px solid var(--grid);border-radius:4px;z-index:60;min-width:120px;box-shadow:0 4px 12px rgba(0,0,0,0.4)}
@@ -1135,7 +1311,7 @@ function openAbout(tileId){
   m.classList.add('show');
 }
 // Tiny ⓘ button HTML for inclusion in tile headers
-const aboutBtn=tileId=>`<button onclick="openAbout('${tileId}')" title="About this tile — what it shows, how it's computed, source, caveats" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:1px 7px;border-radius:5px;cursor:pointer;font-family:inherit;font-weight:600;line-height:1.2">ⓘ</button>`;
+const aboutBtn=tileId=>`<button class="tile-btn" onclick="openAbout('${tileId}')" title="About this tile — what it shows, how it's computed, source, caveats">ⓘ</button>`;
 
 // 2026-04-30 (user feedback): "all charts need to have reset button just like
 // the map to bring back from zoom." Plotly supports auto-reset by setting
@@ -1147,7 +1323,7 @@ function resetPlotZoom(divId){
   if(!d||typeof Plotly==='undefined')return;
   try{ Plotly.relayout(divId,{'xaxis.autorange':true,'yaxis.autorange':true,'yaxis2.autorange':true,'xaxis2.autorange':true}); }catch(e){}
 }
-const resetZoomBtn=divId=>`<button onclick="resetPlotZoom('${divId}')" title="Reset zoom — back to full data range. (Double-clicking on the chart also resets.)" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1">⤾</button>`;
+const resetZoomBtn=divId=>`<button class="tile-btn" onclick="resetPlotZoom('${divId}')" title="Reset zoom — back to full data range. (Double-clicking on the chart also resets.)">⤾</button>`;
 
 // 2026-05-01 (R2-Q9 + Q11 user override): "Reset to Default View" — separate
 // from Reset Zoom. Resets ALL chart state: zoom AND any tile-specific filters
@@ -1168,7 +1344,7 @@ function resetTileToDefaults(tileId){
     charts.forEach(c => resetPlotZoom(c.id));
   }
 }
-const resetViewBtn = tileId => `<button onclick="resetTileToDefaults('${tileId}')" title="Reset to default view — clears any filters, view toggles, and zoom on this tile" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">↺</button>`;
+const resetViewBtn = tileId => `<button class="tile-btn" onclick="resetTileToDefaults('${tileId}')" title="Reset to default view — clears any filters, view toggles, and zoom on this tile">↺</button>`;
 
 // ======================================================================
 // 2026-05-01 (R2-Q25 chrome sweep): tile Hide (×) framework. Click × in any
@@ -1219,7 +1395,7 @@ function applyTileHideOnRender(){
     if(btn){ btn.textContent='+'; btn.title='Expand tile'; }
   });
 }
-const hideTileBtn = tileId => `<button data-tile-hide-btn="${tileId}" onclick="toggleTileHide('${tileId}')" title="Hide tile (collapse body)" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">×</button>`;
+const hideTileBtn = tileId => `<button class="tile-btn" data-tile-hide-btn="${tileId}" onclick="toggleTileHide('${tileId}')" title="Hide tile (collapse body)">×</button>`;
 
 // ======================================================================
 // 2026-05-01: generic Full Screen button. Each tile registers its own
@@ -1263,7 +1439,7 @@ function openTileFullscreen(tileId){
     });
   },50);
 }
-const fsTileBtn = tileId => `<button data-tile-fs-btn="${tileId}" onclick="openTileFullscreen('${tileId}')" title="Open tile in full screen" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">⛶</button>`;
+const fsTileBtn = tileId => `<button class="tile-btn" data-tile-fs-btn="${tileId}" onclick="openTileFullscreen('${tileId}')" title="Open tile in full screen">⛶</button>`;
 
 // ======================================================================
 // 2026-05-01 (Phase D): tileChromeStrip — single source of truth for the
@@ -1296,8 +1472,8 @@ function tileChromeStrip(opts){
   if(opts.about)        parts.push(aboutBtn(opts.id));
   if(opts.cols)         parts.push(tableColHidePanelHtml(opts.cols));
   if(opts.resetZoom)    parts.push(resetZoomBtn(opts.resetZoom));
-  if(opts.csv)          parts.push(`<button class="export-btn" onclick="${opts.csv}" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>`);
-  if(opts.fullscreen)   parts.push(`<button class="export-btn" onclick="${opts.fullscreen}" title="Full screen" style="padding:3px 8px;font-size:13px">⛶</button>`);
+  if(opts.csv)          parts.push(`<button class="tile-btn" onclick="${opts.csv}" title="Download CSV">CSV</button>`);
+  if(opts.fullscreen)   parts.push(`<button class="tile-btn" onclick="${opts.fullscreen}" title="Full screen">⛶</button>`);
   if(opts.extra)        parts.push(opts.extra);
   if(opts.resetView)    parts.push(resetViewBtn(opts.id));
   if(opts.hide)         parts.push(hideTileBtn(opts.id));
@@ -1414,8 +1590,8 @@ function tableColHidePanelHtml(tableId){
   // table to exist in DOM. Use a sentinel <div> with data-* and populate
   // at click time.
   return `<div class="col-hide-wrap" style="position:relative;display:inline-block">
-    <button onclick="toggleTableColHidePanel('${tableId}', this)" title="Hide / show columns" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">⚙ Cols</button>
-    <div data-col-hide-panel="${tableId}" style="display:none;position:absolute;top:28px;right:0;z-index:200;background:var(--card);border:1px solid var(--pri);border-radius:8px;padding:8px 10px;min-width:220px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
+    <button class="tile-btn" onclick="toggleTableColHidePanel('${tableId}', this)" title="Hide / show columns">⚙ Cols</button>
+    <div data-col-hide-panel="${tableId}" style="display:none;position:absolute;top:28px;right:0;z-index:200;background:var(--card);border:1px solid var(--pri);border-radius:var(--radius-lg);padding:var(--space-md) var(--space-lg);min-width:220px;max-height:320px;overflow-y:auto;box-shadow:var(--shadow-lg)"></div>
   </div>`;
 }
 

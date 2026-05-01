@@ -1159,6 +1159,101 @@ function resetTileToDefaults(tileId){
 }
 const resetViewBtn = tileId => `<button onclick="resetTileToDefaults('${tileId}')" title="Reset to default view — clears any filters, view toggles, and zoom on this tile" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">↺</button>`;
 
+// ======================================================================
+// 2026-05-01 (R2-Q25 chrome sweep): tile Hide (×) framework. Click × in any
+// tile's title bar to collapse its body. The collapsed tile shows only the
+// title row + a ▸ to expand. State is saved per session in localStorage so
+// users can curate their dashboard view without losing customization on reload.
+// ======================================================================
+const RR_HIDE_KEY = 'rr.tileHidden.v1';
+function _loadTileHide(){
+  try{ return JSON.parse(localStorage.getItem(RR_HIDE_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+function _saveTileHide(map){
+  try{ localStorage.setItem(RR_HIDE_KEY, JSON.stringify(map)); }catch(e){}
+}
+window._tileHidden = _loadTileHide();
+function toggleTileHide(tileId){
+  const tile = document.getElementById(tileId);
+  if(!tile) return;
+  const isHidden = !window._tileHidden[tileId];
+  window._tileHidden[tileId] = isHidden;
+  _saveTileHide(window._tileHidden);
+  // Hide everything inside the tile EXCEPT the title bar (.flex-between or
+  // first child of the card). Use a data-attribute on body children so we can
+  // restore them precisely.
+  const titleRow = tile.querySelector('.flex-between, .card-header') || tile.firstElementChild;
+  Array.from(tile.children).forEach(child => {
+    if(child === titleRow) return;
+    child.style.display = isHidden ? 'none' : '';
+  });
+  // Toggle the × icon
+  const btn = tile.querySelector(`[data-tile-hide-btn="${tileId}"]`);
+  if(btn) btn.textContent = isHidden ? '+' : '×';
+  if(btn) btn.title = isHidden ? 'Expand tile' : 'Hide tile (collapse body)';
+}
+function applyTileHideOnRender(){
+  // Called after every render to re-collapse any tiles the user marked hidden.
+  Object.entries(window._tileHidden||{}).forEach(([tileId, isHidden])=>{
+    if(!isHidden) return;
+    const tile = document.getElementById(tileId);
+    if(!tile) return;
+    const titleRow = tile.querySelector('.flex-between, .card-header') || tile.firstElementChild;
+    Array.from(tile.children).forEach(child => {
+      if(child === titleRow) return;
+      child.style.display = 'none';
+    });
+    const btn = tile.querySelector(`[data-tile-hide-btn="${tileId}"]`);
+    if(btn){ btn.textContent='+'; btn.title='Expand tile'; }
+  });
+}
+const hideTileBtn = tileId => `<button data-tile-hide-btn="${tileId}" onclick="toggleTileHide('${tileId}')" title="Hide tile (collapse body)" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">×</button>`;
+
+// ======================================================================
+// 2026-05-01: generic Full Screen button. Each tile registers its own
+// fullscreen handler (or falls back to a generic copy-into-modal pattern).
+// ======================================================================
+window._tileFullscreen = window._tileFullscreen || {};
+function openTileFullscreen(tileId){
+  const handler = window._tileFullscreen[tileId];
+  if(handler && typeof handler === 'function'){
+    try{ handler(); return; }
+    catch(e){ console.error('Fullscreen handler failed for '+tileId, e); }
+  }
+  // Generic fallback: clone tile HTML into a modal overlay
+  const tile = document.getElementById(tileId);
+  if(!tile) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;padding:24px;overflow:auto';
+  overlay.onclick = e => { if(e.target===overlay) document.body.removeChild(overlay); };
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '× Close';
+  closeBtn.style.cssText = 'position:absolute;top:16px;right:24px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);font-size:13px;padding:6px 14px;border-radius:6px;cursor:pointer;z-index:10000';
+  closeBtn.onclick = () => document.body.removeChild(overlay);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'max-width:1600px;margin:32px auto;background:var(--card);border-radius:8px;padding:18px';
+  wrap.innerHTML = tile.outerHTML;
+  // Strip the fullscreen button from the cloned tile to avoid recursive opens
+  wrap.querySelectorAll('[data-tile-fs-btn]').forEach(b=>b.remove());
+  overlay.appendChild(closeBtn);
+  overlay.appendChild(wrap);
+  document.body.appendChild(overlay);
+  // Re-trigger Plotly redraw on cloned chart divs (they need real DOM dims)
+  setTimeout(()=>{
+    wrap.querySelectorAll('[id$="Div"]').forEach(div=>{
+      const orig = document.getElementById(div.id);
+      if(orig && orig.data && window.Plotly){
+        const newId = div.id+'_fs';
+        div.id = newId;
+        try{ Plotly.newPlot(newId, orig.data, Object.assign({},orig.layout,{height:Math.min(window.innerHeight-160,720)}), {responsive:true,displaylogo:false}); }
+        catch(e){ console.warn('FS Plotly redraw failed', e); }
+      }
+    });
+  },50);
+}
+const fsTileBtn = tileId => `<button data-tile-fs-btn="${tileId}" onclick="openTileFullscreen('${tileId}')" title="Open tile in full screen" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">⛶</button>`;
+
 // 2026-04-30 (cardChars audit F1+F3+F5): static metadata for every shipped
 // portfolio characteristic. Drives: (a) histKey → which cs.hist.sum[].KEY to
 // plot in the drill modal — only TE/Beta/AS shipped today, parser backlog
@@ -1754,10 +1849,38 @@ function jumpToLatest(){
 }
 
 // Returns the currently selected week's hist.sum entry (or current stats object)
+// 2026-05-01 (user request): per-week Idio/Factor split from sector MCR.
+// Verified: Σ|sector mcr| at any date matches cs.sum.pct_specific exactly
+// for the latest week (63.2 == 63.2 on EM). This is the same `sum_sector_mcr`
+// derivation the parser does at the latest week, applied per historical week.
+// Returns {pct_specific, pct_factor} or {pct_specific:null, pct_factor:null}
+// if hist.sec doesn't have data for that date.
+function getPctSpecificForWeek(weekDate){
+  if(!cs||!cs.hist||!cs.hist.sec)return{pct_specific:null,pct_factor:null};
+  let sum=0, hits=0;
+  for(const sec_name in cs.hist.sec){
+    const entries=cs.hist.sec[sec_name]||[];
+    const e=entries.find(x=>x.d===weekDate);
+    if(e&&e.mcr!=null){sum+=Math.abs(e.mcr);hits++;}
+  }
+  if(hits===0)return{pct_specific:null,pct_factor:null};
+  const pct_specific=+sum.toFixed(1);
+  const pct_factor=+(100-pct_specific).toFixed(1);
+  return{pct_specific,pct_factor,_synth:'sum_sector_mcr'};
+}
+
 function getSelectedWeekSum(){
   if(!_selectedWeek)return cs.sum;
   const entry=(cs.hist&&cs.hist.sum||[]).find(e=>e.d===_selectedWeek);
-  return entry||cs.sum;
+  if(!entry)return cs.sum;
+  // Enrich with per-week Idio/Factor split (user request 2026-05-01) so that
+  // historical-week cardThisWeek / Risk-tab sum cards show the correct split,
+  // not the latest-week's pct_specific.
+  const pct=getPctSpecificForWeek(_selectedWeek);
+  return{...entry,
+    pct_specific:pct.pct_specific!=null?pct.pct_specific:entry.pct_specific,
+    pct_factor:pct.pct_factor!=null?pct.pct_factor:entry.pct_factor,
+    _pct_specific_source:pct._synth||entry._pct_specific_source};
 }
 
 // Banner HTML shown when viewing a historical week
@@ -1787,6 +1910,9 @@ function upd(){
   rRisk();
   rHold();
   setTimeout(refreshCardNoteBadges,200);
+  // 2026-05-01 (R2-Q25 chrome sweep): re-apply hide state after every render
+  // so user-collapsed tiles stay collapsed across week-selector / strategy-switch / tab-switch.
+  setTimeout(applyTileHideOnRender,30);
 }
 
 // ===== RISK ALERTS =====
@@ -1902,25 +2028,38 @@ function toggleThisWeek(){
   if(caret)caret.textContent=_thisWeekCollapsed?'▶':'▾';
 }
 function _thisWeekHeaderHtml(title){
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+  return `<div class="flex-between" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
     <div style="display:flex;align-items:center;gap:8px">
       <div class="card-title" style="margin:0">${title}</div>
       ${aboutBtn('cardThisWeek')}
     </div>
-    <button onclick="toggleThisWeek()" title="Collapse / expand" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 8px;border-radius:5px;cursor:pointer;line-height:1"><span id="thisWeekCaret">${_thisWeekCollapsed?'▶':'▾'}</span></button>
+    <div style="display:flex;gap:6px;align-items:center">
+      ${fsTileBtn('cardThisWeek')}
+      ${hideTileBtn('cardThisWeek')}
+      <button onclick="toggleThisWeek()" title="Collapse / expand body section" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 8px;border-radius:5px;cursor:pointer;line-height:1"><span id="thisWeekCaret">${_thisWeekCollapsed?'▶':'▾'}</span></button>
+    </div>
   </div>`;
 }
 function thisWeekCardHtml(s){
   if(!s||!s.sum)return '';
+  // 2026-05-01 (week-aware narrative): TE / AS / Beta / cash come from the
+  // selected week (latest by default). Sectors / holdings / factors arrays
+  // are still latest-only, so those bullets get suppressed in historical
+  // mode (so we never label latest-week composition as belonging to a past date).
+  let ws=getSelectedWeekSum();
+  let isHistWeek=!!_selectedWeek;
   let stateBullets=[];
-  // TE status
-  let te=s.sum.te;
+  // TE status — uses per-week TE (ws.te), works for any historical week
+  let te=ws.te;
   if(te!=null){
     let teRed=_thresholds.teRed??_thresholdsDefault.teRed,teAmb=_thresholds.teAmber??_thresholdsDefault.teAmber;
     if(te>=teRed) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is above the ${teRed}% red threshold — elevated risk budget.`);
     else if(te>=teAmb) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is in amber territory (${teAmb}\u2013${teRed}% band).`);
     else if(te>0) stateBullets.push(`Tracking error <strong>${f2(te,1)}%</strong> is within the ${teAmb}% amber threshold.`);
   }
+  // The next 3 bullets ride on s.sectors / s.hold / s.factors which are LATEST-only;
+  // suppress them in historical-week mode so we never label latest composition with a past date.
+  if(!isHistWeek){
   // Top OW + UW sectors
   let sortedSecs=(s.sectors||[]).filter(x=>x.n&&!/cash/i.test(x.n)&&isFinite(x.a)).sort((a,b)=>(b.a||0)-(a.a||0));
   if(sortedSecs.length){
@@ -1945,37 +2084,48 @@ function thisWeekCardHtml(s){
     let tail=moreN>0?`, +${moreN} more`:'';
     stateBullets.push(`Significant factor tilts (\u2265${sigma}\u03c3): ${names}${tail}.`);
   }
-  // Cash position
+  } else {
+    // Historical-week mode: surface a one-liner so the user knows composition
+    // bullets live at latest. The TE bullet above already used per-week ws.te.
+    stateBullets.push(`<span style="color:var(--textDim);font-style:italic">Composition bullets (sector OW/UW, top risk holding, factor tilts) only populate at latest week.</span>`);
+  }
+  // Cash position -- per-week ws.cash if available, else latest s.sum.cash so a
+  // high-cash regime still surfaces in historical view.
   let cashMax=_thresholds.cashMax??_thresholdsDefault.cashMax;
-  if(s.sum.cash!=null&&s.sum.cash>cashMax){
-    stateBullets.push(`Cash position <strong>${f2(s.sum.cash,1)}%</strong> exceeds the ${cashMax}% alert threshold.`);
+  let cashVal=ws.cash!=null?ws.cash:s.sum.cash;
+  if(cashVal!=null&&cashVal>cashMax){
+    stateBullets.push(`Cash position <strong>${f2(cashVal,1)}%</strong> exceeds the ${cashMax}% alert threshold.`);
   }
 
   // CHANGES bullets (data-first, WoW)
+  // 2026-05-01: when _selectedWeek set, "this week" is the historical pick and
+  // "prior" is the entry before it in hist.summary. Otherwise latest vs latest-1.
   let changeBullets=[];
   let hist=s.hist&&s.hist.sum||[];
-  let prev=hist.length>=2?hist[hist.length-2]:null;
+  let curIdx=isHistWeek?hist.findIndex(e=>e.d===_selectedWeek):hist.length-1;
+  let prev=(curIdx>0)?hist[curIdx-1]:null;
+  let curEntry=(curIdx>=0)?hist[curIdx]:s.sum;
   if(prev){
-    let teD=s.sum.te!=null&&prev.te!=null?+(s.sum.te-prev.te).toFixed(2):null;
+    let teD=curEntry.te!=null&&prev.te!=null?+(curEntry.te-prev.te).toFixed(2):null;
     if(teD!=null&&Math.abs(teD)>=0.05){
       let arrow=teD>0?'\u2191':'\u2193',col=teD>0?'var(--neg)':'var(--pos)';
-      changeBullets.push(`<strong>TE:</strong> ${f2(s.sum.te,1)}% <span style="color:${col}">${arrow}${Math.abs(teD).toFixed(2)}pp</span> vs prior week`);
+      changeBullets.push(`<strong>TE:</strong> ${f2(curEntry.te,1)}% <span style="color:${col}">${arrow}${Math.abs(teD).toFixed(2)}pp</span> vs prior week`);
     }
-    let asD=s.sum.as!=null&&prev.as!=null?+(s.sum.as-prev.as).toFixed(1):null;
+    let asD=curEntry.as!=null&&prev.as!=null?+(curEntry.as-prev.as).toFixed(1):null;
     if(asD!=null&&Math.abs(asD)>=0.1){
       let arrow=asD>0?'\u2191':'\u2193';
-      changeBullets.push(`<strong>Active Share:</strong> ${f2(s.sum.as,1)}% <span style="color:var(--txt)">${arrow}${Math.abs(asD).toFixed(1)}pp</span>`);
+      changeBullets.push(`<strong>Active Share:</strong> ${f2(curEntry.as,1)}% <span style="color:var(--txt)">${arrow}${Math.abs(asD).toFixed(1)}pp</span>`);
     }
-    let betaD=s.sum.beta!=null&&prev.beta!=null?+(s.sum.beta-prev.beta).toFixed(3):null;
+    let betaD=curEntry.beta!=null&&prev.beta!=null?+(curEntry.beta-prev.beta).toFixed(3):null;
     if(betaD!=null&&Math.abs(betaD)>=0.005){
       let arrow=betaD>0?'\u2191':'\u2193';
-      let col=Math.abs((s.sum.beta||1)-1)>Math.abs((prev.beta||1)-1)?'var(--warn)':'var(--txt)';
-      changeBullets.push(`<strong>Beta:</strong> ${f2(s.sum.beta,3)} <span style="color:${col}">${arrow}${Math.abs(betaD).toFixed(3)}</span>`);
+      let col=Math.abs((curEntry.beta||1)-1)>Math.abs((prev.beta||1)-1)?'var(--warn)':'var(--txt)';
+      changeBullets.push(`<strong>Beta:</strong> ${f2(curEntry.beta,3)} <span style="color:${col}">${arrow}${Math.abs(betaD).toFixed(3)}</span>`);
     }
-    let hD=prev.h&&s.sum.h?(s.sum.h-prev.h):null;
+    let hD=prev.h&&curEntry.h?(curEntry.h-prev.h):null;
     // Suppress implausible WoW holdings deltas (data bug signal): weekly turnover > 100 positions is not realistic
     if(hD!=null&&hD!==0&&Math.abs(hD)<=100){
-      changeBullets.push(`<strong>Holdings:</strong> ${s.sum.h} <span style="color:var(--txt)">(${hD>0?'+':''}${hD})</span> vs prior`);
+      changeBullets.push(`<strong>Holdings:</strong> ${curEntry.h} <span style="color:var(--txt)">(${hD>0?'+':''}${hD})</span> vs prior`);
     }
   }
   // Holdings deltas from snap (Patch 013 data)
@@ -2072,18 +2222,27 @@ function rWeekOverWeek(s){
       <div class="wow-empty">First observation — no prior week to compare against. Tile will populate once a second weekly snapshot is ingested.</div>
     </div>`;
   }
-  // Hist-week guard: WoW is "latest vs prior", not user-selected vs whatever
+  // 2026-05-01 (user request): support _selectedWeek — when user picks a
+  // historical week from the selector, show that week's diff vs its prior
+  // week from hist.summary. KPI deltas use cs.hist.sum entries only (cheap),
+  // but the move-list (Added/Dropped/Resized) requires per-week hold[] which
+  // we only have for latest + prior (cs.hold + cs.hold_prev). For historical
+  // weeks, we show KPI deltas only and a note that holdings detail lives at latest.
+  let last, prev, isHist=false;
   if(_selectedWeek){
-    return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
-      <div class="flex-between" style="margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff is anchored at the latest week vs the prior week. Switch back to latest to see the diff." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false">Week over Week</div>${aboutBtn('cardWeekOverWeek')}</div>
-      </div>
-      <div class="wow-empty" style="font-size:11px">WoW diff shows latest week only. <a href="javascript:jumpToLatest()" style="color:var(--pri)">Return to latest week</a> to see the diff.</div>
-    </div>`;
+    const idx=hist.findIndex(e=>e.d===_selectedWeek);
+    if(idx<=0){
+      return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
+        <div class="flex-between" style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff for the selected historical week vs its prior week." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false">Week over Week</div>${aboutBtn('cardWeekOverWeek')}</div>
+        </div>
+        <div class="wow-empty" style="font-size:11px">Selected week is the first observation — no prior week to compare against.</div>
+      </div>`;
+    }
+    last=hist[idx]; prev=hist[idx-1]; isHist=true;
+  } else {
+    last=hist[hist.length-1]||{}; prev=hist[hist.length-2]||{};
   }
-  // Build KPI deltas from hist.sum
-  const last=hist[hist.length-1]||{};
-  const prev=hist[hist.length-2]||{};
   const fmtDate=d=>{if(!d||d.length!==8)return d||'—';return d.slice(0,4)+'-'+d.slice(4,6)+'-'+d.slice(6,8);};
   const dateBadge=`${fmtDate(prev.d)} → ${fmtDate(last.d)}`;
   const kpis=[
@@ -2169,18 +2328,29 @@ function rWeekOverWeek(s){
       return `<div class="wow-fac-cell"><div class="wow-fac-name" title="${f.n}">${facShort}</div><div class="wow-fac-arrow ${dir}">${arrow}</div><div class="wow-fac-num">${sign}${f.dExp.toFixed(2)}σ</div><div class="wow-fac-spark">${spark}</div></div>`;
     }).join('')}</div>`;
   })();
+  // 2026-05-01: in historical-week mode, the move-list (Added/Dropped/Resized)
+  // and factor rotation use cs.hold + cs.hold_prev which represent the LATEST
+  // two weeks only — they don't reflect the selected historical week's diff.
+  // Hide these sections in hist mode and show only the KPI deltas (which DO
+  // come from cs.hist.summary at the right week pair).
+  const moveListsHtml = isHist
+    ? `<div class="wow-empty" style="font-size:11px;padding:18px 0">Holdings-level moves (Added/Dropped/Resized) and factor rotation only available for the latest week. KPI deltas above reflect the selected historical week vs its prior week.</div>`
+    : `<div class="wow-cols">${addCol}${dropCol}${resizeCol}</div>${facRot}`;
   return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="card-title tip" data-tip="What changed this week — KPI deltas (TE/AS/Beta/Holdings count), 3-column move list (Added/Dropped/Resized top 5 by |Δwt|), and factor rotation footer for the 3 factors with the biggest active-exposure shift. Click any row to drill into that holding." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false" style="margin:0">Week over Week</div>
+        <div class="card-title tip" data-tip="What changed this week — KPI deltas (TE/AS/Beta/Holdings count), 3-column move list (Added/Dropped/Resized top 5 by |Δwt|), and factor rotation footer for the 3 factors with the biggest active-exposure shift. Click any row to drill into that holding." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false" style="margin:0">Week over Week${isHist?' <span style="font-size:10px;color:var(--warn);font-weight:500">· historical</span>':''}</div>
         ${aboutBtn('cardWeekOverWeek')}
         <span style="font-size:10px;color:var(--textDim);font-weight:400">${dateBadge}</span>
       </div>
-      <span style="font-size:9px;color:var(--textDim)">Δwt threshold: ${WOW_RESIZE_THRESH.toFixed(2)}%</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:9px;color:var(--textDim);margin-right:4px">Δwt threshold: ${WOW_RESIZE_THRESH.toFixed(2)}%</span>
+        ${fsTileBtn('cardWeekOverWeek')}
+        ${hideTileBtn('cardWeekOverWeek')}
+      </div>
     </div>
     <div class="wow-kpis">${kpiHtml}</div>
-    <div class="wow-cols">${addCol}${dropCol}${resizeCol}</div>
-    ${facRot}
+    ${moveListsHtml}
   </div>`;
 }
 
@@ -2279,6 +2449,8 @@ function rExp(){
       <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
       <button class="export-btn" title="Full screen — opens different view based on current Table / Chart mode" onclick="openSecFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+      ${resetViewBtn('cardSectors')}
+      ${hideTileBtn('cardSectors')}
     </div></div>
     <div id="secTable" style="overflow-x:auto">${rWt(s.sectors,'sec',s.hold)}</div>
     <div id="secChart" style="display:none"><div id="secChartDiv" style="height:380px"></div><div id="secChartCaption" style="text-align:center;padding:6px 8px"></div></div>
@@ -2303,6 +2475,10 @@ function rExp(){
         <div style="display:flex;gap:6px;align-items:center">
           ${aboutBtn('cardFacRisk')}
           <button class="export-btn" title="Full screen — bigger snapshot quadrant" onclick="openFacRiskFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+          ${resetZoomBtn('facRiskDiv')}
+          <button class="export-btn" onclick="exportFacRiskCsv&&exportFacRiskCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
+          ${resetViewBtn('cardFacRisk')}
+          ${hideTileBtn('cardFacRisk')}
         </div>
       </div>
       <div id="facRiskKpi" style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap;align-items:center"></div>
@@ -2327,6 +2503,8 @@ function rExp(){
           <button class="export-btn" id="facPerfCsv" onclick="exportFacAttribCsv()" style="padding:3px 8px;font-size:11px;display:${_facPerfView==='waterfall'?'inline-block':'none'}">CSV</button>
           ${resetZoomBtn('facButtDiv')}
           <button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+          ${resetViewBtn('cardFacButt')}
+          ${hideTileBtn('cardFacButt')}
         </div>
       </div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
@@ -2346,6 +2524,8 @@ function rExp(){
           <button id="facViewPrimary" class="toggle-btn${_facView==='primary'?' active':''}" onclick="setFacView('primary')">Primary</button>
           <button id="facViewAll" class="toggle-btn${_facView==='all'?' active':''}" onclick="setFacView('all')">All</button>
         </div>
+        ${resetViewBtn('cardFacDetail')}
+        ${hideTileBtn('cardFacDetail')}
       </div>
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${facGroupPillsHtml()}</div>
@@ -2384,6 +2564,8 @@ function rExp(){
           <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
           <button class="toggle-btn" onclick="toggleCountryView('table',this)">Table</button>
         </div>
+        ${resetViewBtn('cardCountry')}
+        ${hideTileBtn('cardCountry')}
       </div>
     </div>
     <div id="mapSecondary" style="display:none;gap:6px;align-items:center;padding:4px 0 6px;flex-wrap:wrap">
@@ -2408,6 +2590,8 @@ function rExp(){
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
       <button class="export-btn" title="Full screen — opens different view based on current Chart / Table mode" onclick="openGrpFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+      ${resetViewBtn('cardGroups')}
+      ${hideTileBtn('cardGroups')}
     </div></div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
     <div id="grpTable" style="display:none;overflow-x:auto">${rGroupTable(s.groups,s.hold)}</div>
@@ -2432,6 +2616,8 @@ function rExp(){
         ${rnkColDropHtml()}
         <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks_by_'+_rnkBy)" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
         <button onclick="openRnkFullscreen()" title="Full screen" class="export-btn" style="padding:3px 8px;font-size:13px">⛶</button>
+        ${resetViewBtn('cardRanks')}
+        ${hideTileBtn('cardRanks')}
       </div>
     </div>
     <div id="rnkTableWrap" style="overflow-x:auto"></div>
@@ -2450,7 +2636,7 @@ function rExp(){
   <!-- Row 7: Treemap (full width) -->
   <div>
     <div class="card" id="cardTreemap">
-      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div>${aboutBtn('cardTreemap')}</div></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div>${aboutBtn('cardTreemap')}</div><div style="display:flex;gap:6px;align-items:center">${fsTileBtn('cardTreemap')}${resetViewBtn('cardTreemap')}${hideTileBtn('cardTreemap')}</div></div>
       <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
         <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Group</span>
           <div class="toggle-wrap" style="margin:0" id="treeDimWrap"><button class="toggle-btn active" data-dim="sec" onclick="setTreeDim('sec')" style="padding:1px 6px;font-size:9px">Sector</button><button class="toggle-btn" data-dim="co" onclick="setTreeDim('co')" style="padding:1px 6px;font-size:9px">Country</button><button class="toggle-btn" data-dim="grp" onclick="setTreeDim('grp')" style="padding:1px 6px;font-size:9px">Group</button><button class="toggle-btn" data-dim="rank" onclick="setTreeDim('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
@@ -2480,7 +2666,7 @@ function rExp(){
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
     <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>${aboutBtn('cardUnowned')}</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button></div></div>
+    <div style="display:flex;gap:6px;align-items:center"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button>${fsTileBtn('cardUnowned')}${resetViewBtn('cardUnowned')}${hideTileBtn('cardUnowned')}</div></div>
     ${rUnowned(_unownedFromHold(s))}
   </div>
 
@@ -2520,6 +2706,9 @@ function rExp(){
         </div>
         ${resetZoomBtn('attribChartDiv')}
         <button class="export-btn" onclick="exportCSV('#tbl-attrib','attribution')" title="Download CSV">CSV</button>
+        ${fsTileBtn('cardAttrib')}
+        ${resetViewBtn('cardAttrib')}
+        ${hideTileBtn('cardAttrib')}
       </div>
     </div>
     <div id="attribTableArea" style="margin-top:8px"></div>
@@ -2535,6 +2724,8 @@ function rExp(){
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
       <button class="export-btn" title="Full screen — opens different view based on current Table / Chart mode" onclick="openRegFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
+      ${resetViewBtn('cardRegions')}
+      ${hideTileBtn('cardRegions')}
     </div></div>
     <div id="regTable" style="overflow-x:auto">${rWt(s.regions,'reg',s.hold)}</div>
     <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
@@ -6568,7 +6759,12 @@ function riskDecompTree(s,factorRisk,idioRisk){
   return'<div class="card" id="cardRiskDecomp" style="margin-bottom:16px">'+
     '<div class="flex-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px">'+
     '<div class="card-title tip" style="margin:0" data-tip="Total TE decomposed into Factor Risk + Stock-Specific Risk, then drilled into the top contributors on each side. The percentages sum back to 100% of total tracking error." oncontextmenu="showNotePopup(event,\'cardRiskDecomp\');return false">Risk Decomposition Tree</div>'+
-    aboutBtn('cardRiskDecomp')+'</div></div>'+
+    aboutBtn('cardRiskDecomp')+'</div>'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+      fsTileBtn('cardRiskDecomp')+
+      resetViewBtn('cardRiskDecomp')+
+      hideTileBtn('cardRiskDecomp')+
+    '</div></div>'+
     '<div style="padding:4px 0">'+
       '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid);margin-bottom:8px">'+
         '<span style="font-size:13px;font-weight:700;color:var(--txth)">Total Risk (TE)</span>'+
@@ -6619,9 +6815,16 @@ function riskHistoricalTrends(s){
     </div>`;
   }).join('');
   return `<div class="card" id="cardRiskHistTrends" style="margin-bottom:16px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:0">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
-      ${aboutBtn('cardRiskHistTrends')}
+    <div class="flex-between" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:0">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
+        ${aboutBtn('cardRiskHistTrends')}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        ${fsTileBtn('cardRiskHistTrends')}
+        ${resetViewBtn('cardRiskHistTrends')}
+        ${hideTileBtn('cardRiskHistTrends')}
+      </div>
     </div>
     <!-- 2026-04-30 (user feedback "Historical Trends leaking off page"):
          was repeat(4, minmax(180px,1fr)) → 768px floor, overflows narrow tabs.
@@ -6674,7 +6877,12 @@ function rRiskHistMinis(s){
 
 function rRisk(){
   let s=cs;
-  let totalTE=s.sum.te;
+  // 2026-05-01: when user picks a historical week, all KPI sum-cards (TE,
+  // Idio%, Factor%, Beta, AS) must reflect that week — not the latest. ws is
+  // either cs.sum (latest) or hist.sum entry enriched with per-week pct_specific
+  // via getSelectedWeekSum() → getPctSpecificForWeek() (Σ|sector mcr|).
+  let ws=getSelectedWeekSum();
+  let totalTE=ws.te;
   // 2026-04-30 (cross-tab integrity fix — was B99 backlog item):
   // Risk-tab Idio/Factor split MUST come from cs.sum.pct_specific /
   // cs.sum.pct_factor (the same source the Exposures tab + cardThisWeek read).
@@ -6686,9 +6894,9 @@ function rRisk(){
   // both null (legacy files); when synth, the synth marker is already on
   // cs.sum._pct_specific_source so downstream tiles can flag it.
   let idioPct, factorPct, idioRisk, factorRisk;
-  if(s.sum.pct_specific!=null && s.sum.pct_factor!=null){
-    idioPct=+(s.sum.pct_specific).toFixed(1);
-    factorPct=+(s.sum.pct_factor).toFixed(1);
+  if(ws.pct_specific!=null && ws.pct_factor!=null){
+    idioPct=+(ws.pct_specific).toFixed(1);
+    factorPct=+(ws.pct_factor).toFixed(1);
     idioRisk=+(totalTE*idioPct/100).toFixed(2);
     factorRisk=+(totalTE*factorPct/100).toFixed(2);
   } else {
@@ -6701,8 +6909,9 @@ function rRisk(){
     idioPct=+(idioRisk/totalTE*100).toFixed(1);
   }
   // Surface synth marker if parser derived pct_specific (e.g. 'sum_sector_mcr'
-  // path). The ᵉ flag tells PMs the split is approximate — not from source.
-  const _pctSynth = s.sum._pct_specific_source && s.sum._pct_specific_source !== 'native';
+  // path or per-week sum_sector_mcr re-derivation). The ᵉ flag tells PMs the
+  // split is approximate — not from source.
+  const _pctSynth = ws._pct_specific_source && ws._pct_specific_source !== 'native';
 
   // Factor MCR data (sorted by |c| desc, no idiosyncratic)
   let facMCR=s.factors.map(f=>{
@@ -6766,12 +6975,12 @@ function rRisk(){
     </div>
     <div class="sum-card" onclick="oDrMetric('beta')" title="Beta detail">
       <div class="label">Beta</div>
-      <div class="value">${f2(s.sum.beta,2)}</div>
+      <div class="value">${f2(ws.beta,2)}</div>
       <div class="sub">vs benchmark</div>
     </div>
     <div class="sum-card" onclick="oDrMetric('as')" title="Active share detail">
       <div class="label">Active Share</div>
-      <div class="value">${f2(s.sum.as,1)}%</div>
+      <div class="value">${f2(ws.as,1)}%</div>
       <div class="sub">${gt(s.hist.sum,'as')} trend</div>
     </div>
   </div>
@@ -6797,6 +7006,9 @@ function rRisk(){
       <div style="display:flex;gap:6px;align-items:center">
         ${resetZoomBtn('teStackedDiv')}
         <button class="export-btn" onclick="exportTEStackedCsv()" style="padding:3px 7px;font-size:11px">CSV</button>
+        ${fsTileBtn('cardTEStacked')}
+        ${resetViewBtn('cardTEStacked')}
+        ${hideTileBtn('cardTEStacked')}
       </div>
     </div>
     <div id="teStackedDiv" class="chart-h-md"></div>
@@ -6808,7 +7020,13 @@ function rRisk(){
   <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span><span onclick="event.stopPropagation()">${resetZoomBtn('riskBetaMultiDiv')}</span></div>
-      <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
+      <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
+        <button class="export-btn" onclick="exportBetaMultiCsv&&exportBetaMultiCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
+        ${fsTileBtn('cardBetaHist')}
+        ${resetViewBtn('cardBetaHist')}
+        ${hideTileBtn('cardBetaHist')}
+        <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
+      </div>
     </div>
     <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
   </div>
@@ -6817,16 +7035,22 @@ function rRisk(){
   <div class="card" id="cardFacContribBars" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>${aboutBtn('cardFacContribBars')}${resetZoomBtn('riskFacBarDiv')}</div>
-      <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
-        <label tabindex="0" style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
-          <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
-        </label>
-        <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
-          <input type="radio" name="riskFacMode" value="exp" onchange="window._rfbMode='exp';rRiskFacBarsMode()" style="display:none"> Exposure
-        </label>
-        <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
-          <input type="radio" name="riskFacMode" value="both" onchange="window._rfbMode='both';rRiskFacBarsMode()" style="display:none"> Both
-        </label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
+          <label tabindex="0" style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
+            <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
+          </label>
+          <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
+            <input type="radio" name="riskFacMode" value="exp" onchange="window._rfbMode='exp';rRiskFacBarsMode()" style="display:none"> Exposure
+          </label>
+          <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
+            <input type="radio" name="riskFacMode" value="both" onchange="window._rfbMode='both';rRiskFacBarsMode()" style="display:none"> Both
+          </label>
+        </div>
+        <button class="export-btn" onclick="exportFacContribCsv&&exportFacContribCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
+        ${fsTileBtn('cardFacContribBars')}
+        ${resetViewBtn('cardFacContribBars')}
+        ${hideTileBtn('cardFacContribBars')}
       </div>
     </div>
     <!-- Group pills + threshold slider + factor checkboxes -->
@@ -6870,7 +7094,12 @@ function rRisk(){
   <div class="card" id="cardRiskFacTbl" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>${aboutBtn('cardRiskFacTbl')}</div>
-      <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
+        ${fsTileBtn('cardRiskFacTbl')}
+        ${resetViewBtn('cardRiskFacTbl')}
+        ${hideTileBtn('cardRiskFacTbl')}
+      </div>
     </div>
     <table id="tbl-risk-fac"><thead><tr>
       <th data-col="n" onclick="sortTbl('tbl-risk-fac',0)">Factor</th>
@@ -6936,6 +7165,9 @@ function rRisk(){
         <span id="rbd-thresh-val" style="font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace;min-width:32px">0.5%</span>
         ${resetZoomBtn('rbdChartDiv')}
         <button class="export-btn" onclick="exportRiskByDimCsv()" title="Download CSV">CSV</button>
+        ${fsTileBtn('cardRiskByDim')}
+        ${resetViewBtn('cardRiskByDim')}
+        ${hideTileBtn('cardRiskByDim')}
       </div>
     </div>
     <div id="rbdChartDiv" class="chart-h-lg" style="min-height:280px"></div>
@@ -6966,6 +7198,10 @@ function rRisk(){
         ${resetZoomBtn('riskExpHistDiv')}
         <button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button>
         <button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>
+        <button class="export-btn" onclick="exportFacHistCsv&&exportFacHistCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
+        ${fsTileBtn('cardFacHist')}
+        ${resetViewBtn('cardFacHist')}
+        ${hideTileBtn('cardFacHist')}
       </div>
     </div>
     <div id="facExpToggles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">${facToggleHtml}</div>
@@ -6987,6 +7223,9 @@ function rRisk(){
           <option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option>
         </select>
         <button class="export-btn" onclick="exportCorrCsv()" title="Download correlation matrix as CSV">CSV</button>
+        ${fsTileBtn('cardCorr')}
+        ${resetViewBtn('cardCorr')}
+        ${hideTileBtn('cardCorr')}
       </div>
     </div>
     <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
@@ -7747,7 +7986,7 @@ function watchlistCardHtml(s){
   // Empty state: show the tile with onboarding copy instead of hiding entirely
   if(!total){
     return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
-      <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div>${aboutBtn('cardWatchlist')}</div></div>
+      <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div>${aboutBtn('cardWatchlist')}</div><div style="display:flex;gap:6px;align-items:center">${hideTileBtn('cardWatchlist')}</div></div>
       <div style="font-size:11px;color:var(--txt);padding:8px 6px">No tickers watchlisted yet \u2014 click the \u2691 flag icon on any holding row (Holdings tab) to add it.</div>
     </div>`;
   }
@@ -7773,7 +8012,7 @@ function watchlistCardHtml(s){
   }).join('');
   return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
     <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div>${aboutBtn('cardWatchlist')}</div>
-    <div class="export-bar"><button class="export-btn" onclick="exportWatchlistCsv('${s.id}')">CSV</button></div></div>
+    <div style="display:flex;gap:6px;align-items:center"><button class="export-btn" onclick="exportWatchlistCsv('${s.id}')">CSV</button>${fsTileBtn('cardWatchlist')}${resetViewBtn('cardWatchlist')}${hideTileBtn('cardWatchlist')}</div></div>
     ${sections}
   </div>`;
 }
@@ -8011,6 +8250,9 @@ function renderHoldTab(){
         <div style="display:flex;gap:6px;align-items:center">
           ${resetZoomBtn('holdRiskDiv')}
           ${aboutBtn('cardHoldRisk')}
+          ${fsTileBtn('cardHoldRisk')}
+          ${resetViewBtn('cardHoldRisk')}
+          ${hideTileBtn('cardHoldRisk')}
         </div>
       </div>
       <div id="holdRiskDiv" class="chart-h-lg"></div>
@@ -8045,6 +8287,9 @@ function renderHoldTab(){
             <option value="">All Ranks</option>
             ${[1,2,3,4,5].map(r=>`<option value="${r}">R${r}</option>`).join('')}
           </select>
+          ${fsTileBtn('cardHoldings')}
+          ${resetViewBtn('cardHoldings')}
+          ${hideTileBtn('cardHoldings')}
         </div>
       </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
@@ -8090,7 +8335,7 @@ function renderHoldTab(){
       <div class="card" id="cardRankDist" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Portfolio weight distribution across the 5 quintiles (Q1=best to Q5=worst). PMs typically concentrate in Q1-Q2; Q3-Q5 weight signals deliberate exceptions or risk pockets. Click a bar to filter the holdings table by that quintile. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRankDist');return false" style="margin:0">Rank Distribution</div>${aboutBtn('cardRankDist')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · Q1=best</span></div>
-          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('rankDistDiv')}</div>
+          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('rankDistDiv')}${fsTileBtn('cardRankDist')}${resetViewBtn('cardRankDist')}${hideTileBtn('cardRankDist')}</div>
         </div>
         <div id="rankDistDiv" class="chart-h-sm"></div>
       </div>
@@ -8099,7 +8344,7 @@ function renderHoldTab(){
       <div class="card" id="cardTop10" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
-          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('holdConcDiv')}</div>
+          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('holdConcDiv')}${fsTileBtn('cardTop10')}${resetViewBtn('cardTop10')}${hideTileBtn('cardTop10')}</div>
         </div>
         <div id="holdConcDiv" class="chart-h-md"></div>
       </div>
@@ -8115,6 +8360,9 @@ function renderHoldTab(){
         <div style="display:flex;gap:6px;align-items:center">
           ${aboutBtn('cardChars')}
           <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
+          ${fsTileBtn('cardChars')}
+          ${resetViewBtn('cardChars')}
+          ${hideTileBtn('cardChars')}
         </div>
       </div>
       <div style="flex:1;overflow-y:auto;max-height:520px;margin-top:6px">${rChr(cs.chars)}</div>

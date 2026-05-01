@@ -3695,7 +3695,11 @@ function rWt(data,type,hold){
 }
 
 // Primary factors shown by default, sorted by TE contribution
-const FAC_PRIMARY=new Set(['Momentum (Medium-Term)','Momentum','Volatility','Growth','Value','Dividend Yield','Profitability']);
+// 2026-05-01 (cardCorr audit C3): added 'Medium-Term Momentum' — the actual factor name
+// shipped by FactSet 18 Style Snapshot. Old entry 'Momentum (Medium-Term)' was a legacy
+// variant; keeping for backward-compat. Without this, default checkbox state on cardCorr
+// was missing the momentum factor on first render.
+const FAC_PRIMARY=new Set(['Momentum (Medium-Term)','Medium-Term Momentum','Momentum','Volatility','Growth','Value','Dividend Yield','Profitability']);
 
 // ===== FACTOR TABLE STATE =====
 const FAC_GROUP_DEFS=[
@@ -4890,7 +4894,9 @@ function rUpdateCorr(){
     if(wks<Infinity)arr=arr.slice(-wks);
     if(freq==='monthly'){
       let seen=new Set();
-      arr=arr.filter(h=>{let m=h.d.slice(0,7);if(seen.has(m))return false;seen.add(m);return true;});
+      // 2026-05-01 (cardCorr audit C1): h.d is YYYYMMDD (no separator) — slice(0,7)
+      // produced 3-4 buckets per calendar month instead of 1. Use slice(0,6) for true year-month dedupe.
+      arr=arr.filter(h=>{let m=h.d.slice(0,6);if(seen.has(m))return false;seen.add(m);return true;});
     }
     sliced[fn]=arr.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(+(h.e||0)));
   });

@@ -81,6 +81,11 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | 2026-05-01 16:40 | E.1 Country FS Map fix | — | `refactor.20260501.1640.phase-E-country-map-fix` | Detect view via toggle .active class, not chart-div display. Map FS now opens correctly. |
 | 2026-05-01 16:55 | E.2 Country FS view tabs | — | `refactor.20260501.1655.phase-E2-country-fs-tabs` | Map / Heat / Table tabs inside FS modal — flip without exiting. |
 | 2026-05-01 17:15 | J week-flow lint | — | `refactor.20260501.1715.phase-J-lint` | Static lint catches direct cs.X access in render fns. Wired into smoke_test.sh. Annotated 7 false-positives, fixed 1 real issue. |
+| 2026-05-01 17:45 | org spine | — | `refactor.20260501.1745.org-spine` | SESSION_GUIDE.md + AGENTS.md (subagent runbook) + dev_dashboard.html (project state at a glance) + docs/INDEX.md update. |
+| 2026-05-01 17:55 | F UX shipping | — | `refactor.20260501.1755.phase-F-universe-ux` | Universe pill: rename (Port-Held / In Bench / All) + per-pill tooltips + persistent count strip. Backend logic unchanged. |
+| 2026-05-01 18:10 | item 2A | — | `refactor.20260501.1810.item-2A-sector-fs-summary` | Sector fullscreen: 9 summary stat tiles (Top Risk, Top Diversifier, Largest OW, Largest UW, Biggest Port, Biggest Bench, Σ \|Active\|, etc.). Flows per-week. |
+| 2026-05-01 18:20 | item 4 | — | `refactor.20260501.1820.item-4-fac-perf-yaxis` | Factor Performance y-axis: smart tick decimals based on value range, % suffix matches title unit. |
+| 2026-05-01 18:30 | D helper | — | `refactor.20260501.1830.phase-D-helper` | tileChromeStrip() helper — single source of truth. Migrations gradual (per-tile as touched). |
 
 ## Status summary (post-2026-05-01 session)
 
@@ -94,12 +99,17 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 - Static lint prevents future direct-cs.X regressions (Phase J).
 
 **Outstanding:**
-- Phase D — `tileChrome()` contract for uniform tile chrome assembly. Lower priority now since the data-flow + UX issues are resolved.
-- Phase K — design polish pass. Architecture is uniform, design polish is the natural next sweep.
-- User-direction-required: Phase F shipping (rename pills / drop "Both" / add "Bench-Only" / hover tooltips / status strip — pick combo).
-- Sector full-page summary tiles (item #2A from user feedback) — not yet built.
-- Factor Performance y-axis cleanup (item #4 from user feedback).
-- Per-holding factor TE breakdown for historical weeks — data not shipped per-week from FactSet, currently shows "—" with explanation.
+- Phase D — `tileChromeStrip()` helper SHIPPED (2026-05-01 18:30). Tile-by-tile migration is gradual (each commit that touches a tile's chrome can swap to the helper).
+- Phase K — design polish pass: typography, spacing, color harmony. Architecture is uniform now, this is the natural next sweep.
+- Per-holding factor TE breakdown for historical weeks — data not shipped per-week from FactSet, currently shows "—" with explanation. Would require parser-side per-week per-holding factor_contr extraction (would balloon file size). Deferred to FactSet conversation.
+- Phase F UX (combo A+D+E) — SHIPPED 2026-05-01 17:55.
+- Item #2A sector full-page summary tiles — SHIPPED 2026-05-01 18:10.
+- Item #4 Factor Performance y-axis — SHIPPED 2026-05-01 18:20.
+
+**Next session priorities (ordered by leverage):**
+1. Begin tileChromeStrip migration sweep — start with Tier-1 tiles (cardSectors / cardCountry / cardWeekOverWeek). Each migration verifies the helper handles the tile's chrome shape.
+2. Phase K design polish pass — typography (size/weight ladder), spacing rhythm, color harmony, hover states. Architecture is solid, this is purely visual.
+3. Per-tile audit cadence resume — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep.
 
 ---
 

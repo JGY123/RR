@@ -1,7 +1,60 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-04-30 (EM full-history landed + parser data-integrity batch + cardWeekOverWeek + autonomous-hour polish)
+last_updated: 2026-05-01 18:30 (post-presentation refactor sweep — 10 phase tags, organization spine, all immediate user-direction items shipped)
+---
+
+## 2026-05-01 (afternoon-evening) — Post-presentation refactor sweep
+
+**Latest tag:** `refactor.20260501.1830.phase-D-helper`
+**Pre-presentation baseline:** `presentation-2026-05-01-shipped` (commit `3b10805`)
+**Branch state:** `main` is clean.
+
+### What landed today (10 phase tags + 4 feature ships):
+
+#### Pre-presentation crisis fixes
+- `fix(parser): jagged-CSV per-row num_groups (recover ACWI +27wk, IDM +92wk)` — header undercount of "Period Start Date" markers was silently dropping trailing weekly data on ACWI/IDM. Now per-row clamping recovers full history.
+- `fix(week-flow): TE/MCR/ORVQ ranks flow per-week in hist mode` — sector / country / group / region tables now flow with the week selector (was: weights changed but risk stayed static).
+- `fix(critical): sector/country/group TE = section aggregate, not holdings sum` — holdings sum was double-counting bench-only (137% > 100%). Section-aggregate row from FactSet is now source of truth.
+
+#### Refactor phases (B–J)
+- **B** `tableColHide` framework + cardSectors canary — sidecar via CSS attribute selectors targeting existing `data-col` attrs. No renderer rewrite.
+- **C** Sweep to all 8 dashboard tables — uniform "⚙ Cols" everywhere.
+- **D** `tileChromeStrip()` helper — one source of truth for chrome assembly. Migrations gradual (per-tile as touched).
+- **E.1** Country fullscreen Map fix — was wrongly opening heatmap on first click (`countryChartDiv.style.display` empty-string bug).
+- **E.2** Country fullscreen Map/Heat/Table tabs — flip views inside FS modal without exiting.
+- **F** Universe pill UX — rename (Port-Held / In Bench / All) + per-pill tooltips + persistent count status strip. Backend logic unchanged (audit confirmed no double-counting).
+- **G** Scroll preservation on `changeWeek` / `setImpactPeriod` — page no longer jumps to top.
+- **H** Factor Detail / Risk / ContribBars / RiskFacTbl all flow per-week via `getFactorsForWeek` + `_wFactors`.
+- **I** WoW row tooltip — full name + ticker + sector for disambiguation (Kongsberg Maritime vs Gruppen).
+- **J** Week-flow static lint (`lint_week_flow.py`) — catches future direct-cs.X regressions. Wired into `smoke_test.sh`.
+
+#### User-direction items shipped (after "go with whatever")
+- Item #2A — Sector fullscreen 9 summary stat tiles (Top Risk, Top Diversifier, Largest OW/UW, Biggest Port/Bench Wt, Σ |Active|, etc.)
+- Item #4 — Factor Performance y-axis: smart decimals + % suffix
+- Phase F UX combo A+D+E — Universe pill rename + tooltips + status strip
+
+#### Organization spine (NEW infrastructure for future sessions)
+- `SESSION_GUIDE.md` — operational checklist for first 5 min of any session
+- `AGENTS.md` — subagent runbook with briefing template
+- `dev_dashboard.html` — visual project state at a glance
+- `REFACTOR_PLAN.md` — 11-phase plan with checkpoint log (this session = 10 of 11 phases done)
+- `REFACTOR_AUDIT.md` — full inventory of 12 tables × 30 tiles
+- `UNIVERSE_AUDIT.md` — Phase F audit findings
+- `TABLESPEC_DESIGN.md` — preserved design exploration (sidecar approach won)
+- `lint_week_flow.py` — static lint script
+- `refactor_diff.html` — visual diff tool for any future migration
+- `docs/INDEX.md` updated to point at all of the above
+
+### Next session priorities (ordered by leverage)
+1. **tileChromeStrip migration** — start with Tier-1 hero tiles (cardSectors / cardCountry / cardWeekOverWeek). Each migration verifies the helper handles one tile's chrome shape before broader sweep.
+2. **Phase K design polish** — typography (size/weight ladder), spacing rhythm, color harmony, hover states. Architecture is solid, this is purely visual.
+3. **Per-tile audit cadence resume** — pick 2-3 Tier-2 tiles for `tile-audit` subagent review.
+
+### Outstanding (no user direction needed; tackle when bandwidth allows)
+- Per-holding factor TE breakdown for historical weeks — data not shipped per-week from FactSet. Currently shows "—" with explanation. Would need parser-side per-week per-holding factor_contr (file size ballooning concern).
+- IOP / GSC FactSet re-runs (F16 / F17) — sector/region/group missing on IOP, Raw Factors missing on GSC.
+
 ---
 
 ## 2026-04-30 (afternoon) — EM full-history end-to-end + S1 cardWeekOverWeek shipped

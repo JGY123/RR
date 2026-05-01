@@ -185,9 +185,9 @@ a:hover { text-decoration: underline; }
     <h2>Project snapshot</h2>
     <div class="kpi"><span class="num" id="kpi-commits">…</span><span class="lbl">commits today</span></div>
     <div class="kpi"><span class="num" id="kpi-tags">…</span><span class="lbl">refactor checkpoints</span></div>
-    <div class="kpi"><span class="num" id="kpi-phases">9 / 11</span><span class="lbl">phases shipped (A-J of A-K)</span></div>
+    <div class="kpi"><span class="num" id="kpi-phases">10 / 11</span><span class="lbl">phases shipped (A-J + D helper, K queued)</span></div>
     <div style="margin-top:10px;font-size:11px;color:var(--textDim)">
-      Latest tag: <code id="latest-tag">refactor.20260501.1715.phase-J-lint</code>
+      Latest tag: <code id="latest-tag">refactor.20260501.1830.phase-D-helper</code>
     </div>
   </div>
 
@@ -203,7 +203,7 @@ a:hover { text-decoration: underline; }
         <tr><td><strong>A</strong></td><td>Audit</td><td><span class="tag tag-ok">done</span></td></tr>
         <tr><td><strong>B</strong></td><td>tableColHide framework + canary</td><td><span class="tag tag-ok">done</span></td></tr>
         <tr><td><strong>C</strong></td><td>Sweep tableColHide → 8 tables</td><td><span class="tag tag-ok">done</span></td></tr>
-        <tr><td><strong>D</strong></td><td>tileChrome() contract</td><td><span class="tag tag-pending">queued</span></td></tr>
+        <tr><td><strong>D</strong></td><td>tileChromeStrip() helper</td><td><span class="tag tag-ok">helper shipped</span></td></tr>
         <tr><td><strong>E</strong></td><td>Country fullscreen Map+Heat+Table tabs</td><td><span class="tag tag-ok">done</span></td></tr>
         <tr><td><strong>F</strong></td><td>Universe selector audit</td><td><span class="tag tag-ok">report</span></td></tr>
         <tr><td><strong>G</strong></td><td>Scroll preservation</td><td><span class="tag tag-ok">done</span></td></tr>
@@ -218,9 +218,11 @@ a:hover { text-decoration: underline; }
   <!-- ===== Awaiting user ===== -->
   <div class="card">
     <h2>Awaiting user direction</h2>
-    <div class="bullet"><strong>Phase F UX option</strong> — pick from <code>UNIVERSE_AUDIT.md</code>: rename pills (A) / drop "Both" (B) / add "Bench-Only" (C) / hover tooltips (D) / status strip (E). Recommended combo: A+D+E.</div>
-    <div class="bullet"><strong>Factor Performance y-axis</strong> (item #4 from 2026-05-01) — what specifically looks off? Screenshot or describe.</div>
-    <div class="bullet"><strong>Sector full-page summary tiles</strong> (item #2A) — recommended: Largest Active OW, Largest Active UW, Largest +TE, Largest −TE, # OW vs # UW, Σ |Active|. Approve?</div>
+    <div class="bullet">No blocking items right now. Items shipped today after user said "go with whatever":</div>
+    <div class="bullet">✓ Phase F UX (Universe pill rename + tooltips + status strip — combo A+D+E)</div>
+    <div class="bullet">✓ Factor Performance y-axis cleanup (smart decimals + % suffix)</div>
+    <div class="bullet">✓ Sector fullscreen 9-tile summary stat strip</div>
+    <div class="bullet"><strong>Next session</strong>: pick a Tier-2 tile for tile-audit subagent review, OR start the tileChromeStrip migration sweep, OR do Phase K design polish.</div>
   </div>
 
   <!-- ===== Data integrity ===== -->

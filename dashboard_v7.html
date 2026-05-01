@@ -40,19 +40,22 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:var(--cardBorder);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--textDim)}
-.header{display:flex;align-items:center;gap:16px;padding:10px 24px;background:var(--card);border-bottom:1px solid var(--grid);position:sticky;top:0;z-index:100}
+/* 2026-05-01 polish: header gradient + refined chrome (subtle depth) */
+.header{display:flex;align-items:center;gap:16px;padding:12px 24px;background:linear-gradient(180deg,#161b27 0%,var(--card) 100%);border-bottom:1px solid var(--cardBorder);position:sticky;top:0;z-index:100;box-shadow:0 1px 0 rgba(0,0,0,0.2)}
 .header h1{font-size:18px;font-weight:700;color:var(--txth);letter-spacing:-0.5px}
 .header h1 span{color:var(--pos);font-weight:300}
-.hdr-r{display:flex;align-items:center;gap:12px}
+.hdr-r{display:flex;align-items:center;gap:10px}
 .strat-sel{display:flex;align-items:center;gap:4px}
-.strat-sel select{font-size:12px;font-weight:600;padding:5px 28px 5px 10px;background:var(--surf);border:1px solid var(--pri);color:var(--txth);border-radius:8px;cursor:pointer;font-family:inherit;min-width:200px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.strat-sel select{font-size:12px;font-weight:600;padding:6px 30px 6px 12px;background:var(--surf);border:1px solid var(--pri);color:var(--txth);border-radius:8px;cursor:pointer;font-family:inherit;min-width:220px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%2394a3b8'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;letter-spacing:0.3px}
+.strat-sel select:hover{border-color:var(--accent)}
 .strat-btn{padding:6px 14px;border:none;background:none;color:var(--txt);font-size:12px;font-weight:500;border-radius:6px;cursor:pointer;transition:all .2s;font-family:inherit}
 .strat-btn.active{background:var(--pri);color:#fff}
 .strat-btn:hover:not(.active){background:var(--grid);color:var(--txth)}
-.tabs{display:flex;gap:2px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--grid);position:sticky;top:61px;z-index:99}
-.tab{padding:10px 20px;border:none;background:none;color:var(--txt);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit}
-.tab.active{color:var(--pri);border-bottom-color:var(--pri)}
-.tab:hover:not(.active){color:var(--txth)}
+/* 2026-05-01 polish: cleaner tabs with subtle hover state */
+.tabs{display:flex;gap:2px;padding:0 24px;background:var(--card);border-bottom:1px solid var(--cardBorder);position:sticky;top:63px;z-index:99}
+.tab{padding:11px 22px;border:none;background:none;color:var(--txt);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;font-family:inherit;letter-spacing:0.2px}
+.tab.active{color:var(--pri);border-bottom-color:var(--pri);font-weight:600}
+.tab:hover:not(.active){color:var(--txth);border-bottom-color:var(--cardBorder)}
 .upload-zone{display:flex;flex-direction:column;align-items:center;justify-content:center;height:calc(100vh - 100px);gap:16px}
 .upload-zone label{padding:16px 32px;background:var(--pri);color:#fff;border-radius:12px;cursor:pointer;font-weight:600;font-size:15px;transition:all .2s}
 .upload-zone label:hover{background:var(--accentDim)}
@@ -65,24 +68,34 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--b
 .g23{grid-template-columns:2fr 3fr}
 .g32{grid-template-columns:3fr 2fr}
 .g12{grid-template-columns:1fr 2fr}
-.card{background:var(--card);border:1px solid var(--grid);border-radius:12px;padding:16px;overflow:visible;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
-.card-title{font-size:11px;font-weight:600;color:var(--textDim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
-.sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
-.sum-card{background:var(--card);border:1px solid var(--grid);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .2s}
-.sum-card:hover{border-color:var(--pri);transform:translateY(-2px)}
-.sum-card .label{font-size:10px;font-weight:600;color:var(--textDim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
-.sum-card .value{font-size:28px;font-weight:800;color:var(--txth);font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;line-height:1.1}
-.sum-card .sub{font-size:9px;color:var(--textDim);margin-top:6px;letter-spacing:0.3px}
+/* 2026-05-01 PRESENTATION POLISH: tightened card chrome + hero KPI sum-cards
+   redesigned with subtle gradient accent + better hover shadow. Goal: read
+   like a Bloomberg/Aladdin terminal, not a spreadsheet ported to web. */
+.card{background:var(--card);border:1px solid var(--cardBorder);border-radius:12px;padding:18px;overflow:visible;box-shadow:0 1px 3px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.02);transition:box-shadow .2s ease,border-color .2s ease}
+.card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.4),inset 0 1px 0 rgba(255,255,255,0.03)}
+.card-title{font-size:11px;font-weight:700;color:var(--textBright);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:10px}
+.sum-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+.sum-card{background:linear-gradient(180deg,var(--card) 0%,rgba(18,22,31,0.85) 100%);border:1px solid var(--cardBorder);border-radius:10px;padding:16px 18px;text-align:center;cursor:pointer;transition:all .25s ease;position:relative;overflow:hidden}
+.sum-card::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--pri) 30%,var(--accent) 70%,transparent);opacity:0;transition:opacity .25s ease}
+.sum-card:hover{border-color:var(--pri);transform:translateY(-2px);box-shadow:0 6px 20px rgba(99,102,241,0.15)}
+.sum-card:hover::before{opacity:1}
+.sum-card .label{font-size:10px;font-weight:700;color:var(--textDim);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:10px}
+.sum-card .value{font-size:32px;font-weight:700;color:var(--textBright);font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;line-height:1.05;letter-spacing:-0.02em}
+/* 2026-05-01 polish: bumped subtitle from 9px to 11px — was unreadable from 6 feet away in presentation context. */
+.sum-card .sub{font-size:11px;color:var(--txt);margin-top:8px;letter-spacing:0.3px;font-weight:500;opacity:0.85}
+.sum-card.alert::before{opacity:1;background:linear-gradient(90deg,transparent,var(--neg),transparent)}
+.sum-card.warn::before{opacity:1;background:linear-gradient(90deg,transparent,var(--warn),transparent)}
 .sum-card.alert{border-color:var(--neg);background:rgba(239,68,68,.05)}
 .sum-card.warn{border-color:var(--warn);background:rgba(245,158,11,.05)}
 /* B105.5: card left-border accent when annotations exist */
 .card.has-notes,[id^="card"].has-notes{border-left:3px solid var(--accent)}
 table{width:100%;border-collapse:collapse;font-size:12px}
-th{text-align:left;padding:8px 10px;color:var(--txt);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:0.5px;border-bottom:1px solid var(--grid);white-space:nowrap}
-td{padding:7px 10px;border-bottom:1px solid rgba(30,36,51,.45);white-space:nowrap;font-variant-numeric:tabular-nums}
-tr:hover td{background:#1e293b}
+/* 2026-05-01 polish: tighter header typography + zebra-friendly hover */
+th{text-align:left;padding:9px 11px;color:var(--textDim);font-weight:700;text-transform:uppercase;font-size:9.5px;letter-spacing:1px;border-bottom:1px solid var(--cardBorder);white-space:nowrap;background:rgba(18,22,31,0.4)}
+td{padding:7.5px 11px;border-bottom:1px solid rgba(30,36,51,.4);white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--text)}
+tr:hover td{background:rgba(99,102,241,0.045)}
 th.r,td.r{text-align:right}
-td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums;color:var(--textBright)}
 .pos{color:var(--pos)}.neg{color:var(--neg)}.warn-t{color:var(--warn)}
 .alert-t{color:var(--neg);font-weight:600}
 .pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600}
@@ -127,6 +140,44 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 @media(max-width:1200px){.g2,.g3,.g4,.g23,.g32,.g12{grid-template-columns:1fr}.sum-cards{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:1024px){.sum-cards{grid-template-columns:repeat(3,1fr)}.modal{width:95vw;padding:16px}}
 @media(max-width:768px){.sum-cards{grid-template-columns:repeat(2,1fr)}.header{flex-direction:column;gap:8px;padding:8px 16px}.header h1{font-size:15px}.tabs{overflow-x:auto;padding:0 12px}.tab{padding:8px 12px;font-size:12px}#content{padding:8px 12px 24px}.strat-sel{flex-wrap:wrap}.modal{max-height:95vh;border-radius:12px}}
+
+/* 2026-05-01 PRESENTATION POLISH: production-grade chrome refinements */
+
+/* Body content padding: more generous breathing room for premium feel */
+#content{padding:18px 28px 36px}
+
+/* Footer-link / footnote block — subtler, classier */
+.footnote{font-size:10px;color:var(--textDim);margin-top:6px;font-style:italic}
+
+/* Loading shimmer: more elegant pulsing band */
+.parse-shimmer{display:flex;align-items:center;justify-content:center;gap:14px;padding:60px;color:var(--textDim);font-size:13px}
+
+/* Better focus states for accessibility (keyboard nav) */
+button:focus-visible, select:focus-visible, input:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+
+/* Crisp number alignment — lining figures in tables */
+.mono, td.r, .sum-card .value{font-feature-settings:"tnum" 1,"lnum" 1}
+
+/* Card-title elegance: thin underline accent under hero card titles */
+.card-title.hero{position:relative;padding-bottom:8px;margin-bottom:12px}
+.card-title.hero::after{content:"";position:absolute;left:0;bottom:0;width:40px;height:2px;background:linear-gradient(90deg,var(--accent),var(--pri));border-radius:1px}
+
+/* Hover affordance on clickable cards */
+.card.clickable{cursor:pointer}
+.card.clickable:hover{border-color:var(--pri);transform:translateY(-1px)}
+
+/* Print-ready styles for screenshot/PDF export */
+@media print{
+  body{background:#fff;color:#000}
+  .header,.tabs,#hdrUtility{display:none!important}
+  .card{break-inside:avoid;border:1px solid #ddd!important;box-shadow:none!important;background:#fff!important;color:#000!important}
+  .sum-card{background:#fff!important;color:#000!important}
+  .card-title,.label{color:#666!important}
+  .value{color:#000!important}
+  table{font-size:10px}
+  th{background:#f5f5f5!important;color:#333!important}
+  td{color:#000!important;border-color:#eee!important}
+}
 /* 2026-04-30 (user feedback "Chrome bigger screen tiles don't scale"):
    Viewport-aware chart heights. Tiles tagged with .chart-h-{md|lg|xl} grow
    gracefully on wider/taller viewports so a 1440p or 4k Chrome window doesn't
@@ -187,8 +238,11 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 @keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.card{animation:slideUp .3s ease both}
-.sum-card{animation:slideUp .3s ease both}
+/* 2026-05-01 polish: replaced slideUp on cards with subtle fade — every tab
+   switch was animating 12+ cards in, looked like a marketing site rather
+   than a serious analytics product. Fade is cleaner and faster. */
+.card{animation:fadeIn .15s ease both}
+.sum-card{animation:fadeIn .15s ease both}
 
 /* Skeleton loader */
 .skeleton{background:linear-gradient(90deg,var(--surf) 25%,var(--grid) 50%,var(--surf) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px;min-height:20px}
@@ -414,12 +468,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 </head>
 <body>
 <div class="header">
-<!-- Left: branding (Q69 — full Redwood Risk wordmark) -->
-<div style="min-width:170px;flex-shrink:0;display:flex;align-items:center;gap:10px">
-  <div style="width:4px;height:30px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--univ))"></div>
-  <div style="line-height:1;display:flex;flex-direction:column;gap:3px" title="Redwood Risk Control Panel — portfolio risk + factor analytics for the Redwood PM team">
-    <h1 style="font-size:14px;font-weight:700;letter-spacing:2.5px;color:var(--textBright);line-height:1;margin:0">REDWOOD <span style="color:var(--accent)">RISK</span></h1>
-    <div style="font-size:8px;font-weight:600;letter-spacing:3px;color:var(--textDim);line-height:1;text-transform:uppercase">Control Panel</div>
+<!-- Left: branding (2026-05-01 polish — ALGER parent firm + REDWOOD RISK product wordmark) -->
+<div style="min-width:230px;flex-shrink:0;display:flex;align-items:center;gap:14px">
+  <!-- Alger parent-firm mark -->
+  <div style="display:flex;flex-direction:column;align-items:center;line-height:1;padding-right:14px;border-right:1px solid var(--grid)" title="Fred Alger Management — parent firm">
+    <div style="font-size:13px;font-weight:800;letter-spacing:4px;color:var(--textBright);line-height:1;font-family:'DM Sans','Inter',system-ui,sans-serif">ALGER</div>
+    <div style="font-size:6px;font-weight:600;letter-spacing:2.5px;color:var(--textDim);margin-top:3px;text-transform:uppercase">Management</div>
+  </div>
+  <!-- Redwood gradient bar + wordmark -->
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:4px;height:30px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--pri))"></div>
+    <div style="line-height:1;display:flex;flex-direction:column;gap:3px" title="Redwood Risk Control Panel — portfolio risk + factor analytics for the Redwood PM team">
+      <h1 style="font-size:14px;font-weight:700;letter-spacing:2.5px;color:var(--textBright);line-height:1;margin:0">REDWOOD <span style="color:var(--accent)">RISK</span></h1>
+      <div style="font-size:8px;font-weight:600;letter-spacing:3px;color:var(--textDim);line-height:1;text-transform:uppercase">Control Panel</div>
+    </div>
   </div>
 </div>
 <!-- Center: strategy + report date -->

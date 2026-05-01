@@ -2712,7 +2712,7 @@ function rExp(){
   <!-- Row 3b: Factor Detail (full width below the two map tiles) -->
   <div class="card" id="cardFacDetail" style="margin-top:16px">
     <div class="flex-between" style="margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>${aboutBtn('cardFacDetail')}</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>${aboutBtn('cardFacDetail')}${tableColHidePanelHtml('tbl-fac')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
         ${facColDropHtml()}
@@ -2734,7 +2734,7 @@ function rExp(){
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:none;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}${tableColHidePanelHtml('tbl-ctry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:none;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
@@ -2782,7 +2782,7 @@ function rExp(){
 
   <!-- Row 5: Redwood Groups -->
   <div class="card" id="cardGroups">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div>${aboutBtn('cardGroups')}<span id="grpFilterChip"></span></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div>${aboutBtn('cardGroups')}${tableColHidePanelHtml('tbl-grp')}<span id="grpFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
@@ -2879,6 +2879,7 @@ function rExp(){
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="card-title tip" data-tip="Return attribution from the 18 Style Snapshot section. Shows how each country, industry, and currency contributed to portfolio returns over the selected period. Click any row or bar for time series." oncontextmenu="showNotePopup(event,'cardAttrib');return false">Factor Attribution</div>
         ${aboutBtn('cardAttrib')}
+        ${tableColHidePanelHtml('tbl-attrib')}
         <span style="font-size:10px;color:var(--textDim);font-weight:400">period: ${IMPACT_PERIOD_LABELS[_impactPeriod]||'—'} (uses global Impact selector)</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -2916,7 +2917,7 @@ function rExp(){
 
   <!-- Row 13: Region Active Weights (de-prioritized, bottom of page) -->
   <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div>${aboutBtn('cardRegions')}<span id="regFilterChip"></span></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div>${aboutBtn('cardRegions')}${tableColHidePanelHtml('tbl-reg')}<span id="regFilterChip"></span></div>
     <div style="display:flex;gap:6px;align-items:center">
       <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
       <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
@@ -7368,7 +7369,7 @@ function rRisk(){
   <!-- Factor Exposures Table -->
   <div class="card" id="cardRiskFacTbl" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>${aboutBtn('cardRiskFacTbl')}</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>${aboutBtn('cardRiskFacTbl')}${tableColHidePanelHtml('tbl-risk-fac')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
         ${fsTileBtn('cardRiskFacTbl')}
@@ -8634,6 +8635,7 @@ function renderHoldTab(){
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           ${aboutBtn('cardChars')}
+          ${tableColHidePanelHtml('tbl-chr')}
           <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
           ${fsTileBtn('cardChars')}
           ${resetViewBtn('cardChars')}

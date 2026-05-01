@@ -1616,8 +1616,34 @@ function openFreshnessDetail(){
   alert(lines.join('\n'));
 }
 
-function go(id,btn){
+// 2026-05-01 (per-strategy lazy load): if A[id] is a stub (just {id,name,_lazy:true}
+// from index.json), fetch data/strategies/<id>.json FIRST, then proceed.
+// All existing call-sites of go(id) keep working unchanged.
+async function go(id,btn){
   if(!A[id])return;
+  // Lazy-load the strategy if it's a stub
+  if(A[id]._lazy){
+    try{
+      showLoading('tab-'+activeTab);
+      // Visible status: dropdown briefly shows fetching state
+      const sel=$('stratSel'); const dd=sel?sel.querySelector('select'):null;
+      if(dd)dd.style.opacity='0.5';
+      const url='data/strategies/'+encodeURIComponent(id)+'.json?b='+Date.now();
+      const r=await fetch(url,{cache:'no-store'});
+      if(!r.ok)throw new Error('Strategy file not found: '+url);
+      const sdata=await r.json();
+      // Wrap as a 1-strategy raw shape so normalize() can run on it
+      const rawWrap=[{[id]:sdata},[],'',{}];
+      const norm=normalize(rawWrap);
+      A[id]=norm[id]||sdata;  // replace stub with full normalized strategy
+      delete A[id]._lazy;
+      if(dd)dd.style.opacity='';
+    }catch(e){
+      console.error('Failed to lazy-load strategy '+id+':',e);
+      showToast('Failed to load '+id+' — '+e.message,'var(--neg)');
+      return;
+    }
+  }
   cs=A[id];
   // Sync dropdown if it exists
   let sel=$('stratSel');
@@ -12118,24 +12144,82 @@ window.addEventListener('DOMContentLoaded',()=>{
     Object.keys(localStorage).filter(k=>k.startsWith('rr_')).forEach(k=>localStorage.removeItem(k));
   }catch(e){}
   try{if(_sp)localStorage.setItem(PREFS_KEY,_sp);}catch(e){}
-  // Auto-load latest_data.json if available (cache-busted) — for server deployment
-  // Falls back to upload zone if file not found
-  fetch('latest_data.json?b='+Date.now(),{cache:'no-store'}).then(r=>{
-    if(!r.ok)throw new Error('No auto-load file');
+  // 2026-05-01 (per-strategy lazy load): try data/strategies/index.json FIRST.
+  // Each strategy file is 100-500MB which Chrome handles fine; the monolithic
+  // 1.8GB latest_data.json crashes the renderer (Aw, Snap, Error code 5).
+  //
+  // index.json is tiny (~30MB) and contains:
+  //   - strategies: list of all strategy IDs
+  //   - default: which strategy to load on first visit
+  //   - summaries[id]: small per-strategy summary (sum, sectors, factors, hist.summary)
+  //
+  // Each strategy's full data is fetched on-demand when the user clicks it
+  // in the dropdown (handled by go() above).
+  //
+  // If index.json doesn't exist, fall back to the legacy single-file path
+  // (which OOMs on big files but works fine on smaller single-strategy data).
+
+  function _loadFromIndex(idx){
+    // Build A skeleton: each strategy is a stub with {id, name, _lazy:true}
+    // — populated with summaries[id] data so the dropdown + hero KPIs work
+    // before the user clicks anything.
+    A = {};
+    const strats = idx.strategies || [];
+    for(const sid of strats){
+      const summary = (idx.summaries && idx.summaries[sid]) || {};
+      A[sid] = {
+        ...summary,
+        id: sid,
+        name: summary.name || sid,
+        _lazy: true,            // marker — go() will fetch full data on click
+      };
+    }
+    // Run normalize on the skeleton so the existing init() flow works.
+    // Wrap A in the parser's 4-element list shape.
+    const rawWrap = [A, [], idx.report_date || '', idx.parse_stats || {}];
+    A = normalize(rawWrap);
+    // Restore the _lazy marker (normalize doesn't preserve unknown fields)
+    for(const sid of strats){
+      if(A[sid]) A[sid]._lazy = true;
+    }
+    window._lastRawJson = rawWrap;
+    if(idx.report_date) window._reportDate = idx.report_date;
+    // Pre-load the default strategy (or shared-strat from URL hash, or first)
+    const defaultId = (window._sharedStrat && A[window._sharedStrat]) ? window._sharedStrat : (idx.default || strats[0]);
+    init();   // sets up dropdown + UI scaffolding using A skeleton
+    // Now lazy-load the default strategy and switch to it
+    if(defaultId && A[defaultId]){
+      go(defaultId);   // will trigger fetch + render
+      delete window._sharedStrat;
+    }
+    showToast('Loaded ' + strats.length + ' strategies (lazy mode) — ' + defaultId + ' active', 'var(--pos)');
+  }
+
+  fetch('data/strategies/index.json?b='+Date.now(),{cache:'no-store'}).then(r=>{
+    if(!r.ok) throw new Error('No index.json');
     return r.json();
-  }).then(data=>{
-    window._lastRawJson=data;
-    A=normalize(data);
-    let keys=Object.keys(A);
-    if(keys.length){
-      init();
-      if(window._sharedStrat&&A[window._sharedStrat]){go(window._sharedStrat);delete window._sharedStrat;}
-      showToast('Auto-loaded latest data — '+keys.length+' strategies','var(--pos)');
-    }else{throw new Error('No strategies');}
+  }).then(idx=>{
+    console.log('✓ Detected per-strategy split mode — loading from data/strategies/');
+    _loadFromIndex(idx);
   }).catch(()=>{
-    // No latest_data.json found — show upload zone (normal local usage)
-    document.getElementById('content').style.display='none';
-    document.getElementById('uploadZone').style.display='flex';
+    // No index.json — try legacy monolithic latest_data.json
+    fetch('latest_data.json?b='+Date.now(),{cache:'no-store'}).then(r=>{
+      if(!r.ok)throw new Error('No auto-load file');
+      return r.json();
+    }).then(data=>{
+      window._lastRawJson=data;
+      A=normalize(data);
+      let keys=Object.keys(A);
+      if(keys.length){
+        init();
+        if(window._sharedStrat&&A[window._sharedStrat]){go(window._sharedStrat);delete window._sharedStrat;}
+        showToast('Auto-loaded latest data — '+keys.length+' strategies','var(--pos)');
+      }else{throw new Error('No strategies');}
+    }).catch(()=>{
+      // No latest_data.json found either — show upload zone (normal local usage)
+      document.getElementById('content').style.display='none';
+      document.getElementById('uploadZone').style.display='flex';
+    });
   });
 });
 </script>

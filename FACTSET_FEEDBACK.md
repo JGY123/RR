@@ -111,6 +111,63 @@
 **Context:** the EM bench includes ADRs of Brazilian/Chinese/etc. companies that are listed in US (e.g. NIO-US, MELI-US). Their ticker-region suffix is `-US` but their issuer domicile is EM. The dashboard needs both (one for listing exchange, one for "country of risk" attribution). Today we use the suffix.
 **Ask to FactSet:** add a `Country of Risk` column per security in Security or Raw Factors section. Lets the parser distinguish listing country from risk country.
 
+### F16 · IOP (ACWIXUS) shipped with major sections missing — 🔴 NEEDS RE-RUN
+**Status:** Caught during multi-account run verification, 2026-05-01.
+**File:** `risk_reports_sample.csv` (1.7 GB multi-account file, 5 strategies, parsed 2026-05-01).
+**What's wrong:** IOP/ACWIXUS is in the file but with significantly less data than the other 4 strategies (ACWI, GSC, IDM, ISC). Same process was supposedly run for all 5 accounts.
+
+**Sections present for IOP/ACWIXUS:**
+- ✅ Raw Factors (3,849 rows) — per-bench-constituent data with bw/mcap/raw_exp/spotlight ranks
+- ✅ Security (911 rows) — but factor_contr columns within these rows are EMPTY (per-period factor TE breakdown missing)
+- ✅ Portfolio Characteristics (470 rows) — sum cards, P/E, P/B all populated
+- ✅ 18 Style Snapshot (168 rows) — snap_attrib factor history works
+- ✅ Country (52 rows), Industry (34 rows) — current snapshot works
+
+**Sections MISSING for IOP/ACWIXUS:**
+- ❌ RiskM — 0/12 factors with active exposure / TE % data
+- ❌ Sector Weights section rows — per-period sector aggregates missing
+- ❌ Region section rows
+- ❌ Group section rows
+- ❌ factor_contr per holding (Security section's per-period factor breakdown columns are empty)
+
+**Visible symptoms:**
+- Total TE / AS / Beta sum cards work (from Portfolio Characteristics)
+- Risk tab mostly EMPTY: cardFacRisk, cardFacContribBars, cardRiskFacTbl, cardRiskByDim all sparse
+- cardSectors / cardCountry / cardRegions / cardGroups: current snapshot works but no historical trend (hist.sec / hist.ctry / hist.reg / hist.grp = empty)
+
+**Comparison vs working strategies:**
+| Strategy | Sector Weights rows | Region rows | Group rows | Per-strategy file size |
+|---|---:|---:|---:|---:|
+| ACWI    | populated | populated | populated | 477 MB |
+| ISC     | populated | populated | populated | 519 MB |
+| IOP     | **0** | **0** | **0** | 292 MB |
+| IDM     | populated | populated | populated | 204 MB |
+
+**Ask to FactSet:** re-run IOP (ACWIXUS) end-to-end with the same process used for the other 4 strategies. The output should include RiskM section + Sector Weights / Region / Group section rows + factor_contr columns populated in the Security section.
+
+### F17 · GSC shipped without Raw Factors data — 🔴 NEEDS RE-RUN
+**Status:** Caught during multi-account run verification, 2026-05-01.
+**What's wrong:** GSC is in the file with full Security + RiskM + factor TE + sector/country/group data — but the **Raw Factors section is missing or empty** for GSC. The per-strategy split file is only 10.6 MB vs 200-500 MB for other strategies (the 20-50× size gap is the missing Raw Factors data).
+
+**Sections present for GSC:**
+- ✅ Security (2,130 rows — actually larger than ACWI's 1,383)
+- ✅ Portfolio Characteristics (526 rows) — sum cards, P/E, P/B
+- ✅ 18 Style Snapshot (126 keys) — snap_attrib works
+- ✅ Sector Weights / Country / Region / Group / Industry — all populated
+- ✅ RiskM — 12/12 factors populated
+- ✅ factor_contr per holding (16 factors) — full data
+
+**Sections MISSING for GSC:**
+- ❌ Raw Factors section — no per-bench-constituent enrichment (no mcap, no raw_exp, no spotlight ranks for the long-tail bench)
+
+**Visible symptoms:**
+- cs.hold has 1,002 holdings but only the slim Security section data — no F4 long-tail synthesis happens (Raw Factors empty)
+- Holdings table shows SEDOLs (e.g. `BMMV2K8`) instead of ticker-regions (e.g. `700-HK`)
+- No market cap / 52-week vol / 90D ADV columns
+- Spotlight quintile coverage thinner (only port-held + materially-large bench-only get ranks from Security section, not the full bench-only universe via Raw Factors)
+
+**Ask to FactSet:** re-run GSC ensuring the Raw Factors section is included in the output. All other 4 strategies (ACWI, IDM, IOP, ISC) had Raw Factors in this batch — GSC is the outlier. Same configuration / process should apply.
+
 ---
 
 ## Closed / Resolved

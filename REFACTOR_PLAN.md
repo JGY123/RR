@@ -71,6 +71,35 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | Date | Phase | Commit | Tag | Notes |
 |---|---|---|---|---|
 | 2026-05-01 12:30 | baseline | `3b10805` | `presentation-2026-05-01-shipped` | TE bug fixed live during demo. ACWI/IDM full-history recovered. |
+| 2026-05-01 14:30 | A audit | — | — | REFACTOR_AUDIT.md ships full inventory. 12 tables × 30 tiles. |
+| 2026-05-01 15:00 | B tableColHide canary | — | `refactor.20260501.1500.phase-B-canary` | Sidecar framework: data-col CSS rules + checkbox panel + persisted state. cardSectors as canary. |
+| 2026-05-01 15:30 | C tableColHide sweep | — | `refactor.20260501.1530.phase-C-complete` | Applied to all 8 tables. Uniform UX across cardSectors/Country/Groups/Regions/Chars/Attrib/FacDetail/RiskFacTbl. |
+| 2026-05-01 15:45 | G scroll preservation | — | `refactor.20260501.1545.phase-G-scroll` | `_withScrollPreserved` wrapper. changeWeek + jumpToLatest + setImpactPeriod no longer jump to top. |
+| 2026-05-01 16:00 | I WoW tooltips | — | `refactor.20260501.1600.phase-I-wow-tooltips` | Diagnosed Kongsberg "false-exit" — actually correct (two Kongsbergs). Added full-name+ticker+sector tooltip to disambiguate. |
+| 2026-05-01 16:10 | F universe audit | — | — | UNIVERSE_AUDIT.md: no double-counting bug. UX/labeling proposed (5 options A-E). Awaiting user direction. |
+| 2026-05-01 16:20 | H Factor flows per-week | — | `refactor.20260501.1620.phase-H-factor-detail` | `getFactorsForWeek` + `_wFactors` accessor. Wired into cardFacDetail + cardFacRisk + Risk-tab factor table. |
+| 2026-05-01 16:40 | E.1 Country FS Map fix | — | `refactor.20260501.1640.phase-E-country-map-fix` | Detect view via toggle .active class, not chart-div display. Map FS now opens correctly. |
+| 2026-05-01 16:55 | E.2 Country FS view tabs | — | `refactor.20260501.1655.phase-E2-country-fs-tabs` | Map / Heat / Table tabs inside FS modal — flip without exiting. |
+| 2026-05-01 17:15 | J week-flow lint | — | `refactor.20260501.1715.phase-J-lint` | Static lint catches direct cs.X access in render fns. Wired into smoke_test.sh. Annotated 7 false-positives, fixed 1 real issue. |
+
+## Status summary (post-2026-05-01 session)
+
+**Shipped:**
+- All 8 dashboard tables have uniform "⚙ Cols" hide/show panel (Phase B+C).
+- Scroll position preserved on week / period change (Phase G).
+- WoW row tooltips disambiguate similarly-named holdings (Phase I).
+- Universe selector audited; no bug; UX options proposed (Phase F).
+- Factor Detail / Factor Risk Snapshot / Risk-tab factor table all flow per-week (Phase H).
+- Country fullscreen — Map view now opens correctly + tabs Map/Heat/Table inside FS (Phase E).
+- Static lint prevents future direct-cs.X regressions (Phase J).
+
+**Outstanding:**
+- Phase D — `tileChrome()` contract for uniform tile chrome assembly. Lower priority now since the data-flow + UX issues are resolved.
+- Phase K — design polish pass. Architecture is uniform, design polish is the natural next sweep.
+- User-direction-required: Phase F shipping (rename pills / drop "Both" / add "Bench-Only" / hover tooltips / status strip — pick combo).
+- Sector full-page summary tiles (item #2A from user feedback) — not yet built.
+- Factor Performance y-axis cleanup (item #4 from user feedback).
+- Per-holding factor TE breakdown for historical weeks — data not shipped per-week from FactSet, currently shows "—" with explanation.
 
 ---
 

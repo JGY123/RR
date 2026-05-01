@@ -184,6 +184,40 @@
   font-family: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
+
+/* Modal close button — slightly larger than .tile-btn since these are
+   prominent affordances at the top-right of full-screen modals. */
+.modal-close-btn {
+  background: none;
+  border: 1px solid var(--grid);
+  color: var(--txt);
+  font-size: var(--text-xl);
+  padding: 4px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  font-weight: var(--w-semibold);
+  transition: color .15s, border-color .15s, background .15s;
+}
+.modal-close-btn:hover {
+  color: var(--txth);
+  border-color: var(--neg);
+  background: var(--neg-wash);
+}
+.modal-close-btn:focus-visible {
+  outline: 2px solid var(--pri);
+  outline-offset: 1px;
+}
+
+/* Modal heading — consistent typography for full-screen / drill-modal titles */
+.modal-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  color: var(--txth);
+  font-weight: var(--w-semibold);
+  letter-spacing: 0.3px;
+}
 body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;overflow-x:hidden}
 .mono{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
 
@@ -674,7 +708,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div class="hdr-r" style="min-width:130px;justify-content:flex-end;flex-shrink:0">
   <!-- B109: global Impact-period selector — applies to every tile that shows factor Impact -->
   <div id="impactPeriodWrap" title="Sets the time window used by every Impact column across the dashboard. Period applies globally; tile labels update inline." style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 8px">
-    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Impact</span>
+    <span class="section-label">Impact</span>
     <select id="impactPeriodSel" onchange="setImpactPeriod(this.value)" style="background:none;border:none;color:var(--txth);font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;padding:2px 4px"></select>
   </div>
   <!-- 2026-05-01 (Phase F UX combo A+D+E): Universe pill — relabeled,
@@ -684,7 +718,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
        when actually it's the union (= Bench when Port ⊂ Bench). New labels
        make the semantics explicit. -->
   <div id="aggModeWrap" title="Universe: which holdings the count / weight / ORVQ-average columns aggregate across. TE / MCR / factor_contr columns are universe-INVARIANT (B116) — they show the same value regardless of pill choice." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Universe</span>
+    <span class="section-label" style="margin-right:2px">Universe</span>
     <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" title="Port-Held: only holdings with h.p > 0 (portfolio positions). Excludes bench-only constituents." style="font-size:10px;padding:2px 7px">Port-Held</button>
     <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" title="In Benchmark: every constituent of the benchmark (h.b > 0). INCLUDES the portfolio overlap. For pure bench-not-port, see the cardUnowned tile." style="font-size:10px;padding:2px 7px">In Bench</button>
     <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" title="All Holdings: union of Port-Held + In Benchmark = every non-cash row in cs.hold[]. No double-counting (each holding counted exactly once)." style="font-size:10px;padding:2px 7px">All</button>
@@ -692,7 +726,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
   </div>
   <!-- Global avg-method pill — controls ORVQ rank averaging method. Sums and counts use the Universe pill alone. -->
   <div id="avgModeWrap" title="ORVQ rank averaging: Wtd = holding-weight-weighted (port-weight under Port/Both, bench-weight under Bench). Avg = simple mean across the active universe." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-    <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Ranks</span>
+    <span class="section-label" style="margin-right:2px">Ranks</span>
     <button class="pill" id="avg-pill-wtd" onclick="setAvgMode('wtd')" style="font-size:10px;padding:2px 7px">Wtd</button>
     <button class="pill" id="avg-pill-avg" onclick="setAvgMode('avg')" style="font-size:10px;padding:2px 7px">Avg</button>
   </div>
@@ -2970,7 +3004,7 @@ function rExp(){
             <button id="facPerfWaterBtn" class="toggle-btn" onclick="setFacPerfView('waterfall')" title="Sorted bars + cumulative running total">Waterfall</button>
           </div>
           <div style="display:flex;gap:2px;align-items:center;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:2px">
-            <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;padding:0 6px">Period</span>
+            <span class="section-label" style="padding:0 6px">Period</span>
             ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" data-fac-period="${p}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
           </div>
           ${aboutBtn('cardFacButt')}
@@ -3011,7 +3045,7 @@ function rExp(){
   <!-- Row 4: Country Exposure -->
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}${tableColHidePanelHtml('tbl-ctry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:none;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}${tableColHidePanelHtml('tbl-ctry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:none;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span class="section-label" style="margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="position:relative">
           <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
@@ -3080,7 +3114,7 @@ function rExp(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio / Benchmark / Both with the global Universe pill in the header. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
         ${aboutBtn('cardRanks')}
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-left:8px">Rank</span>
+        <span class="section-label" style="margin-left:8px">Rank</span>
         <button class="pill" id="rnk-pill-over" onclick="setRanksBy('over')">Overall</button>
         <button class="pill" id="rnk-pill-rev" onclick="setRanksBy('rev')">Rev</button>
         <button class="pill" id="rnk-pill-val" onclick="setRanksBy('val')">Val</button>
@@ -3161,7 +3195,7 @@ function rExp(){
       </div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Period</span>
+          <span class="section-label" style="margin-right:2px">Period</span>
           ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
         </div>
         <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
@@ -3911,7 +3945,7 @@ function openSecTableFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
       <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Sector Table · ${cs.id} · ${aggLbl}</h2><span style="font-size:10px;color:var(--textDim)">All columns visible · Click any sector row to drill</span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     ${stats?`<div style="display:flex;gap:8px;padding:8px 18px;flex-wrap:wrap;border-bottom:1px solid var(--grid)">${stats}</div>`:''}
     <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="secFsTableWrap">${rWt(_wSec(),'sec',cs.hold)}</div></div>`;
@@ -3944,7 +3978,7 @@ function openGrpChartFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
       <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Redwood Groups · ${cs.id}</h2><span style="font-size:10px;color:var(--textDim)">Click a bar to drill into that group</span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding:12px 18px"><div id="grpFsChartDiv" style="min-height:600px"></div></div>`;
   m.classList.add('show');
@@ -3961,7 +3995,7 @@ function openGrpTableFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid)">
       <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Redwood Groups · Table · ${cs.id}</h2><span style="font-size:10px;color:var(--textDim)">Click a row to drill</span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="grpFsTableWrap">${rGroupTable(_wGrp(),cs.hold)}</div></div>`;
   m.classList.add('show');
@@ -3989,7 +4023,7 @@ function openRegChartFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
       <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Region Active Weights · ${cs.id}</h2></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding:12px 18px"><div id="regFsChartDiv" style="min-height:600px"></div></div>`;
   m.classList.add('show');
@@ -4006,7 +4040,7 @@ function openRegTableFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid)">
       <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Region Active Weights · Table · ${cs.id}</h2><span style="font-size:10px;color:var(--textDim)">Click a row to drill</span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="regFsTableWrap">${rWt(_wReg(),'reg',cs.hold)}</div></div>`;
   m.classList.add('show');
@@ -4070,7 +4104,7 @@ function _renderSecFsContent(){
   return`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
       <div style="display:flex;align-items:center;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600;letter-spacing:0.3px">Sector Active Weights · Full View</h2><span id="secFsFilterChip"></span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="display:flex;gap:10px;padding:10px 18px;flex-wrap:wrap;border-bottom:1px solid var(--grid)">${stats}</div>
     <div style="display:flex;flex:1;min-height:0;overflow:hidden">
@@ -6333,7 +6367,7 @@ function openFacRiskFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(168,85,247,0.04),transparent)">
       <div style="display:flex;align-items:baseline;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Factor Risk Snapshot · ${cs.id||cs.name||''}</h2><span style="font-size:10px;color:var(--textDim)">click any factor to drill · bubble size = factor σ</span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="padding:8px 18px;border-bottom:1px solid var(--grid);display:flex;gap:10px;flex-wrap:wrap;background:rgba(15,23,42,0.4)">
       <span style="font-size:10px;color:var(--txt)"><strong style="color:var(--pri)">Total TE</strong> ${te!=null?f2(te,2)+'%':'—'}</span>
@@ -6437,7 +6471,7 @@ function openFacButtFullscreen(){
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
       <div style="display:flex;align-items:baseline;gap:12px"><h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Factor Risk Map · ${cs.id||cs.name||''}</h2><span style="font-size:10px;color:var(--textDim)">click any factor to drill</span></div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
       <div style="flex:0 0 auto;padding:8px 14px 4px">
@@ -6782,7 +6816,7 @@ function openCtryChartFullscreen(){
         <h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Country × Factor TE Heatmap · ${cs.id} · ${aggLbl}</h2>
         <span style="font-size:10px;color:var(--textDim)">Click any cell to drill into that country sorted by the clicked factor</span>
       </div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="display:flex;flex:1;min-height:0;overflow:hidden">
       <div id="ctryFsHeatWrap" style="flex:1;min-width:0;padding:12px 18px;overflow:auto"><div id="ctryFsHeatDiv" style="min-height:600px"></div></div>
@@ -6809,7 +6843,7 @@ function openCtryTableFullscreen(){
         <h2 style="margin:0;font-size:16px;color:var(--txth);font-weight:600">Country Table · ${cs.id} · ${aggLbl}</h2>
         <span style="font-size:10px;color:var(--textDim)">Click any country row to drill</span>
       </div>
-      <button onclick="closeSecFullscreen()" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:14px;padding:4px 10px;border-radius:6px;cursor:pointer" title="Close (Esc)">✕</button>
+      <button class="modal-close-btn" onclick="closeSecFullscreen()" title="Close (Esc)">✕</button>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding:8px 12px"><div id="ctryFsTableWrap">${rCountryTable(_wCtry(),cs.hold)}</div></div>`;
   m.classList.add('show');
@@ -7789,12 +7823,12 @@ function rRisk(){
         <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400"></span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Dim</span>
+        <span class="section-label">Dim</span>
         <button class="pill" id="rbd-pill-country" onclick="setRiskByDim('country')">Country</button>
         <button class="pill" id="rbd-pill-currency" onclick="setRiskByDim('currency')">Currency</button>
         <button class="pill" id="rbd-pill-industry" onclick="setRiskByDim('industry')">Industry</button>
         <span style="width:1px;height:16px;background:var(--grid);margin:0 4px"></span>
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Min</span>
+        <span class="section-label">Min</span>
         <input type="range" id="rbd-thresh" min="0" max="3" step="0.1" value="0.5" oninput="setRiskByDimThresh(this.value)" style="width:80px;accent-color:var(--accent)">
         <span id="rbd-thresh-val" style="font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace;min-width:32px">0.5%</span>
         ${resetZoomBtn('rbdChartDiv')}
@@ -7822,7 +7856,7 @@ function rRisk(){
         <div class="card-title tip" data-tip="Time series for selected factors. Toggle metric: Active Exposure (e − bm), Factor Return (per-week pure return), or Cumulative Return (running sum). Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacHist');return false" style="margin:0">Factor History</div>
         ${aboutBtn('cardFacHist')}
         <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Metric</span>
+          <span class="section-label" style="margin-right:2px">Metric</span>
           <button class="pill" id="fac-hist-pill-exp" onclick="setFacHistMetric('exp')" style="font-size:10px;padding:2px 7px">Active Exp</button>
           <button class="pill" id="fac-hist-pill-ret" onclick="setFacHistMetric('ret')" style="font-size:10px;padding:2px 7px">Factor Return</button>
           <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px">Cum Return</button>
@@ -9633,11 +9667,11 @@ function oDrF(name,range){
     <!-- Period + Range selectors -->
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Impact period</span>
+        <span class="section-label" style="margin-right:2px">Impact period</span>
         ${periodChips}
       </div>
       <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Chart range</span>
+        <span class="section-label" style="margin-right:2px">Chart range</span>
         <div class="range-btns" style="margin:0">${rangeChips}</div>
       </div>
     </div>
@@ -9645,12 +9679,12 @@ function oDrF(name,range){
     <!-- View toggle (Risk | Return) — only ONE chart visible at a time -->
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-        <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">View</span>
+        <span class="section-label" style="margin-right:2px">View</span>
         ${viewChips}
       </div>
       ${_facDrillView==='return'?`
         <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Preset</span>
+          <span class="section-label" style="margin-right:2px">Preset</span>
           ${returnPresetChips}
         </div>
       `:''}
@@ -9677,11 +9711,11 @@ function oDrF(name,range){
       <span style="font-size:10px;color:var(--textDim);font-weight:400">${isMacro?`aggregated by ${name==='Country'?'country':name==='Currency'?'currency':name==='Industry'?'industry':'classification'}`:`per-holding contribution to ${name}`}</span>
       <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap">
         ${hasRawExp?`<div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Sort by</span>
+          <span class="section-label" style="margin-right:2px">Sort by</span>
           ${[['te','% TE'],['rawexp','Raw Exp']].map(([k,l])=>`<button class="pill${_facDrillContribSort===k?' active':''}" onclick="setFacDrillContribSort('${k}','${nm}')" style="font-size:10px;padding:2px 8px">${l}</button>`).join('')}
         </div>`:''}
         <div style="display:flex;align-items:center;gap:4px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-          <span style="font-size:9px;color:var(--textDim);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:2px">Universe</span>
+          <span class="section-label" style="margin-right:2px">Universe</span>
           ${['portfolio','benchmark','both'].map(u=>`<button class="pill${_facDrillUniverse===u?' active':''}" onclick="setFacDrillUniverse('${u}','${nm}')" style="font-size:10px;padding:2px 8px">${({portfolio:'Port',benchmark:'Bench',both:'Both'})[u]}</button>`).join('')}
         </div>
       </div>

@@ -6456,15 +6456,19 @@ function setMapFacParam(param){
 // Cross-tile insight (per user): every multi-view tile in RR should expose
 // the same pattern — ⛶ button opens a context-specific FS, not a generic one.
 function openCtryFullscreen(){
-  const map=document.getElementById('countryMapDiv');
-  const chart=document.getElementById('countryChartDiv');
-  const table=document.getElementById('countryTableWrap');
-  const isMap   = map   && map.style.display   !== 'none';
-  const isChart = chart && chart.style.display !== 'none';
-  const isTable = table && table.style.display !== 'none';
-  if(isChart){return openCtryChartFullscreen();}
-  if(isTable){return openCtryTableFullscreen();}
-  // Default / map view → existing rich-map FS
+  // 2026-05-01 (Phase E fix — user priority): detect current view via the
+  // ACTIVE TOGGLE BUTTON, not via the chart-div's inline display style.
+  // The earlier dispatch checked `countryChartDiv.style.display !== 'none'`,
+  // but on initial page load the Plotly chart div has no explicit display
+  // style (empty string ≠ 'none') so isChart returned TRUE even when the
+  // user was viewing the Map. Result: clicking ⛶ on the default Map view
+  // wrongly opened the Heat Map fullscreen — exactly what user reported.
+  // Toggle buttons reliably carry the .active class via toggleCountryView.
+  const activeBtn = document.querySelector('#cardCountry .toggle-wrap .toggle-btn.active');
+  const activeLabel = (activeBtn && activeBtn.textContent || '').trim().toLowerCase();
+  if(activeLabel === 'chart') return openCtryChartFullscreen();
+  if(activeLabel === 'table') return openCtryTableFullscreen();
+  // Default / Map → rich-map fullscreen via openFullScreen('country')
   return openFullScreen('country');
 }
 

@@ -1266,6 +1266,45 @@ function openTileFullscreen(tileId){
 const fsTileBtn = tileId => `<button data-tile-fs-btn="${tileId}" onclick="openTileFullscreen('${tileId}')" title="Open tile in full screen" style="background:none;border:1px solid var(--grid);color:var(--textDim);font-size:11px;padding:2px 7px;border-radius:5px;cursor:pointer;font-family:inherit;line-height:1;font-weight:600">⛶</button>`;
 
 // ======================================================================
+// 2026-05-01 (Phase D): tileChromeStrip — single source of truth for the
+// standard tile chrome cluster (About / Cols / CSV / Reset Zoom / Full
+// Screen / Reset View / Hide). Replaces inline assembly in 30+ tiles.
+//
+// Add a button by editing this one helper → ships everywhere.
+// Remove a button by deleting one line → gone everywhere.
+//
+// Usage:
+//   ${tileChromeStrip({
+//     id:'cardSectors',
+//     about: true,
+//     cols: 'tbl-sec',                              // table col-hide panel
+//     csv: "exportCSV('#secTable table','sectors')",  // string handler (eval-style for inline onclick)
+//     fullscreen: 'openSecFullscreen()',             // string handler
+//     resetView: true,
+//     hide: true,
+//     extra: '<custom HTML>',                        // anything else (toggle wraps, view buttons)
+//   })}
+//
+// All buttons optional — pass false / omit to skip.
+// `extra` is rendered BEFORE Reset View + Hide (right side of the cluster)
+// so per-tile bespoke controls (view-toggle wraps, custom dropdowns) sit
+// in the center of the cluster, with the universal buttons on the right.
+// ======================================================================
+function tileChromeStrip(opts){
+  if(!opts||!opts.id)return '';
+  const parts=[];
+  if(opts.about)        parts.push(aboutBtn(opts.id));
+  if(opts.cols)         parts.push(tableColHidePanelHtml(opts.cols));
+  if(opts.resetZoom)    parts.push(resetZoomBtn(opts.resetZoom));
+  if(opts.csv)          parts.push(`<button class="export-btn" onclick="${opts.csv}" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>`);
+  if(opts.fullscreen)   parts.push(`<button class="export-btn" onclick="${opts.fullscreen}" title="Full screen" style="padding:3px 8px;font-size:13px">⛶</button>`);
+  if(opts.extra)        parts.push(opts.extra);
+  if(opts.resetView)    parts.push(resetViewBtn(opts.id));
+  if(opts.hide)         parts.push(hideTileBtn(opts.id));
+  return `<div class="tile-chrome" style="display:flex;gap:6px;align-items:center">${parts.join('')}</div>`;
+}
+
+// ======================================================================
 // 2026-05-01 — UNIFORM COLUMN HIDE/SHOW FRAMEWORK (Phase B refactor)
 // ======================================================================
 // Existing renderers (rWt, rCountryTable, rGroupTable, rChr, rAttribTable)

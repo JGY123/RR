@@ -2497,7 +2497,9 @@ function rWeekOverWeek(s){
   // Render rows
   const rowHtml=(h, mode)=>{
     const tk=h.tkr_region||h.t||'';
-    const nm=(h.n||'').slice(0,28);
+    const nmFull=(h.n||'');                                        // full name for hover
+    const nm=nmFull.length>28?nmFull.slice(0,27)+'…':nmFull;        // truncated for display
+    const titleAttr=`title="${nmFull.replace(/"/g,'&quot;')} · ${tk}${h.sec?' · '+h.sec:''}"`;  // disambiguator (e.g. Kongsberg Maritime vs Kongsberg Gruppen)
     const escT=(h.t||'').replace(/'/g,"\\'");
     if(mode==='resized'){
       const dwt=h._dwt;
@@ -2506,13 +2508,13 @@ function rWeekOverWeek(s){
       const maxDwt=Math.max(...resized.map(r=>Math.abs(r._dwt)),0.5);
       const scale=Math.abs(dwt)/maxDwt;
       const dir=dwt>0?'pos':'neg';
-      return `<div class="wow-row" onclick="oSt('${escT}')"><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt" style="color:${col}">${sign}${dwt.toFixed(2)}</div><div class="wow-hbar"><span class="${dir}" style="--scale:${scale.toFixed(2)}"></span></div></div>`;
+      return `<div class="wow-row" onclick="oSt('${escT}')" ${titleAttr}><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt" style="color:${col}">${sign}${dwt.toFixed(2)}</div><div class="wow-hbar"><span class="${dir}" style="--scale:${scale.toFixed(2)}"></span></div></div>`;
     }
     const wt=portKey(h);
     const tr=h.pct_t||h.tr||0;
     const trCol=tr>0?'var(--neg)':(tr<0?'var(--pos)':'var(--txt)');
     const trSign=tr>0?'+':'';
-    return `<div class="wow-row" onclick="oSt('${escT}')"><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt">${wt.toFixed(2)}%</div><div class="te" style="color:${trCol}">${trSign}${tr.toFixed(2)}</div></div>`;
+    return `<div class="wow-row" onclick="oSt('${escT}')" ${titleAttr}><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt">${wt.toFixed(2)}%</div><div class="te" style="color:${trCol}">${trSign}${tr.toFixed(2)}</div></div>`;
   };
   const addCol=`<div class="wow-col"><div class="wow-col-h">Added <span class="count">${added.length} new</span></div>${added.length?added.slice(0,7).map(h=>rowHtml(h,'added')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No new positions this week</div>'}${added.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${added.length-7} more...</div>`:''}</div>`;
   const dropCol=`<div class="wow-col"><div class="wow-col-h">Dropped <span class="count">${dropped.length} exited</span></div>${dropped.length?dropped.slice(0,7).map(h=>rowHtml(h,'dropped')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No exits this week</div>'}${dropped.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${dropped.length-7} more...</div>`:''}</div>`;

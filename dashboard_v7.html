@@ -11687,17 +11687,72 @@ function openFullScreen(type){
     scatter:'Each dot = one holding. Ideal: top-left (high risk, high return). Click any dot for detail.',
     country:'Color intensity = selected metric. Click any country for full analysis.'
   };
-  $('fsTitle').textContent=titles[type]||'';
+  // 2026-05-01 (Phase E.2): inject view-switcher tabs above the title for
+  // Country fullscreen so user can flip Map/Heat/Table without exiting.
+  // User feedback: "full-page views should be richer and more functional
+  // than the smaller tile versions." Tabs render inline.
+  let titleHtml = titles[type]||'';
+  if(type==='country'){
+    titleHtml = `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;width:100%">
+      <span>${titles.country}</span>
+      <div id="fsCtryViewTabs" class="toggle-wrap" style="margin:0">
+        <button class="toggle-btn active" data-fs-ctry-view="map"   onclick="setFsCountryView('map')">Map</button>
+        <button class="toggle-btn"        data-fs-ctry-view="heat"  onclick="setFsCountryView('heat')">Heat</button>
+        <button class="toggle-btn"        data-fs-ctry-view="table" onclick="setFsCountryView('table')">Table</button>
+      </div>
+    </div>`;
+  }
+  $('fsTitle').innerHTML=titleHtml;
   $('fsExplain').textContent=explains[type]||'';
   $('fsPanelContent').innerHTML='';
   $('fsPanelTitle').textContent='';
   window._fsType=type;
+  window._fsCtryView='map';   // default view for country FS
   modal.classList.add('show');
   setTimeout(function(){
     if(type==='facmap')renderFsFactorMap(s);
     else if(type==='scatter')renderFsScatter(s);
     else if(type==='country')renderFsCountry(s);
   },60);
+}
+
+// Phase E.2 \u2014 switch between Map / Heat / Table inside the Country fullscreen
+// modal without closing it. Reuses the existing renderers (no new render code).
+function setFsCountryView(view){
+  if(!cs)return;
+  window._fsCtryView=view;
+  // Update active button state
+  document.querySelectorAll('#fsCtryViewTabs .toggle-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.fsCtryView===view);
+  });
+  const div=$('fsChartDiv');
+  if(!div)return;
+  // Empty existing chart cleanly
+  try{ if(window.Plotly) Plotly.purge(div); }catch(e){}
+  div.innerHTML='';
+  if(view==='map'){
+    renderFsCountry(cs);
+    return;
+  }
+  if(view==='heat'){
+    // Heatmap of country \u00d7 factor TE contribution. Reuses rCountryChart
+    // which writes Plotly into a target div.
+    div.innerHTML='<div id="fsCtryHeatTarget" style="height:100%;min-height:600px"></div>';
+    setTimeout(()=>{
+      try{ if(typeof rCountryChart==='function') rCountryChart(cs,'fsCtryHeatTarget'); }
+      catch(e){ console.error('FS country heat render failed', e); }
+    },40);
+    return;
+  }
+  if(view==='table'){
+    // Render the country table at full width with current filters / column-hide state
+    div.innerHTML=`<div style="overflow:auto;height:100%;padding:0 4px"><div id="fsCtryTableTarget">${rCountryTable(_wCtry(),cs.hold)}</div></div>`;
+    setTimeout(()=>{
+      if(typeof applySectColVis==='function')applySectColVis();
+      if(typeof _applyTableColHideCss==='function')_applyTableColHideCss();
+    },40);
+    return;
+  }
 }
 
 function closeFsModal(){

@@ -5902,7 +5902,10 @@ function rFacRisk(s){
   const kpi=document.getElementById('facRiskKpi');
   const div=document.getElementById('facRiskDiv');
   if(!div)return;
-  const facs=(s.factors||[]).filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
+  // 2026-05-01 (Phase H): per-week factor data via _wFactors() (snap_attrib
+  // → cs.factors shape). Auto-falls-back to s.factors when no week selected.
+  const sourceFactors = (typeof _wFactors==='function' ? _wFactors() : (s.factors||[]));
+  const facs=sourceFactors.filter(f=>f&&f.n&&f.a!=null&&isFinite(f.a)&&isFinite(f.c));
   if(!facs.length){div.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No factor data</p>';return;}
   // KPI strip — six factor-specific stats (Beta + Active Share were
   // user-flagged as irrelevant to a FACTOR snapshot tile and replaced
@@ -7212,6 +7215,9 @@ function rRisk(){
   // via getSelectedWeekSum() → getPctSpecificForWeek() (Σ|sector mcr|).
   let ws=getSelectedWeekSum();
   let totalTE=ws.te;
+  // 2026-05-01 (Phase H): factor table on Risk tab also flows per-week via
+  // _wFactors(). cardFacContribBars reads from this as well.
+  const _facsForWeek=(typeof _wFactors==='function')?_wFactors():(s.factors||[]);
   // 2026-04-30 (cross-tab integrity fix — was B99 backlog item):
   // Risk-tab Idio/Factor split MUST come from cs.sum.pct_specific /
   // cs.sum.pct_factor (the same source the Exposures tab + cardThisWeek read).
@@ -7243,15 +7249,15 @@ function rRisk(){
   const _pctSynth = ws._pct_specific_source && ws._pct_specific_source !== 'native';
 
   // Factor MCR data (sorted by |c| desc, no idiosyncratic)
-  let facMCR=s.factors.map(f=>{
+  let facMCR=_facsForWeek.map(f=>{
     let contrib=Math.abs(f.c||0);
     let mcrTE=+(totalTE*contrib/100).toFixed(3);
     let devPct=f.dev!=null&&totalTE>0?+(f.dev/totalTE*100).toFixed(1):null;
     return{n:f.n,e:f.a,c:f.c,mcrTE,ret:f.ret,imp:f.imp,dev:f.dev,devPct};
   }).sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
 
-  // Factor checkbox toggles for exposure history
-  let allFacs=[...s.factors].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
+  // Factor checkbox toggles for exposure history (factor list itself doesn't change per-week)
+  let allFacs=[..._facsForWeek].sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0));
   let facColors=['#6366f1','#10b981','#a78bfa','#ef4444','#8b5cf6','#38bdf8','#ec4899','#f97316','#22c55e','#a78bfa'];
   let facToggleHtml=allFacs.map((f,i)=>{
     let isPrimary=FAC_PRIMARY.has(f.n);

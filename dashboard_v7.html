@@ -116,13 +116,14 @@ td.r{font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-varian
 .pag button{padding:4px 12px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:6px;cursor:pointer;font-family:inherit;font-size:11px}
 .pag button:hover{border-color:var(--pri);color:var(--txth)}
 .pag button:disabled{opacity:.3;cursor:default}
-.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center}
+/* 2026-05-01 polish: drill modal chrome upgrade — dramatic shadow + backdrop blur */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.show{display:flex}
-.modal{background:var(--card);border:1px solid var(--grid);border-radius:16px;width:90vw;max-width:900px;max-height:85vh;overflow-y:auto;padding:24px}
+.modal{background:var(--card);border:1px solid var(--cardBorder);border-radius:14px;width:90vw;max-width:920px;max-height:88vh;overflow-y:auto;padding:28px;box-shadow:0 30px 80px -20px rgba(0,0,0,0.7),0 0 0 1px rgba(255,255,255,0.04) inset}
 .modal-lg{max-width:1100px}
-.modal h2{font-size:16px;font-weight:700;color:var(--txth);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
-.modal .close{background:none;border:none;color:var(--txt);font-size:20px;cursor:pointer;padding:4px 8px}
-.modal .close:hover{color:var(--txth)}
+.modal h2{font-size:17px;font-weight:700;color:var(--textBright);margin-bottom:18px;display:flex;justify-content:space-between;align-items:center;letter-spacing:-0.2px;padding-bottom:14px;border-bottom:1px solid var(--cardBorder)}
+.modal .close{background:none;border:none;color:var(--textDim);font-size:22px;cursor:pointer;padding:4px 10px;border-radius:6px;line-height:1;transition:all .15s ease}
+.modal .close:hover{color:var(--textBright);background:rgba(255,255,255,0.04)}
 .trend{display:inline-block;font-size:10px;margin-left:4px}
 .trend.up{color:var(--pos)}.trend.down{color:var(--neg)}.trend.flat{color:var(--txt)}
 .btn{padding:8px 16px;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .2s}
@@ -390,17 +391,19 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
 .valid-strat .vs-row{display:flex;justify-content:space-between;color:var(--txt);font-size:10px;margin-top:2px}
 .valid-issue{color:var(--warn);font-size:11px;margin-top:4px;padding-left:12px}
 
-/* CSV parse overlay shimmer text */
-.parse-shimmer{display:flex;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--txt);flex-direction:column}
+/* CSV parse overlay shimmer text — 2026-05-01 polish: more elegant centered loader */
+.parse-shimmer{display:flex;align-items:center;justify-content:center;height:240px;gap:14px;color:var(--txt);flex-direction:column;font-size:13px;letter-spacing:0.2px}
+.parse-shimmer .skeleton{box-shadow:0 0 24px rgba(99,102,241,0.35)}
 
 /* Week selector */
 #weekSelWrap select option{background:var(--card);color:var(--txth)}
-.week-hist-banner{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:8px;padding:6px 14px;font-size:11px;color:var(--warn);display:flex;align-items:center;gap:8px;margin-bottom:12px}
-/* Range buttons for time series charts */
-.range-btns{display:flex;gap:4px;margin-bottom:8px}
-.range-btn{padding:3px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txt);border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;transition:all .15s}
-.range-btn.active{background:var(--pri);color:#fff;border-color:var(--pri)}
-.range-btn:hover:not(.active){border-color:var(--pri);color:var(--txth)}
+/* 2026-05-01 polish: cleaner historical-week banner with subtle gradient */
+.week-hist-banner{background:linear-gradient(180deg,rgba(245,158,11,.10),rgba(245,158,11,.05));border:1px solid rgba(245,158,11,.22);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--warn);display:flex;align-items:center;gap:10px;margin-bottom:14px;font-weight:500}
+/* Range buttons for time series charts — 2026-05-01 polish: tighter pill group */
+.range-btns{display:inline-flex;gap:0;margin-bottom:8px;background:var(--bg);border:1px solid var(--cardBorder);border-radius:6px;padding:2px;overflow:hidden}
+.range-btn{padding:3px 10px;background:transparent;border:none;color:var(--textDim);border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:500;transition:all .15s;letter-spacing:0.3px}
+.range-btn.active{background:var(--pri);color:#fff;font-weight:600}
+.range-btn:hover:not(.active){background:rgba(99,102,241,0.10);color:var(--textBright)}
 
 /* Print styles */
 @media print{
@@ -518,11 +521,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
     <button onclick="jumpToLatest()" id="latestBtn" style="display:none;background:var(--pri);color:#fff;border:none;border-radius:4px;font-size:10px;font-weight:600;padding:2px 7px;cursor:pointer;font-family:inherit;margin-left:2px">Latest</button>
   </div>
   <!-- 2026-04-30 (W1, Strategic Recommendations): freshness pill in header.
-       Color-coded dot + days-ago text showing how stale the latest data is.
-       Click to open data-quality summary (planned full sidebar = S2). -->
-  <div id="freshnessWrap" title="Latest data refresh — click for details" onclick="openFreshnessDetail()" style="display:none;align-items:center;gap:5px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 8px;cursor:pointer">
-    <span id="freshnessDot" style="width:8px;height:8px;border-radius:50%;background:var(--pos)"></span>
-    <span id="freshnessText" style="font-size:10px;color:var(--textDim);font-weight:500">—</span>
+       2026-05-01 polish: subtle pulse on the dot + cleaner chrome. -->
+  <div id="freshnessWrap" title="Latest data refresh — click for details" onclick="openFreshnessDetail()" style="display:none;align-items:center;gap:7px;background:var(--surf);border:1px solid var(--cardBorder);border-radius:8px;padding:4px 10px;cursor:pointer;transition:all .15s ease">
+    <span id="freshnessDot" style="width:8px;height:8px;border-radius:50%;background:var(--pos);box-shadow:0 0 8px var(--pos)"></span>
+    <span id="freshnessText" style="font-size:10px;color:var(--textBright);font-weight:600;letter-spacing:0.3px">—</span>
   </div>
   <button class="btn btn-sec btn-sm" id="glossaryBtn" style="font-size:13px;display:none" onclick="openGlossary()" title="Metric Glossary">&#9432;</button>
   <button class="btn btn-sec btn-sm" id="configBtn" style="font-size:13px" onclick="toggleConfig()" title="Settings">&#9881;</button>

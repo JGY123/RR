@@ -3679,11 +3679,18 @@ function openSecTableFullscreen(){
   const t=_secFsTotals();
   const wtdLbl=_avgMode==='wtd'?'Wtd':'Avg';
   const stat=(label,val,sub,color)=>`<div style="background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;padding:6px 10px;min-width:108px"><div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px">${label}</div><div style="font-size:15px;color:${color||'var(--txth)'};font-weight:600;font-family:'JetBrains Mono',monospace">${val}</div>${sub?`<div style="font-size:10px;color:var(--textDim);margin-top:1px">${sub}</div>`:''}</div>`;
+  // 2026-05-01 (item #2A): expanded stat strip — 9 summary tiles covering
+  // weights / TE / counts. All flip with universe pill + week selector.
   const stats=t?(
     stat('Universe',`${aggLbl}`,`${t.totalCount} secs · Ranks ${wtdLbl}`)+
     stat('Σ TE',f2(t.totalTR,2)+'%',`Stock ${f2(t.totalMCR,2)}% · Fac ${f2(t.totalFactor,2)}%`,'var(--pri)')+
-    stat('Top Risk',t.topName?t.topName.slice(0,16):'—',t.topName?`+${f2(t.topV,2)}%`:'','var(--neg)')+
-    stat('Top Diversifier',t.divName&&t.divV<-0.01?t.divName.slice(0,16):'—',t.divName&&t.divV<-0.01?`${f2(t.divV,2)}%`:'','var(--pos)')
+    stat('Top Risk',t.topName?t.topName.slice(0,16):'—',t.topName?`+${f2(t.topV,2)}% TE`:'','var(--neg)')+
+    stat('Top Diversifier',t.divName&&t.divV<-0.01?t.divName.slice(0,16):'—',t.divName&&t.divV<-0.01?`${f2(t.divV,2)}% TE`:'','var(--pos)')+
+    stat('Largest OW',t.topOW?t.topOW.n.slice(0,16):'—',t.topOW?`${(t.topOW.a>=0?'+':'')+f2(t.topOW.a,1)}% active`:'','var(--neg)')+
+    stat('Largest UW',t.topUW?t.topUW.n.slice(0,16):'—',t.topUW?`${f2(t.topUW.a,1)}% active`:'','var(--pos)')+
+    stat('Biggest Port Wt',t.bigPort?t.bigPort.n.slice(0,16):'—',t.bigPort?`${f2(t.bigPort.p,1)}% port`:'','var(--txth)')+
+    stat('Biggest Bench Wt',t.bigBench?t.bigBench.n.slice(0,16):'—',t.bigBench?`${f2(t.bigBench.b,1)}% bench`:'','var(--txth)')+
+    stat('Active Tilt Spread','Σ |Active| '+f2(t.totAbsActive,1)+'%',`${t.posCount} OW · ${t.negCount} UW`,'var(--acc)')
   ):'';
   c.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--grid);background:linear-gradient(to right,rgba(99,102,241,0.04),transparent)">
@@ -3804,18 +3811,43 @@ function _secFsTotals(){
     if(b.tr>topV){topV=b.tr;topName=k;}
     if(b.tr<divV){divV=b.tr;divName=k;}
   });
-  return{totalTR,totalMCR,totalFactor:totalTR-totalMCR,totalP,totalCount,topName,topV,divName,divV};
+  // 2026-05-01 (Phase 2A — user request): more summary stats for the
+  // sector full-page stat-strip. Pull from per-week dim entries (_wSec)
+  // so they flip with the week selector.
+  const wsec=_wSec().filter(s=>s&&s.n&&!/cash/i.test(s.n));
+  let topOW=null,topUW=null;
+  let bigPort=null,bigBench=null;
+  let posCount=0,negCount=0;
+  let totAbsActive=0;
+  wsec.forEach(s=>{
+    const a=+s.a||0, p=+s.p||0, b=+s.b||0;
+    totAbsActive += Math.abs(a);
+    if(a>0)posCount++;
+    if(a<0)negCount++;
+    if(!topOW||a>(+topOW.a||0))topOW={n:s.n,a};
+    if(!topUW||a<(+topUW.a||0))topUW={n:s.n,a};
+    if(!bigPort||p>(+bigPort.p||0))bigPort={n:s.n,p};
+    if(!bigBench||b>(+bigBench.b||0))bigBench={n:s.n,b};
+  });
+  return{
+    totalTR,totalMCR,totalFactor:totalTR-totalMCR,totalP,totalCount,topName,topV,divName,divV,
+    topOW, topUW, bigPort, bigBench, posCount, negCount, totAbsActive,
+  };
 }
 function _renderSecFsContent(){
   const t=_secFsTotals();
   const aggLbl=_aggMode==='portfolio'?'Portfolio':_aggMode==='benchmark'?'Benchmark':'Both';
   const wtdLbl=_avgMode==='wtd'?'Wtd':'Avg';
   const stat=(label,val,sub,color)=>`<div style="background:rgba(99,102,241,0.04);border:1px solid var(--grid);border-radius:6px;padding:8px 12px;min-width:120px"><div style="font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:3px">${label}</div><div style="font-size:18px;color:${color||'var(--txth)'};font-weight:600;font-family:'JetBrains Mono',monospace">${val}</div>${sub?`<div style="font-size:10px;color:var(--textDim);margin-top:2px">${sub}</div>`:''}</div>`;
+  // 2026-05-01 (item #2A): chart-FS gets the same expanded stat strip.
   const stats=t?(
     stat('Universe',`${aggLbl}`,`${t.totalCount} securities · Ranks ${wtdLbl}`)+
     stat('Σ TE Contrib',f2(t.totalTR,2)+'%',`Stock ${f2(t.totalMCR,2)}% · Factor ${f2(t.totalFactor,2)}%`,'var(--pri)')+
-    stat('Top Risk Driver',t.topName?t.topName.slice(0,18):'—',t.topName?`+${f2(t.topV,2)}% TE`:'','var(--neg)')+
+    stat('Top Risk',t.topName?t.topName.slice(0,18):'—',t.topName?`+${f2(t.topV,2)}% TE`:'','var(--neg)')+
     stat('Top Diversifier',t.divName&&t.divV<-0.01?t.divName.slice(0,18):'—',t.divName&&t.divV<-0.01?`${f2(t.divV,2)}% TE`:'','var(--pos)')+
+    stat('Largest OW',t.topOW?t.topOW.n.slice(0,18):'—',t.topOW?`${(t.topOW.a>=0?'+':'')+f2(t.topOW.a,1)}% active`:'','var(--neg)')+
+    stat('Largest UW',t.topUW?t.topUW.n.slice(0,18):'—',t.topUW?`${f2(t.topUW.a,1)}% active`:'','var(--pos)')+
+    stat('Σ |Active|',f2(t.totAbsActive,1)+'%',`${t.posCount} OW · ${t.negCount} UW`,'var(--acc)')+
     stat('Σ Port Wt',f2(t.totalP,1)+'%','of ' + (t.totalCount?'allocated':''))
   ):'';
   return`

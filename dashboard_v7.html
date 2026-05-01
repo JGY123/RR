@@ -3722,6 +3722,16 @@ function secColDropHtml(){
 // hold param: optional array of holdings (used for sector TE contribution computation)
 function rWt(data,type,hold){
   if(!data||!data.length)return`<p style="color:var(--txt);font-size:12px">No ${type==='sec'?'sector':type==='reg'?'region':'group'} data</p>`;
+  // 2026-05-01 (week-flow fix): in historical-week mode the `hold` arg is
+  // still latest-only (cs.hold). Aggregating TE/MCR/ORVQ from latest holdings
+  // would mix latest risk numbers with per-week port weights — exactly the
+  // "weights change but risk stays" symptom user reported. We:
+  //   1. force aggHold=null below so factorAgg / secTEMap etc. stay empty
+  //   2. show TE columns anyway (driven by per-week d.tr / d.mcr from getDimForWeek)
+  //   3. show ORVQ ranks from d.over / d.rev / d.val / d.qual directly
+  //   4. blank the factor-contribution columns (per-holding factor_contr is latest-only)
+  const isHistMode = (typeof _selectedWeek!=='undefined' && _selectedWeek);
+  const aggHold = isHistMode ? null : hold;  // skip holdings aggregation in hist mode
   // For sectors: compute TE + MCR split + O·R·V·Q weighted/simple rank averages per sector
   let secTEMap={},secMCRMap={};
   // Simple: _S=sum, _C=count. Weighted: _W=rank×weight sum, _PW=weight sum.
@@ -3729,8 +3739,8 @@ function rWt(data,type,hold){
   let secRS={},secRC={},secRW={},secRPW={},secRBW={},secRBPW={};
   let secVS={},secVC={},secVW={},secVPW={},secVBW={},secVBPW={};
   let secQS={},secQC={},secQW={},secQPW={},secQBW={},secQBPW={};
-  if(type==='sec'&&hold){
-    hold.forEach(h=>{
+  if(type==='sec'&&aggHold){
+    aggHold.forEach(h=>{
       if(!h.sec)return;
       secTEMap[h.sec]=(secTEMap[h.sec]||0)+(h.tr||0);
       secMCRMap[h.sec]=(secMCRMap[h.sec]||0)+(h.mcr||0);
@@ -3747,8 +3757,8 @@ function rWt(data,type,hold){
   let regRS={},regRC={},regRW={},regRPW={},regRBW={},regRBPW={};
   let regVS={},regVC={},regVW={},regVPW={},regVBW={},regVBPW={};
   let regQS={},regQC={},regQW={},regQPW={},regQBW={},regQBPW={};
-  if(type==='reg'&&hold){
-    hold.forEach(h=>{
+  if(type==='reg'&&aggHold){
+    aggHold.forEach(h=>{
       if(isCash(h)||!h.co)return;
       // 2026-04-30 (data-integrity F1): prefer parser-shipped h.reg over CMAP fallback.
       let reg=h.reg||CMAP[h.co]||'Other';
@@ -3760,14 +3770,14 @@ function rWt(data,type,hold){
       if(h.qual!=null){regQS[reg]=(regQS[reg]||0)+h.qual;regQC[reg]=(regQC[reg]||0)+1;regQW[reg]=(regQW[reg]||0)+h.qual*w;regQPW[reg]=(regQPW[reg]||0)+w;regQBW[reg]=(regQBW[reg]||0)+h.qual*bw;regQBPW[reg]=(regQBPW[reg]||0)+bw;}
     });
   }
-  let hasRegRanks=type==='reg'&&hold&&Object.keys(regOC).length>0;
+  let hasRegRanks=type==='reg'&&aggHold&&Object.keys(regOC).length>0;
   // Factor-contribution aggregation — universe-aware via _aggMode. avgFields:
   // ['over','rev','val','qual'] enables simple-avg ORVQ via factorAgg.avg under _avgMode==='avg'.
   let factorAgg={};
-  if(hold&&(type==='sec'||type==='reg')){
+  if(aggHold&&(type==='sec'||type==='reg')){
     // 2026-04-30 (data-integrity F1): prefer h.reg over CMAP fallback.
     const groupFn=type==='sec'?(h=>h.sec):(h=>(h.reg||(h.co?CMAP[h.co]||'Other':null)));
-    factorAgg=aggregateHoldingsBy(hold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});
+    factorAgg=aggregateHoldingsBy(aggHold,groupFn,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});
   }
   // Sector / region TE fallback: if no holdings are shipped for a bucket
   // (v2 Security slim drops the long tail of bench-only names), the
@@ -3786,7 +3796,9 @@ function rWt(data,type,hold){
     let cls=activeStyle(d.a);
     let drillFn=type==='sec'?`oDr('sec','${d.n}')`:`oDr('reg','${d.n}')`;
     let threshCls=Math.abs(d.a)>5?'thresh-alert':Math.abs(d.a)>3?'thresh-warn':'';
-    const showTE=(type==='sec'||type==='reg')&&hold;
+    // showTE: drive from data presence — in hist mode aggHold is null but the
+    // per-week dim entry carries d.tr / d.mcr → still render the TE columns.
+    const showTE=(type==='sec'||type==='reg')&&(aggHold||(d.tr!=null||d.mcr!=null));
     let teTotal=showTE?aggTr(d.n):null;
     let teMCR=showTE?aggMcr(d.n):null;
     let teFactor=showTE?+(teTotal-teMCR).toFixed(1):null;
@@ -3810,6 +3822,12 @@ function rWt(data,type,hold){
     let facContribCells='';
     if(type==='sec'||type==='reg'){
       facContribCells=RNK_FACTOR_COLS.map((f,i)=>{
+        // 2026-05-01 (week-flow): per-holding factor_contr is latest-only
+        // (cs.hold doesn't carry per-week factor breakdown). Render — in
+        // hist mode with a tooltip explaining why.
+        if(isHistMode){
+          return`<td class="r" data-col="f_${i}" data-sv="" style="font-size:11px;color:var(--textDim);background:rgba(168,85,247,0.04)" title="Per-holding factor breakdown only available for the latest week">—</td>`;
+        }
         const v=factorAgg[d.n]?.factor?.[f]??0;
         const cls=v>0.01?'neg':v<-0.01?'pos':'';
         const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
@@ -3823,22 +3841,41 @@ function rWt(data,type,hold){
         let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td class="r" data-col="${col}" data-sv="${avg!=null?+avg.toFixed(2):''}" style="font-size:11px;font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
-      const fa=factorAgg[d.n];
-      rvqCells=rankCell(pickRankAvg(fa?.avg?.over,{S:secOS[d.n]||0,C:secOC[d.n]||0,W:secOW[d.n]||0,PW:secOPW[d.n]||0,BW:secOBW[d.n]||0,BPW:secOBPW[d.n]||0}),'o')
-              +rankCell(pickRankAvg(fa?.avg?.rev, {S:secRS[d.n]||0,C:secRC[d.n]||0,W:secRW[d.n]||0,PW:secRPW[d.n]||0,BW:secRBW[d.n]||0,BPW:secRBPW[d.n]||0}),'r')
-              +rankCell(pickRankAvg(fa?.avg?.val, {S:secVS[d.n]||0,C:secVC[d.n]||0,W:secVW[d.n]||0,PW:secVPW[d.n]||0,BW:secVBW[d.n]||0,BPW:secVBPW[d.n]||0}),'v')
-              +rankCell(pickRankAvg(fa?.avg?.qual,{S:secQS[d.n]||0,C:secQC[d.n]||0,W:secQW[d.n]||0,PW:secQPW[d.n]||0,BW:secQBW[d.n]||0,BPW:secQBPW[d.n]||0}),'q');
+      // 2026-05-01 (week-flow): in hist mode use the per-week dim entry's
+      // section-level rank averages (parser ships d.over / d.rev / d.val /
+      // d.qual at sector aggregate per week). In latest mode use the
+      // holdings-aggregated factorAgg / secOS-secOPW pools.
+      if(isHistMode){
+        rvqCells=rankCell(d.over!=null?d.over:null,'o')
+                +rankCell(d.rev!=null?d.rev:null,'r')
+                +rankCell(d.val!=null?d.val:null,'v')
+                +rankCell(d.qual!=null?d.qual:null,'q');
+      } else {
+        const fa=factorAgg[d.n];
+        rvqCells=rankCell(pickRankAvg(fa?.avg?.over,{S:secOS[d.n]||0,C:secOC[d.n]||0,W:secOW[d.n]||0,PW:secOPW[d.n]||0,BW:secOBW[d.n]||0,BPW:secOBPW[d.n]||0}),'o')
+                +rankCell(pickRankAvg(fa?.avg?.rev, {S:secRS[d.n]||0,C:secRC[d.n]||0,W:secRW[d.n]||0,PW:secRPW[d.n]||0,BW:secRBW[d.n]||0,BPW:secRBPW[d.n]||0}),'r')
+                +rankCell(pickRankAvg(fa?.avg?.val, {S:secVS[d.n]||0,C:secVC[d.n]||0,W:secVW[d.n]||0,PW:secVPW[d.n]||0,BW:secVBW[d.n]||0,BPW:secVBPW[d.n]||0}),'v')
+                +rankCell(pickRankAvg(fa?.avg?.qual,{S:secQS[d.n]||0,C:secQC[d.n]||0,W:secQW[d.n]||0,PW:secQPW[d.n]||0,BW:secQBW[d.n]||0,BPW:secQBPW[d.n]||0}),'q');
+      }
     }
-    if(type==='reg'&&hasRegRanks){
+    if(type==='reg'&&(hasRegRanks||isHistMode)){
       const rankCellR=(avg)=>{
         let c=avg!=null?rc(Math.round(avg)):'#334155';
         return`<td data-sv="${avg!=null?+avg.toFixed(2):''}" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:600;color:${c}">${avg!=null?f2(avg,1):'—'}</td>`;
       };
-      const fa=factorAgg[d.n];
-      rvqCells=rankCellR(pickRankAvg(fa?.avg?.over,{S:regOS[d.n]||0,C:regOC[d.n]||0,W:regOW[d.n]||0,PW:regOPW[d.n]||0,BW:regOBW[d.n]||0,BPW:regOBPW[d.n]||0}))
-              +rankCellR(pickRankAvg(fa?.avg?.rev, {S:regRS[d.n]||0,C:regRC[d.n]||0,W:regRW[d.n]||0,PW:regRPW[d.n]||0,BW:regRBW[d.n]||0,BPW:regRBPW[d.n]||0}))
-              +rankCellR(pickRankAvg(fa?.avg?.val, {S:regVS[d.n]||0,C:regVC[d.n]||0,W:regVW[d.n]||0,PW:regVPW[d.n]||0,BW:regVBW[d.n]||0,BPW:regVBPW[d.n]||0}))
-              +rankCellR(pickRankAvg(fa?.avg?.qual,{S:regQS[d.n]||0,C:regQC[d.n]||0,W:regQW[d.n]||0,PW:regQPW[d.n]||0,BW:regQBW[d.n]||0,BPW:regQBPW[d.n]||0}));
+      if(isHistMode){
+        // 2026-05-01: per-week regional rank averages from dim entry
+        rvqCells=rankCellR(d.over!=null?d.over:null)
+                +rankCellR(d.rev!=null?d.rev:null)
+                +rankCellR(d.val!=null?d.val:null)
+                +rankCellR(d.qual!=null?d.qual:null);
+      } else {
+        const fa=factorAgg[d.n];
+        rvqCells=rankCellR(pickRankAvg(fa?.avg?.over,{S:regOS[d.n]||0,C:regOC[d.n]||0,W:regOW[d.n]||0,PW:regOPW[d.n]||0,BW:regOBW[d.n]||0,BPW:regOBPW[d.n]||0}))
+                +rankCellR(pickRankAvg(fa?.avg?.rev, {S:regRS[d.n]||0,C:regRC[d.n]||0,W:regRW[d.n]||0,PW:regRPW[d.n]||0,BW:regRBW[d.n]||0,BPW:regRBPW[d.n]||0}))
+                +rankCellR(pickRankAvg(fa?.avg?.val, {S:regVS[d.n]||0,C:regVC[d.n]||0,W:regVW[d.n]||0,PW:regVPW[d.n]||0,BW:regVBW[d.n]||0,BPW:regVBPW[d.n]||0}))
+                +rankCellR(pickRankAvg(fa?.avg?.qual,{S:regQS[d.n]||0,C:regQC[d.n]||0,W:regQW[d.n]||0,PW:regQPW[d.n]||0,BW:regQBW[d.n]||0,BPW:regQBPW[d.n]||0}));
+      }
     }
     // Trend sparkline cell (inline SVG of .a over last N periods)
     let sparkSeries=type==='sec'?(cs.hist&&cs.hist.sec&&cs.hist.sec[d.n]):(cs.hist&&cs.hist.reg&&cs.hist.reg[d.n]);
@@ -3850,8 +3887,10 @@ function rWt(data,type,hold){
     const _curTE=showTE?aggTr(d.n):null;
     const _teSeries=sparkSeries; // sparkSeries items have both `a` (active wt) and `tr` (%T) per period
     let sparkCell=`<td class="r" data-col="trend" style="width:72px;padding:4px 8px">${inlineSparkSvgV2(sparkSeries,_teSeries,sparkWin,_curTE)}</td>`;
-    const cnt=hold?(factorAgg[d.n]?.count ?? 0):null;
-    const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
+    // Count column uses original `hold` arg (need it whether hist or not for layout consistency).
+    // In hist mode show — since per-week count isn't tracked.
+    const cnt = isHistMode ? null : (hold ? (factorAgg[d.n]?.count ?? 0) : null);
+    const cntCell = hold ? `<td class="r" data-col="count" data-sv="${cnt??''}" style="font-size:11px;color:var(--textDim)" ${isHistMode?'title="Per-week holdings count not tracked at sector level"':''}>${cnt!=null?cnt:'—'}</td>` : '';
     return`<tr class="clickable ${threshCls}" onclick="${drillFn}">
       <td>${d.n}</td>
       ${cntCell}
@@ -4597,13 +4636,18 @@ function rChr(chars){
 
 function rCountryTable(countries,hold){
   if(!countries||!countries.length)return'<p style="color:var(--txt);font-size:12px">No country data</p>';
+  // 2026-05-01 (week-flow): hist mode = use per-week dim entry fields directly
+  // (countries[i] already has tr/mcr/over/rev/val/qual at section-aggregate level)
+  // and skip the latest-only holdings aggregation.
+  const isHistMode = (typeof _selectedWeek!=='undefined' && _selectedWeek);
+  const aggHold = isHistMode ? null : hold;
   // Compute ORVQ per country: simple / port-weighted / bench-weighted avgs
   let coOS={},coOC={},coOW={},coOPW={},coOBW={},coOBPW={};
   let coRS={},coRC={},coRW={},coRPW={},coRBW={},coRBPW={};
   let coVS={},coVC={},coVW={},coVPW={},coVBW={},coVBPW={};
   let coQS={},coQC={},coQW={},coQPW={},coQBW={},coQBPW={};
-  if(hold){
-    hold.forEach(h=>{
+  if(aggHold){
+    aggHold.forEach(h=>{
       if(!h.co||isCash(h))return;
       let w=h.p>0?h.p:0;
       let bw=h.b>0?h.b:0;
@@ -4615,7 +4659,7 @@ function rCountryTable(countries,hold){
   }
   // Factor-contribution aggregation — universe-aware via _aggMode. avgFields drive simple-avg ORVQ.
   let factorAgg={};
-  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
+  if(aggHold){factorAgg=aggregateHoldingsBy(aggHold,h=>h.co,RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
   // 2026-04-30 (BENCH_MODE_AUDIT finding): aggTr/aggMcr fallback to the
   // parser-shipped cs.countries[].tr / .mcr when the holding-aggregation
   // returns 0 — bench-only countries with thin slim coverage would otherwise
@@ -4636,8 +4680,8 @@ function rCountryTable(countries,hold){
     let c=avg!=null?rc(Math.round(avg)):'#334155';
     return`<td class="r" data-col="${col||''}" style="font-size:11px;font-weight:600;color:${c}" data-sv="${avg!=null?+avg.toFixed(2):''}">${avg!=null?f2(avg,1):'—'}</td>`;
   };
-  let hasRanks=hold&&Object.keys(coOC).length>0;
-  let hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
+  let hasRanks=isHistMode||(aggHold&&Object.keys(coOC).length>0);
+  let hasTE=isHistMode||(aggHold&&aggHold.some(h=>h.tr!=null||h.mcr!=null));
   let sorted=[...countries].sort((a,b)=>Math.abs(b.a)-Math.abs(a.a));
   let maxTE=hasTE?Math.max(...sorted.map(c=>Math.abs(aggTr(c.n))),0.01):1;
   let rows=sorted.map(c=>{
@@ -4662,13 +4706,25 @@ function rCountryTable(countries,hold){
       `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
     const fa=factorAgg[c.n];
-    let rvq=hasRanks?(
-      rankCell(pickRankAvg(fa?.avg?.over,{S:coOS[c.n]||0,C:coOC[c.n]||0,W:coOW[c.n]||0,PW:coOPW[c.n]||0,BW:coOBW[c.n]||0,BPW:coOBPW[c.n]||0}),'o')+
-      rankCell(pickRankAvg(fa?.avg?.rev, {S:coRS[c.n]||0,C:coRC[c.n]||0,W:coRW[c.n]||0,PW:coRPW[c.n]||0,BW:coRBW[c.n]||0,BPW:coRBPW[c.n]||0}),'r')+
-      rankCell(pickRankAvg(fa?.avg?.val, {S:coVS[c.n]||0,C:coVC[c.n]||0,W:coVW[c.n]||0,PW:coVPW[c.n]||0,BW:coVBW[c.n]||0,BPW:coVBPW[c.n]||0}),'v')+
-      rankCell(pickRankAvg(fa?.avg?.qual,{S:coQS[c.n]||0,C:coQC[c.n]||0,W:coQW[c.n]||0,PW:coQPW[c.n]||0,BW:coQBW[c.n]||0,BPW:coQBPW[c.n]||0}),'q')
-    ):'';
+    let rvq;
+    if(isHistMode){
+      // 2026-05-01: per-week country rank averages from dim entry
+      rvq=rankCell(c.over!=null?c.over:null,'o')
+         +rankCell(c.rev!=null?c.rev:null,'r')
+         +rankCell(c.val!=null?c.val:null,'v')
+         +rankCell(c.qual!=null?c.qual:null,'q');
+    } else {
+      rvq=hasRanks?(
+        rankCell(pickRankAvg(fa?.avg?.over,{S:coOS[c.n]||0,C:coOC[c.n]||0,W:coOW[c.n]||0,PW:coOPW[c.n]||0,BW:coOBW[c.n]||0,BPW:coOBPW[c.n]||0}),'o')+
+        rankCell(pickRankAvg(fa?.avg?.rev, {S:coRS[c.n]||0,C:coRC[c.n]||0,W:coRW[c.n]||0,PW:coRPW[c.n]||0,BW:coRBW[c.n]||0,BPW:coRBPW[c.n]||0}),'r')+
+        rankCell(pickRankAvg(fa?.avg?.val, {S:coVS[c.n]||0,C:coVC[c.n]||0,W:coVW[c.n]||0,PW:coVPW[c.n]||0,BW:coVBW[c.n]||0,BPW:coVBPW[c.n]||0}),'v')+
+        rankCell(pickRankAvg(fa?.avg?.qual,{S:coQS[c.n]||0,C:coQC[c.n]||0,W:coQW[c.n]||0,PW:coQPW[c.n]||0,BW:coQBW[c.n]||0,BPW:coQBPW[c.n]||0}),'q')
+      ):'';
+    }
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
+      if(isHistMode){
+        return`<td class="r" data-col="f_${i}" style="font-size:11px;color:var(--textDim);background:rgba(168,85,247,0.04)" title="Per-holding factor breakdown only available for the latest week">—</td>`;
+      }
       const v=factorAgg[c.n]?.factor?.[f]??0;
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
       const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
@@ -4699,6 +4755,11 @@ function rCountryTable(countries,hold){
 
 function rGroupTable(groups,hold){
   if(!groups||!groups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
+  // 2026-05-01 (week-flow): hist mode → use per-week dim entry fields
+  // (groups[i] already has tr/mcr/over/rev/val/qual at section-aggregate level)
+  // and skip the latest-only holdings aggregation.
+  const isHistMode = (typeof _selectedWeek!=='undefined' && _selectedWeek);
+  const aggHold = isHistMode ? null : hold;
   let displayGroups=groups.filter(g=>g.n&&g.n!=='[Cash]');
   if(!displayGroups.length)return'<p style="color:var(--txt);font-size:12px">No group data</p>';
   // Compute weighted-avg ORVQ per group via GROUPS_DEF sector→subgroup mapping
@@ -4706,7 +4767,7 @@ function rGroupTable(groups,hold){
   let grpRS={},grpRC={},grpRW={},grpRPW={},grpRBW={},grpRBPW={};
   let grpVS={},grpVC={},grpVW={},grpVPW={},grpVBW={},grpVBPW={};
   let grpQS={},grpQC={},grpQW={},grpQPW={},grpQBW={},grpQBPW={};
-  if(hold){
+  if(aggHold){
     // 2026-04-30 (cardGroups audit F1, RED → GREEN): the prior pre-h.subg
     // implementation routed each holding through GROUPS_DEF's sector→
     // subgroup mapping, which assigns holdings to MULTIPLE buckets when a
@@ -4714,7 +4775,7 @@ function rGroupTable(groups,hold){
     // overstated up to 6.7× and summed to 157% of total. The parser ships
     // h.subg as a SINGLE exclusive bucket — use it. Same convention as the
     // drill modal at L9659 and the treemap at L5327.
-    hold.forEach(h=>{
+    aggHold.forEach(h=>{
       if(isCash(h))return;
       const sg=h.subg||h.sg;
       if(!sg)return;
@@ -4731,16 +4792,16 @@ function rGroupTable(groups,hold){
     if(avg==null)return`<td data-col="${col}" data-sv="" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);color:var(--txt)">—</td>`;
     return`<td data-col="${col}" style="text-align:center;font-size:11px;padding:4px 6px;background:rgba(99,102,241,0.04);font-weight:700;color:${rc(Math.round(avg))}" data-sv="${+avg.toFixed(2)}">${f2(avg,1)}</td>`;
   };
-  let hasRanks=hold&&Object.keys(grpOC).length>0;
+  let hasRanks=isHistMode||(aggHold&&Object.keys(grpOC).length>0);
   // 2026-04-30 (cardGroups audit F1): factor-contrib + TE aggregation now
   // uses h.subg (single exclusive bucket per parser), matching the ORVQ
   // path above. Also falls back to parser-shipped g.tr / g.mcr per-group
   // aggregate when holdings sum is zero — same pattern as cardSectors.
   let factorAgg={};
-  if(hold){factorAgg=aggregateHoldingsBy(hold,h=>(h.subg||h.sg||null),RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
+  if(aggHold){factorAgg=aggregateHoldingsBy(aggHold,h=>(h.subg||h.sg||null),RNK_FACTOR_COLS,{mode:_aggMode,avgFields:['over','rev','val','qual']});}
   const aggTr=(name)=>{const v=factorAgg[name]?.tr; if(v!=null&&Math.abs(v)>0.01)return v; const g=displayGroups.find(x=>x.n===name); return g?.tr??0;};
   const aggMcr=(name)=>{const v=factorAgg[name]?.mcr; if(v!=null&&Math.abs(v)>0.01)return v; const g=displayGroups.find(x=>x.n===name); return g?.mcr??0;};
-  const hasTE=hold&&hold.some(h=>h.tr!=null||h.mcr!=null);
+  const hasTE=isHistMode||(aggHold&&aggHold.some(h=>h.tr!=null||h.mcr!=null));
   const maxTE=hasTE?Math.max(...displayGroups.map(g=>Math.abs(aggTr(g.n))),0.01):1;
   let rows=displayGroups.map(g=>{
     let cls=activeStyle(g.a);
@@ -4765,20 +4826,32 @@ function rGroupTable(groups,hold){
       `<td class="r" data-col="factor_te" data-sv="${teFactor}" style="font-size:11px;color:var(--txt)">${f2(teFactor,1)}</td>`
     ):'';
     const fa=factorAgg[gn];
-    let rvq=hasRanks?(
-      rankCell(pickRankAvg(fa?.avg?.over,{S:grpOS[gn]||0,C:grpOC[gn]||0,W:grpOW[gn]||0,PW:grpOPW[gn]||0,BW:grpOBW[gn]||0,BPW:grpOBPW[gn]||0}),'o')+
-      rankCell(pickRankAvg(fa?.avg?.rev, {S:grpRS[gn]||0,C:grpRC[gn]||0,W:grpRW[gn]||0,PW:grpRPW[gn]||0,BW:grpRBW[gn]||0,BPW:grpRBPW[gn]||0}),'r')+
-      rankCell(pickRankAvg(fa?.avg?.val, {S:grpVS[gn]||0,C:grpVC[gn]||0,W:grpVW[gn]||0,PW:grpVPW[gn]||0,BW:grpVBW[gn]||0,BPW:grpVBPW[gn]||0}),'v')+
-      rankCell(pickRankAvg(fa?.avg?.qual,{S:grpQS[gn]||0,C:grpQC[gn]||0,W:grpQW[gn]||0,PW:grpQPW[gn]||0,BW:grpQBW[gn]||0,BPW:grpQBPW[gn]||0}),'q')
-    ):'';
+    let rvq;
+    if(isHistMode){
+      // 2026-05-01: per-week group rank averages from dim entry
+      rvq=rankCell(g.over!=null?g.over:null,'o')
+         +rankCell(g.rev!=null?g.rev:null,'r')
+         +rankCell(g.val!=null?g.val:null,'v')
+         +rankCell(g.qual!=null?g.qual:null,'q');
+    } else {
+      rvq=hasRanks?(
+        rankCell(pickRankAvg(fa?.avg?.over,{S:grpOS[gn]||0,C:grpOC[gn]||0,W:grpOW[gn]||0,PW:grpOPW[gn]||0,BW:grpOBW[gn]||0,BPW:grpOBPW[gn]||0}),'o')+
+        rankCell(pickRankAvg(fa?.avg?.rev, {S:grpRS[gn]||0,C:grpRC[gn]||0,W:grpRW[gn]||0,PW:grpRPW[gn]||0,BW:grpRBW[gn]||0,BPW:grpRBPW[gn]||0}),'r')+
+        rankCell(pickRankAvg(fa?.avg?.val, {S:grpVS[gn]||0,C:grpVC[gn]||0,W:grpVW[gn]||0,PW:grpVPW[gn]||0,BW:grpVBW[gn]||0,BPW:grpVBPW[gn]||0}),'v')+
+        rankCell(pickRankAvg(fa?.avg?.qual,{S:grpQS[gn]||0,C:grpQC[gn]||0,W:grpQW[gn]||0,PW:grpQPW[gn]||0,BW:grpQBW[gn]||0,BPW:grpQBPW[gn]||0}),'q')
+      ):'';
+    }
     let facContribCells=hold?RNK_FACTOR_COLS.map((f,i)=>{
+      if(isHistMode){
+        return`<td class="r" data-col="f_${i}" style="font-size:11px;color:var(--textDim);background:rgba(168,85,247,0.04)" title="Per-holding factor breakdown only available for the latest week">—</td>`;
+      }
       const v=factorAgg[gn]?.factor?.[f]??0;
       const cls=v>0.01?'neg':v<-0.01?'pos':'';
       const txt=v==null||!isFinite(v)?'—':Math.abs(v)<0.005?'<span style="color:var(--textDim)">0.00</span>':(v>0?'+':'')+v.toFixed(2);
       return`<td class="r ${cls}" data-col="f_${i}" data-sv="${v}" style="font-size:11px;background:rgba(168,85,247,0.04)">${txt}</td>`;
     }).join(''):'';
-    const cnt=hold?(factorAgg[gn]?.count ?? 0):null;
-    const cntCell=hold?`<td class="r" data-col="count" data-sv="${cnt}" style="font-size:11px;color:var(--textDim)">${cnt}</td>`:'';
+    const cnt = isHistMode ? null : (hold ? (factorAgg[gn]?.count ?? 0) : null);
+    const cntCell = hold ? `<td class="r" data-col="count" data-sv="${cnt??''}" style="font-size:11px;color:var(--textDim)" ${isHistMode?'title="Per-week count not tracked"':''}>${cnt!=null?cnt:'—'}</td>` : '';
     return`<tr class="clickable ${threshCls}" onclick="oDrGroup('${g.n}')"><td data-col="group"><span class="chip">${g.n}</span></td>${cntCell}<td class="r" data-col="port" data-sv="${g.p}">${f2(g.p)}</td><td class="r" data-col="bench" data-sv="${g.b}">${f2(g.b)}</td><td class="r ${cls}" data-col="active" data-sv="${g.a}">${fp(g.a)}</td>${teCells}${rvq}${facContribCells}</tr>`;
   }).join('');
   const grpShift=hold?1:0;

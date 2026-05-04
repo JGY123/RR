@@ -4214,7 +4214,7 @@ function _renderSecFsChart(){
   const xmax=Math.max(1,...xs.map(Math.abs))*1.30;
   const ymax=Math.max(1,...ys.map(Math.abs))*1.35;
   const trace={type:'scatter',mode:'markers+text',x:xs,y:ys,text:labels,textposition:'top center',textfont:{size:10,color:'#cbd5e1',family:'DM Sans'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(255,255,255,0.18)',width:0.5},opacity:0.88},customdata:customdata,hovertemplate:'<b>%{customdata[0]}</b><br>Port: %{customdata[1]:.1f}% · Bench: %{customdata[2]:.1f}% · Active: %{customdata[3]:+.1f}%<br>TE: %{customdata[4]:.2f}% · Stock: %{customdata[5]:.2f}%<br>Avg Rank: %{customdata[6]} · Holdings: %{customdata[7]}<extra></extra>',showlegend:false};
-  const layout={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},hoverlabel:HOVERLABEL_THEME,xaxis:{title:{text:'Active Weight (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',range:[-xmax,xmax]},yaxis:{title:{text:'TE Contribution (%)',font:{size:11,color:'#94a3b8'}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',range:[-ymax,ymax]},margin:{l:60,r:18,t:18,b:54},shapes:[{type:'rect',xref:'x',yref:'y',x0:0,x1:xmax,y0:0,y1:ymax,fillcolor:'rgba(239,68,68,0.025)',line:{width:0},layer:'below'},{type:'rect',xref:'x',yref:'y',x0:-xmax,x1:0,y0:-ymax,y1:0,fillcolor:'rgba(16,185,129,0.025)',line:{width:0},layer:'below'}]};
+  const layout={paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},hoverlabel:HOVERLABEL_THEME,xaxis:{title:{text:'Active Weight (%)',font:{size:11,color:THEME().tick}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',range:[-xmax,xmax]},yaxis:{title:{text:'TE Contribution (%)',font:{size:11,color:THEME().tick}},zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',range:[-ymax,ymax]},margin:{l:60,r:18,t:18,b:54},shapes:[{type:'rect',xref:'x',yref:'y',x0:0,x1:xmax,y0:0,y1:ymax,fillcolor:'rgba(239,68,68,0.025)',line:{width:0},layer:'below'},{type:'rect',xref:'x',yref:'y',x0:-xmax,x1:0,y0:-ymax,y1:0,fillcolor:'rgba(16,185,129,0.025)',line:{width:0},layer:'below'}]};
   Plotly.newPlot('secFsChartDiv',[trace],layout,{displayModeBar:false,responsive:true});
   div.on('plotly_click',function(e){const cd=e.points&&e.points[0]&&e.points[0].customdata;if(cd&&cd[0]){_secFsFocusOn(cd[0]);}});
 }
@@ -6012,11 +6012,11 @@ function rSecChart(s){
     font:{family:'DM Sans, system-ui',color:'#cbd5e1',size:11},
     hoverlabel:HOVERLABEL_THEME,
     height:380,
-    xaxis:{title:{text:`Active Weight (% port − % bench)  ·  ${aggLbl} universe`,font:{size:10,color:'#94a3b8'}},
+    xaxis:{title:{text:`Active Weight (% port − % bench)  ·  ${aggLbl} universe`,font:{size:10,color:THEME().tick}},
       zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,
       gridcolor:'rgba(148,163,184,0.07)',tickformat:'+.1f',
       range:[-xmax,xmax]},
-    yaxis:{title:{text:'TE Contribution (%)',font:{size:10,color:'#94a3b8'}},
+    yaxis:{title:{text:'TE Contribution (%)',font:{size:10,color:THEME().tick}},
       zeroline:true,zerolinecolor:'rgba(148,163,184,0.55)',zerolinewidth:1.2,
       gridcolor:'rgba(148,163,184,0.07)',tickformat:'.1f',
       range:[-ymax,ymax]},
@@ -9020,7 +9020,7 @@ function renderHoldTab(){
       </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
       <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
-        ${[['risk','By Risk'],['weight','By Weight'],['rank','By Rank'],['name','By Name']].map(([m,lbl])=>`<button onclick="setHoldSort('${m}')" style="padding:4px 12px;border-radius:16px;background:${_holdSortMode===m?'#6366f1':'#1e293b'};color:${_holdSortMode===m?'white':'#94a3b8'};font-size:11px;border:none;cursor:pointer;font-family:inherit">${lbl}</button>`).join('')}
+        ${[['risk','By Risk'],['weight','By Weight'],['rank','By Rank'],['name','By Name']].map(([m,lbl])=>`<button onclick="setHoldSort('${m}')" style="padding:4px 12px;border-radius:16px;background:${_holdSortMode===m?'var(--pri)':'var(--surf)'};color:${_holdSortMode===m?'#fff':'var(--textDim)'};font-size:var(--text-md);border:none;cursor:pointer;font-family:inherit">${lbl}</button>`).join('')}
         <span style="width:1px;height:16px;background:#334155;display:inline-block;margin:0 4px"></span>
         ${(()=>{let flagged=Object.keys(_holdFlags);return flagged.length?`<button onclick="toggleFlaggedFilter()" data-chip-key="flagged" style="padding:4px 12px;border-radius:16px;background:rgba(245,158,11,0.15);color:#f59e0b;font-size:11px;border:1px solid rgba(245,158,11,0.4);cursor:pointer;font-family:inherit">&#9873; Flagged (${flagged.length})</button>`:'';})()}
       </div>
@@ -9824,7 +9824,7 @@ function oDrF(name,range){
           hovertemplate:'%{x|%b %d %Y}<br>TE Contrib: %{y:.2f}%<extra></extra>',
           hoverlabel:HOVERLABEL_THEME, yaxis:'y2'},
         {x:dates,y:sigmaVals,type:'scatter',mode:'lines',name:'Factor σ (%)',
-          line:{color:'#94a3b8',width:1.5,dash:'dot'},
+          line:{color:THEME().tick,width:1.5,dash:'dot'},
           hovertemplate:'%{x|%b %d %Y}<br>Factor σ: %{y:.2f}%<extra></extra>',
           hoverlabel:HOVERLABEL_THEME, yaxis:'y2'}
       ];
@@ -11920,7 +11920,7 @@ function renderCharHistChart(metric,histKey){
   ];
   if(benchSeries&&benchSeries.some(v=>v!=null&&isFinite(v))){
     traces.push({x:dates,y:benchSeries,type:'scatter',mode:'lines',name:'Benchmark',
-      line:{color:'#94a3b8',width:1.4,dash:'dot'},
+      line:{color:THEME().tick,width:1.4,dash:'dot'},
       hovertemplate:'%{x|%b %d %Y}<br>Benchmark: '+yprefix+'%{y:'+tickfmt+'}'+ysuffix+'<extra></extra>',
       connectgaps:false});
   }

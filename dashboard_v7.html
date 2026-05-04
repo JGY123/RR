@@ -7755,13 +7755,14 @@ function rRisk(){
   <div class="card" id="cardTEStacked" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:6px;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-        <div class="card-title tip" data-tip="Weekly tracking error decomposed into stock-specific (purple, bottom) + factor (indigo, top) — stacked area summing to the total TE line. Drag range slider to zoom. Click chart for the TE drill modal." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Decomposition Over Time</div>
+        <div class="card-title tip" data-tip="Weekly tracking error decomposed into stock-specific (amber, bottom) + factor (cyan, top) — stacked area summing to the total TE line. Drag range slider to zoom. Click chart for the TE drill modal." oncontextmenu="showNotePopup(event,'cardTEStacked');return false" style="margin:0">Tracking Error — Decomposition Over Time</div>
         ${aboutBtn('cardTEStacked')}
-        <span style="font-size:10px;color:var(--textDim);font-weight:400">stock-specific (purple) + factor (indigo) = total TE · ${s.hist.sum.length} wk</span>
+        <span style="font-size:10px;color:var(--textDim);font-weight:400">stock-specific (amber) + factor (cyan) = total TE${s.hist.sum.length?' · '+s.hist.sum.length+' wk':''}</span>
       </div>
       ${tileChromeStrip({id:'cardTEStacked',resetZoom:'teStackedDiv',csv:'exportTEStackedCsv()',fullscreen:"openTileFullscreen('cardTEStacked')",resetView:true,hide:true})}
     </div>
     <div id="teStackedDiv" class="chart-h-md"></div>
+    <div id="teStackedFooterCap" style="font-size:10px;color:var(--textDim);padding:6px 4px 0;border-top:1px solid var(--grid);margin-top:4px"></div>
   </div>
 
   <!-- 2026-05-01 (R2-Q2 user override → B): cardBetaHist stays on Risk tab.
@@ -8034,37 +8035,74 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   let hist=s.hist.sum;
   let el=document.getElementById('teStackedDiv');
   if(!el)return;
-  if(!hist.length){el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:40px">No TE history</p>';return;}
+  // T2-F5 fix (audit 2026-05-04, cardTEStacked): empty-state copy now points
+  // at the B114 architectural gap (parser ships single-snapshot files, not
+  // cumulative history) instead of the misleading "No TE history" — surfaces
+  // the real cause so the PM sees "history not yet ingested" not "broken tile".
+  if(!hist.length){
+    el.innerHTML='<div class="empty-state" style="padding:32px 24px;text-align:center"><div style="font-weight:600;margin-bottom:6px">Per-week TE history not yet ingested</div><div style="font-size:11px;color:var(--textDim);max-width:460px;margin:0 auto;line-height:1.5">B114 — parser writes single-snapshot per-strategy files; cumulative weekly history merge is pending. Total TE / Active Share / Beta sum-cards above remain correct (latest-week values). When the multi-week pipeline ships, this chart will show Idio + Factor decomposition over time.</div></div>';
+    return;
+  }
   let te=s.sum.te||1;
   let idioFrac=te>0?idioRisk/te:0.5;
   let facFrac=1-idioFrac;
   let dates=hist.map(h=>isoDate(h.d));
   let teVals=hist.map(h=>h.te);
+  // T1-F2 + T1-F3 defensive fix (audit 2026-05-04): track per-week
+  // synth-broadcast (when h.pct_specific is null and we fall back to the
+  // latest-week split) and out-of-tolerance sums. Both surface in the legend
+  // + footer so the user sees the math the same way the L2 monitor sees it.
+  // Anti-fabrication discipline + LESSONS_LEARNED 9-14.
+  let synthCount=0, sumDriftCount=0, weeksWithBoth=0;
   // Normalize per data point so factor+idio sum exactly to te
   let idioVals=hist.map(h=>{
-    let raw_s=h.pct_specific!=null?h.pct_specific:idioFrac*100;
-    let raw_f=h.pct_factor!=null?h.pct_factor:facFrac*100;
+    let havePs=h.pct_specific!=null, havePf=h.pct_factor!=null;
+    let raw_s=havePs?h.pct_specific:idioFrac*100;
+    let raw_f=havePf?h.pct_factor:facFrac*100;
+    if(!havePs||!havePf)synthCount++;
+    if(havePs&&havePf){
+      weeksWithBoth++;
+      if(Math.abs(raw_s+raw_f-100)>5)sumDriftCount++;
+    }
     let tot=raw_s+raw_f||100;
     return +(h.te*(raw_s/tot)).toFixed(3);
   });
+  if(sumDriftCount>0){
+    // Defensive log per F18 / cardRiskByDim pattern — anomalies become work
+    // items, not noise. Console-warn surfaces in the integrity console.
+    console.warn(`[cardTEStacked] ${sumDriftCount}/${weeksWithBoth} weeks have |pct_specific+pct_factor − 100%| > 5pp. Σ shares deviate from invariant. See FACTSET_FEEDBACK candidate.`);
+  }
   let facVals=hist.map((h,i)=>+(h.te-idioVals[i]).toFixed(3));
   let C=_teStackColors();
+  // ᵉ-suffix in legend names when broadcast was used on any week — same
+  // pattern as the sum-card ᵉ at L7724/L7729 (cardThisWeek/cardRiskHistTrends).
+  let synthSfx=synthCount>0?' ᵉ':'';
   Plotly.newPlot('teStackedDiv',[
-    {x:dates,y:idioVals,name:'Idiosyncratic (Stock-Specific)',type:'scatter',mode:'lines',
+    {x:dates,y:idioVals,name:'Idiosyncratic (Stock-Specific)'+synthSfx,type:'scatter',mode:'lines',
       fill:'tozeroy',fillcolor:C.idioFill,line:{color:C.idioLine,width:1},
-      stackgroup:'te',hovertemplate:'Stock-Specific: %{y:.2f}%<extra></extra>'},
-    {x:dates,y:facVals,name:'Factor',type:'scatter',mode:'lines',
+      stackgroup:'te',hovertemplate:'Stock-Specific: %{y:.2f} pp TE<extra></extra>'},
+    {x:dates,y:facVals,name:'Factor'+synthSfx,type:'scatter',mode:'lines',
       fill:'tonexty',fillcolor:C.facFill,line:{color:C.facLine,width:1},
-      stackgroup:'te',hovertemplate:'Factor: %{y:.2f}%<extra></extra>'},
+      stackgroup:'te',hovertemplate:'Factor: %{y:.2f} pp TE<extra></extra>'},
     {x:dates,y:teVals,name:'Total TE',type:'scatter',mode:'lines',
       line:{color:THEME().tickH,width:2.5},fill:'none',
-      hovertemplate:'%{x|%b %d %Y} — TE: %{y:.2f}%<extra></extra>'}
+      hovertemplate:'%{x|%b %d %Y} — TE: %{y:.2f} pp<extra></extra>'}
   ],{...plotBg,
     xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:THEME().card,bordercolor:C.rsBorder,borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
-    yaxis:{...plotBg.yaxis,title:'TE %',zeroline:false},
+    yaxis:{...plotBg.yaxis,title:'TE (pp)',zeroline:false},
     legend:{orientation:'h',y:1.12,font:{size:11}},
     hovermode:'x unified'
   },{...plotCfg,scrollZoom:true});
+  // Footer caveat block — surfaces synth-broadcast count + sum-drift count.
+  // Defensive UI (LESSONS 12-13): show the math, don't quietly normalize.
+  let foot=document.getElementById('teStackedFooterCap');
+  if(foot){
+    let parts=[];
+    parts.push('Universe pill does not affect this tile (TE is portfolio-level, universe-invariant per B116).');
+    if(synthCount>0)parts.push(`<span style="color:var(--warn)">ᵉ</span> ${synthCount}/${hist.length} weeks: Idio/Factor split broadcast from latest-week share (per-week pct_specific missing for those weeks).`);
+    if(sumDriftCount>0)parts.push(`<span style="color:var(--warn)">⚠</span> ${sumDriftCount}/${weeksWithBoth} weeks: Σ pct_specific+pct_factor deviates from 100% by &gt;5pp (renormalized for display; see console).`);
+    foot.innerHTML=parts.join(' · ');
+  }
   if(el.on){el.on('plotly_click',function(){if(typeof oDrMetric==='function')oDrMetric('te');});}
 }
 

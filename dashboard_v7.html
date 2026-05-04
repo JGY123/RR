@@ -1486,19 +1486,27 @@ const fsTileBtn = tileId => `<button class="tile-btn" data-tile-fs-btn="${tileId
 // Usage:
 //   ${tileChromeStrip({
 //     id:'cardSectors',
-//     about: true,
-//     cols: 'tbl-sec',                              // table col-hide panel
-//     csv: "exportCSV('#secTable table','sectors')",  // string handler (eval-style for inline onclick)
-//     fullscreen: 'openSecFullscreen()',             // string handler
-//     resetView: true,
-//     hide: true,
-//     extra: '<custom HTML>',                        // anything else (toggle wraps, view buttons)
+//     about: true,                                    // ⓘ button
+//     cols: 'tbl-sec',                                // ⚙ Cols panel for that table
+//     resetZoom: 'secChartDiv',                       // ⤾ button on that chart div
+//     download: {                                     // ⬇ dropdown with PNG + CSV options
+//       png: '#cardSectors',
+//       csv: "exportCSV('#secTable table','sectors')",
+//     },
+//     view: {                                         // Table/Chart/etc toggle row
+//       active: 'table',
+//       options: [['table','Table'], ['chart','Chart']],
+//       onchange: 'toggleSecView',                    // function name; called with (mode, btnEl)
+//     },
+//     fullscreen: 'openSecFullscreen()',              // ⛶ string handler
+//     resetView: true,                                // ↺
+//     hide: true,                                     // ×
+//     extra: '<custom HTML>',                         // anything else (legacy controls etc.)
 //   })}
 //
-// All buttons optional — pass false / omit to skip.
-// `extra` is rendered BEFORE Reset View + Hide (right side of the cluster)
-// so per-tile bespoke controls (view-toggle wraps, custom dropdowns) sit
-// in the center of the cluster, with the universal buttons on the right.
+// All slots optional — pass false / omit to skip.
+// Render order (left → right):
+//   about · cols · resetZoom · download · view · csv · fullscreen · extra · resetView · hide
 // ======================================================================
 function tileChromeStrip(opts){
   if(!opts||!opts.id)return '';
@@ -1506,12 +1514,48 @@ function tileChromeStrip(opts){
   if(opts.about)        parts.push(aboutBtn(opts.id));
   if(opts.cols)         parts.push(tableColHidePanelHtml(opts.cols));
   if(opts.resetZoom)    parts.push(resetZoomBtn(opts.resetZoom));
+  if(opts.download)     parts.push(_tileDownloadDropdown(opts.id, opts.download));
+  if(opts.view)         parts.push(_tileViewToggle(opts.view));
   if(opts.csv)          parts.push(`<button class="tile-btn" onclick="${opts.csv}" title="Download CSV">CSV</button>`);
   if(opts.fullscreen)   parts.push(`<button class="tile-btn" onclick="${opts.fullscreen}" title="Full screen">⛶</button>`);
   if(opts.extra)        parts.push(opts.extra);
   if(opts.resetView)    parts.push(resetViewBtn(opts.id));
   if(opts.hide)         parts.push(hideTileBtn(opts.id));
-  return `<div class="tile-chrome" style="display:flex;gap:6px;align-items:center">${parts.join('')}</div>`;
+  return `<div class="tile-chrome">${parts.join('')}</div>`;
+}
+
+// Download dropdown — uniform PNG + CSV menu used across cardSectors,
+// cardCountry, cardGroups, cardChars, cardRegions etc. The user explicitly
+// said NO PNG buttons on RR (feedback_no_png_buttons.md). PNG is offered
+// only inside this dropdown — never as a standalone button.
+// dl: { png: '#tileSelector', csv: "exportCSV(...)" }
+function _tileDownloadDropdown(tileId, dl){
+  if(!dl)return '';
+  const items=[];
+  if(dl.csv){
+    const csvCall = (typeof dl.csv === 'string') ? dl.csv : '';
+    items.push(`<div onclick="${csvCall};this.closest('.dl-drop').classList.remove('open')">Download CSV</div>`);
+  }
+  if(dl.png){
+    const pngArg = JSON.stringify(dl.png);
+    items.push(`<div onclick="screenshotCard(${pngArg});this.closest('.dl-drop').classList.remove('open')">Download PNG</div>`);
+  }
+  if(!items.length)return '';
+  return `<div class="dl-wrap" onclick="event.stopPropagation()"><button class="tile-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')">⬇</button><div class="dl-drop">${items.join('')}</div></div>`;
+}
+
+// View-toggle row — uniform Table/Chart/Map/etc switcher used across
+// cardSectors, cardCountry, cardGroups, cardRegions, cardAttrib.
+// view: { active: 'table', options: [['table','Table'], ['chart','Chart']], onchange: 'toggleSecView' }
+function _tileViewToggle(view){
+  if(!view||!view.options||!view.options.length)return '';
+  const fn = view.onchange || 'noop';
+  const buttons = view.options.map(opt => {
+    const [val, label] = Array.isArray(opt) ? opt : [opt, opt];
+    const isActive = view.active === val;
+    return `<button class="toggle-btn${isActive?' active':''}" onclick="${fn}('${val}',this)">${label}</button>`;
+  }).join('');
+  return `<div class="toggle-wrap" style="margin:0">${buttons}</div>`;
 }
 
 // ======================================================================
@@ -2948,18 +2992,24 @@ function rExp(){
        risk-snapshot metric anchoring TE decomposition context. -->
 
   <!-- Row 2: Sector Weights (Region moved to bottom) -->
+  <!-- 2026-05-03 (Phase D migration canary): cardSectors chrome row migrated
+       to tileChromeStrip. The 9 inline-styled buttons + dropdowns + toggle
+       are now declarative. secColDropHtml legacy column-picker preserved
+       in the extra slot until its functionality migrates into the universal
+       Cols panel.  -->
   <div class="card" id="cardSectors" style="margin-bottom:16px">
     <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Sector Active Weights</div><span id="secFilterChip"></span></div>
-    <div style="display:flex;gap:6px;align-items:center">
-      ${aboutBtn('cardSectors')}
-      ${tableColHidePanelHtml('tbl-sec')}
-      ${secColDropHtml()}
-      <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardSectors');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#secTable table','sectors');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
-      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleSecView('table',this)">Table</button><button class="toggle-btn" onclick="toggleSecView('chart',this)">Chart</button></div>
-      <button class="export-btn" title="Full screen — opens different view based on current Table / Chart mode" onclick="openSecFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
-      ${resetViewBtn('cardSectors')}
-      ${hideTileBtn('cardSectors')}
-    </div></div>
+    ${tileChromeStrip({
+      id:'cardSectors',
+      about:true,
+      cols:'tbl-sec',
+      download:{ png:'#cardSectors', csv:"exportCSV('#secTable table','sectors')" },
+      view:{ active:'table', options:[['table','Table'],['chart','Chart']], onchange:'toggleSecView' },
+      fullscreen:'openSecFullscreen()',
+      resetView:true,
+      hide:true,
+      extra: secColDropHtml(),
+    })}</div>
     <div id="secTable" style="overflow-x:auto">${rWt(_wSec(),'sec',s.hold)}</div>
     <div id="secChart" style="display:none"><div id="secChartDiv" style="height:380px"></div><div id="secChartCaption" style="text-align:center;padding:6px 8px"></div></div>
   </div>

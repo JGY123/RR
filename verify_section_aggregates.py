@@ -31,6 +31,7 @@ OUTPUT:
 """
 
 import argparse
+import gc
 import json
 import os
 import sys
@@ -68,9 +69,21 @@ def compute_dim_sums(strategy_obj, dim_key):
     """For a single (strategy, dim), return list of (date, Σ tr) per week.
 
     Reads from cs.hist[dim] which is keyed by bucket name and ships an array of
-    per-week entries. Each entry has a `tr` field (alias for FactSet %T)."""
+    per-week entries. Each entry has a `tr` field (alias for FactSet %T).
+
+    2026-05-04 fallback: if hist[dim] is empty (e.g. when loaded from
+    index.json's summaries which have only the latest snapshot), fall back to
+    reading the latest-only top-level field (cs.sectors / cs.countries / etc.).
+    Returns a single-entry list [("LATEST", Σtr)]."""
     hist_dim = (strategy_obj.get("hist") or {}).get(dim_key) or {}
     if not hist_dim:
+        # Fallback: read latest snapshot from top-level array
+        latest_key = {"sec":"sectors","ctry":"countries","reg":"regions",
+                      "grp":"groups","ind":"industries"}.get(dim_key)
+        if latest_key and strategy_obj.get(latest_key):
+            tr_sum = sum((b.get("tr") or 0) for b in strategy_obj[latest_key])
+            d = strategy_obj.get("current_date") or "LATEST"
+            return [(d, tr_sum)]
         return []
     # All buckets share the same date series; iterate by index.
     first_bucket = next(iter(hist_dim.values()))
@@ -89,8 +102,14 @@ def compute_dim_sums(strategy_obj, dim_key):
 
 
 def compute_holding_sum(strategy_obj):
-    """Σ %T across all non-cash holdings (latest week only — that's what's in cs.hold)."""
-    hold = strategy_obj.get("hold") or []
+    """Σ %T across all non-cash holdings (latest week only — that's what's in cs.hold).
+
+    Returns None if cs.hold is absent (split-summary load mode skips holdings
+    to keep memory low). Caller renders "—" for that case so the row stays
+    visible but clearly distinguishes "no data" from "0%"."""
+    hold = strategy_obj.get("hold")
+    if not hold:
+        return None
     # Match isCash() in dashboard: ticker startswith CASH_ or sector contains 'cash'
     s = 0.0
     for h in hold:
@@ -105,6 +124,71 @@ def compute_holding_sum(strategy_obj):
     return s
 
 
+def _load_strategies(rr_dir, monolithic_path, force_monolithic=False, latest_only=False):
+    """Return an iterable of (sid, strategy_dict).
+
+    2026-05-04 (memory-pressure fix): the monolithic latest_data.json is
+    1.8 GB. Loading it synchronously caused a smoke-test runaway on the
+    16 GB Mac (two parallel runs → 3.4 GB stuck in swap, load avg 5+).
+
+    Three load paths, ordered by memory cost:
+
+    1. **--latest mode + index.json available** (TINY: ~500 KB peak).
+       index.json's `summaries` field carries per-strategy `sectors`,
+       `countries`, `regions`, `groups`, `industries` at the latest week.
+       Skip the heavy files entirely.
+
+    2. **Full mode + split files available** (peak ~1.5 GB per-strategy).
+       Iterate per-strategy heavy file, del + gc.collect() between, so
+       only one is in memory at a time.
+
+    3. **Fallback: monolithic** (peak ~5 GB).
+       Loads latest_data.json. Used only when split files are missing.
+    """
+    split_dir = os.path.join(rr_dir, "data", "strategies")
+    index_path = os.path.join(split_dir, "index.json")
+
+    # Mode 1: --latest + index.json — use the slim summaries
+    if latest_only and not force_monolithic and os.path.exists(index_path):
+        with open(index_path) as f:
+            idx = json.load(f)
+        sums = idx.get("summaries") or {}
+        # Yield (sid, summary_dict). Summary has the latest-week dim arrays
+        # but NOT hist.X — fine because we only read hist[-1] in latest mode
+        # which equals the summary's snapshot.
+        def gen_latest():
+            for sid in sorted(sums.keys()):
+                yield sid, sums[sid]
+        return gen_latest(), "split-summary"
+
+    # Mode 2: full mode + split files — load one heavy file at a time
+    if not force_monolithic and os.path.exists(index_path):
+        with open(index_path) as f:
+            idx = json.load(f)
+        sids = idx.get("strategies") or []
+        def gen_split():
+            for sid in sorted(sids):
+                p = os.path.join(split_dir, f"{sid}.json")
+                if not os.path.exists(p):
+                    continue
+                with open(p) as f:
+                    obj = json.load(f)
+                yield sid, obj
+                # Force release before next strategy loads
+                del obj
+                gc.collect()
+        return gen_split(), "split-heavy"
+
+    # Mode 3: fallback monolithic
+    if not os.path.exists(monolithic_path):
+        print(f"ERROR: neither {index_path} nor {monolithic_path} found.", file=sys.stderr)
+        sys.exit(2)
+    with open(monolithic_path) as f:
+        d = json.load(f)
+    strats = d[0] if isinstance(d, list) else d.get("strategies", d)
+    return iter(sorted(strats.items())), "monolithic"
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -117,29 +201,29 @@ def main():
     ap.add_argument("--json", action="store_true",
                     help="Machine-readable JSON output")
     ap.add_argument("--input", default="latest_data.json",
-                    help="Path to parsed JSON (default latest_data.json)")
+                    help="Path to monolithic JSON (used only as fallback if data/strategies/ missing)")
+    ap.add_argument("--monolithic", action="store_true",
+                    help="Force loading the monolithic JSON (ignore data/strategies/ split files)")
     args = ap.parse_args()
 
     rr_dir = os.path.dirname(os.path.abspath(__file__))
     in_path = os.path.join(rr_dir, args.input)
-    if not os.path.exists(in_path):
-        print(f"ERROR: {in_path} not found.", file=sys.stderr)
-        sys.exit(2)
-
-    with open(in_path) as f:
-        d = json.load(f)
-    strats = d[0] if isinstance(d, list) else d.get("strategies", d)
+    strat_iter, source = _load_strategies(
+        rr_dir, in_path,
+        force_monolithic=args.monolithic,
+        latest_only=args.latest,
+    )
 
     results = {
-        "version": "1.0",
+        "version": "1.1",
         "tolerance_pct": args.tolerance,
         "latest_only": args.latest,
+        "data_source": source,  # "split" or "monolithic" — telemetry for memory diagnostics
         "strategies": {},
     }
 
-    # Iterate strategies in stable order
-    for sid in sorted(strats.keys()):
-        s = strats[sid]
+    # Iterate strategies one at a time (memory-friendly when source="split")
+    for sid, s in strat_iter:
         per_dim = {}
         for dim_key, dim_label in DIMS:
             sums = compute_dim_sums(s, dim_key)
@@ -165,11 +249,14 @@ def main():
                 "n_buckets": len((s.get("hist") or {}).get(dim_key) or {}),
             }
         # Per-holding %T (latest week only — cs.hold is latest-only by design)
+        # Returns None if hold is missing (split-summary mode skips it).
+        holding_sum = compute_holding_sum(s)
         per_dim["Per-holding"] = {
             "total_weeks": 1,
-            "latest": compute_holding_sum(s),
+            "latest": holding_sum,  # may be None
             "n_buckets": len(s.get("hold") or []),
-            "note": "F18 — latest week only; cs.hold doesn't ship per-week",
+            "note": "F18 — latest week only; cs.hold doesn't ship per-week" if holding_sum is not None
+                    else "skipped — split-summary mode (holdings not loaded for memory)",
         }
         results["strategies"][sid] = per_dim
 
@@ -180,7 +267,7 @@ def main():
     # Pretty print
     print("=" * 86)
     print(f"RR Data Integrity Monitor — Section-Aggregate %TE Check")
-    print(f"Tolerance: ±{args.tolerance:.1f}%   |   Mode: {'latest week' if args.latest else 'all weeks'}")
+    print(f"Tolerance: ±{args.tolerance:.1f}%   |   Mode: {'latest week' if args.latest else 'all weeks'}   |   Source: {source}")
     print("=" * 86)
 
     grand_total = 0
@@ -197,16 +284,20 @@ def main():
                 continue
             if dim_label == "Per-holding":
                 latest = r["latest"]
-                sev = severity(latest, args.tolerance)
-                col = color_for(sev)
-                ic = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}[sev]
-                if sev == "RED":
-                    any_red = True
-                grand_total += 1
-                if sev == "GREEN":
-                    grand_within += 1
-                note = r.get("note", "")
-                print(f"  {ic} {col}{dim_label:<12}{END} latest = {latest:>6.1f} ({r['n_buckets']} holdings) {DIM}{note}{END}")
+                if latest is None:
+                    # Skipped — split-summary mode. Don't count toward score.
+                    print(f"  {DIM}—  Per-holding   skipped — {r.get('note','')}{END}")
+                else:
+                    sev = severity(latest, args.tolerance)
+                    col = color_for(sev)
+                    ic = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴"}[sev]
+                    if sev == "RED":
+                        any_red = True
+                    grand_total += 1
+                    if sev == "GREEN":
+                        grand_within += 1
+                    note = r.get("note", "")
+                    print(f"  {ic} {col}{dim_label:<12}{END} latest = {latest:>6.1f} ({r['n_buckets']} holdings) {DIM}{note}{END}")
             else:
                 tot = r["total_weeks"]
                 mn, mx, avg = r["min"], r["max"], r["avg"]

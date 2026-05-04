@@ -3383,6 +3383,8 @@ function rExp(){
         ${tileChromeStrip({id:'cardCashHist',about:true,download:{csv:'exportCashHistCsv()'},fullscreen:"openTileFullscreen('cardCashHist')",resetView:true,hide:true})}
       </div>
       <div id="cashHistDiv" style="height:160px"></div>
+      <!-- D2 footer (audit cardCashHist 2026-05-04): provenance + target-band caveat. -->
+      <div style="font-size:10px;color:var(--textDim);padding:6px 4px 0;border-top:1px solid var(--grid);margin-top:4px">Source: cs.hist.sum[].cash extracted from Sector Weights [Cash] row per period (parser FORMAT 4.2+). Target band 0–5% (faint green); above-target (>5%) and negative-cash zones in faint red. Negative cash is rare but possible from settlement timing.</div>
     </div>`;
   })()}`;
 
@@ -8036,9 +8038,9 @@ function rRisk(){
         ${aboutBtn('cardFacHist')}
         <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
           <span class="section-label" style="margin-right:2px">Metric</span>
-          <button class="pill" id="fac-hist-pill-exp" onclick="setFacHistMetric('exp')" style="font-size:10px;padding:2px 7px">Active Exp</button>
-          <button class="pill" id="fac-hist-pill-ret" onclick="setFacHistMetric('ret')" style="font-size:10px;padding:2px 7px">Factor Return</button>
-          <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px" title="Cumulative Factor Return — DERIVED: simple sum of per-week factor returns. True compounded cumulative requires FactSet full_period_imp (geometric link), shipped only for the 'Full' period. Simple sum can under-report by ~25% on high-volatility factors over long windows. See LESSONS_LEARNED Anti-Pattern 1.">Cum Return<span style="color:var(--warn);font-size:9px;margin-left:2px" aria-label="derived">ᵉ</span></button>
+          <button class="pill" id="fac-hist-pill-exp" onclick="setFacHistMetric('exp')">Active Exp</button>
+          <button class="pill" id="fac-hist-pill-ret" onclick="setFacHistMetric('ret')">Factor Return</button>
+          <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" title="Cumulative Factor Return — DERIVED: simple sum of per-week factor returns. True compounded cumulative requires FactSet full_period_imp (geometric link), shipped only for the 'Full' period. Simple sum can under-report by ~25% on high-volatility factors over long windows. See LESSONS_LEARNED Anti-Pattern 1.">Cum Return<span style="color:var(--warn);font-size:9px;margin-left:2px" aria-label="derived">ᵉ</span></button>
         </div>
       </div>
       ${tileChromeStrip({
@@ -8061,7 +8063,7 @@ function rRisk(){
        reset-zoom. -->
   <div class="card" id="cardCorr">
     <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (e−bm) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray." oncontextmenu="showNotePopup(event,'cardCorr');return false">Factor Correlation Matrix</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (exp − bench_exp) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray. Universe-invariant (no need to flip the Universe pill — see footer)." oncontextmenu="showNotePopup(event,'cardCorr');return false">Factor Correlation Matrix</div></div>
       ${tileChromeStrip({
         id:'cardCorr',
         about:true,
@@ -8071,7 +8073,7 @@ function rRisk(){
         resetView:true,
         hide:true,
         extra: `
-          <select id="corrPeriod" onchange="rUpdateCorr()" style="font-size:var(--text-md);padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-family:inherit">
+          <select id="corrPeriod" onchange="rUpdateCorr()" title="Period over which Pearson correlation is computed. Each option uses the latest N weeks: 13/26/52/156 ≈ 3M/6M/1Y/3Y. Min ~24 weekly observations recommended for stable correlation; 'All' uses every week available in hist." style="font-size:var(--text-md);padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-family:inherit">
             <option value="all" selected>All</option><option value="156">3Y</option><option value="52">1Y</option><option value="26">6M</option><option value="13">3M</option>
           </select>
           <select id="corrFreq" onchange="rUpdateCorr()" style="font-size:var(--text-md);padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-family:inherit">
@@ -8265,6 +8267,33 @@ function exportHoldRiskCsv(){
   const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hold_risk_'+(cs.id||'')+'.csv';a.click();
+}
+
+// cardTop10 CSV export (audit cardTop10 2026-05-04 T2.1). Emits the same
+// top-10 holdings the bar chart displays — sorted by port weight desc, cash
+// excluded. F18-clean: no Σ, just the per-row port/active/sector/country
+// for the top 10. Useful for share-with-colleague or paste-into-deck flows.
+function exportTop10Csv(){
+  if(!cs||!cs.hold)return;
+  const top10=[...cs.hold].filter(h=>!isCash(h)&&isFinite(h.p)).sort((a,b)=>b.p-a.p).slice(0,10);
+  if(!top10.length)return;
+  const rows=[['Rank','Ticker','Name','Sector','Country','Port %','Active %','TE Contrib %','MCR']];
+  top10.forEach((h,i)=>{
+    rows.push([
+      i+1,
+      tk(h)||h.t||'',
+      h.n||'',
+      h.sec||'',
+      h.co||h.country||'',
+      h.p!=null?h.p:'',
+      h.a!=null?h.a:'',
+      h.tr!=null?h.tr:'',
+      h.mcr!=null?h.mcr:''
+    ]);
+  });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='top10_holdings_'+(cs.id||'')+'.csv';a.click();
 }
 
 // cardCashHist CSV export (audit cardCashHist 2026-05-04 F1, supports the new
@@ -8633,12 +8662,18 @@ function rRiskFacBarsMode(){
 }
 
 // Factor group pill handler
+// D3 fix (audit cardRiskDecomp 2026-05-04): "Exchange Rate Sensitivity" was
+// missing from FAC_GROUPS so it fell into the catch-all "Other" bucket on the
+// risk-decomp tree. Added under secondary alongside its short-form alias
+// "FX Sensitivity" (which the rest of the codebase uses inconsistently).
+// Also added "Medium-Term Momentum" alongside "Momentum (Medium-Term)" since
+// FactSet has shipped both forms in different formats.
 const FAC_GROUPS={
   all:null,
   valGrowth:['Value','Growth','Dividend Yield','Earnings Variability','Earnings Yield'],
-  mktBehavior:['Momentum','Momentum (Medium-Term)','Market Sensitivity','Volatility'],
+  mktBehavior:['Momentum','Momentum (Medium-Term)','Medium-Term Momentum','Market Sensitivity','Volatility'],
   profitability:['Profitability'],
-  secondary:['Size','Leverage','Liquidity','FX Sensitivity','Mid Cap','Earnings Variability']
+  secondary:['Size','Leverage','Liquidity','FX Sensitivity','Exchange Rate Sensitivity','Mid Cap','Earnings Variability']
 };
 function setFacGroup(group,btn){
   document.querySelectorAll('.fgp').forEach(b=>b.classList.remove('active'));
@@ -8834,6 +8869,18 @@ function updateFacExpChart(){
     shapes:weekShapes,
     annotations:weekAnnos
   },plotCfg);
+  // T4 fix (audit cardFacHist 2026-05-04): plotly_click → factor drill.
+  // Was missing — clicks on lines did nothing despite cardFacContribBars and
+  // cardRiskFacTbl peers wiring this exact pattern. ~3 LOC.
+  if(el && el.on){
+    el.removeAllListeners&&el.removeAllListeners('plotly_click');
+    el.on('plotly_click',function(d){
+      const n=d&&d.points&&d.points[0]&&d.points[0].data&&d.points[0].data.name;
+      // Strip ᵉ suffix if present (snap_attrib fallback marker)
+      const cleanName=n?n.replace(/\s*ᵉ\s*$/,''):null;
+      if(cleanName && typeof oDrF==='function')oDrF(cleanName);
+    });
+  }
 }
 
 function setFacExpAll(){
@@ -9198,11 +9245,14 @@ function watchlistCardHtml(s){
   });
   Object.values(groups).forEach(arr=>arr.sort((x,y)=>Math.abs(y.a||0)-Math.abs(x.a||0)));
   let total=tickers.length;
-  // Empty state: show the tile with onboarding copy instead of hiding entirely
+  // Empty state: show the tile with onboarding copy instead of hiding entirely.
+  // T3-A + T3-C fixes (audit 2026-05-04, cardWatchlist): canonical .empty-state
+  // class (was inline style); copy drops self-referential "(Holdings tab)"
+  // since this tile IS on the Holdings tab now.
   if(!total){
     return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
       <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div></div>${tileChromeStrip({id:'cardWatchlist',about:true,hide:true})}</div>
-      <div style="font-size:11px;color:var(--txt);padding:8px 6px">No tickers watchlisted yet \u2014 click the \u2691 flag icon on any holding row (Holdings tab) to add it.</div>
+      <div class="empty-state">No tickers watchlisted yet<div class="empty-state-hint">Click the \u2691 flag icon on any holding row to add it. Cycles Watch / Reduce / Add.</div></div>
     </div>`;
   }
   let mkRow=(item,col)=>{
@@ -9223,11 +9273,20 @@ function watchlistCardHtml(s){
     let col=FLAG_COLORS[g.key],icon=FLAG_ICONS[g.key];
     let rows=arr.map(item=>mkRow(item,col)).join('');
     let tblId='tbl-watch-'+g.key;
-    return `<div style="margin-top:8px"><div style="font-size:10px;color:${col};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table id="${tblId}" style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr><th data-col="flag" style="width:22px"></th><th data-col="t" class="tip" data-tip="Ticker symbol" onclick="sortTbl('${tblId}',1)">Ticker</th><th data-col="n" class="tip" data-tip="Security name" onclick="sortTbl('${tblId}',2)">Name</th><th data-col="p" class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('${tblId}',3)">Port %</th><th data-col="a" class="r tip" data-tip="Active weight vs benchmark %" onclick="sortTbl('${tblId}',4)">Active %</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    // T3-B fix (audit 2026-05-04, cardWatchlist): use canonical .section-label
+    // class instead of inline uppercase + letter-spacing styles. Color stays
+    // overridden inline (per-flag color, not a token).
+    return `<div style="margin-top:8px"><div class="section-label" style="color:${col};margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table id="${tblId}" style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr><th data-col="flag" style="width:22px"></th><th data-col="t" class="tip" data-tip="Ticker symbol" onclick="sortTbl('${tblId}',1)">Ticker</th><th data-col="n" class="tip" data-tip="Security name" onclick="sortTbl('${tblId}',2)">Name</th><th data-col="p" class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('${tblId}',3)">Port %</th><th data-col="a" class="r tip" data-tip="Active weight vs benchmark %" onclick="sortTbl('${tblId}',4)">Active %</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }).join('');
   return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
     <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div></div>${tileChromeStrip({id:'cardWatchlist',about:true,csv:`exportWatchlistCsv('${s.id}')`,fullscreen:"openTileFullscreen('cardWatchlist')",resetView:true,hide:true})}</div>
     ${sections}
+    <!-- T1-A footer (audit 2026-05-04, cardWatchlist): explicit "no \u03a3 shown"
+         caveat. Per the F18 contamination map, this tile is F18-clean BY DESIGN
+         (no aggregate, no \u03a3, per-row only). Surface that so future contributors
+         don't add a \u03a3 without realizing F18 implications. Also clarifies that
+         per-row figures are always from the latest week (T2-B). -->
+    <div style="font-size:10px;color:var(--textDim);padding:6px 4px 0;border-top:1px solid var(--grid);margin-top:8px">Per-row Port % / Active % from the latest week (watchlist does not follow the global week selector). No \u03a3 %T shown \u2014 F18-clean by design.</div>
   </div>`;
 }
 
@@ -9556,7 +9615,7 @@ function renderHoldTab(){
       <div class="card" id="cardTop10" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
-          ${tileChromeStrip({id:'cardTop10',resetZoom:'holdConcDiv',fullscreen:"openTileFullscreen('cardTop10')",resetView:true,hide:true})}
+          ${tileChromeStrip({id:'cardTop10',resetZoom:'holdConcDiv',csv:'exportTop10Csv()',fullscreen:"openTileFullscreen('cardTop10')",resetView:true,hide:true})}
         </div>
         <div id="holdConcDiv" class="chart-h-md"></div>
       </div>

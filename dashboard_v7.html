@@ -2765,13 +2765,16 @@ function rWeekOverWeek(s){
   const hist=(s&&s.hist&&s.hist.sum)||[];
   const prevHold=s&&s.hold_prev||[];
   const currHold=(s&&s.hold)||[];
-  // Empty state — no prior week
+  // 2026-05-04 (cardWeekOverWeek audit F1+D1): empty branches now carry the
+  // full chrome strip (was: only aboutBtn) + use the canonical .empty-state
+  // class (was: bespoke .wow-empty).
   if(hist.length<2 && (!prevHold||!prevHold.length)){
     return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff: this week vs last week. KPI deltas + holdings moves + factor rotation. Renders only when prior week's data is available." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false">Week over Week</div>${aboutBtn('cardWeekOverWeek')}</div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff: this week vs last week. KPI deltas + holdings moves + factor rotation. Renders only when prior week's data is available." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false" style="margin:0">Week over Week</div></div>
+        ${tileChromeStrip({id:'cardWeekOverWeek',about:true,fullscreen:"openTileFullscreen('cardWeekOverWeek')",hide:true})}
       </div>
-      <div class="wow-empty">First observation — no prior week to compare against. Tile will populate once a second weekly snapshot is ingested.</div>
+      <div class="empty-state">First observation — no prior week to compare against.<div class="empty-state-hint">Tile will populate once a second weekly snapshot is ingested.</div></div>
     </div>`;
   }
   // 2026-05-01 (user request): support _selectedWeek — when user picks a
@@ -2786,9 +2789,10 @@ function rWeekOverWeek(s){
     if(idx<=0){
       return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:8px">
-          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff for the selected historical week vs its prior week." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false">Week over Week</div>${aboutBtn('cardWeekOverWeek')}</div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Week-over-week diff for the selected historical week vs its prior week." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false" style="margin:0">Week over Week</div></div>
+          ${tileChromeStrip({id:'cardWeekOverWeek',about:true,fullscreen:"openTileFullscreen('cardWeekOverWeek')",hide:true})}
         </div>
-        <div class="wow-empty" style="font-size:11px">Selected week is the first observation — no prior week to compare against.</div>
+        <div class="empty-state">Selected week is the first observation — no prior week to compare against.</div>
       </div>`;
     }
     last=hist[idx]; prev=hist[idx-1]; isHist=true;
@@ -2829,13 +2833,20 @@ function rWeekOverWeek(s){
   }).map(h=>{const p=prevByT.get(h.t);return{...h, _dwt:portKey(h)-portKey(p)};}).sort((a,b)=>Math.abs(b._dwt)-Math.abs(a._dwt));
   added.sort((a,b)=>portKey(b)-portKey(a));
   dropped.sort((a,b)=>portKey(b)-portKey(a));
-  // Render rows
+  // Render rows. 2026-05-04 (audit F3): dropped rows previously had clickable
+  // affordance that silently no-op'd because oSt(SEDOL) requires the ticker
+  // to be in cs.hold (LATEST). For dropped (= in hold_prev only), drop the
+  // onclick + cursor:pointer to remove the dead-click affordance.
   const rowHtml=(h, mode)=>{
     const tk=h.tkr_region||h.t||'';
     const nmFull=(h.n||'');                                        // full name for hover
     const nm=nmFull.length>28?nmFull.slice(0,27)+'…':nmFull;        // truncated for display
     const titleAttr=`title="${nmFull.replace(/"/g,'&quot;')} · ${tk}${h.sec?' · '+h.sec:''}"`;  // disambiguator (e.g. Kongsberg Maritime vs Kongsberg Gruppen)
     const escT=(h.t||'').replace(/'/g,"\\'");
+    // F3: dropped rows aren't drillable (SEDOL not in cs.hold)
+    const isClickable = mode!=='dropped';
+    const onclickAttr = isClickable ? `onclick="oSt('${escT}')"` : '';
+    const styleAttr = isClickable ? '' : 'style="cursor:default;opacity:.85"';
     if(mode==='resized'){
       const dwt=h._dwt;
       const sign=dwt>0?'+':'';
@@ -2843,13 +2854,13 @@ function rWeekOverWeek(s){
       const maxDwt=Math.max(...resized.map(r=>Math.abs(r._dwt)),0.5);
       const scale=Math.abs(dwt)/maxDwt;
       const dir=dwt>0?'pos':'neg';
-      return `<div class="wow-row" onclick="oSt('${escT}')" ${titleAttr}><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt" style="color:${col}">${sign}${dwt.toFixed(2)}</div><div class="wow-hbar"><span class="${dir}" style="--scale:${scale.toFixed(2)}"></span></div></div>`;
+      return `<div class="wow-row" ${onclickAttr} ${styleAttr} ${titleAttr}><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt" style="color:${col}">${sign}${dwt.toFixed(2)}</div><div class="wow-hbar"><span class="${dir}" style="--scale:${scale.toFixed(2)}"></span></div></div>`;
     }
     const wt=portKey(h);
     const tr=h.pct_t||h.tr||0;
     const trCol=tr>0?'var(--neg)':(tr<0?'var(--pos)':'var(--txt)');
     const trSign=tr>0?'+':'';
-    return `<div class="wow-row" onclick="oSt('${escT}')" ${titleAttr}><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt">${wt.toFixed(2)}%</div><div class="te" style="color:${trCol}">${trSign}${tr.toFixed(2)}</div></div>`;
+    return `<div class="wow-row" ${onclickAttr} ${styleAttr} ${titleAttr}><div><span class="tk">${tk}</span><span class="nm">${nm}</span></div><div class="wt">${wt.toFixed(2)}%</div><div class="te" style="color:${trCol}">${trSign}${tr.toFixed(2)}</div></div>`;
   };
   const addCol=`<div class="wow-col"><div class="wow-col-h">Added <span class="count">${added.length} new</span></div>${added.length?added.slice(0,7).map(h=>rowHtml(h,'added')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No new positions this week</div>'}${added.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${added.length-7} more...</div>`:''}</div>`;
   const dropCol=`<div class="wow-col"><div class="wow-col-h">Dropped <span class="count">${dropped.length} exited</span></div>${dropped.length?dropped.slice(0,7).map(h=>rowHtml(h,'dropped')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No exits this week</div>'}${dropped.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${dropped.length-7} more...</div>`:''}</div>`;

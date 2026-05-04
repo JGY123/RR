@@ -2865,22 +2865,34 @@ function rWeekOverWeek(s){
   const addCol=`<div class="wow-col"><div class="wow-col-h">Added <span class="count">${added.length} new</span></div>${added.length?added.slice(0,7).map(h=>rowHtml(h,'added')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No new positions this week</div>'}${added.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${added.length-7} more...</div>`:''}</div>`;
   const dropCol=`<div class="wow-col"><div class="wow-col-h">Dropped <span class="count">${dropped.length} exited</span></div>${dropped.length?dropped.slice(0,7).map(h=>rowHtml(h,'dropped')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No exits this week</div>'}${dropped.length>7?`<div class="wow-row" style="opacity:.5;font-size:10px;font-style:italic;padding:8px 0">${dropped.length-7} more...</div>`:''}</div>`;
   const resizeCol=`<div class="wow-col"><div class="wow-col-h">Resized <span class="count">top ${Math.min(5,resized.length)} |Δwt|</span></div>${resized.length?resized.slice(0,5).map(h=>rowHtml(h,'resized')).join(''):'<div style="font-size:10px;color:var(--textDim);padding:8px 0">No material weight changes (≥0.10%)</div>'}</div>`;
-  // Factor rotation footer — top 3 by |Δexp|. Only renders in latest mode
-  // (moveListsHtml hidden in hist mode); s.factors here is latest-only by design.
+  // Factor rotation footer — top 3 by |Δexp|. 2026-05-04 (audit F2): now
+  // _selectedWeek-aware. When user picks a historical week, find that week
+  // in each factor's snap_attrib hist and compare to its prior. Falls back
+  // to hist[-1] vs hist[-2] when no week selected (latest mode).
   const facRot=(()=>{
-    const facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a||f.e));   // lint-week-flow:ignore (latest-only block, see comment above)
+    const facs=(s.factors||[]).filter(f=>f&&f.n&&isFinite(f.a||f.e));   // lint-week-flow:ignore (factor LIST is invariant; per-factor data IS week-aware below)
     const sa=s.snap_attrib||{};
     const ranked=facs.map(f=>{
       const fhist=(sa[f.n]||{}).hist||[];
       if(fhist.length<2)return null;
-      const lastP=fhist[fhist.length-1]||{};
-      const prevP=fhist[fhist.length-2]||{};
+      // 2026-05-04 (F2): pick the right (selected, prior) pair from hist
+      let lastP, prevP;
+      if(_selectedWeek){
+        const idx=fhist.findIndex(e=>e&&e.d===_selectedWeek);
+        if(idx<=0)return null;        // selected week is first or missing in this factor's history
+        lastP=fhist[idx]||{}; prevP=fhist[idx-1]||{};
+      } else {
+        lastP=fhist[fhist.length-1]||{};
+        prevP=fhist[fhist.length-2]||{};
+      }
       const lastAct=(lastP.exp!=null&&lastP.bench_exp!=null)?(lastP.exp-lastP.bench_exp):f.a;
       const prevAct=(prevP.exp!=null&&prevP.bench_exp!=null)?(prevP.exp-prevP.bench_exp):null;
       if(lastAct==null||prevAct==null)return null;
       const dExp=+(lastAct-prevAct).toFixed(3);
-      // Build sparkline of last 12 weeks of active exposure
-      const tail=fhist.slice(-12).map(p=>(p.exp!=null&&p.bench_exp!=null)?(p.exp-p.bench_exp):null).filter(v=>v!=null);
+      // Build sparkline of last 12 weeks of active exposure ENDING at the selected week
+      const endIdx=_selectedWeek?fhist.findIndex(e=>e&&e.d===_selectedWeek):fhist.length-1;
+      const sliceEnd=endIdx>=0?endIdx+1:fhist.length;
+      const tail=fhist.slice(Math.max(0,sliceEnd-12),sliceEnd).map(p=>(p.exp!=null&&p.bench_exp!=null)?(p.exp-p.bench_exp):null).filter(v=>v!=null);
       return {n:f.n, dExp, tail};
     }).filter(x=>x).sort((a,b)=>Math.abs(b.dExp)-Math.abs(a.dExp));
     const top3=ranked.slice(0,3);
@@ -2894,13 +2906,12 @@ function rWeekOverWeek(s){
       return `<div class="wow-fac-cell"><div class="wow-fac-name" title="${f.n}">${facShort}</div><div class="wow-fac-arrow ${dir}">${arrow}</div><div class="wow-fac-num">${sign}${f.dExp.toFixed(2)}σ</div><div class="wow-fac-spark">${spark}</div></div>`;
     }).join('')}</div>`;
   })();
-  // 2026-05-01: in historical-week mode, the move-list (Added/Dropped/Resized)
-  // and factor rotation use cs.hold + cs.hold_prev which represent the LATEST
-  // two weeks only — they don't reflect the selected historical week's diff.
-  // Hide these sections in hist mode and show only the KPI deltas (which DO
-  // come from cs.hist.summary at the right week pair).
+  // 2026-05-04 (audit F2): factor rotation block IS hist-aware now (uses
+  // snap_attrib[name].hist filtered by _selectedWeek). Move list still
+  // requires per-week hold[] which only ships latest+prior, so the
+  // Added/Dropped/Resized columns only render in latest mode.
   const moveListsHtml = isHist
-    ? `<div class="wow-empty" style="font-size:11px;padding:18px 0">Holdings-level moves (Added/Dropped/Resized) and factor rotation only available for the latest week. KPI deltas above reflect the selected historical week vs its prior week.</div>`
+    ? `<div class="empty-state" style="padding:18px 0">Holdings-level moves (Added/Dropped/Resized) only available for the latest week. KPI deltas above + factor rotation below reflect the selected historical week vs its prior week.</div>${facRot}`
     : `<div class="wow-cols">${addCol}${dropCol}${resizeCol}</div>${facRot}`;
   // 2026-05-04 (Phase D migration): cardWeekOverWeek chrome → tileChromeStrip.
   return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">

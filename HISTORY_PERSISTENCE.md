@@ -139,3 +139,63 @@ This is a major architecture change. **Do NOT build during marathon.** Sequencin
 ## Where this doc lives
 
 `HISTORY_PERSISTENCE.md` at repo root. Linked from `BACKLOG.md` under future B114 entry. Reviewed and updated when B114 schedule comes up.
+
+---
+
+## 2026-05-04 update — what's changed since the original draft
+
+### State of play (post audit cycle)
+
+The original draft (April 2026) framed B114 as a single architectural project gated on multiple unknowns. After the May 2026 audit cycle and the cardTEStacked T1 RED finding, the picture is sharper:
+
+1. **`hist.summary` IS populated in current production data** — 383-618 weeks per strategy across all 6 (probed via `data/strategies/<ID>.json`). The split-file pipeline (`load_multi_account.sh` + `merge_em_history.py`) already produces multi-year per-strategy files. The "file replace = history wipe" risk in the original draft (Q23) is partially mitigated today by always loading from the split files, not the monolithic file.
+
+2. **Per-week `pct_specific` / `pct_factor` was the missing piece.** F19 (parser fix shipped 2026-05-04, FORMAT_VERSION 4.3) closes this — `_hist_entry()` now joins per-week riskm rows and includes pct_specific/pct_factor in `hist.summary[]`. Verified by 7 unit tests + manual probe (GSC latest week: Σ|sector mcr| = 69.9 = sum.pct_specific exactly).
+
+3. **F12(a) — the runtime fallback** — cardTEStacked now resolves per-week split via three tiers: source-direct (after F19) → MCR-derived (Σ|sector mcr| via L2-verified path) → broadcast (last-resort). The chart renders correctly today even on pre-F19 data because tier 2 uses sector MCR which IS populated in current files.
+
+4. **Cross-tile week-marker sweep** (2026-05-04): cardTEStacked, cardBetaHist, cardCashHist, cardFacHist all now show a vertical marker at `_selectedWeek` for week-flow consistency. (Was only on cardRiskHistTrends mini-charts before.)
+
+### Implications for B114 scope
+
+**What B114 still needs to do** (size estimate revised):
+
+| Item | Original estimate | 2026-05-04 status | Revised |
+|---|---|---|---|
+| Parser merge logic (`merge_into_cumulative(new, existing)`) | 2-3 hrs | **Still TODO**. F19 + split-file pipeline are independent of merge. | 2-3 hrs |
+| Cumulative file format + naming convention | 1-2 hrs | Per-strategy split-file convention already exists at `data/strategies/<ID>.json` — this IS the cumulative format. Merge logic just appends new weeks to each. | **0.5-1 hr** (just the merge entry-points + manifest stamp) |
+| Dashboard fetch path | 1-2 hrs | Already loads from `data/strategies/index.json` + per-strategy. No new fetch path needed. | **0 hrs** (no change) |
+| IndexedDB cache for in-session preview | 1-2 hrs | Optional — current architecture already supports preview via drag-drop JSON. Not blocking. | **deferred to post-B114** if at all |
+| Cumulative-save UI button | ~30 min | Optional — `load_data.sh` + commit pattern is the current promotion path. | **deferred** |
+| Test suite (`test_cumulative_merge.py`) | ~30 min | Net new. | 30-60 min |
+
+**Revised B114 size: 3-5 hrs** (down from 6-10 hrs). The split-file pipeline + F19 already did the heaviest lifts.
+
+### B114 next-steps inventory (when scheduled)
+
+1. Define the merge contract:
+   - Input A: existing `data/strategies/<ID>.json` (cumulative)
+   - Input B: new ingest output for `<ID>` (single CSV / multi-week CSV)
+   - Output: merged `<ID>.json` where every (week × field) is the union, with conflict policy (default: new-wins, configurable).
+2. Implement `merge_strategy_into_existing(new_strategy, existing_path) -> merged` in `factset_parser.py`:
+   - Merge `hist.summary[]` by date (deduplicate, new-wins on conflict)
+   - Merge `hist.fac[name][]`, `hist.sec[name][]`, `hist.ctry[name][]`, `hist.reg[name][]`, `hist.grp[name][]`, `hist.ind[name][]`, `hist.chars[metric][]` — same date-keyed dedupe per name.
+   - Replace top-level "current" arrays (`sum`, `sectors`, `countries`, etc.) with new-ingest values (current state always reflects latest CSV).
+   - Stamp `parser_version`, `format_version`, `merge_history[]` (audit trail of which CSVs contributed which date ranges).
+3. Wire into `load_multi_account.sh`: optional `--merge` flag that does the union instead of replace.
+4. Test suite:
+   - `test_merge_idempotent` — merging the same ingest twice produces identical output
+   - `test_merge_appends_new_weeks` — non-overlapping ingests union to full coverage
+   - `test_merge_conflict_new_wins` — overlapping date → newer ingest's value
+   - `test_merge_preserves_unrelated_strategies` — merging IDM doesn't touch ACWI
+5. Update CLAUDE.md + ARCHITECTURE.md with the merge workflow.
+6. First production run: parse the next FactSet CSV through the new merge path; this establishes the cumulative file as the authoritative state going forward.
+
+### Open questions for user (still pending from original draft)
+
+- **Q1 — merge-conflict policy.** Default "new-wins" recommended (user just downloaded fresh data). User may want "keep_existing" for audit-trail use cases — confirm.
+- **Q2 — date legitimacy.** How often does a date's data legitimately change after first publication? (E.g., Q4-2025 reported in Jan-2026 but a re-run in May-2026 changes the data — is that a real workflow?)
+- **Q3 — per-strategy split.** Confirmed via 2026-05 split-file pipeline — answered.
+- **Q4 — audit-trail.** Should the cumulative file carry a `merge_history[]` array recording every CSV that contributed which weeks? Recommended yes; ~10 KB overhead.
+
+When user is ready to schedule: open this doc + answer Q1, Q2, Q4. The implementation itself is now ~3-5 hrs of focused work.

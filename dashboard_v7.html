@@ -6119,11 +6119,15 @@ function rCashHist(s){
       yMinData<0?{type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:Math.min(yMinData,-0.5),y1:0,fillcolor:'rgba(239,68,68,0.07)',line:{width:0},layer:'below'}:null,
       // Target boundaries (dashed slate)
       {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_LO,y1:TARGET_LO,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}},
-      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_HI,y1:TARGET_HI,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}}
+      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_HI,y1:TARGET_HI,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}},
+      // Week-marker (cross-tile sweep 2026-05-04) — vertical line at the
+      // globally-selected week. Same pattern as cardTEStacked / cardBetaHist.
+      (typeof _selectedWeek!=='undefined' && _selectedWeek)?{type:'line',xref:'x',yref:'paper',x0:isoDate(_selectedWeek),x1:isoDate(_selectedWeek),y0:0,y1:1,line:{color:T.tickH,width:1.5,dash:'dot'}}:null
     ].filter(Boolean),
     annotations:[
       {x:1,xref:'paper',y:TARGET_HI,yref:'y',text:'5% target',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'},
-      {x:1,xref:'paper',y:TARGET_LO,yref:'y',text:'0%',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'}
+      {x:1,xref:'paper',y:TARGET_LO,yref:'y',text:'0%',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'},
+      ...((typeof _selectedWeek!=='undefined' && _selectedWeek)?[{x:isoDate(_selectedWeek),xref:'x',y:1.04,yref:'paper',text:'selected wk',showarrow:false,font:{size:9,color:T.tickH},xanchor:'center'}]:[])
     ]
   },modalPlotCfg);
 }
@@ -8355,11 +8359,21 @@ function rMultiBeta(s){
   if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:cPredicted},xanchor:'left',xshift:6});
   if(betas.historical!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.historical,yref:'y',text:'Hist Avg',showarrow:false,font:{size:9,color:THEME().tick},xanchor:'left',xshift:6});
   if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:cMpt},xanchor:'left',xshift:6});
+  // F6 fix (audit 2026-05-04, cardBetaHist): vertical marker at the
+  // globally-selected week. Same pattern as cardTEStacked T2-F2 — restores
+  // week-flow consistency (cardBetaHist was a holdout).
+  let weekShapes=[];
+  if(typeof _selectedWeek!=='undefined' && _selectedWeek){
+    const swISO=isoDate(_selectedWeek);
+    weekShapes.push({type:'line',xref:'x',yref:'paper',x0:swISO,x1:swISO,y0:0,y1:1,line:{color:THEME().tickH,width:1.5,dash:'dot'}});
+    betaAnnotations.push({x:swISO,xref:'x',y:1.04,yref:'paper',text:'selected wk',showarrow:false,font:{size:9,color:THEME().tickH},xanchor:'center'});
+  }
   Plotly.newPlot('riskBetaMultiDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:'Beta'},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:6},
     legend:{orientation:'h',y:1.12,font:{size:10}},
     annotations:betaAnnotations,
+    shapes:weekShapes,
     margin:{...plotBg.margin,r:70}
   },plotCfg);
   // D5 (audit 2026-05-04): footer caption "· N wk · since YYYY-MM" — peer
@@ -8699,11 +8713,22 @@ function updateFacExpChart(){
       footerCap.textContent='';
     }
   }
+  // P3 / cross-tile sweep 2026-05-04: vertical marker at globally-selected
+  // week, matching cardTEStacked / cardBetaHist / cardCashHist.
+  let weekShapes=[];
+  let weekAnnos=[];
+  if(typeof _selectedWeek!=='undefined' && _selectedWeek){
+    const swISO=isoDate(_selectedWeek);
+    weekShapes.push({type:'line',xref:'x',yref:'paper',x0:swISO,x1:swISO,y0:0,y1:1,line:{color:THEME().tickH,width:1.5,dash:'dot'}});
+    weekAnnos.push({x:swISO,xref:'x',y:1.04,yref:'paper',text:'selected wk',showarrow:false,font:{size:9,color:THEME().tickH},xanchor:'center'});
+  }
   Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:yTitle,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},
     legend:{orientation:'h',y:1.12,font:{size:10}},
-    hovermode:'x unified'
+    hovermode:'x unified',
+    shapes:weekShapes,
+    annotations:weekAnnos
   },plotCfg);
 }
 

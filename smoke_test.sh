@@ -122,6 +122,23 @@ else
   echo -e "  ${YELLOW}—${RESET} lint_week_flow.py missing, skipping"
 fi
 
+# ===== 5b. Section-aggregate sums (Layer 2 of Data Integrity Monitor, 2026-05-04) =====
+echo
+echo -e "${BOLD}5b. Section-aggregate sums (data integrity monitor)${RESET}"
+if [ -f "$SCRIPT_DIR/verify_section_aggregates.py" ] && [ -f "$JSON" ]; then
+  # Latest-week-only mode for fast smoke-test gate (~0.5s).
+  # Captures RED findings without flagging on every historical thin-tail blip.
+  if python3 "$SCRIPT_DIR/verify_section_aggregates.py" --latest --strict >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${RESET} latest-week section aggregates within tolerance"
+    PASS=$((PASS+1))
+  else
+    echo -e "  ${YELLOW}—${RESET} RED findings on latest-week section aggregates — run \`python3 verify_section_aggregates.py --latest\` for details"
+    echo -e "  ${DIM}    (per-holding %T deviation 94→134%% is the F18 finding; section-aggregates should be clean)${RESET}"
+  fi
+else
+  echo -e "  ${YELLOW}—${RESET} verify_section_aggregates.py or JSON missing, skipping"
+fi
+
 # ===== 6. Git state =====
 echo
 echo -e "${BOLD}6. Git state${RESET}"

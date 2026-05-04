@@ -11,13 +11,19 @@ cd ~/RR
 git log --oneline -5                    # last 5 commits — recognize the latest tag
 git tag --list 'refactor.*' | tail -5   # most recent refactor checkpoints
 git tag --list 'presentation*' | tail -5  # most recent presentation tags
-git status -s                            # uncommitted changes? (should be 0 unless mid-work)
+git status -sb                           # uncommitted changes + remote sync state
 ./smoke_test.sh --quick                  # ~2 sec — confirms parse + lint clean
 ```
 
-Expected outcome: smoke test green, working tree clean.
+Expected outcome: smoke test green, working tree clean, **`## main...origin/main`** (in sync).
 
 If smoke test is RED → STOP. Read the failure, fix or roll back to last green tag before continuing.
+
+**If `## main...origin/main [ahead N]` shows N > 5** → push first before doing other work:
+```bash
+git push origin main && git push origin --tags
+```
+This catches the recovery-risk drift the daily scan flags. Push discipline is part of the workflow, not optional.
 
 ## 2. Read the state docs (2 min)
 
@@ -65,7 +71,7 @@ git tag working.$(date +%Y%m%d.%H%M).pre-<feature>
 python3 lint_week_flow.py --strict
 ```
 
-## 6. End-of-session ritual (5 min)
+## 6. End-of-session ritual (5 min) — **MANDATORY**
 
 When wrapping up:
 
@@ -74,6 +80,17 @@ When wrapping up:
 3. **Tag the working state**: `git tag working.$(date +%Y%m%d.%H%M).<descriptor>`
 4. **Verify the tag list looks clean**: `git tag --list 'working.*' | tail -10`
 5. If anything was blocked on user direction, add a clear note to REFACTOR_PLAN.md "Awaiting" section
+6. **Pre-push smoke test**: `./smoke_test.sh && python3 lint_week_flow.py --strict`
+7. **Push to origin/main + tags** — recovery-risk discipline:
+   ```bash
+   git push origin main
+   git push origin --tags
+   git status -sb        # confirms ## main...origin/main (no [ahead N])
+   ```
+
+**Why mandatory:** if disk fails between this session and the next, only what's on `origin/main` survives. Local tags + commits do not. The daily scan flags drift, but the operator (you / me) should never let drift accumulate to begin with. **A session is not complete until `git status -sb` shows clean against origin.**
+
+**Push at intra-session checkpoints too**: anytime you've shipped a phase + tag and the smoke test is green, push. Cost: ~3 seconds. Benefit: shorter recovery window if anything goes wrong.
 
 ---
 

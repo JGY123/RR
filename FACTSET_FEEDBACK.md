@@ -174,6 +174,10 @@
 
 **Finding date:** 2026-05-04 (cardRiskByDim audit)
 **Severity:** RED — contradicts the documented invariant in CLAUDE.md line 108.
+**Status:** OPEN · Inquiry letter drafted in `FACTSET_INQUIRY_F18.md` (not yet sent — needs human review + recipient name)
+**PA-side tests:** queued in `PA_TESTS_F18.md` (7 tests, ~1 hour total)
+**Automated monitor:** flagged by `verify_section_aggregates.py --strict` (RED on IDM/IOP/ACWI/ISC, YELLOW on GSC)
+**Workaround in dashboard (shipped 2026-05-04):** cardRiskByDim footer now shows `Σ %T` and `Σ |%T|` honestly so the deviation is visible. About-registry caveat updated.
 
 CLAUDE.md states: `%T = Percentage of tracking error — each holding's % contribution to total portfolio TE (sums to ~100%)`. The audit measured Σ h.pct_t per strategy on 2026-05-04 latest week:
 

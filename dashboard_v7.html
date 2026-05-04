@@ -3055,22 +3055,25 @@ function rExp(){
           <div class="card-title tip" data-tip="Factor Performance — period view. Toggle between Bubble (exposure × payoff × risk weight quadrant) and Waterfall (sorted contributions with running total). Period selector controls both views." oncontextmenu="showNotePopup(event,'cardFacButt');return false">Factor Performance</div>
           <span id="facPerfSubtitle" style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × payoff · bubble = avg TE contribution</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <div class="toggle-wrap" style="margin:0">
-            <button id="facPerfBubbleBtn" class="toggle-btn active" onclick="setFacPerfView('bubble')" title="Quadrant: exposure × payoff × risk weight">Bubble</button>
-            <button id="facPerfWaterBtn" class="toggle-btn" onclick="setFacPerfView('waterfall')" title="Sorted bars + cumulative running total">Waterfall</button>
-          </div>
-          <div style="display:flex;gap:2px;align-items:center;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:2px">
-            <span class="section-label" style="padding:0 6px">Period</span>
-            ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" data-fac-period="${p}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
-          </div>
-          ${aboutBtn('cardFacButt')}
-          <button class="export-btn" id="facPerfCsv" onclick="exportFacAttribCsv()" style="padding:3px 8px;font-size:11px;display:${_facPerfView==='waterfall'?'inline-block':'none'}">CSV</button>
-          ${resetZoomBtn('facButtDiv')}
-          <button class="export-btn" title="Full screen — multi-period impact comparison + bigger quadrant" onclick="openFacButtFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
-          ${resetViewBtn('cardFacButt')}
-          ${hideTileBtn('cardFacButt')}
-        </div>
+        ${tileChromeStrip({
+          id:'cardFacButt',
+          about:true,
+          resetZoom:'facButtDiv',
+          fullscreen:'openFacButtFullscreen()',
+          resetView:true,
+          hide:true,
+          extra: `
+            <div class="toggle-wrap" style="margin:0">
+              <button id="facPerfBubbleBtn" class="toggle-btn active" onclick="setFacPerfView('bubble')" title="Quadrant: exposure × payoff × risk weight">Bubble</button>
+              <button id="facPerfWaterBtn" class="toggle-btn" onclick="setFacPerfView('waterfall')" title="Sorted bars + cumulative running total">Waterfall</button>
+            </div>
+            <div style="display:flex;gap:2px;align-items:center;background:var(--surf);border:1px solid var(--grid);border-radius:var(--radius-lg);padding:2px">
+              <span class="section-label" style="padding:0 6px">Period</span>
+              ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" data-fac-period="${p}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
+            </div>
+            <button class="tile-btn" id="facPerfCsv" onclick="exportFacAttribCsv()" style="display:${_facPerfView==='waterfall'?'inline-block':'none'}">CSV</button>
+          `,
+        })}
       </div>
       <div id="facTopTeStrip" style="display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px;align-items:center"></div>
       <div id="facButtDiv" style="height:440px"></div>
@@ -3182,13 +3185,14 @@ function rExp(){
         <button class="pill" id="rnk-pill-val" onclick="setRanksBy('val')">Val</button>
         <button class="pill" id="rnk-pill-qual" onclick="setRanksBy('qual')">Qual</button>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        ${rnkColDropHtml()}
-        <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardRanks table','ranks_by_'+_rnkBy)" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
-        <button onclick="openRnkFullscreen()" title="Full screen" class="export-btn" style="padding:3px 8px;font-size:13px">⛶</button>
-        ${resetViewBtn('cardRanks')}
-        ${hideTileBtn('cardRanks')}
-      </div>
+      ${tileChromeStrip({
+        id:'cardRanks',
+        download:{ csv:"exportCSV('#cardRanks table','ranks_by_'+_rnkBy)" },
+        fullscreen:'openRnkFullscreen()',
+        resetView:true,
+        hide:true,
+        extra: rnkColDropHtml(),
+      })}
     </div>
     <div id="rnkTableWrap" style="overflow-x:auto"></div>
   </div>
@@ -7491,13 +7495,9 @@ function riskDecompTree(s,factorRisk,idioRisk){
   let idioNode=mkNode('dt_idio','Stock-Specific Risk',f2(idioRisk,2)+'%',idioPct,'#f59e0b',idioKids);
   return'<div class="card" id="cardRiskDecomp" style="margin-bottom:16px">'+
     '<div class="flex-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px">'+
-    '<div class="card-title tip" style="margin:0" data-tip="Total TE decomposed into Factor Risk + Stock-Specific Risk, then drilled into the top contributors on each side. The percentages sum back to 100% of total tracking error." oncontextmenu="showNotePopup(event,\'cardRiskDecomp\');return false">Risk Decomposition Tree</div>'+
-    aboutBtn('cardRiskDecomp')+'</div>'+
-    '<div style="display:flex;gap:6px;align-items:center">'+
-      fsTileBtn('cardRiskDecomp')+
-      resetViewBtn('cardRiskDecomp')+
-      hideTileBtn('cardRiskDecomp')+
-    '</div></div>'+
+    '<div class="card-title tip" style="margin:0" data-tip="Total TE decomposed into Factor Risk + Stock-Specific Risk, then drilled into the top contributors on each side. The percentages sum back to 100% of total tracking error." oncontextmenu="showNotePopup(event,\'cardRiskDecomp\');return false">Risk Decomposition Tree</div></div>'+
+    tileChromeStrip({id:'cardRiskDecomp',about:true,fullscreen:"openTileFullscreen('cardRiskDecomp')",resetView:true,hide:true})+
+    '</div>'+
     '<div style="padding:4px 0">'+
       '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid);margin-bottom:8px">'+
         '<span style="font-size:13px;font-weight:700;color:var(--txth)">Total Risk (TE)</span>'+
@@ -7551,13 +7551,8 @@ function riskHistoricalTrends(s){
     <div class="flex-between" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div style="display:flex;align-items:center;gap:8px">
         <div class="card-title tip" data-tip="Four-metric trend glance across all available weeks. Click a card for detailed time-series drill with threshold bands. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskHistTrends');return false" style="margin-bottom:0">Historical Trends <span style="font-size:10px;color:var(--txt);font-weight:400;margin-left:8px">${hist.length} week${hist.length===1?'':'s'}</span>${hist.length<2?'<span style="font-size:10px;color:var(--warn);margin-left:8px">· Need ≥2 weeks for sparklines</span>':''}</div>
-        ${aboutBtn('cardRiskHistTrends')}
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        ${fsTileBtn('cardRiskHistTrends')}
-        ${resetViewBtn('cardRiskHistTrends')}
-        ${hideTileBtn('cardRiskHistTrends')}
-      </div>
+      ${tileChromeStrip({id:'cardRiskHistTrends',about:true,fullscreen:"openTileFullscreen('cardRiskHistTrends')",resetView:true,hide:true})}
     </div>
     <!-- 2026-04-30 (user feedback "Historical Trends leaking off page"):
          was repeat(4, minmax(180px,1fr)) → 768px floor, overflows narrow tabs.
@@ -7739,13 +7734,7 @@ function rRisk(){
         ${aboutBtn('cardTEStacked')}
         <span style="font-size:10px;color:var(--textDim);font-weight:400">stock-specific (purple) + factor (indigo) = total TE · ${s.hist.sum.length} wk</span>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        ${resetZoomBtn('teStackedDiv')}
-        <button class="export-btn" onclick="exportTEStackedCsv()" style="padding:3px 7px;font-size:11px">CSV</button>
-        ${fsTileBtn('cardTEStacked')}
-        ${resetViewBtn('cardTEStacked')}
-        ${hideTileBtn('cardTEStacked')}
-      </div>
+      ${tileChromeStrip({id:'cardTEStacked',resetZoom:'teStackedDiv',csv:'exportTEStackedCsv()',fullscreen:"openTileFullscreen('cardTEStacked')",resetView:true,hide:true})}
     </div>
     <div id="teStackedDiv" class="chart-h-md"></div>
   </div>
@@ -7756,38 +7745,38 @@ function rRisk(){
   <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span><span onclick="event.stopPropagation()">${resetZoomBtn('riskBetaMultiDiv')}</span></div>
-      <div style="display:flex;gap:6px;align-items:center" onclick="event.stopPropagation()">
-        <button class="export-btn" onclick="exportBetaMultiCsv&&exportBetaMultiCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
-        ${fsTileBtn('cardBetaHist')}
-        ${resetViewBtn('cardBetaHist')}
-        ${hideTileBtn('cardBetaHist')}
-        <span style="font-size:9px;color:var(--pri)">click for detail ›</span>
-      </div>
+      <span onclick="event.stopPropagation()">${tileChromeStrip({id:'cardBetaHist',csv:'exportBetaMultiCsv&&exportBetaMultiCsv()',fullscreen:"openTileFullscreen('cardBetaHist')",resetView:true,hide:true,extra:'<span style="font-size:9px;color:var(--pri)">click for detail ›</span>'})}</span>
     </div>
     <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
   </div>
 
-  <!-- Factor Contribution Bars with toggle -->
+  <!-- Factor Contribution Bars — chrome migrated to tileChromeStrip 2026-05-04.
+       Bespoke radiogroup (TE/Exp/Both) lives in the extra slot. -->
   <div class="card" id="cardFacContribBars" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div>${aboutBtn('cardFacContribBars')}${resetZoomBtn('riskFacBarDiv')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:6px;overflow:hidden">
-          <label tabindex="0" style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
-            <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
-          </label>
-          <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
-            <input type="radio" name="riskFacMode" value="exp" onchange="window._rfbMode='exp';rRiskFacBarsMode()" style="display:none"> Exposure
-          </label>
-          <label style="font-size:11px;padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
-            <input type="radio" name="riskFacMode" value="both" onchange="window._rfbMode='both';rRiskFacBarsMode()" style="display:none"> Both
-          </label>
-        </div>
-        <button class="export-btn" onclick="exportFacContribCsv&&exportFacContribCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
-        ${fsTileBtn('cardFacContribBars')}
-        ${resetViewBtn('cardFacContribBars')}
-        ${hideTileBtn('cardFacContribBars')}
-      </div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level TE contribution and active exposure. Toggle TE / Exposure / Both. Click a bar to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardFacContribBars');return false" style="margin:0">Factor Contributions</div></div>
+      ${tileChromeStrip({
+        id:'cardFacContribBars',
+        about:true,
+        resetZoom:'riskFacBarDiv',
+        csv:'exportFacContribCsv&&exportFacContribCsv()',
+        fullscreen:"openTileFullscreen('cardFacContribBars')",
+        resetView:true,
+        hide:true,
+        extra: `
+          <div role="radiogroup" aria-label="Display mode" style="display:flex;gap:0;border:1px solid var(--grid);border-radius:var(--radius-md);overflow:hidden">
+            <label tabindex="0" style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
+              <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
+            </label>
+            <label style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
+              <input type="radio" name="riskFacMode" value="exp" onchange="window._rfbMode='exp';rRiskFacBarsMode()" style="display:none"> Exposure
+            </label>
+            <label style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
+              <input type="radio" name="riskFacMode" value="both" onchange="window._rfbMode='both';rRiskFacBarsMode()" style="display:none"> Both
+            </label>
+          </div>
+        `,
+      })}
     </div>
     <!-- Group pills + threshold slider + factor checkboxes -->
     <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">
@@ -7903,11 +7892,7 @@ function rRisk(){
         <span class="section-label">Min</span>
         <input type="range" id="rbd-thresh" min="0" max="3" step="0.1" value="0.5" oninput="setRiskByDimThresh(this.value)" style="width:80px;accent-color:var(--accent)">
         <span id="rbd-thresh-val" style="font-size:10px;color:var(--txt);font-family:'JetBrains Mono',monospace;min-width:32px">0.5%</span>
-        ${resetZoomBtn('rbdChartDiv')}
-        <button class="export-btn" onclick="exportRiskByDimCsv()" title="Download CSV">CSV</button>
-        ${fsTileBtn('cardRiskByDim')}
-        ${resetViewBtn('cardRiskByDim')}
-        ${hideTileBtn('cardRiskByDim')}
+        ${tileChromeStrip({id:'cardRiskByDim',resetZoom:'rbdChartDiv',csv:'exportRiskByDimCsv()',fullscreen:"openTileFullscreen('cardRiskByDim')",resetView:true,hide:true})}
       </div>
     </div>
     <div id="rbdChartDiv" class="chart-h-lg" style="min-height:280px"></div>
@@ -7934,15 +7919,15 @@ function rRisk(){
           <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px">Cum Return</button>
         </div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        ${resetZoomBtn('riskExpHistDiv')}
-        <button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button>
-        <button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>
-        <button class="export-btn" onclick="exportFacHistCsv&&exportFacHistCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
-        ${fsTileBtn('cardFacHist')}
-        ${resetViewBtn('cardFacHist')}
-        ${hideTileBtn('cardFacHist')}
-      </div>
+      ${tileChromeStrip({
+        id:'cardFacHist',
+        resetZoom:'riskExpHistDiv',
+        csv:'exportFacHistCsv&&exportFacHistCsv()',
+        fullscreen:"openTileFullscreen('cardFacHist')",
+        resetView:true,
+        hide:true,
+        extra:'<button onclick="setFacExpAll()" class="btn btn-sec btn-sm">Select All</button><button onclick="setFacExpClear()" class="btn btn-sec btn-sm">Clear All</button>',
+      })}
     </div>
     <div id="facExpToggles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">${facToggleHtml}</div>
     <div id="riskExpHistDiv" class="chart-h-md"></div>
@@ -7953,20 +7938,24 @@ function rRisk(){
        reset-zoom. -->
   <div class="card" id="cardCorr">
     <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (e−bm) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray." oncontextmenu="showNotePopup(event,'cardCorr');return false">Factor Correlation Matrix</div>${aboutBtn('cardCorr')}</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        ${resetZoomBtn('corrHeatPlot')}
-        <select id="corrPeriod" onchange="rUpdateCorr()" style="font-size:11px;padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit">
-          <option value="all" selected>All</option><option value="156">3Y</option><option value="52">1Y</option><option value="26">6M</option><option value="13">3M</option>
-        </select>
-        <select id="corrFreq" onchange="rUpdateCorr()" style="font-size:11px;padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit">
-          <option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option>
-        </select>
-        <button class="export-btn" onclick="exportCorrCsv()" title="Download correlation matrix as CSV">CSV</button>
-        ${fsTileBtn('cardCorr')}
-        ${resetViewBtn('cardCorr')}
-        ${hideTileBtn('cardCorr')}
-      </div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" style="margin:0" data-tip="Pearson correlation of factor active exposures (e−bm) over the selected period. Red = anti-correlated, indigo = co-moving. r=0 mid-gray." oncontextmenu="showNotePopup(event,'cardCorr');return false">Factor Correlation Matrix</div></div>
+      ${tileChromeStrip({
+        id:'cardCorr',
+        about:true,
+        resetZoom:'corrHeatPlot',
+        csv:'exportCorrCsv()',
+        fullscreen:"openTileFullscreen('cardCorr')",
+        resetView:true,
+        hide:true,
+        extra: `
+          <select id="corrPeriod" onchange="rUpdateCorr()" style="font-size:var(--text-md);padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-family:inherit">
+            <option value="all" selected>All</option><option value="156">3Y</option><option value="52">1Y</option><option value="26">6M</option><option value="13">3M</option>
+          </select>
+          <select id="corrFreq" onchange="rUpdateCorr()" style="font-size:var(--text-md);padding:3px 6px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-family:inherit">
+            <option value="weekly" selected>Weekly</option><option value="monthly">Monthly</option>
+          </select>
+        `,
+      })}
     </div>
     <div id="corrFactorSel" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--grid)">
       ${s.factors.map(f=>`<label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:2px 6px;border-radius:4px;border:1px solid var(--grid)"><input type="checkbox" class="corr-fac-chk" value="${f.n}" ${FAC_PRIMARY.has(f.n)?'checked':''} onchange="rUpdateCorr()"><span style="color:${FAC_PRIMARY.has(f.n)?'var(--txth)':'var(--txt)'}">${f.n}</span></label>`).join('')}   <!-- lint-week-flow:ignore (factor name list for correlation checkboxes; list doesn't change per week) -->
@@ -8726,7 +8715,7 @@ function watchlistCardHtml(s){
   // Empty state: show the tile with onboarding copy instead of hiding entirely
   if(!total){
     return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
-      <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div>${aboutBtn('cardWatchlist')}</div><div style="display:flex;gap:6px;align-items:center">${hideTileBtn('cardWatchlist')}</div></div>
+      <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Click the \u2691 flag icon on any holding row to add it to this watchlist. Cycle through Watch/Reduce/Add categories." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist</div></div>${tileChromeStrip({id:'cardWatchlist',about:true,hide:true})}</div>
       <div style="font-size:11px;color:var(--txt);padding:8px 6px">No tickers watchlisted yet \u2014 click the \u2691 flag icon on any holding row (Holdings tab) to add it.</div>
     </div>`;
   }
@@ -8986,13 +8975,7 @@ function renderHoldTab(){
           <div class="card-title tip" data-tip="Per-holding quadrant — sibling of Factor Risk Snapshot. X = active weight (UW ← → OW). Y = TE contribution (signed). Bubble size = stock-specific TE (|MCR|, the idio component). Click any bubble for the holding drill." oncontextmenu="showNotePopup(event,'cardHoldRisk');return false">Holdings Risk Snapshot</div>
           <span style="font-size:10px;color:var(--textDim);font-weight:400">active wt × risk contrib · bubble = idio (|MCR|)</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${resetZoomBtn('holdRiskDiv')}
-          ${aboutBtn('cardHoldRisk')}
-          ${fsTileBtn('cardHoldRisk')}
-          ${resetViewBtn('cardHoldRisk')}
-          ${hideTileBtn('cardHoldRisk')}
-        </div>
+        ${tileChromeStrip({id:'cardHoldRisk',about:true,resetZoom:'holdRiskDiv',fullscreen:"openTileFullscreen('cardHoldRisk')",resetView:true,hide:true})}
       </div>
       <div id="holdRiskDiv" class="chart-h-lg"></div>
       <div id="holdRiskLegend" style="display:flex;gap:18px;justify-content:center;align-items:center;margin-top:6px;padding:6px 12px;font-size:10px;color:var(--txt);flex-wrap:wrap;border-top:1px solid var(--grid)"></div>
@@ -9015,20 +8998,24 @@ function renderHoldTab(){
           return '· '+parts.join(' · ');
         })()}</span></div>${aboutBtn('cardHoldings')}${_concPill}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          ${holdViewToggleHtml()}
-          <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardHoldings');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportAllHoldings();this.closest('.dl-drop').classList.remove('open')">Export All CSV</div></div></div>
-          <button class="export-btn" onclick="_showIndustry=!_showIndustry;renderHoldTab()" title="Toggle Industry column" style="${_showIndustry?'border-color:var(--pri);color:var(--pri)':''};${_holdView==='cards'?'display:none':''}">Industry ${_showIndustry?'▲':'▼'}</button>
-          <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by sector">
-            <option value="">All Sectors</option>
-            ${SECS.map(s=>`<option value="${s}">${s}</option>`).join('')}
-          </select>
-          <select id="rankFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-size:11px;font-family:inherit" aria-label="Filter by rank">
-            <option value="">All Ranks</option>
-            ${[1,2,3,4,5].map(r=>`<option value="${r}">R${r}</option>`).join('')}
-          </select>
-          ${fsTileBtn('cardHoldings')}
-          ${resetViewBtn('cardHoldings')}
-          ${hideTileBtn('cardHoldings')}
+          ${tileChromeStrip({
+            id:'cardHoldings',
+            download:{ png:'#cardHoldings', csv:"exportAllHoldings()" },
+            fullscreen:"openTileFullscreen('cardHoldings')",
+            resetView:true,
+            hide:true,
+            extra: holdViewToggleHtml() + `
+              <button class="tile-btn" onclick="_showIndustry=!_showIndustry;renderHoldTab()" title="Toggle Industry column" style="${_showIndustry?'border-color:var(--pri);color:var(--pri);':''}${_holdView==='cards'?'display:none;':''}">Industry ${_showIndustry?'▲':'▼'}</button>
+              <select id="secFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-size:var(--text-md);font-family:inherit" aria-label="Filter by sector">
+                <option value="">All Sectors</option>
+                ${SECS.map(s=>`<option value="${s}">${s}</option>`).join('')}
+              </select>
+              <select id="rankFilter" onchange="filterHold()" style="padding:4px 8px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:var(--radius-md);font-size:var(--text-md);font-family:inherit" aria-label="Filter by rank">
+                <option value="">All Ranks</option>
+                ${[1,2,3,4,5].map(r=>`<option value="${r}">R${r}</option>`).join('')}
+              </select>
+            `,
+          })}
         </div>
       </div>
       <input class="search-box" placeholder="Search ticker or name..." oninput="searchHold(this.value)">
@@ -9074,7 +9061,7 @@ function renderHoldTab(){
       <div class="card" id="cardRankDist" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Portfolio weight distribution across the 5 quintiles (Q1=best to Q5=worst). PMs typically concentrate in Q1-Q2; Q3-Q5 weight signals deliberate exceptions or risk pockets. Click a bar to filter the holdings table by that quintile. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRankDist');return false" style="margin:0">Rank Distribution</div>${aboutBtn('cardRankDist')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · Q1=best</span></div>
-          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('rankDistDiv')}${fsTileBtn('cardRankDist')}${resetViewBtn('cardRankDist')}${hideTileBtn('cardRankDist')}</div>
+          ${tileChromeStrip({id:'cardRankDist',resetZoom:'rankDistDiv',fullscreen:"openTileFullscreen('cardRankDist')",resetView:true,hide:true})}
         </div>
         <div id="rankDistDiv" class="chart-h-sm"></div>
       </div>
@@ -9083,7 +9070,7 @@ function renderHoldTab(){
       <div class="card" id="cardTop10" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
           <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
-          <div style="display:flex;gap:6px;align-items:center">${resetZoomBtn('holdConcDiv')}${fsTileBtn('cardTop10')}${resetViewBtn('cardTop10')}${hideTileBtn('cardTop10')}</div>
+          ${tileChromeStrip({id:'cardTop10',resetZoom:'holdConcDiv',fullscreen:"openTileFullscreen('cardTop10')",resetView:true,hide:true})}
         </div>
         <div id="holdConcDiv" class="chart-h-md"></div>
       </div>

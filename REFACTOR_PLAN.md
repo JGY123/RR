@@ -93,6 +93,9 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | 2026-05-03 09:00 | D-canary | — | `refactor.20260503.0900.phase-D-canary` | tileChromeStrip enhanced with `download` + `view` slots. cardSectors migrated as canary. Bug caught: backticks in HTML comments close parent template literal — fixed. |
 | 2026-05-03 09:30 | D-tier1-sweep | — | `refactor.20260503.0930.phase-D-tier1-sweep` | cardGroups + cardRegions + cardCountry + cardAttrib migrated to tileChromeStrip. ~140 lines of inline chrome → ~50 lines declarative config. |
 | 2026-05-03 09:45 | design color sweep | — | `refactor.20260503.0945.design-color-sweep` | 17 HTML-context `color:#94a3b8` → `color:var(--textDim)`. Plotly traces left untouched (separate refactor). |
+| 2026-05-03 09:50 | session-wrap | — | `refactor.20260503.0950.session-wrap` | REFACTOR_PLAN + SESSION_STATE checkpoint log. |
+| 2026-05-04 10:00 | D-sweep-2 | — | `refactor.20260504.1000.phase-D-sweep-2` | 9 more tiles migrated: cardThisWeek, cardWeekOverWeek, cardChars, cardFacRisk, cardFacDetail, cardRiskFacTbl, cardTreemap, cardUnowned, cardWatchlist. |
+| 2026-05-04 10:30 | **D-COMPLETE** | — | `refactor.20260504.1030.phase-D-complete` | Final 16 chart/risk-tab tiles migrated. **All 30 tile chrome rows now use tileChromeStrip.** Zero inline chrome holdouts. |
 
 ## Status summary (post-2026-05-01 session)
 
@@ -106,7 +109,7 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 - Static lint prevents future direct-cs.X regressions (Phase J).
 
 **Outstanding:**
-- Phase D — `tileChromeStrip()` helper SHIPPED (2026-05-01 18:30). Tile-by-tile migration is gradual (each commit that touches a tile's chrome can swap to the helper).
+- ~~Phase D — `tileChromeStrip()` migration sweep~~ — **COMPLETE 2026-05-04 10:30. All 30 tile chrome rows migrated. Zero inline chrome holdouts.**
 - ~~Phase K — design polish~~ — SHIPPED 2026-05-01 19:00–19:35. Tokens + 10 canonical classes + ~40 inline styles eliminated.
 - Per-holding factor TE breakdown for historical weeks — data not shipped per-week from FactSet, currently shows "—" with explanation. Would require parser-side per-week per-holding factor_contr extraction (would balloon file size). Deferred to FactSet conversation.
 - Phase F UX (combo A+D+E) — SHIPPED 2026-05-01 17:55.
@@ -114,11 +117,12 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 - Item #4 Factor Performance y-axis — SHIPPED 2026-05-01 18:20.
 
 **Next session priorities (ordered by leverage):**
-1. **Continue tileChromeStrip migration** — remaining Tier-1: cardThisWeek (no view toggle, simpler), cardWeekOverWeek, cardFacRisk (Risk-tab Tier-1), cardChars, cardFacDetail, cardRiskFacTbl. Defer cardHoldings (most complex — dedicated commit).
-2. **Per-tile audit cadence resume** — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep.
-3. **Plotly THEME() per-trace cleanup** — 5 remaining `color:'#94a3b8'` Plotly object-literal occurrences. Replace with `THEME().tick` accessor for full theme-flip support.
-4. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` / `gap: Xpx` to `var(--space-*)` tokens.
-5. **Per-tile design pass** — apply `.stat-card` / `.empty-state` / `.section-label` to remaining inline-styled patterns (cardThisWeek bullets, cardWeekOverWeek headers, drill modals).
+1. **Per-tile audit cadence resume** — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep. Architectural refactor is done; functional / data review is the natural next pass.
+2. **Plotly THEME() per-trace cleanup** — 5 remaining `color:'#94a3b8'` Plotly object-literal occurrences. Replace with `THEME().tick` accessor for full theme-flip support.
+3. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` / `gap: Xpx` to `var(--space-*)` tokens (lower priority — current values already work).
+4. **Per-tile design pass** — apply `.stat-card` / `.empty-state` / `.section-label` to remaining inline-styled patterns (cardThisWeek bullets, drill modals).
+5. **Drill modal migration** — drill modals (oDr, oDrMetric, oDrCountry, oSt, etc.) still have inline chrome. They're rendered into a modal overlay — could adopt tileChromeStrip if useful.
+6. **End-of-session: commit a "presentation-2026-05-XX" tag whenever we have a stable state** for stakeholder review.
 
 ---
 

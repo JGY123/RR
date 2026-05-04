@@ -1,7 +1,39 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-05-03 09:45 (Phase D Tier-1 migration sweep + design color cleanup — 5 tiles migrated, 17 hardcoded greys swept)
+last_updated: 2026-05-04 10:30 (Phase D MIGRATION COMPLETE — all 30 tile chrome rows now use tileChromeStrip; zero inline holdouts)
+---
+
+## 2026-05-04 09:50–10:30 — Phase D migration COMPLETE
+
+User said "yes keep at it as long as you know whats next." I knew — REFACTOR_PLAN
+"Next session priorities" #1 was continuing the migration. Did 24 tile migrations
+this session, completing Phase D in full.
+
+**3 commits, 3 tags this session:**
+- `refactor.20260504.1000.phase-D-sweep-2` — 9 tiles batch (Exposures-secondary,
+  Holdings, Risk-tab partial)
+- `refactor.20260504.1030.phase-D-complete` — final 16 chart tiles + cardWatchlist
+  empty-state branch
+
+**Coverage:**
+- 30 tiles using tileChromeStrip (counted via grep)
+- 0 inline `${fsTileBtn(...)}` / `${resetViewBtn(...)}` / `${hideTileBtn(...)}`
+  in tile chrome markup (helpers themselves still defined for the cluster
+  generator's internal use)
+
+**Migration patterns documented (for future reference):**
+- Simple chart tile: `{id, resetZoom, csv, fullscreen, resetView, hide}`
+- Table tile: add `cols: 'tbl-X'` for the column-hide panel
+- Tile with view toggle: `view: { active, options:[[v,label],...], onchange }`
+- Tile with bespoke controls: pass them via `extra: '<custom HTML>'` slot
+- Tile with download: `download: { png:'#tileSel', csv:'fnCall()' }`
+
+**Phase D status: COMPLETE.** The architectural backbone the user asked for
+("many tables/cards/tiles don't have all the functionality... maybe the code
+could be organized better") is in place. Future visual changes ship from one
+location.
+
 ---
 
 ## 2026-05-03 09:00–09:45 — Phase D Tier-1 migration sweep + design color cleanup

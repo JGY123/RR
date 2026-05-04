@@ -358,3 +358,99 @@ User direction at the start of round 2 included "again as usual take insights an
 - All four round-2 items (picker, factor-context drill, Risk-tab heatmap, view-aware FS) shipped in <90 min total. The marathon round format scales when the patterns are well-defined upfront and the questions are tight (5 max per round).
 - Each item committed individually so a regression on one doesn't block the others.
 - Verified each in browser before committing — caught zero parse-bombs or rendering issues this round (the smoke test patterns from the April crisis are paying back).
+
+---
+
+# May 2026 — Post-presentation refactor + audit cadence + F18 escalation
+
+**Drafted:** 2026-05-04 PM
+**Trigger:** four weeks of disciplined "doing it right" work after the April crisis. Not a single bug crisis, but a series of small cadence/operational lessons worth writing down so they stick.
+
+## Lesson 9 — Push discipline at session boundaries
+
+**What happened:** A daily scan flagged that `origin/main` was 71 commits behind local. All work was committed (no uncommitted edits) — but unpushed. If the laptop SSD had failed, 71 commits of refactor + audits + tile fixes would have evaporated.
+
+**Why it slipped:** The end-of-session ritual checked "all changes committed" but not "all commits pushed." Each individual session's push was deferred ("I'll push at the end of the day") and accumulated across sessions.
+
+**Right way:** SESSION_GUIDE.md now requires `git push origin main && git push origin --tags` as Step 7 of the session-end ritual. Step 1 (state check) also flags if local is >5 ahead of origin. The lesson: **commit ≠ pushed**, and recovery posture depends on the push, not the commit.
+
+**Generalization:** for any single-laptop workstream, commit and push are independent backups. Treat them as a pair. Better: a pre-push smoke-test gate (we now have this) ensures the push isn't yolo.
+
+## Lesson 10 — Verifier performance is production-critical
+
+**What happened:** I added `verify_section_aggregates.py` as Layer 2 of the data-integrity monitor. Initial implementation did `json.load(latest_data.json)` (1.8 GB). The smoke test already loaded the same file 3-4 times. Combined RSS spiked to 3.4 GB on a 16 GB Mac under 83% swap pressure. Two stuck Python procs ate memory until killed.
+
+**Why this is a data-integrity lesson:** A verifier that's painful to run is a verifier that gets disabled. A disabled verifier is worse than no verifier (false sense of safety). **The verifier itself is production code** with budgets on memory + speed.
+
+**Right way:**
+- Three-mode loader: `--latest` mode reads only `data/strategies/index.json` (500 KB) for slim summaries. Full mode iterates per-strategy split files with explicit `del` + `gc.collect()` between strategies. Monolithic load is a last-resort fallback.
+- Smoke test now uses `index.json` + first-byte peek instead of 4× monolithic loads.
+- Result: 1.76s wall time / 22 MB peak (was: hangs forever, 3.4 GB stuck procs).
+- Anti-pattern added to data-integrity-specialist agent: "Monolithic data file loaded multiple times in a verifier" → RED finding.
+
+**Generalization:** Any data file that exceeds RAM/4 must have a "summary-first, detail-on-demand" access pattern. Load slim by default; load full only when explicitly needed. Measure peak RSS before/after every verifier change.
+
+## Lesson 11 — Audit cadence beats audit sprints
+
+**What happened:** The April crisis was a sprint — 24 hours of intense work to stabilize. The May follow-up was a cadence — 14 of 30 tiles audited via parallel `tile-audit` subagents, with trivial fixes shipped same-session and larger fixes queued. The cadence shipped 11 fixes in May without a single rollback.
+
+**Why this works:**
+- Parallel subagents (3-4 at a time) explore in <30 min what serial review takes hours.
+- Each audit produces a structured `tile-specs/<id>-audit-<date>.md` doc — a forever-record of "what we checked, what we found, what we fixed."
+- Trivial fixes (label tweaks, footer disclaimers, threshold corrections) ship inline. Larger fixes (chart redesigns, viz upgrades) get queued with a clear handoff doc.
+- The user reviews each fix in-browser before tag/commit — no "self-signoff" by the agent.
+
+**Right way:** Bake quarterly audit cadence into the project rhythm. Parallel subagents for breadth, structured audit docs for memory, in-browser signoff for trust.
+
+**Generalization:** For any product with >10 user-facing surfaces, sprint-only review accumulates blindspots. Cadence-based review with parallel exploration is the only way to keep the whole surface trusted.
+
+## Lesson 12 — Escalate anomalies; don't paper over them
+
+**What happened:** Section-aggregate %TE verifier confirmed `Σ %TE ≈ 100%` on 3,082 of 3,082 sector-weeks (clean). But per-holding %T sums vary 94→134% across strategies — RED finding vs. doc-stated 100%. Five hypotheses (parser bug, doc wrong, undocumented %T_Check filter, universe filter, period handling). Some plausible, none confirmed.
+
+**Wrong move:** quietly rescale per-holding %T to sum to 100%. This would mask the deviation — the user would never know to ask, and any genuine source-side bug would compound silently.
+
+**Right move (executed):**
+- Drafted `FACTSET_INQUIRY_F18.md` letter to FactSet PA expert with cross-strategy table + 6 sharp questions
+- Drafted `PA_TESTS_F18.md` — 7 source-side experiments (~1 hr) to falsify each hypothesis
+- Updated `FACTSET_FEEDBACK.md` with the finding + status
+- Wired `verify_section_aggregates.py` into smoke test for permanent monitoring
+- UI footer reports `Σ %T = X% (expected ~100%, see inquiry F18)` — honest math, not a rescale
+
+**Generalization:** When you find a data anomaly that requires upstream confirmation, the inquiry itself is a formal artifact (not just a Slack message). Six-step flow: observe → hypothesize → source-side tests → letter → reply → monitor. Each cycle adds a permanent automated check so the question can't recur. Created `FACTSET_INQUIRY_TEMPLATE.md` for future inquiries (F19, F20+).
+
+## Lesson 13 — Layered monitoring beats single-point assertions
+
+**What we have now:**
+
+| Layer | What it checks | Cost |
+|---|---|---|
+| L1 — Parser verifier | 22+ checks per parse run | 3s |
+| L2 — Cross-week aggregate verifier | %TE invariant on all (strategy × dim × week) | 0.06s in `--latest` mode |
+| L3 — Trend monitor | drift over time | manual today, dashboard tile someday |
+| L4 — Inquiry log | tracked open questions to upstream | per RED finding |
+
+**Why this matters:** L1 alone catches drift at parse time but misses cross-corpus invariants. L2 catches "every cell across history obeys this rule" — a dimension L1 can't see. L3 catches slow drift (a metric that was 100% last quarter and is 134% now). L4 captures the unknowns.
+
+Each layer feeds the next. An L2 anomaly becomes an L4 inquiry. A resolved L4 inquiry becomes either a parser fix (folded into L1) or a permanent monitor (L2). Knowledge accumulates monotonically.
+
+**Generalization:** For any data-driven product with continuously-updating source data, single-point assertions are necessary but not sufficient. Layered monitoring with feedback loops is the architecture.
+
+## Lesson 14 — `index.json` summaries unlock cheap monitoring
+
+**What happened:** The split-file architecture (`data/strategies/<ID>.json` per strategy + `index.json` summary) was originally a memory-management win. It's also a verifier-performance win: `index.json` is 500 KB and contains enough cross-strategy summary data to do most invariance checks without loading any of the per-strategy detail.
+
+**Right way:**
+- When designing data on disk, split into "summary" + "detail" tiers
+- Summary tier should fit in <1 MB, contain everything a fast monitor needs
+- Detail tier loads on demand
+- Monitors default to summary-tier reads; expensive cross-detail checks are opt-in (`--full` flag)
+
+**Generalization:** Cheap monitoring is the difference between "we have a verifier" and "we run the verifier every day." Design the data layer to make verification cheap by default.
+
+## Process notes (May 2026)
+
+- Five subagents/personas now in rotation: `risk-reports-specialist` (96→98% confidence), `data-integrity-specialist`, `factset-parser-engineer`, `tile-audit`, `data-viz`. Each updated when significant patterns emerge.
+- "Doing it right" framing replaced "ship fast" framing post-presentation. The dashboard is correct, the cadence compounds, the knowledge base grows.
+- Strategic review documented in `STRATEGIC_REVIEW.md` for periodic re-baselining.
+- Anti-fabrication discipline from April held: zero new fabrication patterns introduced in May despite 11 fixes + refactor sweep.

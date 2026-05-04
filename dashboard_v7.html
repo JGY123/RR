@@ -6035,7 +6035,7 @@ function rSecChart(s){
   // Caption explaining the encoding (since the chart packs 4 dims)
   const cap=document.getElementById('secChartCaption');
   if(cap){
-    cap.innerHTML=`<span style="color:#94a3b8;font-size:10px">x = Active wt  ·  y = TE Contrib  ·  size = Port wt  ·  color = Avg Overall rank (1=green/best, 5=red/worst).  Click any sector to drill.</span>`;
+    cap.innerHTML=`<span style="color:var(--textDim);font-size:10px">x = Active wt  ·  y = TE Contrib  ·  size = Port wt  ·  color = Avg Overall rank (1=green/best, 5=red/worst).  Click any sector to drill.</span>`;
   }
 }
 
@@ -6750,12 +6750,12 @@ function rCountryMap(s){
     ];
   });
   const richHover='<b>%{customdata[0]}</b>  '+
-    '<span style="color:#94a3b8">· %{customdata[7]} holdings</span><br>'+
-    '<span style="color:#94a3b8">━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>'+
+    '<span style="color:var(--textDim)">· %{customdata[7]} holdings</span><br>'+
+    '<span style="color:var(--textDim)">━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>'+
     'Port %{customdata[1]:.1f}%  ·  Bench %{customdata[2]:.1f}%  ·  Active %{customdata[3]:+.1f}%<br>'+
     'TE Contrib %{customdata[4]:.2f}%  ·  Stock %{customdata[5]:.2f}%  ·  Factor %{customdata[6]:.2f}%<br>'+
     'Avg Overall Rank: %{customdata[8]}<br>'+
-    '<span style="color:#94a3b8">━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>'+
+    '<span style="color:var(--textDim)">━━━━━━━━━━━━━━━━━━━━━━━━━</span><br>'+
     '<b>Top holdings by %T:</b><br>%{customdata[9]}'+
     '<extra></extra>';
   Plotly.newPlot('countryMapDiv',[{
@@ -9129,7 +9129,7 @@ function renderHoldRows(){
     let flag=_holdFlags[h.t]||null;
     let flagBtn=`<button class="flag-btn${flag?' flagged':''}" data-ticker="${h.t}" style="${flag?'color:'+FLAG_COLORS[flag]+';':''}" onclick="cycleFlag('${h.t}',event)" title="${flag?'Flag: '+flag+' (click to cycle)':'Flag (watch/reduce/add)'}">${flag?FLAG_ICONS[flag]:'\u2691'}</button>`;
     let isBmOnly=(!h.p||h.p===0)&&(h.b>0);
-    let bmBadge=isBmOnly?`<span style="background:#334155;color:#94a3b8;font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
+    let bmBadge=isBmOnly?`<span style="background:#334155;color:var(--textDim);font-size:9px;padding:1px 4px;border-radius:4px;margin-left:3px">BM</span>`:'';
     let newBadge=h.isNew?`<span style="background:#a78bfa;color:#0f172a;font-size:9px;padding:1px 4px;border-radius:4px;font-weight:600;margin-left:3px">NEW</span>`:'';
     // Display the proper ticker when SEDOL→ticker_region merge succeeded;
     // fall back to h.t (SEDOL) when not. Keep h.t in onclick for lookup.
@@ -12195,7 +12195,7 @@ function renderFsFactorMap(s){
       '<td style="padding:5px 6px;color:'+col+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';margin-right:5px"></span>'+f.n+'</td>'+
       '<td style="text-align:right;padding:5px 6px;color:'+(f.a>=0?'#10b981':'#ef4444')+'">'+(f.a>=0?'+':'')+f.a.toFixed(3)+'</td>'+
       '<td style="text-align:right;padding:5px 6px;color:#e2e8f0;font-weight:600">'+(f.c||0).toFixed(1)+'%</td>'+
-      '<td style="text-align:right;padding:5px 6px;color:#94a3b8">'+(f.dev!=null?f.dev.toFixed(3):'—')+'</td>'+
+      '<td style="text-align:right;padding:5px 6px;color:var(--textDim)">'+(f.dev!=null?f.dev.toFixed(3):'—')+'</td>'+
       '</tr>';
   }).join('');
   $('fsPanelContent').innerHTML='<table style="width:100%;font-size:11px;border-collapse:collapse">'+
@@ -12263,7 +12263,7 @@ function _renderFsScatPanel(hold,selTicker){
     let rbe=(Math.abs(h.a||0)>0.01&&Math.abs(h.tr||0)>0.01)?+(Math.abs(h.a)/Math.abs(h.tr)).toFixed(2):null;
     return'<tr style="border-bottom:1px solid rgba(51,65,85,0.4);cursor:pointer;'+(isSel?'background:rgba(99,102,241,0.15)':'')+'" onclick="_fsScat_selectHold(\''+h.t.replace(/'/g,"\\'")+'\')" >'+
       '<td style="padding:4px 6px;color:'+(isSel?'var(--pri)':'var(--txth)')+';font-weight:'+(isSel?'700':'400')+'">'+h.t+'</td>'+
-      '<td style="padding:4px 4px;color:#94a3b8;font-size:10px">'+(h.sec||'').replace(/\s+/g,' ').substring(0,10)+'</td>'+
+      '<td style="padding:4px 4px;color:var(--textDim);font-size:10px">'+(h.sec||'').replace(/\s+/g,' ').substring(0,10)+'</td>'+
       '<td style="text-align:right;padding:4px 6px;color:#e2e8f0">'+(h.p||0).toFixed(1)+'%</td>'+
       '<td style="text-align:right;padding:4px 6px;font-weight:600;color:#e2e8f0">'+(h.tr!=null?h.tr.toFixed(1)+'%':'—')+'</td>'+
       '<td style="text-align:right;padding:4px 6px;color:'+(h.r==null?'#94a3b8':h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+
@@ -12322,7 +12322,7 @@ function _renderFsHoldDetail(ticker){
     facEntries.map(function([k,v]){
       let pct=Math.abs(v)*100;
       return'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'+
-        '<div style="font-size:10px;color:#94a3b8;width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k.replace('Medium-Term ','')+'</div>'+
+        '<div style="font-size:10px;color:var(--textDim);width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+k.replace('Medium-Term ','')+'</div>'+
         '<div style="flex:1;height:5px;background:#1e293b;border-radius:2px"><div style="width:'+Math.min(pct*4,100)+'%;height:100%;background:'+(v>=0?'#10b981':'#ef4444')+';border-radius:2px"></div></div>'+
         '<div style="font-size:10px;font-weight:600;color:'+(v>=0?'#10b981':'#ef4444')+';width:36px;text-align:right">'+(v>=0?'+':'')+v.toFixed(2)+'</div>'+
         '</div>';
@@ -12332,7 +12332,7 @@ function _renderFsHoldDetail(ticker){
     '<div style="color:#64748b">Port %</div><div style="color:#e2e8f0">'+(h.p||0).toFixed(2)+'%</div>'+
     '<div style="color:#64748b">Active %</div><div style="color:'+(h.a>=0?'#10b981':'#ef4444')+'">'+(h.a>=0?'+':'')+((h.a||0).toFixed(2))+'%</div>'+
     '<div style="color:#64748b">Rank</div><div style="color:'+(h.r==null?'#94a3b8':h.r<=2?'#10b981':h.r===3?'#f59e0b':'#ef4444')+'">'+(h.r!=null?'Q'+h.r:'—')+'</div>'+
-    '<div style="color:#64748b">Sector</div><div style="color:#94a3b8;font-size:10px">'+(h.sec||'—')+'</div>'+
+    '<div style="color:#64748b">Sector</div><div style="color:var(--textDim);font-size:10px">'+(h.sec||'—')+'</div>'+
     '<div style="color:#64748b">TE Contrib</div><div style="font-weight:600;color:#e2e8f0">'+(h.tr!=null?h.tr.toFixed(1)+'%':'—')+'</div>'+
     '</div>'+facHtml;
 }
@@ -12558,7 +12558,7 @@ function generateEmailSnapshot(){
 
   // Delta formatter
   const dFmt=(v,unit='',negGood=false)=>{
-    if(v==null)return'<span style="color:#94a3b8;font-size:10px">no prior</span>';
+    if(v==null)return'<span style="color:var(--textDim);font-size:10px">no prior</span>';
     let good=negGood?v<0:v>0;
     let col=v>0?(negGood?'#059669':'#dc2626'):(negGood?'#dc2626':'#059669');
     if(v===0)col='#94a3b8';
@@ -12619,20 +12619,20 @@ function generateEmailSnapshot(){
     .hdr{background:linear-gradient(135deg,#080e1e 0%,#0f172a 100%);color:#e2e8f0;padding:24px 28px}
     .brand{font-size:10px;color:#334155;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
     .hdr h1{font-size:24px;font-weight:700;color:#fff;margin-bottom:3px;line-height:1.2}
-    .hdr .sub{color:#94a3b8;font-size:12px}
+    .hdr .sub{color:var(--textDim);font-size:12px}
     .metrics{display:flex;padding:0;border-bottom:2px solid #f1f5f9}
     .met{flex:1;text-align:center;padding:16px 6px;border-right:1px solid #f1f5f9}
     .met:last-child{border-right:none}
-    .met .lbl{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
+    .met .lbl{font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:1px;margin-bottom:5px}
     .met .val{font-size:20px;font-weight:700;line-height:1}
-    .met .dlta{font-size:10px;color:#94a3b8;margin-top:3px}
-    .narr{padding:10px 28px;font-size:11px;color:#94a3b8;font-style:italic;background:#fafbfc;border-bottom:1px solid #f1f5f9}
+    .met .dlta{font-size:10px;color:var(--textDim);margin-top:3px}
+    .narr{padding:10px 28px;font-size:11px;color:var(--textDim);font-style:italic;background:#fafbfc;border-bottom:1px solid #f1f5f9}
     .sec{padding:16px 28px;border-bottom:1px solid #f1f5f9}
     .sec-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
     .sec-num{width:18px;height:18px;background:#1e293b;color:#fff;border-radius:50%;font-size:9px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
     .sec-ttl{font-size:11px;font-weight:700;color:#1e293b;text-transform:uppercase;letter-spacing:.5px}
     table{width:100%;border-collapse:collapse}
-    th{font-size:9px;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-bottom:2px solid #f1f5f9;text-align:left;font-weight:600}
+    th{font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:.5px;padding:5px 10px;border-bottom:2px solid #f1f5f9;text-align:left;font-weight:600}
     th.r{text-align:right}
     .tcols{display:flex;gap:16px}
     .tcols>div{flex:1}
@@ -12641,7 +12641,7 @@ function generateEmailSnapshot(){
     .changes{list-style:none}
     .changes li{font-size:11px;color:#334155;padding:4px 10px 4px 22px;border-bottom:1px solid #f8fafc;position:relative}
     .changes li::before{content:'›';position:absolute;left:10px;color:#6366f1;font-weight:700}
-    .footer{padding:12px 28px;font-size:10px;color:#94a3b8;text-align:center;background:#f8fafc}
+    .footer{padding:12px 28px;font-size:10px;color:var(--textDim);text-align:center;background:#f8fafc}
   </style></head><body><div class="container">
     <div class="hdr">
       <div class="brand">Redwood Risk Control Panel</div>
@@ -12662,7 +12662,7 @@ function generateEmailSnapshot(){
     </div>
     ${sigFac.length?`<div class="sec">
       <div class="sec-hdr"><span class="sec-num">3</span><span class="sec-ttl">Factor Exposures</span></div>
-      ${facNarr?`<p style="font-size:11px;color:#94a3b8;font-style:italic;margin-bottom:8px">${facNarr}</p>`:''}
+      ${facNarr?`<p style="font-size:11px;color:var(--textDim);font-style:italic;margin-bottom:8px">${facNarr}</p>`:''}
       <table><thead><tr><th>Factor</th><th class="r">Active Exp.</th><th class="r">TE Contrib%</th></tr></thead><tbody>${facRows}</tbody></table>
     </div>`:''}
     <div class="sec">

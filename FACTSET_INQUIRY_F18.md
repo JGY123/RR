@@ -19,7 +19,7 @@ If you don't have a named contact: ask your FactSet account manager to route to 
 
 > Hi [name],
 >
-> We're building an internal portfolio risk dashboard called Redwood Risk, sourced entirely from FactSet Portfolio Attribution CSV exports across 6 strategies (ACWI, ACWIXUS / IOP, EM, IDM, ISC, GSC), with weekly history going back as far as 2014 (~3,000 weekly snapshots in total).
+> We're building an internal portfolio risk dashboard called Redwood Risk, sourced entirely from FactSet Portfolio Attribution CSV exports across 6 strategies (ACWI, ACWIXUS / IOP, EM, IDM, ISC, GSC), with weekly history going back as far as 2014 (~3,000 weekly snapshots in total). The dashboard is built around a strict no-fabrication policy: every numeric cell traces back to a documented source path, and we'd rather show "missing" than guess. That's the lens behind this question.
 >
 > Our internal documentation has long stated that **`%T` (the per-holding "Percentage of tracking error" column in the Security section) sums to ~100% per portfolio per week** — i.e., that each holding's %T value is its share of total portfolio TE, and the column normalizes across the universe.
 >
@@ -36,7 +36,9 @@ If you don't have a named contact: ask your FactSet account manager to route to 
 >
 > Range: **94.6 → 134.4** — a ±35% deviation from the documented "~100%" claim. The deviation is non-uniform across strategies, which suggests it's not a uniform sampling issue but something portfolio- or universe-specific.
 >
-> **What's clean and reassuring:** the **section-aggregate** rows (Sector Weights / Country / Region / Group) DO sum to ~100% — we verified 3,082 of 3,082 sector-weeks across all 6 strategies fall within ±5% of 100%, with averages dead-on 100%. So at the section-aggregate level the math holds. The deviation appears to be specifically in the per-holding Security-section `%T` column.
+> **What's clean and reassuring:** the **section-aggregate** rows (Sector Weights / Country / Region / Group) DO sum to ~100% — we verified 3,082 of 3,082 sector-weeks across all 6 strategies fall within ±5% of 100%, with averages dead-on 100%. We've now baked this into a Layer-2 automated monitor (`verify_section_aggregates.py`, wired into our pre-flight smoke test) so any drift would be caught immediately. So at the section-aggregate level the math holds; the deviation appears specifically in the per-holding Security-section `%T` column.
+>
+> **What we've already disciplined ourselves on:** to make sure this isn't a parser bug on our side, we audited the parser for related issues. We did find one — per-week `pct_specific` / `pct_factor` in the historical summary was being silently dropped; the parser DID extract them per RiskM period but never wrote them through to `hist.summary[]`. Fixed (FORMAT_VERSION 4.3, May 2026). We mention this so you know we've cleaned our own house before bringing this to you.
 >
 > Could you help us understand:
 >
@@ -48,6 +50,8 @@ If you don't have a named contact: ask your FactSet account manager to route to 
 >
 > 3. **Is `%T_Check` (the inclusion flag in the Security section) filtering some rows from the export?**
 >    We see this flag in your output but don't fully understand its semantics. Could it be filtering bench-only or below-materiality rows in a way that affects the sum?
+>
+>    Related observation that may be a clue: on a recent audit of bench-only holdings, we found that **76% of bench-only constituents on EM** ship `%T = null` (623 of 819 bench-only holdings). Only the 196 with shipped `%T` are slim-Security entries; the 623 long-tail constituents come through Raw Factors with no `%T_implied`. If `%T_Check` is the gate that decides which BM-only rows make the Security section, that filter behavior may also explain part of the per-portfolio deviation. (We're tracking this separately as inquiry F12 — an enhancement request to ship `%T_implied` on the long-tail; it's a related but distinct conversation.)
 >
 > 4. **Does the per-strategy variance hint at a known cause?**
 >    EM under-reports (94.6%); IOP / ACWI heavily over (125-134%). Both ACWI and IOP have very large bench universes (~2,000+ names). Is there a relationship between universe size or %T_Check inclusion logic and the sum behavior?
@@ -92,11 +96,22 @@ If you don't have a named contact: ask your FactSet account manager to route to 
 
 ## Internal next steps before sending
 
-1. Run `verify_section_aggregates.py` (in DATA_INTEGRITY_MONITOR.md) — confirms the table's numbers are reproducible and current.
-2. Run the PA-side tests (PA_TESTS.md) — eliminates "did we read the column wrong" as a hypothesis.
-3. **Have a real human review the letter** before send. Tone, recipient, attachments.
+1. ✅ DONE — `verify_section_aggregates.py` shipped + wired into smoke test. Section-aggregate invariant confirmed clean on 3,082/3,082 sector-weeks. The cross-strategy table in the letter is reproducible at any time via this verifier.
+2. Run the PA-side tests (`PA_TESTS_F18.md`) — eliminates "did we read the column wrong" as a hypothesis. Plan ~1 hour at a desktop with PA access.
+3. **Have a real human review the letter** before send. Tone, recipient, attachments. Specifically check that question 3's F12 cross-reference reads as "additional context" not "scope creep" — we want to keep F18 narrow.
 4. **Decide whether to send by email vs raise a support ticket** — the letter format works for a relationship contact; for a ticket, condense to questions 1-4 and link to the repo doc.
 5. Update FACTSET_FEEDBACK.md F18 entry with "letter sent YYYY-MM-DD to [recipient]" once it goes out.
+
+**Pre-send readiness checklist (2026-05-04):**
+- [x] `verify_section_aggregates.py` confirms the cross-strategy table reproducibly
+- [x] Parser-side hygiene fixes (F19) shipped — letter mentions this to demonstrate due diligence
+- [x] F18 contamination map filed in `SOURCES.md` — every tile that displays a Σ %T now has a defensive disclosure footer (cardRiskByDim · cardRanks · cardRiskDecomp · cardTreemap · cardUnowned all done)
+- [ ] PA-side experiments run (recommend ~1 hr human session at PA desktop)
+- [ ] Recipient name confirmed (FactSet account manager → quant attribution lead)
+- [ ] Letter human-reviewed for tone + factual accuracy
+- [ ] CSV slice + reproducer script attached or linked
+
+When all checkboxes filled, the letter is ready to send.
 
 ---
 

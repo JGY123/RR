@@ -2,6 +2,25 @@
 
 **Scope:** 30 tiles, 12 primary tables, ~13K LOC  
 **Generated:** 2026-05-01
+**Updated:** 2026-05-04 — POST-MIGRATION. Phase D + Phase K + design-token sweep all shipped. The "before" state described below is now historical reference.
+
+---
+
+## ✅ POST-REFACTOR STATE (2026-05-04)
+
+| Item | State |
+|---|---|
+| Tile chrome unification | ✅ 30/30 tiles using `tileChromeStrip()` |
+| Column hide/show | ✅ 8 tables using `tableColHidePanelHtml()` (uniform ⚙ Cols panel) |
+| Per-week data flow | ✅ Lint-enforced via `lint_week_flow.py` (smoke-test gate) |
+| Design tokens | ✅ `--space-*` / `--text-*` / `--w-*` / `--radius-*` / wash colors / shadows in :root |
+| Canonical classes | ✅ `.tile-btn`, `.export-btn` (unified), `.section-label`, `.empty-state`, `.stat-card`, `.modal-close-btn`, `.modal-title`, `.tile-chrome`, `.kpi-strip`, `.num-tabular` |
+| HTML hardcoded greys | ✅ 17 `color:#94a3b8` swept to `var(--textDim)` (HTML context) |
+| Plotly hardcoded greys | ✅ 5 `color:'#94a3b8'` swept to `THEME().tick` (Plotly context) |
+| Scroll preservation | ✅ `_withScrollPreserved` on changeWeek / setImpactPeriod |
+| Universe pill UX | ✅ Renamed (Port-Held / In Bench / All) + tooltips + count strip |
+
+---
 
 ---
 

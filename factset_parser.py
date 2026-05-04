@@ -31,8 +31,17 @@ import sys
 import time
 from datetime import datetime
 
-PARSER_VERSION = "3.1.0"
-FORMAT_VERSION = "4.2"
+PARSER_VERSION = "3.1.1"
+FORMAT_VERSION = "4.3"
+# 4.3 (2026-05-04, F19): hist.summary[] entries now carry per-week pct_specific
+#                       and pct_factor (was: only at the latest snapshot via
+#                       sum.pct_specific). Join via riskm_by_date in _hist_entry.
+#                       Backwards compatible — old consumers that don't read
+#                       these new fields continue working unchanged. cardTEStacked
+#                       (the audit's T1-F1 trigger) and any future per-week
+#                       Idio/Factor split now have a source-direct path.
+# 4.2 (2026-04-30): cash extraction from Sector Weights [Cash] row per period
+#                   into hist.summary[].cash (cardCashHist time-series).
 
 # ── Strategy code → dashboard ID mapping ─────────────────────────────────────
 # Only ACWIXUS gets renamed (to IOP). Anything else passes through unchanged —
@@ -1417,6 +1426,9 @@ class FactSetParserV3:
                                     cash_by_date[d_parsed] = w
                     break
 
+            # F19 fix (2026-05-04): hoist date→riskm map out of hist.summary
+            # comprehension. Was O(P×R); now O(R) build + O(P) lookup.
+            riskm_by_date = {r.get("d"): r for r in riskm_rows if r.get("d")}
             s = {
                 "id": dash_id,
                 "name": dash_id,
@@ -1492,7 +1504,10 @@ class FactSetParserV3:
                 "factors": self._build_factor_list(current_rm, snap, factor_names),
                 "chars":   self._build_chars(pc_metrics, current_rm, mcap, bmcap),
                 "hist": {
-                    "summary": [self._hist_entry(pc, cash_by_date) for pc in pc_rows],
+                    # F19 fix (2026-05-04): _hist_entry now joins by date with
+                    # riskm_by_date (built once, above) so every per-week summary
+                    # entry carries pct_specific / pct_factor when source ships them.
+                    "summary": [self._hist_entry(pc, cash_by_date, riskm_by_date) for pc in pc_rows],
                     "fac":  self._build_hist_fac(riskm_rows),
                     # 2026-04-28: per-period group history. Each value is a list of
                     # {d, p, b, a, mcr, tr, over, rev, val, qual, mom, stab} entries
@@ -1619,7 +1634,7 @@ class FactSetParserV3:
 
         return chars
 
-    def _hist_entry(self, pc_row, cash_by_date=None):
+    def _hist_entry(self, pc_row, cash_by_date=None, riskm_by_date=None):
         pcm = pc_row.get("_metrics", {}) if pc_row else {}
         def v(metric):
             m = pcm.get(metric)
@@ -1629,6 +1644,16 @@ class FactSetParserV3:
         # in _assemble; passed in via cash_by_date dict so per-period cash %
         # populates hist.summary[].cash (drives cardCashHist time-series tile).
         cash = (cash_by_date or {}).get(d) if d else None
+        # F19 fix (2026-05-04, audit cardTEStacked T1-F1): per-week
+        # pct_specific / pct_factor were absent from hist.summary even though
+        # the parser DOES extract them per period at line 601-602. The chart
+        # had no choice but to broadcast the latest-week split or fall back
+        # to MCR aggregation. With this join, every cs.hist.sum[] entry now
+        # carries the source-direct split when FactSet ships it. Backwards
+        # compatible — fields are null when riskm_by_date doesn't carry them.
+        rm = (riskm_by_date or {}).get(d) if d else None
+        pct_specific = rm.get("pct_specific") if rm else None
+        pct_factor   = rm.get("pct_factor")   if rm else None
         return {
             "d":    d,
             "te":   v("Predicted Tracking Error (Std Dev)"),
@@ -1637,6 +1662,8 @@ class FactSetParserV3:
             "as":   v("Port. Ending Active Share"),
             "sr":   None,
             "cash": cash,
+            "pct_specific": pct_specific,
+            "pct_factor":   pct_factor,
         }
 
     def _build_hist_fac(self, riskm_rows):

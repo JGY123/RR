@@ -155,6 +155,22 @@ Aggregation helper: `aggregateHoldingsBy(holds, groupKeyFn, factorList, opts)` (
 
 (See cardRiskHistTrends, cardTEStacked, cardRiskFacTbl, cardFacContribBars sections in `tile-specs/*.md`. Most read directly from `cs.factors[]` / `cs.hist.sum` / `cs.snap_attrib` — sourced. cardTEStacked has a known math issue per B96 where `pct_specific`/`pct_factor` are interpreted as TE-shares but per CSV spec they're "% of Total Risk".)
 
+### cardTEStacked — per-week Idio/Factor split (F12(a) + F19, 2026-05-04)
+
+The Idio/Factor decomposition over time uses a three-tier provenance resolution. Every per-week point on the chart now carries one of these three sources, surfaced in the chart footer caveat:
+
+| Tier | Source | When used | Marker |
+|---|---|---|---|
+| **1 — Source-direct** | `cs.hist.sum[i].pct_specific` / `.pct_factor` (parser-shipped, FORMAT_VERSION ≥ 4.3 — F19 fix) | When parser ships per-week values from CSV | green ● |
+| **2 — MCR-derived** | `getPctSpecificForWeek(d) = Σ |cs.hist.sec[name].mcr|` over all sectors at date `d` | When tier 1 is null but `hist.sec` has MCR for that date. **L2-verified** by `verify_section_aggregates.py` (Σ pct_specific ≈ 100% on 3,082/3,082 sector-weeks). Same math as parser's `_pct_specific_source = "sum_sector_mcr"` for the latest week. Spot-check: GSC latest = 69.9 = source-direct exactly. | indigo ● + ᵉ |
+| **3 — Broadcast** | Latest-week split (`cs.sum.pct_specific` / `cs.sum.pct_factor`) repeated onto every week | Last-resort when both tiers above fail (e.g., `hist.sec` has no entry for that date) | warn ● + ᵉ |
+
+`exportTEStackedCsv()` (the tile's CSV export) uses the same three-tier resolution and emits a `Source` column so downstream consumers can see provenance per row.
+
+**Renormalization invariant:** when `pct_specific + pct_factor` for a given week deviates from 100% by >5 pp, a console warning fires (`[cardTEStacked] N/M weeks: Σ shares deviate ...`) and the chart's footer surfaces a `⚠` caveat. The chart still renders (renormalized to fit `te`) but the deviation is never silently absorbed.
+
+**Pre-F12(a) state (do not regress):** the chart used to fall back to a flat broadcast of the latest-week split when `pct_specific` was null — visually misleading because real per-week share varies (46→74% on GSC over 10 yrs). All three tiers are now visible to the user.
+
 ## Typography conventions (design-polish-v1 / B105.5, 2026-04-24)
 
 Global CSS rules establish visual provenance for every numeric cell. These are NOT per-tile choices — if a number "looks different" between tiles, it should not be a font/typography difference, since the rules below are global.

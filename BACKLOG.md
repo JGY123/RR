@@ -113,6 +113,7 @@ Items surfaced by `INQUISITOR_QUEUE_R2_2026-04-30.md` user replies on 2026-05-01
 - **Critical sequencing:** must land BEFORE the production massive-run CSV ingest. Otherwise the first ingest is a one-shot replace and the append-only model never starts.
 - **Size:** L (~6–10 hours, parser merge logic + dashboard fetch path + IndexedDB cache + cumulative-save UI button + new test suite).
 - **Open questions for user:** see `HISTORY_PERSISTENCE.md` Section "Open questions for the user".
+- **2026-05-04 update — concrete trigger surfaced.** cardTEStacked Tier-2 audit (`tile-specs/cardTEStacked-audit-2026-05-04.md`, T1-F1) verified that `hist.summary` IS populated in current split-files (383-618 wks/strategy) but **per-week `pct_specific`/`pct_factor` is null on every historical week for every strategy**. F12(a) workaround shipped (cardTEStacked now derives per-week split from Σ|sector mcr| via `getPctSpecificForWeek()` — L2-verified path) so the chart renders meaningfully today. But the parser-side gap remains: investigate whether parser CAN extract per-week pct_specific from CSV (and is failing) or whether FactSet doesn't ship them per-week (in which case the L2-derived path becomes the canonical source going forward). Track as F19 inquiry — parser probe first, then FactSet question if parser is innocent.
 
 ---
 

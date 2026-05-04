@@ -1212,11 +1212,11 @@ const _ABOUT_REG={
   },
   cardTEStacked:{
     title:'Tracking Error — Decomposition Over Time',
-    what:'Weekly TE decomposed into idiosyncratic + factor-side contributions. Range slider for zoom. Click for detail drill.',
-    how:'Per-week: idio TE (stock-specific) + factor TE (Σ factor contributions) = total TE. Stacked-area chart with idio at bottom (purple) + factor stacked above + total TE line overlay.',
-    source:'cs.hist.sum[].te + parser-derived per-week idio/factor split (when shipped) or sector-aggregated MCR sums when only sector hist available.',
-    caveats:'Decomposition history requires hist.sec MCR data; falls back to total TE only when sector-level history missing. Synth markers (ᵉ) on derived points.',
-    related:'cardRiskHistTrends · cardFacContribBars · TE drill modal'
+    what:'Weekly TE decomposed into idiosyncratic (stock-specific, amber) + factor (cyan) contributions. Range slider for zoom. Click chart for the TE drill modal.',
+    how:'Per-week TE comes from cs.hist.sum[].te. The Idio/Factor split is resolved in three tiers: (1) source-direct from h.pct_specific / h.pct_factor when parser ships them; (2) MCR-derived from Σ|sector mcr| via getPctSpecificForWeek() — same math the parser uses for sum.pct_specific (`_pct_specific_source = sum_sector_mcr`), L2-verified across 3,082 sector-weeks; (3) last-resort broadcast of the latest-week split when neither (1) nor (2) is available. The footer below the chart discloses the tier breakdown over the rendered window.',
+    source:'cs.hist.sum[].te (per-week TE). Per-week split: cs.hist.sum[].pct_specific / .pct_factor preferred; Σ|cs.hist.sec[name].mcr| as L2-verified fallback (verify_section_aggregates.py).',
+    caveats:'In current production, parser ships per-week pct_specific=null on every historical week (F19 candidate). The chart uses the L2-verified MCR-derived path on those weeks, marked ᵉ. Spot-check on GSC latest week: Σ|mcr|=69.9 = sum.pct_specific exactly. Universe pill (Port-Held / In-Bench / All) does not affect this tile — TE is portfolio-level (B116 invariance).',
+    related:'cardRiskHistTrends · cardFacContribBars · cardRiskByDim · TE drill modal · B114 history persistence · F19 per-week pct_specific provenance'
   },
   cardBetaHist:{
     title:'Beta History — Predicted vs Historical vs MPT',
@@ -7771,7 +7771,7 @@ function rRisk(){
   <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
       <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted Axioma beta over time + Historical / MPT reference lines for the active strategy. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted vs Historical vs MPT</div><span style="font-size:10px;color:var(--textDim);margin-left:4px" id="betaHistFooterCap"></span><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span><span onclick="event.stopPropagation()">${resetZoomBtn('riskBetaMultiDiv')}</span></div>
-      <span onclick="event.stopPropagation()">${tileChromeStrip({id:'cardBetaHist',csv:'exportBetaMultiCsv&&exportBetaMultiCsv()',fullscreen:"openTileFullscreen('cardBetaHist')",resetView:true,hide:true,extra:'<span style="font-size:9px;color:var(--pri)">click for detail ›</span>'})}</span>
+      <span onclick="event.stopPropagation()">${tileChromeStrip({id:'cardBetaHist',csv:'exportBetaMultiCsv()',fullscreen:"openTileFullscreen('cardBetaHist')",resetView:true,hide:true,extra:'<span style="font-size:9px;color:var(--pri)">click for detail ›</span>'})}</span>
     </div>
     <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
   </div>
@@ -7785,7 +7785,7 @@ function rRisk(){
         id:'cardFacContribBars',
         about:true,
         resetZoom:'riskFacBarDiv',
-        csv:'exportFacContribCsv&&exportFacContribCsv()',
+        csv:'exportFacContribCsv()',
         fullscreen:"openTileFullscreen('cardFacContribBars')",
         resetView:true,
         hide:true,
@@ -7948,7 +7948,7 @@ function rRisk(){
       ${tileChromeStrip({
         id:'cardFacHist',
         resetZoom:'riskExpHistDiv',
-        csv:'exportFacHistCsv&&exportFacHistCsv()',
+        csv:'exportFacHistCsv()',
         fullscreen:"openTileFullscreen('cardFacHist')",
         resetView:true,
         hide:true,
@@ -8048,21 +8048,43 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   let facFrac=1-idioFrac;
   let dates=hist.map(h=>isoDate(h.d));
   let teVals=hist.map(h=>h.te);
-  // T1-F2 + T1-F3 defensive fix (audit 2026-05-04): track per-week
-  // synth-broadcast (when h.pct_specific is null and we fall back to the
-  // latest-week split) and out-of-tolerance sums. Both surface in the legend
-  // + footer so the user sees the math the same way the L2 monitor sees it.
-  // Anti-fabrication discipline + LESSONS_LEARNED 9-14.
-  let synthCount=0, sumDriftCount=0, weeksWithBoth=0;
-  // Normalize per data point so factor+idio sum exactly to te
+  // ───── F12(a) — three-tier per-week pct_specific resolver (2026-05-04) ─────
+  // The chart's idio/factor split previously was binary: either parser-direct
+  // (h.pct_specific) or latest-week broadcast (the fall-through anti-pattern).
+  // In current production data, parser-direct is null on every historical week
+  // (verified across all 6 strategies). The result was a flat split — visually
+  // misleading because real per-week share VARIES (46→74% on GSC over 10 yrs).
+  //
+  // F12(a) introduces a middle tier: derive per-week pct_specific from
+  // Σ|sector mcr| (cs.hist.sec). This sits on the L2-verified path
+  // (verify_section_aggregates.py confirms invariance across 3,082 sector-weeks)
+  // — same math the parser uses for sum.pct_specific (`_pct_specific_source =
+  // 'sum_sector_mcr'`). Spot-check on GSC latest week: Σ|mcr|=69.9 = sum.pct_specific
+  // exactly (Δ=-0.00). The third tier (broadcast) remains as final fallback
+  // for weeks where hist.sec also has no data; it is marked separately so the
+  // user can see at a glance which weeks were derived vs broadcast.
+  //
+  // Counters tracked for defensive UI footer per LESSONS 9-14.
+  let cntSourceDirect=0, cntMcrDerived=0, cntBroadcast=0, sumDriftCount=0, weeksWithBoth=0;
   let idioVals=hist.map(h=>{
     let havePs=h.pct_specific!=null, havePf=h.pct_factor!=null;
-    let raw_s=havePs?h.pct_specific:idioFrac*100;
-    let raw_f=havePf?h.pct_factor:facFrac*100;
-    if(!havePs||!havePf)synthCount++;
-    if(havePs&&havePf){
-      weeksWithBoth++;
+    let raw_s, raw_f;
+    if(havePs && havePf){
+      raw_s=h.pct_specific; raw_f=h.pct_factor;
+      cntSourceDirect++; weeksWithBoth++;
       if(Math.abs(raw_s+raw_f-100)>5)sumDriftCount++;
+    } else {
+      // Tier 2 — derive from sector MCR aggregation (L2-verified).
+      const w=(typeof getPctSpecificForWeek==='function')?getPctSpecificForWeek(h.d):null;
+      if(w && w.pct_specific!=null){
+        raw_s=w.pct_specific; raw_f=w.pct_factor;
+        cntMcrDerived++;
+      } else {
+        // Tier 3 — final fallback: broadcast latest-week split (legacy path).
+        raw_s=havePs?h.pct_specific:idioFrac*100;
+        raw_f=havePf?h.pct_factor:facFrac*100;
+        cntBroadcast++;
+      }
     }
     let tot=raw_s+raw_f||100;
     return +(h.te*(raw_s/tot)).toFixed(3);
@@ -8072,6 +8094,8 @@ function rTEStackedArea(s,factorRisk,idioRisk){
     // items, not noise. Console-warn surfaces in the integrity console.
     console.warn(`[cardTEStacked] ${sumDriftCount}/${weeksWithBoth} weeks have |pct_specific+pct_factor − 100%| > 5pp. Σ shares deviate from invariant. See FACTSET_FEEDBACK candidate.`);
   }
+  // synthCount fires the legend ᵉ when ANY week was not source-direct.
+  let synthCount=cntMcrDerived+cntBroadcast;
   let facVals=hist.map((h,i)=>+(h.te-idioVals[i]).toFixed(3));
   let C=_teStackColors();
   // ᵉ-suffix in legend names when broadcast was used on any week — same
@@ -8093,13 +8117,19 @@ function rTEStackedArea(s,factorRisk,idioRisk){
     legend:{orientation:'h',y:1.12,font:{size:11}},
     hovermode:'x unified'
   },{...plotCfg,scrollZoom:true});
-  // Footer caveat block — surfaces synth-broadcast count + sum-drift count.
-  // Defensive UI (LESSONS 12-13): show the math, don't quietly normalize.
+  // Footer caveat block — F12(a) provenance breakdown per LESSONS 9-14.
+  // Defensive UI: show the math, don't quietly normalize. The user sees at a
+  // glance which weeks are source-direct (parser ships pct_specific) vs
+  // MCR-derived (L2-verified sector aggregation) vs broadcast (last-resort).
   let foot=document.getElementById('teStackedFooterCap');
   if(foot){
     let parts=[];
     parts.push('Universe pill does not affect this tile (TE is portfolio-level, universe-invariant per B116).');
-    if(synthCount>0)parts.push(`<span style="color:var(--warn)">ᵉ</span> ${synthCount}/${hist.length} weeks: Idio/Factor split broadcast from latest-week share (per-week pct_specific missing for those weeks).`);
+    let provBits=[];
+    if(cntSourceDirect>0)provBits.push(`<span style="color:var(--pos)">●</span> ${cntSourceDirect} source-direct`);
+    if(cntMcrDerived>0)provBits.push(`<span style="color:var(--pri)">●</span> ${cntMcrDerived} MCR-derived (Σ|sector mcr|, L2-verified)<span style="color:var(--warn);font-size:9px;margin-left:2px">ᵉ</span>`);
+    if(cntBroadcast>0)provBits.push(`<span style="color:var(--warn)">●</span> ${cntBroadcast} broadcast (last-resort, latest-week split)<span style="color:var(--warn);font-size:9px;margin-left:2px">ᵉ</span>`);
+    if(provBits.length)parts.push('Provenance over '+hist.length+' wks: '+provBits.join(' · '));
     if(sumDriftCount>0)parts.push(`<span style="color:var(--warn)">⚠</span> ${sumDriftCount}/${weeksWithBoth} weeks: Σ pct_specific+pct_factor deviates from 100% by &gt;5pp (renormalized for display; see console).`);
     foot.innerHTML=parts.join(' · ');
   }
@@ -8132,18 +8162,133 @@ function exportTEStackedCsv(){
   if(!cs||!cs.hist||!cs.hist.sum)return;
   let hist=cs.hist.sum;
   let te=cs.sum.te||1;
-  let rows=[['Date','Total TE %','Stock-Specific %','Factor %']];
+  let idioRiskLatest=cs.sum.pct_specific!=null?cs.sum.pct_specific:50;
+  let facRiskLatest=cs.sum.pct_factor!=null?cs.sum.pct_factor:50;
+  let idioFrac=(idioRiskLatest)/((idioRiskLatest)+(facRiskLatest))||0.5;
+  // F12(a) anti-fabrication fix (2026-05-04): per-week pct_specific resolved
+  // through the same three-tier path as rTEStackedArea (source-direct →
+  // MCR-derived → broadcast). The CSV used to fall back to 50/50 when source
+  // was null — silent fabrication in exported data. Now: provenance column
+  // surfaces which tier each row came from, matching the chart's footer.
+  let rows=[['Date','Total TE %','Stock-Specific %','Factor %','Source']];
   hist.forEach(h=>{
-    let raw_s=h.pct_specific!=null?h.pct_specific:50;
-    let raw_f=h.pct_factor!=null?h.pct_factor:50;
+    let raw_s, raw_f, src;
+    if(h.pct_specific!=null && h.pct_factor!=null){
+      raw_s=h.pct_specific; raw_f=h.pct_factor; src='source-direct';
+    } else {
+      const w=(typeof getPctSpecificForWeek==='function')?getPctSpecificForWeek(h.d):null;
+      if(w && w.pct_specific!=null){
+        raw_s=w.pct_specific; raw_f=w.pct_factor; src='mcr-derived (Σ|sector mcr|)';
+      } else {
+        raw_s=h.pct_specific!=null?h.pct_specific:idioFrac*100;
+        raw_f=h.pct_factor!=null?h.pct_factor:(1-idioFrac)*100;
+        src='broadcast (latest-week split)';
+      }
+    }
     let tot=raw_s+raw_f||100;
     let idio=+(h.te*(raw_s/tot)).toFixed(3);
     let fac=+(h.te-idio).toFixed(3);
-    rows.push([h.d,h.te,idio,fac]);
+    rows.push([h.d,h.te,idio,fac,src]);
   });
   let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   let blob=new Blob([csv],{type:'text/csv'});
   let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='te_decomp_'+cs.id+'.csv';a.click();
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// CSV exporters for 3 tiles whose chrome strips referenced undefined funcs:
+// cardBetaHist (F4), cardFacHist (F1), cardFacContribBars (F1) — all RED in
+// audit cycle 2026-05-04 because the `funcName && funcName()` short-circuit
+// guards in tileChromeStrip silently no-op'd when the function was absent.
+// All three follow the canonical pattern from exportTEStackedCsv (above).
+// ─────────────────────────────────────────────────────────────────────────
+
+// cardBetaHist (audit F4, 2026-05-04). Columns: Date · Beta · Predicted (ref)
+// · Historical (ref) · MPT (ref). Reference values are flat scalars from
+// cs.sum.betas — repeated each row so the CSV is self-contained.
+function exportBetaMultiCsv(){
+  if(!cs||!cs.hist||!cs.hist.sum)return;
+  const hist=cs.hist.sum;
+  const betas=cs.sum.betas||{};
+  const rows=[['Date','Beta','Predicted (ref)','Historical (ref)','MPT (ref)']];
+  hist.forEach(h=>{
+    rows.push([h.d, h.beta!=null?h.beta:'',
+      betas.predicted!=null?betas.predicted:'',
+      betas.historical!=null?betas.historical:'',
+      betas.mpt!=null?betas.mpt:'']);
+  });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='beta_hist_'+(cs.id||'')+'.csv';a.click();
+}
+
+// cardFacHist (audit F1, 2026-05-04). Emits per-week per-factor for the
+// CURRENTLY checked factors and CURRENT metric (Active Exp / Factor Return /
+// Cum Return). Cum Return column carries the ᵉ-derived caveat in the column
+// label per anti-fabrication discipline (matches the pill marker on screen).
+function exportFacHistCsv(){
+  if(!cs)return;
+  const facHist=cs.hist&&cs.hist.fac||{};
+  const snap=cs.snap_attrib||{};
+  const checked=[...document.querySelectorAll('.fac-exp-chk:checked')].map(c=>c.value);
+  if(!checked.length){alert('No factors selected — toggle at least one factor before exporting.');return;}
+  const metric=(typeof _facHistMetric!=='undefined'&&_facHistMetric)||'exp';
+  const lbl=metric==='exp'?'Active Exposure (e-bm)':metric==='ret'?'Factor Return (%, weekly)':'Cum Return (%) [ᵉ simple-sum approx]';
+  const rows=[['Date','Factor',lbl]];
+  checked.forEach(name=>{
+    if(metric==='exp'){
+      const h=facHist[name];
+      if(h&&h.length){
+        h.forEach(p=>{
+          const v=p.bm!=null?+(p.e-p.bm).toFixed(4):(p.e!=null?p.e:'');
+          rows.push([p.d,name,v]);
+        });
+      }
+    } else {
+      // 'ret' or 'cret'
+      const sa=snap[name];
+      if(sa&&sa.hist&&sa.hist.length){
+        let cum=0;
+        sa.hist.forEach(p=>{
+          const r=p.ret!=null?p.ret:0;
+          if(metric==='ret'){rows.push([p.d,name,+r.toFixed(3)]);}
+          else {cum+=r; rows.push([p.d,name,+cum.toFixed(3)]);}
+        });
+      }
+    }
+  });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='fac_hist_'+metric+'_'+(cs.id||'')+'.csv';a.click();
+}
+
+// cardFacContribBars (audit F1, 2026-05-04). Emits the latest-week factor
+// snapshot the chart is currently rendering, filtered by checkbox state +
+// threshold. Columns include SIGNED TE contribution (audit D1 noted the
+// chart sign-collapses for visual reasons; CSV preserves the sign so users
+// can rebuild any view).
+function exportFacContribCsv(){
+  if(!cs)return;
+  const facMCR=window._rfbData||[];
+  if(!facMCR.length){alert('No factor data loaded yet — switch to the Risk tab and try again.');return;}
+  const checked=new Set([...document.querySelectorAll('.fac-bar-chk:checked')].map(c=>c.value));
+  const thr=parseFloat((document.getElementById('facThreshSlider')||{}).value||'0')||0;
+  const rows=[['Factor','Active Exposure','TE Contrib % (signed)','MCR to TE','Factor σ','Return %','Impact']];
+  facMCR.forEach(f=>{
+    if(!checked.has(f.n))return;
+    if(Math.abs(f.c||0)<thr)return;
+    rows.push([f.n,
+      f.a!=null?f.a:'',
+      f.c!=null?f.c:'',         // signed — NOT |c|
+      f.mcr!=null?f.mcr:'',
+      f.dev!=null?f.dev:'',
+      f.ret!=null?f.ret:'',
+      f.imp!=null?f.imp:''
+    ]);
+  });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='fac_contrib_'+(cs.id||'')+'.csv';a.click();
 }
 
 function rMultiBeta(s){

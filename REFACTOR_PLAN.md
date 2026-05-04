@@ -96,6 +96,12 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | 2026-05-03 09:50 | session-wrap | — | `refactor.20260503.0950.session-wrap` | REFACTOR_PLAN + SESSION_STATE checkpoint log. |
 | 2026-05-04 10:00 | D-sweep-2 | — | `refactor.20260504.1000.phase-D-sweep-2` | 9 more tiles migrated: cardThisWeek, cardWeekOverWeek, cardChars, cardFacRisk, cardFacDetail, cardRiskFacTbl, cardTreemap, cardUnowned, cardWatchlist. |
 | 2026-05-04 10:30 | **D-COMPLETE** | — | `refactor.20260504.1030.phase-D-complete` | Final 16 chart/risk-tab tiles migrated. **All 30 tile chrome rows now use tileChromeStrip.** Zero inline chrome holdouts. |
+| 2026-05-04 10:45 | session-wrap | — | `refactor.20260504.1045.session-wrap` | REFACTOR_PLAN + SESSION_STATE + dev_dashboard updated for D-complete. |
+| 2026-05-04 11:00 | plotly color sweep | — | `refactor.20260504.1100.plotly-color-sweep` | 5 Plotly `color:'#94a3b8'` → `color:THEME().tick`. Theme-flip support. |
+| 2026-05-04 11:15 | KPI stat-card | — | `refactor.20260504.1115.kpi-stat-card` | cardFacRisk KPI strip → `.stat-card` markup (6 inline boxes). |
+| 2026-05-04 11:30 | cardHoldRisk audit fixes | — | `refactor.20260504.1130.cardHoldRisk-audit-fixes` | D2 disclaimer + F3 week banner + F1 CSV export. Audit GREEN. |
+| 2026-05-04 11:45 | cardWeekOverWeek F1+F3+D1 | — | `refactor.20260504.1145.cardWeekOverWeek-audit-fixes` | Empty-branch chrome + dropped-row drill safety + .empty-state migration. |
+| 2026-05-04 12:00 | cardWeekOverWeek F2 | — | `refactor.20260504.1200.cardWeekOverWeek-F2` | Factor rotation footer now `_selectedWeek`-aware. KPI deltas + factor rotation BOTH flow per-week now. |
 
 ## Status summary (post-2026-05-01 session)
 
@@ -117,12 +123,18 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 - Item #4 Factor Performance y-axis — SHIPPED 2026-05-01 18:20.
 
 **Next session priorities (ordered by leverage):**
-1. **Per-tile audit cadence resume** — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep. Architectural refactor is done; functional / data review is the natural next pass.
-2. **Plotly THEME() per-trace cleanup** — 5 remaining `color:'#94a3b8'` Plotly object-literal occurrences. Replace with `THEME().tick` accessor for full theme-flip support.
-3. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` / `gap: Xpx` to `var(--space-*)` tokens (lower priority — current values already work).
-4. **Per-tile design pass** — apply `.stat-card` / `.empty-state` / `.section-label` to remaining inline-styled patterns (cardThisWeek bullets, drill modals).
-5. **Drill modal migration** — drill modals (oDr, oDrMetric, oDrCountry, oSt, etc.) still have inline chrome. They're rendered into a modal overlay — could adopt tileChromeStrip if useful.
-6. **End-of-session: commit a "presentation-2026-05-XX" tag whenever we have a stable state** for stakeholder review.
+1. **Re-run cardRiskByDim audit** — earlier audit subagent ran for 50+ min and likely stalled. Re-spawn with same brief (deferred 2026-05-04).
+2. **Pick 2-3 more Tier-2 tiles for audit sweep** — cardCorr / cardFacContribBars / cardTEStacked / cardBetaHist / cardFacHist haven't been audited recently.
+3. **Pending audit fixes from cardWeekOverWeek**:
+   - F4: CSV export for move list (small, ship anytime)
+   - C1: clarify riskMode neutral vs all-risk coloring on Beta/AS/Holdings deltas (PM decision)
+   - D2/D3/D4/D5: typography polish (.section-label adoption, off-scale font sizes, sparkline color convention)
+4. **Pending audit fixes from cardHoldRisk**:
+   - F2: dedicated `openHoldRiskFullscreen()` handler with bigger bubbles (~25 LOC)
+   - D3: bench-only long tail clutter (PM decision: filter or surface)
+5. **Drill modal migration** — drill modals (oDr, oDrMetric, oDrCountry, oSt) still have inline chrome.
+6. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` to `var(--space-*)` tokens.
+7. **End-of-session: commit a "presentation-2026-05-XX" tag whenever we have a stable state** for stakeholder review.
 
 ---
 

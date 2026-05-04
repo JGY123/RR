@@ -1,7 +1,53 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-05-04 10:30 (Phase D MIGRATION COMPLETE — all 30 tile chrome rows now use tileChromeStrip; zero inline holdouts)
+last_updated: 2026-05-04 12:00 (Tile audit cadence — 2 of 3 audits delivered + fixes shipped; cardRiskByDim deferred)
+---
+
+## 2026-05-04 11:00–12:00 — Tile audit cadence resume
+
+User said "start the next session lets continue." Per REFACTOR_PLAN
+"Next session priorities" #1: per-tile audit cadence resume.
+
+**Spawned 3 parallel `tile-audit` subagents** for cardWeekOverWeek,
+cardHoldRisk, cardRiskByDim.
+
+**While audits ran (parallel work):**
+- `refactor.20260504.1100.plotly-color-sweep` — 5 Plotly `color:'#94a3b8'`
+  → `THEME().tick` for full theme-flip support
+- `refactor.20260504.1115.kpi-stat-card` — cardFacRisk KPI strip (6 inline
+  boxes) → canonical `.stat-card` markup
+- REFACTOR_AUDIT.md updated with post-migration state header
+- REFACTOR_IMPACT.md created — cumulative 4-day impact summary
+
+**cardHoldRisk audit (DELIVERED, GREEN overall):**
+- `refactor.20260504.1130.cardHoldRisk-audit-fixes`:
+  - D2 disclaimer (Universe pill doesn't filter — TE/MCR universe-invariant)
+  - F3 tile-local "data is latest only" banner when `_selectedWeek` set
+  - F1 CSV export (`exportHoldRiskCsv()` + chrome `csv:` slot)
+- 3 YELLOWs deferred: F2 (custom fullscreen), D3 (bench-only clutter — PM)
+
+**cardWeekOverWeek audit (DELIVERED, YELLOW → GREEN-trending):**
+- `refactor.20260504.1145.cardWeekOverWeek-audit-fixes`:
+  - F1 empty-branch chrome (was: only aboutBtn)
+  - F3 dropped-row drill safety (was: silent dead-click)
+  - D1 `.wow-empty` → canonical `.empty-state` migration
+- `refactor.20260504.1200.cardWeekOverWeek-F2`:
+  - F2 factor rotation footer is now `_selectedWeek`-aware
+  - In hist mode: KPI deltas + factor rotation BOTH flow per-week
+  - Move list correctly stays latest-only (cs.hold limitation)
+- 4 polish items deferred: F4 (CSV export), C1 (riskMode coloring — PM),
+  D2-D5 (typography polish)
+
+**cardRiskByDim audit (DEFERRED):**
+- Subagent ran 50+ min, likely stalled. Re-spawn next session.
+
+**Session output: 9 commits, 7 tags.**
+
+Tile audit reports preserved at:
+- `tile-specs/cardHoldRisk-audit-2026-05-04.md` (209 lines)
+- `tile-specs/cardWeekOverWeek-audit-2026-05-04.md` (192 lines)
+
 ---
 
 ## 2026-05-04 09:50–10:30 — Phase D migration COMPLETE

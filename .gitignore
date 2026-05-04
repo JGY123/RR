@@ -19,3 +19,9 @@ __pycache__/
 
 # Large parsed JSON outputs (regenerate via load_data.sh)
 latest_data.json
+latest_data_full.json
+em_full_history.json
+data/strategies/
+
+# Scheduled-task lock (per-run state, not for repo)
+.claude/scheduled_tasks.lock

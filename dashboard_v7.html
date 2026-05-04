@@ -2576,16 +2576,20 @@ function toggleThisWeek(){
   if(caret)caret.textContent=_thisWeekCollapsed?'▶':'▾';
 }
 function _thisWeekHeaderHtml(title){
-  return `<div class="flex-between" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+  // 2026-05-04 (Phase D migration): cardThisWeek chrome → tileChromeStrip.
+  // The collapse-caret toggle (toggleThisWeek) is bespoke to this tile so it
+  // sits in the extra slot. About + FS + Hide come from the helper.
+  return `<div class="flex-between">
     <div style="display:flex;align-items:center;gap:8px">
       <div class="card-title" style="margin:0">${title}</div>
-      ${aboutBtn('cardThisWeek')}
     </div>
-    <div style="display:flex;gap:6px;align-items:center">
-      ${fsTileBtn('cardThisWeek')}
-      ${hideTileBtn('cardThisWeek')}
-      <button onclick="toggleThisWeek()" title="Collapse / expand body section" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 8px;border-radius:5px;cursor:pointer;line-height:1"><span id="thisWeekCaret">${_thisWeekCollapsed?'▶':'▾'}</span></button>
-    </div>
+    ${tileChromeStrip({
+      id:'cardThisWeek',
+      about:true,
+      fullscreen:"openTileFullscreen('cardThisWeek')",
+      hide:true,
+      extra: `<button class="tile-btn" onclick="toggleThisWeek()" title="Collapse / expand body section"><span id="thisWeekCaret">${_thisWeekCollapsed?'▶':'▾'}</span></button>`,
+    })}
   </div>`;
 }
 function thisWeekCardHtml(s){
@@ -2887,18 +2891,20 @@ function rWeekOverWeek(s){
   const moveListsHtml = isHist
     ? `<div class="wow-empty" style="font-size:11px;padding:18px 0">Holdings-level moves (Added/Dropped/Resized) and factor rotation only available for the latest week. KPI deltas above reflect the selected historical week vs its prior week.</div>`
     : `<div class="wow-cols">${addCol}${dropCol}${resizeCol}</div>${facRot}`;
+  // 2026-05-04 (Phase D migration): cardWeekOverWeek chrome → tileChromeStrip.
   return `<div class="card" id="cardWeekOverWeek" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div class="card-title tip" data-tip="What changed this week — KPI deltas (TE/AS/Beta/Holdings count), 3-column move list (Added/Dropped/Resized top 5 by |Δwt|), and factor rotation footer for the 3 factors with the biggest active-exposure shift. Click any row to drill into that holding." oncontextmenu="showNotePopup(event,'cardWeekOverWeek');return false" style="margin:0">Week over Week${isHist?' <span style="font-size:10px;color:var(--warn);font-weight:500">· historical</span>':''}</div>
-        ${aboutBtn('cardWeekOverWeek')}
         <span style="font-size:10px;color:var(--textDim);font-weight:400">${dateBadge}</span>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:9px;color:var(--textDim);margin-right:4px">Δwt threshold: ${WOW_RESIZE_THRESH.toFixed(2)}%</span>
-        ${fsTileBtn('cardWeekOverWeek')}
-        ${hideTileBtn('cardWeekOverWeek')}
-      </div>
+      ${tileChromeStrip({
+        id:'cardWeekOverWeek',
+        about:true,
+        fullscreen:"openTileFullscreen('cardWeekOverWeek')",
+        hide:true,
+        extra: `<span style="font-size:9px;color:var(--textDim);margin-right:4px">Δwt threshold: ${WOW_RESIZE_THRESH.toFixed(2)}%</span>`,
+      })}
     </div>
     <div class="wow-kpis">${kpiHtml}</div>
     ${moveListsHtml}
@@ -3030,14 +3036,15 @@ function rExp(){
           <div class="card-title tip" data-tip="Factor Risk Snapshot — point-in-time view. X = active exposure (UW ← → OW, σ). Y = TE contribution (% TE, +/- adds vs diversifies). Bubble size = factor's own volatility (σ). KPI strip shows Idio vs Factor portion of total TE. Click a bubble to drill." oncontextmenu="showNotePopup(event,'cardFacRisk');return false">Factor Risk Snapshot</div>
           <span style="font-size:10px;color:var(--textDim);margin-left:8px;font-weight:400">exposure × risk · bubble = factor σ</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${aboutBtn('cardFacRisk')}
-          <button class="export-btn" title="Full screen — bigger snapshot quadrant" onclick="openFacRiskFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
-          ${resetZoomBtn('facRiskDiv')}
-          <button class="export-btn" onclick="exportFacRiskCsv&&exportFacRiskCsv()" title="Download CSV" style="padding:3px 7px;font-size:11px">CSV</button>
-          ${resetViewBtn('cardFacRisk')}
-          ${hideTileBtn('cardFacRisk')}
-        </div>
+        ${tileChromeStrip({
+          id:'cardFacRisk',
+          about:true,
+          resetZoom:'facRiskDiv',
+          csv:'exportFacRiskCsv&&exportFacRiskCsv()',
+          fullscreen:'openFacRiskFullscreen()',
+          resetView:true,
+          hide:true,
+        })}
       </div>
       <div id="facRiskKpi" style="display:flex;gap:8px;margin:4px 0 10px;flex-wrap:wrap;align-items:center"></div>
       <div id="facRiskDiv" style="height:440px"></div>
@@ -3071,20 +3078,23 @@ function rExp(){
   </div>
 
   <!-- Row 3b: Factor Detail (full width below the two map tiles) -->
+  <!-- 2026-05-04 (Phase D migration): cardFacDetail chrome migrated.
+       facColDropHtml legacy column-picker stays in extra slot.
+       Primary/All view toggle uses helper view slot. -->
   <div class="card" id="cardFacDetail" style="margin-top:16px">
     <div class="flex-between" style="margin-bottom:6px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div>${aboutBtn('cardFacDetail')}${tableColHidePanelHtml('tbl-fac')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button onclick="openFullScreen('facmap')" title="Factor Risk Map — full screen" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
-        ${facColDropHtml()}
-        <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardFacDetail');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download PNG</div><div onclick="exportCSV('#cardFacDetail table','factors');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'))">Download CSV</div></div></div>
-        <div class="toggle-wrap" style="margin:0">
-          <button id="facViewPrimary" class="toggle-btn${_facView==='primary'?' active':''}" onclick="setFacView('primary')">Primary</button>
-          <button id="facViewAll" class="toggle-btn${_facView==='all'?' active':''}" onclick="setFacView('all')">All</button>
-        </div>
-        ${resetViewBtn('cardFacDetail')}
-        ${hideTileBtn('cardFacDetail')}
-      </div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor exposures relative to benchmark. Click rows for detail." oncontextmenu="showNotePopup(event,'cardFacDetail');return false">Factor Detail</div></div>
+      ${tileChromeStrip({
+        id:'cardFacDetail',
+        about:true,
+        cols:'tbl-fac',
+        download:{ png:'#cardFacDetail', csv:"exportCSV('#cardFacDetail table','factors')" },
+        view:{ active:_facView, options:[['primary','Primary'],['all','All']], onchange:'setFacView' },
+        fullscreen:"openFullScreen('facmap')",
+        resetView:true,
+        hide:true,
+        extra: facColDropHtml(),
+      })}
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${facGroupPillsHtml()}</div>
     ${rFac(_wFactors())}
@@ -3196,7 +3206,7 @@ function rExp(){
   <!-- Row 7: Treemap (full width) -->
   <div>
     <div class="card" id="cardTreemap">
-      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div>${aboutBtn('cardTreemap')}</div><div style="display:flex;gap:6px;align-items:center">${fsTileBtn('cardTreemap')}${resetViewBtn('cardTreemap')}${hideTileBtn('cardTreemap')}</div></div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div></div>${tileChromeStrip({id:'cardTreemap',about:true,fullscreen:"openTileFullscreen('cardTreemap')",resetView:true,hide:true})}</div>
       <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
         <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Group</span>
           <div class="toggle-wrap" style="margin:0" id="treeDimWrap"><button class="toggle-btn active" data-dim="sec" onclick="setTreeDim('sec')" style="padding:1px 6px;font-size:9px">Sector</button><button class="toggle-btn" data-dim="co" onclick="setTreeDim('co')" style="padding:1px 6px;font-size:9px">Country</button><button class="toggle-btn" data-dim="grp" onclick="setTreeDim('grp')" style="padding:1px 6px;font-size:9px">Group</button><button class="toggle-btn" data-dim="rank" onclick="setTreeDim('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
@@ -3225,8 +3235,7 @@ function rExp(){
 
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>${aboutBtn('cardUnowned')}</div>
-    <div style="display:flex;gap:6px;align-items:center"><button class="export-btn" onclick="exportCSV('#cardUnowned table','unowned_risk')">CSV</button>${fsTileBtn('cardUnowned')}${resetViewBtn('cardUnowned')}${hideTileBtn('cardUnowned')}</div></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div></div>${tileChromeStrip({id:'cardUnowned',about:true,csv:"exportCSV('#cardUnowned table','unowned_risk')",fullscreen:"openTileFullscreen('cardUnowned')",resetView:true,hide:true})}</div>
     ${rUnowned(_unownedFromHold(s))}
   </div>
 
@@ -7818,15 +7827,19 @@ function rRisk(){
   </div>
 
   <!-- Factor Exposures Table -->
+  <!-- 2026-05-04 (Phase D migration): cardRiskFacTbl chrome → tileChromeStrip -->
   <div class="card" id="cardRiskFacTbl" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div>${aboutBtn('cardRiskFacTbl')}${tableColHidePanelHtml('tbl-risk-fac')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="export-btn" onclick="exportCSV('#tbl-risk-fac','risk_factors')" title="Download CSV">CSV</button>
-        ${fsTileBtn('cardRiskFacTbl')}
-        ${resetViewBtn('cardRiskFacTbl')}
-        ${hideTileBtn('cardRiskFacTbl')}
-      </div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Factor-level active exposure, TE contribution, and return impact. Click a row for time-series drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskFacTbl');return false" style="margin:0">Factor Exposures — click row for time series drill</div></div>
+      ${tileChromeStrip({
+        id:'cardRiskFacTbl',
+        about:true,
+        cols:'tbl-risk-fac',
+        csv:"exportCSV('#tbl-risk-fac','risk_factors')",
+        fullscreen:"openTileFullscreen('cardRiskFacTbl')",
+        resetView:true,
+        hide:true,
+      })}
     </div>
     <table id="tbl-risk-fac"><thead><tr>
       <th data-col="n" onclick="sortTbl('tbl-risk-fac',0)">Factor</th>
@@ -8738,8 +8751,7 @@ function watchlistCardHtml(s){
     return `<div style="margin-top:8px"><div style="font-size:10px;color:${col};text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table id="${tblId}" style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr><th data-col="flag" style="width:22px"></th><th data-col="t" class="tip" data-tip="Ticker symbol" onclick="sortTbl('${tblId}',1)">Ticker</th><th data-col="n" class="tip" data-tip="Security name" onclick="sortTbl('${tblId}',2)">Name</th><th data-col="p" class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('${tblId}',3)">Port %</th><th data-col="a" class="r tip" data-tip="Active weight vs benchmark %" onclick="sortTbl('${tblId}',4)">Active %</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }).join('');
   return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div>${aboutBtn('cardWatchlist')}</div>
-    <div style="display:flex;gap:6px;align-items:center"><button class="export-btn" onclick="exportWatchlistCsv('${s.id}')">CSV</button>${fsTileBtn('cardWatchlist')}${resetViewBtn('cardWatchlist')}${hideTileBtn('cardWatchlist')}</div></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div></div>${tileChromeStrip({id:'cardWatchlist',about:true,csv:`exportWatchlistCsv('${s.id}')`,fullscreen:"openTileFullscreen('cardWatchlist')",resetView:true,hide:true})}</div>
     ${sections}
   </div>`;
 }
@@ -9084,14 +9096,15 @@ function renderHoldTab(){
           <div class="card-title tip" data-tip="Portfolio vs benchmark fundamentals (39 metrics shipped from FactSet Portfolio Characteristics). Click any row for the metric drill — TE / Beta / Active Share open with full historical chart; the rest show single-snapshot until parser-side history persistence (B114)." oncontextmenu="showNotePopup(event,'cardChars');return false">Portfolio Characteristics</div>
           <span style="font-size:10px;color:var(--textDim);font-weight:400">39 metrics · click a row for history · ↓ marks "lower-is-better"</span>
         </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          ${aboutBtn('cardChars')}
-          ${tableColHidePanelHtml('tbl-chr')}
-          <button class="export-btn" title="Download CSV" onclick="exportCSV('#cardChars table','characteristics')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
-          ${fsTileBtn('cardChars')}
-          ${resetViewBtn('cardChars')}
-          ${hideTileBtn('cardChars')}
-        </div>
+        ${tileChromeStrip({
+          id:'cardChars',
+          about:true,
+          cols:'tbl-chr',
+          download:{ csv:"exportCSV('#cardChars table','characteristics')" },
+          fullscreen:"openTileFullscreen('cardChars')",
+          resetView:true,
+          hide:true,
+        })}
       </div>
       <div style="flex:1;overflow-y:auto;max-height:520px;margin-top:6px">${rChr(_wChars())}</div>
     </div>`;

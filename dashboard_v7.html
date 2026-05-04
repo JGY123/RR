@@ -3096,35 +3096,33 @@ function rExp(){
   <div class="card" id="cardCountry" style="grid-column:1/-1${isUSOnly?';display:none':''}">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="card-title">Country Exposure</div>${aboutBtn('cardCountry')}${tableColHidePanelHtml('tbl-ctry')}<span id="ctryFilterChip"></span><span id="ctryTopNPill" style="display:none;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px"><span class="section-label" style="margin-right:2px" title="Top N countries by absolute TE contribution">Top |TE|</span><button class="pill" id="ctry-topn-all" onclick="setCtryTopN(0)" style="font-size:10px;padding:2px 7px">All</button><button class="pill" id="ctry-topn-10" onclick="setCtryTopN(10)" style="font-size:10px;padding:2px 7px">10</button><button class="pill" id="ctry-topn-20" onclick="setCtryTopN(20)" style="font-size:10px;padding:2px 7px">20</button><button class="pill" id="ctry-topn-30" onclick="setCtryTopN(30)" style="font-size:10px;padding:2px 7px">30</button></span></div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <div style="position:relative">
-          <button id="mapColorBtn" onclick="toggleMapColorPicker()" style="font-size:10px;padding:4px 10px;background:var(--surf);border:1px solid var(--grid);color:var(--txth);border-radius:6px;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:4px;min-width:120px">
-            <span id="mapColorLabel">Active Weight</span>
-            <span style="opacity:.4;margin-left:auto">&#9662;</span>
-          </button>
-          <div id="mapColorPicker" style="display:none;position:absolute;top:100%;left:0;z-index:99;margin-top:4px;background:var(--card);border:1px solid var(--pri);border-radius:8px;padding:6px 0;min-width:220px;max-height:400px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div>
-        </div>
-        <button onclick="openCtryFullscreen()" title="Full screen — opens different view based on current Map / Chart / Table mode" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:12px;padding:2px 7px;border-radius:5px;cursor:pointer">&#x26F6;</button>
-        <div class="dl-wrap" onclick="event.stopPropagation()"><button class="export-btn" title="Download" onclick="let dr=this.nextElementSibling;let was=dr.classList.contains('open');document.querySelectorAll('.dl-drop').forEach(m=>m.classList.remove('open'));if(!was)dr.classList.add('open')" style="padding:3px 7px;font-size:13px">⬇</button><div class="dl-drop"><div onclick="screenshotCard('#cardCountry');this.closest('.dl-drop').classList.remove('open')">Download PNG</div><div onclick="exportCSV('#countryTableWrap table','countries');this.closest('.dl-drop').classList.remove('open')">Download CSV</div></div></div>
-        <div id="mapRegionBtns" class="toggle-wrap" style="margin:0">
-          <button class="toggle-btn active" data-region-btn="world" onclick="setMapRegion('world')" title="Zoom: World">World</button>
-          <button class="toggle-btn" data-region-btn="europe" onclick="setMapRegion('europe')" title="Zoom: Europe">Eur</button>
-          <button class="toggle-btn" data-region-btn="asia" onclick="setMapRegion('asia')" title="Zoom: Asia">Asi</button>
-          <button class="toggle-btn" data-region-btn="americas" onclick="setMapRegion('americas')" title="Zoom: Americas">Amer</button>
-        </div>
-        <!-- 2026-04-30 (user feedback): explicit Reset Zoom button — clicking
-             World re-zooms but the button stays "active" so the user can't tell
-             they need to re-engage. A separate Reset always resets even if
-             World is already showing. -->
-        <button id="mapResetBtn" data-region-btn="reset" onclick="setMapRegion('world')" title="Reset zoom — back to full globe" style="background:none;border:1px solid var(--grid);color:var(--txt);font-size:11px;padding:2px 8px;border-radius:5px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:3px">⤾ Reset</button>
-        <div class="toggle-wrap" style="margin:0">
-          <button class="toggle-btn active" onclick="toggleCountryView('map',this)">Map</button>
-          <button class="toggle-btn" onclick="toggleCountryView('chart',this)">Chart</button>
-          <button class="toggle-btn" onclick="toggleCountryView('table',this)">Table</button>
-        </div>
-        ${resetViewBtn('cardCountry')}
-        ${hideTileBtn('cardCountry')}
-      </div>
+      <!-- 2026-05-03 (Phase D migration): cardCountry chrome migrated.
+           Map-specific controls (color picker, region-zoom toggle, map reset)
+           live in the extra slot since they only make sense in Map view. -->
+      ${tileChromeStrip({
+        id:'cardCountry',
+        download:{ png:'#cardCountry', csv:"exportCSV('#countryTableWrap table','countries')" },
+        view:{ active:'map', options:[['map','Map'],['chart','Chart'],['table','Table']], onchange:'toggleCountryView' },
+        fullscreen:'openCtryFullscreen()',
+        resetView:true,
+        hide:true,
+        extra: `
+          <div style="position:relative">
+            <button id="mapColorBtn" class="tile-btn" onclick="toggleMapColorPicker()" style="display:flex;align-items:center;gap:4px;min-width:120px">
+              <span id="mapColorLabel">Active Weight</span>
+              <span style="opacity:.4;margin-left:auto">&#9662;</span>
+            </button>
+            <div id="mapColorPicker" style="display:none;position:absolute;top:100%;left:0;z-index:99;margin-top:4px;background:var(--card);border:1px solid var(--pri);border-radius:var(--radius-lg);padding:var(--space-sm) 0;min-width:220px;max-height:400px;overflow-y:auto;box-shadow:var(--shadow-lg)"></div>
+          </div>
+          <div id="mapRegionBtns" class="toggle-wrap" style="margin:0">
+            <button class="toggle-btn active" data-region-btn="world" onclick="setMapRegion('world')" title="Zoom: World">World</button>
+            <button class="toggle-btn" data-region-btn="europe" onclick="setMapRegion('europe')" title="Zoom: Europe">Eur</button>
+            <button class="toggle-btn" data-region-btn="asia" onclick="setMapRegion('asia')" title="Zoom: Asia">Asi</button>
+            <button class="toggle-btn" data-region-btn="americas" onclick="setMapRegion('americas')" title="Zoom: Americas">Amer</button>
+          </div>
+          <button id="mapResetBtn" class="tile-btn" data-region-btn="reset" onclick="setMapRegion('world')" title="Reset zoom — back to full globe">⤾ Reset</button>
+        `,
+      })}
     </div>
     <div id="mapSecondary" style="display:none;gap:6px;align-items:center;padding:4px 0 6px;flex-wrap:wrap">
       <span style="font-size:9px;color:var(--txt);opacity:.6">Show:</span>
@@ -3142,15 +3140,19 @@ function rExp(){
   </div>
 
   <!-- Row 5: Redwood Groups -->
+  <!-- 2026-05-03 (Phase D migration): cardGroups → tileChromeStrip. -->
   <div class="card" id="cardGroups">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div>${aboutBtn('cardGroups')}${tableColHidePanelHtml('tbl-grp')}<span id="grpFilterChip"></span></div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button class="export-btn" title="Download CSV" onclick="exportCSV('#grpTable table','groups')" style="padding:3px 7px;font-size:13px">⬇ CSV</button>
-      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleGrpView('chart',this)">Chart</button><button class="toggle-btn" onclick="toggleGrpView('table',this)">Table</button></div>
-      <button class="export-btn" title="Full screen — opens different view based on current Chart / Table mode" onclick="openGrpFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
-      ${resetViewBtn('cardGroups')}
-      ${hideTileBtn('cardGroups')}
-    </div></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title tip" data-tip="Redwood's proprietary sector groupings. Subgroups sourced from FactSet SEC_SUBGROUP (exclusive bucketing — each holding in exactly one group). Click a row to drill. Right-click for notes." oncontextmenu="showNotePopup(event,'cardGroups');return false">Redwood Groups</div><span id="grpFilterChip"></span></div>
+    ${tileChromeStrip({
+      id:'cardGroups',
+      about:true,
+      cols:'tbl-grp',
+      download:{ csv:"exportCSV('#grpTable table','groups')" },
+      view:{ active:'chart', options:[['chart','Chart'],['table','Table']], onchange:'toggleGrpView' },
+      fullscreen:'openGrpFullscreen()',
+      resetView:true,
+      hide:true,
+    })}</div>
     <div id="grpChart"><div id="grpChartDiv" style="height:280px"></div></div>
     <div id="grpTable" style="display:none;overflow-x:auto">${rGroupTable(_wGrp(),s.hold)}</div>
   </div>
@@ -3243,32 +3245,35 @@ function rExp(){
         ${tableColHidePanelHtml('tbl-attrib')}
         <span style="font-size:10px;color:var(--textDim);font-weight:400">period: ${IMPACT_PERIOD_LABELS[_impactPeriod]||'—'} (uses global Impact selector)</span>
       </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
-          <span class="section-label" style="margin-right:2px">Period</span>
-          ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
-        </div>
-        <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
-          <option value="all">All categories</option>
-          <option value="country">Countries</option>
-          <option value="industry">Industries</option>
-          <option value="currency">Currencies</option>
-        </select>
-        <select id="attribSort" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:6px;font-size:11px">
-          <option value="imp">By Impact</option>
-          <option value="exp">By Exposure</option>
-          <option value="dev">By Volatility</option>
-        </select>
-        <div class="toggle-wrap" style="margin:0">
-          <button class="toggle-btn active" onclick="toggleAttribView('table',this)">Table</button>
-          <button class="toggle-btn" onclick="toggleAttribView('chart',this)">Chart</button>
-        </div>
-        ${resetZoomBtn('attribChartDiv')}
-        <button class="export-btn" onclick="exportCSV('#tbl-attrib','attribution')" title="Download CSV">CSV</button>
-        ${fsTileBtn('cardAttrib')}
-        ${resetViewBtn('cardAttrib')}
-        ${hideTileBtn('cardAttrib')}
-      </div>
+      <!-- 2026-05-03 (Phase D migration): cardAttrib chrome migrated.
+           Period pills + category / sort selects stay in the extra slot
+           (tile-specific filters not part of the universal contract). -->
+      ${tileChromeStrip({
+        id:'cardAttrib',
+        resetZoom:'attribChartDiv',
+        view:{ active:'table', options:[['table','Table'],['chart','Chart']], onchange:'toggleAttribView' },
+        csv:"exportCSV('#tbl-attrib','attribution')",
+        fullscreen:"openTileFullscreen('cardAttrib')",
+        resetView:true,
+        hide:true,
+        extra: `
+          <div style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:var(--radius-lg);padding:3px 6px">
+            <span class="section-label" style="margin-right:2px">Period</span>
+            ${['m1','m3','m6','y1','all'].map(p=>`<button class="pill${_impactPeriod===p?' active':''}" onclick="setImpactPeriod('${p}')" style="font-size:10px;padding:2px 7px">${IMPACT_PERIOD_LABELS[p]}</button>`).join('')}
+          </div>
+          <select id="attribCategory" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:var(--radius-md);font-size:var(--text-md)">
+            <option value="all">All categories</option>
+            <option value="country">Countries</option>
+            <option value="industry">Industries</option>
+            <option value="currency">Currencies</option>
+          </select>
+          <select id="attribSort" onchange="rAttribTable()" style="background:var(--card);border:1px solid var(--grid);color:var(--txth);padding:4px 8px;border-radius:var(--radius-md);font-size:var(--text-md)">
+            <option value="imp">By Impact</option>
+            <option value="exp">By Exposure</option>
+            <option value="dev">By Volatility</option>
+          </select>
+        `,
+      })}
     </div>
     <div id="attribTableArea" style="margin-top:8px"></div>
     <div id="attribChartArea" style="display:none;margin-top:8px">
@@ -3277,15 +3282,19 @@ function rExp(){
   </div>
 
   <!-- Row 13: Region Active Weights (de-prioritized, bottom of page) -->
+  <!-- 2026-05-03 (Phase D migration): cardRegions → tileChromeStrip. -->
   <div class="card" id="cardRegions" style="margin-top:16px${isUSOnly?';display:none':''}">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div>${aboutBtn('cardRegions')}${tableColHidePanelHtml('tbl-reg')}<span id="regFilterChip"></span></div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <button class="export-btn" title="Download CSV" onclick="exportCSV('#regTable table','regions')" style="padding:3px 7px;font-size:11px">CSV</button>
-      <div class="toggle-wrap" style="margin:0"><button class="toggle-btn active" onclick="toggleRegView('table',this)">Table</button><button class="toggle-btn" onclick="toggleRegView('chart',this)">Chart</button></div>
-      <button class="export-btn" title="Full screen — opens different view based on current Table / Chart mode" onclick="openRegFullscreen()" style="padding:3px 8px;font-size:13px">⛶</button>
-      ${resetViewBtn('cardRegions')}
-      ${hideTileBtn('cardRegions')}
-    </div></div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Region Active Weights</div><span id="regFilterChip"></span></div>
+    ${tileChromeStrip({
+      id:'cardRegions',
+      about:true,
+      cols:'tbl-reg',
+      download:{ csv:"exportCSV('#regTable table','regions')" },
+      view:{ active:'table', options:[['table','Table'],['chart','Chart']], onchange:'toggleRegView' },
+      fullscreen:'openRegFullscreen()',
+      resetView:true,
+      hide:true,
+    })}</div>
     <div id="regTable" style="overflow-x:auto">${rWt(_wReg(),'reg',s.hold)}</div>
     <div id="regChart" style="display:none"><div id="regChartDiv" style="height:260px"></div></div>
   </div>

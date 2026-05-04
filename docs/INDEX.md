@@ -1,6 +1,6 @@
 # RR Documentation Index
 
-**Updated:** 2026-05-01 (post-presentation refactor sweep)
+**Updated:** 2026-05-04 (ARCHITECTURE.md + STRATEGIC_REVIEW.md added)
 **Purpose:** Single navigator for all RR documentation. Anything not listed here is in `docs/archive/`.
 
 ---
@@ -10,12 +10,14 @@
 | File | What it is |
 |---|---|
 | `CLAUDE.md` | Project instructions (cwd-rooted; Claude Code reads this on every session) |
-| `SESSION_GUIDE.md` | **NEW 2026-05-01.** Operational checklist for the first 5 minutes of any new RR session — what to read, what to verify, what to commit. |
+| `ARCHITECTURE.md` | **NEW 2026-05-04.** Contributor-facing intro to RR — data flow, tile contract, design system, integrity model, the 5 operational loops. Read this before your first edit. |
+| `STRATEGIC_REVIEW.md` | **NEW 2026-05-04.** Bird's-eye view: what we're building, where we are, what's NOT in good shape, priorities by leverage. Periodic re-baselining. |
+| `SESSION_GUIDE.md` | Operational checklist for the first 5 minutes of any new RR session — what to read, what to verify, what to commit. |
 | `SESSION_STATE.md` | Live "where are we right now" file. Updated at every checkpoint. |
-| `REFACTOR_PLAN.md` | **NEW 2026-05-01.** Active refactor — 11 phases (A–K), checkpoint log, ground rules. Read before any architectural change. |
+| `REFACTOR_PLAN.md` | Active refactor — 11 phases (A–K), checkpoint log, ground rules. Read before any architectural change. |
 | `BACKLOG.md` | Append-only feature/work queue. 22 active items, structured by ID. |
 | `CHANGELOG.md` | High-level user-visible changes (per release tag) |
-| `dev_dashboard.html` | **NEW 2026-05-01.** Visual project state — open `python3 -m http.server 8765` then `http://localhost:8765/dev_dashboard.html` |
+| `dev_dashboard.html` | Visual project state — open `python3 -m http.server 8765` then `http://localhost:8765/dev_dashboard.html` |
 
 ---
 

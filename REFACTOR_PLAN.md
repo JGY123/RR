@@ -102,6 +102,8 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | 2026-05-04 11:30 | cardHoldRisk audit fixes | — | `refactor.20260504.1130.cardHoldRisk-audit-fixes` | D2 disclaimer + F3 week banner + F1 CSV export. Audit GREEN. |
 | 2026-05-04 11:45 | cardWeekOverWeek F1+F3+D1 | — | `refactor.20260504.1145.cardWeekOverWeek-audit-fixes` | Empty-branch chrome + dropped-row drill safety + .empty-state migration. |
 | 2026-05-04 12:00 | cardWeekOverWeek F2 | — | `refactor.20260504.1200.cardWeekOverWeek-F2` | Factor rotation footer now `_selectedWeek`-aware. KPI deltas + factor rotation BOTH flow per-week now. |
+| 2026-05-04 12:15 | session-wrap-pm | — | `refactor.20260504.1215.session-wrap-pm` | REFACTOR_PLAN + SESSION_STATE + dev_dashboard updated. cardRiskByDim audit deferred (subagent thought to be stalled). |
+| 2026-05-04 12:35 | cardRiskByDim audit fixes | — | `refactor.20260504.1235.cardRiskByDim-audit-fixes` | cardRiskByDim audit landed (~22min late) — D1d footer + D2 dual totals + F2 cash count + F3 about caveat shipped. RED finding D1 (Σ %T = 94→134%, contradicts CLAUDE.md ~100% invariant) added to FACTSET_FEEDBACK as F18. |
 
 ## Status summary (post-2026-05-01 session)
 
@@ -123,7 +125,7 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 - Item #4 Factor Performance y-axis — SHIPPED 2026-05-01 18:20.
 
 **Next session priorities (ordered by leverage):**
-1. **Re-run cardRiskByDim audit** — earlier audit subagent ran for 50+ min and likely stalled. Re-spawn with same brief (deferred 2026-05-04).
+1. **Investigate F18 (Σ %T deviation 94→134%)** — upstream/FactSet question. Verify parser ships %T correctly; spot-check raw CSV %T column; reach out to FactSet team if it's their data. Affects every per-holding TE aggregation.
 2. **Pick 2-3 more Tier-2 tiles for audit sweep** — cardCorr / cardFacContribBars / cardTEStacked / cardBetaHist / cardFacHist haven't been audited recently.
 3. **Pending audit fixes from cardWeekOverWeek**:
    - F4: CSV export for move list (small, ship anytime)
@@ -132,9 +134,14 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 4. **Pending audit fixes from cardHoldRisk**:
    - F2: dedicated `openHoldRiskFullscreen()` handler with bigger bubbles (~25 LOC)
    - D3: bench-only long tail clutter (PM decision: filter or surface)
-5. **Drill modal migration** — drill modals (oDr, oDrMetric, oDrCountry, oSt) still have inline chrome.
-6. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` to `var(--space-*)` tokens.
-7. **End-of-session: commit a "presentation-2026-05-XX" tag whenever we have a stable state** for stakeholder review.
+5. **Pending audit fixes from cardRiskByDim**:
+   - D3: drill modal bucket-vs-portfolio share stat
+   - G1: chip-card wrapper around Dim+Min controls
+   - G2: threshold-preset buttons (0% / 0.5% / 1%)
+   - Open-Q: add Region as 4th pivot
+6. **Drill modal migration** — drill modals (oDr, oDrMetric, oDrCountry, oSt) still have inline chrome.
+7. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` to `var(--space-*)` tokens.
+8. **End-of-session: commit a "presentation-2026-05-XX" tag whenever we have a stable state** for stakeholder review.
 
 ---
 

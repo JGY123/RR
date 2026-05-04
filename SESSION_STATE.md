@@ -1,7 +1,35 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-05-04 12:00 (Tile audit cadence — 2 of 3 audits delivered + fixes shipped; cardRiskByDim deferred)
+last_updated: 2026-05-04 12:35 (Tile audit cadence — ALL 3 audits delivered + fixes shipped; FactSet F18 RED finding logged)
+---
+
+## 2026-05-04 12:35 — cardRiskByDim audit landed (was running slow, not stalled)
+
+After session-wrap-pm at 12:15, the cardRiskByDim subagent's report finally
+appeared (~22 min after the wrap). Read + applied trivial fixes:
+
+**Audit findings:**
+- **RED D1**: Σ h.pct_t = 94.6 (EM) → 134.4 (IOP) across all 6 strategies.
+  Contradicts CLAUDE.md line 108 ("%T sums to ~100%"). UPSTREAM issue, not
+  a tile bug. → Added to FACTSET_FEEDBACK as F18 with cross-strategy table
+  + 4 hypotheses + workaround documented.
+- **YELLOW**: D1d (footer relabel), D2 (dual totals), F2 (cash count
+  off-by-N in CSV total), F3 (about-caveat append) — all SHIPPED.
+
+**Fixes shipped (refactor.20260504.1235.cardRiskByDim-audit-fixes):**
+- Footer: "total |TE| coverage = X%" → "Σ %T = X · Σ |%T| = Y" (honest)
+- CSV "Total" row: cs.hold.length → cs.hold.filter(h=>!isCash(h)).length
+- About caveat now mentions universe-invariance + Σ %T deviation + F18
+- F18 entry in FACTSET_FEEDBACK with cross-strategy table
+
+**3 of 3 tile audits this session delivered:**
+- ✅ cardHoldRisk — GREEN, 3 fixes shipped (D2 + F1 + F3)
+- ✅ cardWeekOverWeek — YELLOW→GREEN, 4 fixes shipped (F1 + F3 + D1 + F2)
+- ✅ cardRiskByDim — YELLOW (RED upstream), 4 fixes shipped (D1d + D2 + F2 + F3)
+
+Total session output: **15 commits, 9 tags.**
+
 ---
 
 ## 2026-05-04 11:00–12:00 — Tile audit cadence resume

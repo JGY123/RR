@@ -12,6 +12,8 @@
 | `CLAUDE.md` | Project instructions (cwd-rooted; Claude Code reads this on every session) |
 | `ARCHITECTURE.md` | **NEW 2026-05-04.** Contributor-facing intro to RR — data flow, tile contract, design system, integrity model, the 5 operational loops. Read this before your first edit. |
 | `STRATEGIC_REVIEW.md` | **NEW 2026-05-04.** Bird's-eye view: what we're building, where we are, what's NOT in good shape, priorities by leverage. Periodic re-baselining. |
+| `PM_ONBOARDING.md` | **NEW 2026-05-04.** "First Monday morning" cheat sheet for PMs. The 4 daily moves, conventions (em-dash / ᵉ / Universe pill / MCR-no-%), data integrity model with honest caveats (F18 / B114 / F12), FAQ, glossary, and "when something looks wrong" path. Companion to EXECUTIVE_SUMMARY + PRESENTATION_DECK. |
+| `DRILL_MODAL_MIGRATION_SPEC.md` | **NEW 2026-05-04.** Spec doc for migrating the 8 drill modals (oDr, oDrMetric, oDrCountry, oSt, etc.) to a `drillChrome()` helper analogous to `tileChromeStrip`. ~6-7 hours, 7 phases, defers code changes pending PM signoff on 3 open questions. |
 | `SESSION_GUIDE.md` | Operational checklist for the first 5 minutes of any new RR session — what to read, what to verify, what to commit. |
 | `SESSION_STATE.md` | Live "where are we right now" file. Updated at every checkpoint. |
 | `REFACTOR_PLAN.md` | Active refactor — 11 phases (A–K), checkpoint log, ground rules. Read before any architectural change. |

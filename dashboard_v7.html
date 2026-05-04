@@ -5194,7 +5194,16 @@ function renderRanksTable(){
     }).join('');
     return`<tr class="clickable" tabindex="0" role="button" aria-label="Filter holdings to ${RNK_BY_LABELS[_rnkBy]} rank ${r.q}" onclick="filterByRank(${r.q})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();filterByRank(${r.q});}"><td data-col="rank" data-sv="${r.q}"><span style="color:${rc(r.q)};font-weight:600">${r.q}</span></td><td class="r" data-col="count" data-sv="${r.count}">${r.count}</td><td class="r" data-col="port" data-sv="${r.p}">${portTxt}</td><td class="r ${actCls}" data-col="active" data-sv="${r.a}">${actTxt}</td><td class="r ${trCls}" data-col="tr" data-sv="${r.tr}">${trTxt}</td><td class="r ${idioCls}" data-col="idio" data-sv="${r.mcr}">${idioTxt}</td>${avgCells}${facCells}</tr>`;
   }).join('');
-  wrap.innerHTML=`<table id="tbl-rnk">${thead}<tbody>${body}</tbody></table>`;
+  // F18 disclosure footer (2026-05-04) — Σ h.tr per quintile aggregates
+  // per-holding %T, which is on the contaminated side of F18 (sums to
+  // 94→134% across strategies vs CLAUDE.md-stated ~100%). The table doesn't
+  // show a totals row, but mentally summing Q1..Q5's TE Contrib column
+  // would surface the F18 deviation. Disclose so user isn't confused.
+  // Pattern from cardRiskByDim L8520. SOURCES.md F18 contamination map row.
+  const sumTr=rows.reduce((acc,r)=>acc+(r.tr||0),0);
+  const sumAbsTr=rows.reduce((acc,r)=>acc+Math.abs(r.tr||0),0);
+  const f18Footer=`<div id="rnkF18Footer" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--grid);font-size:10px;color:var(--textDim);text-align:right">Σ TE Contrib across Q1..Q5 = ${f2(sumTr,1)}% (Σ |%T| = ${f2(sumAbsTr,1)}%) · expected ~100% per CLAUDE.md but FactSet's per-holding %T column does not sum to 100% across the portfolio (range 94→134% across the 6 strategies — see <a href="#" onclick="alert('See FACTSET_FEEDBACK.md F18 — letter drafted, monitor wired, awaiting FactSet reply');return false" style="color:var(--warn);text-decoration:underline">FACTSET_FEEDBACK F18</a>). Per-quintile values are individually correct.</div>`;
+  wrap.innerHTML=`<table id="tbl-rnk">${thead}<tbody>${body}</tbody></table>${f18Footer}`;
 }
 // Replace prior render-call to flow through renderRanksTable from upd cycle
 function rRnk(_unused){

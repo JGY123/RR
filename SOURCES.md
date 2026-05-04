@@ -168,7 +168,8 @@ F18 is the open inquiry on per-holding `%T` summing to 94→134% across strategi
 | **cardFacHist** | NO — per-factor exposure / return | factor-aggregate / snap_attrib | NO | YES — ᵉ marker on Cum Return + snap_attrib fallback |
 | **cardCorr** | NO — pairwise factor correlations | factor-aggregate | NO | YES — universe-invariance disclosure |
 | **cardBetaHist** | NO — single per-week β scalar | portfolio-level | NO | n/a |
-| **cardRanks / cardRankDist** | YES at quintile level — Σ h.tr per rank quintile | per-holding | **YES at quintile-Σ level** | not yet — candidate for footer disclosure |
+| **cardRanks** (Spotlight rank table) | YES — Σ h.tr per quintile (TE Contrib column) | per-holding | **YES at quintile-Σ level** | YES — F18 footer shipped 2026-05-04 ✓ |
+| **cardRankDist** (port-weight histogram) | NO — bar heights are port weight only, not %T | per-quintile port weight | NO | n/a — universe-coverage only |
 | **cardHoldRisk** | NO — per-holding scatter (each dot is one h.tr) | per-row | YES — but each dot is a single value, not a Σ | n/a |
 | **cardTreemap (TE size mode)** | YES — sums h.tr per leaf | per-holding | **YES** | TBD — pending audit |
 | **cardUnowned** | per-row only | per-holding | per-row clean | TBD — pending audit |

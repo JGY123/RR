@@ -1219,12 +1219,12 @@ const _ABOUT_REG={
     related:'cardRiskHistTrends · cardFacContribBars · TE drill modal'
   },
   cardBetaHist:{
-    title:'Beta History — Predicted',
-    what:'Predicted beta over time across all 7 strategies. Multi-strategy line chart — see at a glance which strategies are running risk-on (β>1) vs risk-off.',
-    how:'Each strategy\'s hist.sum.beta plotted on the same date axis. Reference line at β=1. Hover for week + value.',
-    source:'For each strategy: cs.hist.sum[].beta (predicted Axioma beta).',
-    caveats:'Currently active strategies pulled from latest_data.json. Date range may differ across strategies (some have shorter history).',
-    related:'cardRiskHistTrends · Beta sum-card modal'
+    title:'Beta History — Predicted vs Historical vs MPT',
+    what:'Predicted Axioma beta over time for the active strategy, with Historical and MPT beta as flat reference lines. Hover for week + value. Click anywhere on the card to open the full beta detail modal.',
+    how:'cs.hist.sum[].beta plotted as the main line (indigo). cs.sum.betas.predicted / .historical / .mpt drawn as flat reference lines (dotted/dashdot). Empty source values are suppressed; never fabricated.',
+    source:'cs.hist.sum[].beta (predicted Axioma beta per period) + cs.sum.betas.{predicted, historical, mpt} (latest scalars).',
+    caveats:'Historical and MPT shown as flat scalar references, not time series — parser ships only latest values for those (B114 candidate). Single-strategy view (peer multi-strategy comparison lives on the Risk-tab heatmap).',
+    related:'cardRiskHistTrends · Beta sum-card modal · oDrMetric(\'beta\') drill'
   },
   cardFacContribBars:{
     title:'Factor Contributions',
@@ -7769,7 +7769,7 @@ function rRisk(){
        click anywhere on the card opens the Beta drill modal. -->
   <div class="card" id="cardBetaHist" style="margin-bottom:16px;cursor:pointer" onclick="oDrMetric('beta')">
     <div class="flex-between" style="margin-bottom:4px">
-      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted beta over time across all 7 strategies. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted</div><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span><span onclick="event.stopPropagation()">${resetZoomBtn('riskBetaMultiDiv')}</span></div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Predicted Axioma beta over time + Historical / MPT reference lines for the active strategy. Click anywhere on the card for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardBetaHist');return false" style="margin:0">Beta History — Predicted vs Historical vs MPT</div><span style="font-size:10px;color:var(--textDim);margin-left:4px" id="betaHistFooterCap"></span><span onclick="event.stopPropagation()">${aboutBtn('cardBetaHist')}</span><span onclick="event.stopPropagation()">${resetZoomBtn('riskBetaMultiDiv')}</span></div>
       <span onclick="event.stopPropagation()">${tileChromeStrip({id:'cardBetaHist',csv:'exportBetaMultiCsv&&exportBetaMultiCsv()',fullscreen:"openTileFullscreen('cardBetaHist')",resetView:true,hide:true,extra:'<span style="font-size:9px;color:var(--pri)">click for detail ›</span>'})}</span>
     </div>
     <div id="riskBetaMultiDiv" class="chart-h-sm"></div>
@@ -7793,10 +7793,10 @@ function rRisk(){
             <label tabindex="0" style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--pri);color:#fff;outline:none" id="rfbLblTE">
               <input type="radio" name="riskFacMode" value="te" checked onchange="window._rfbMode='te';rRiskFacBarsMode()" style="display:none"> TE Contrib
             </label>
-            <label style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
+            <label tabindex="0" style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblExp">
               <input type="radio" name="riskFacMode" value="exp" onchange="window._rfbMode='exp';rRiskFacBarsMode()" style="display:none"> Exposure
             </label>
-            <label style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
+            <label tabindex="0" style="font-size:var(--text-md);padding:4px 10px;cursor:pointer;background:var(--surf)" id="rfbLblBoth">
               <input type="radio" name="riskFacMode" value="both" onchange="window._rfbMode='both';rRiskFacBarsMode()" style="display:none"> Both
             </label>
           </div>
@@ -7941,7 +7941,7 @@ function rRisk(){
           <span class="section-label" style="margin-right:2px">Metric</span>
           <button class="pill" id="fac-hist-pill-exp" onclick="setFacHistMetric('exp')" style="font-size:10px;padding:2px 7px">Active Exp</button>
           <button class="pill" id="fac-hist-pill-ret" onclick="setFacHistMetric('ret')" style="font-size:10px;padding:2px 7px">Factor Return</button>
-          <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px">Cum Return</button>
+          <button class="pill" id="fac-hist-pill-cret" onclick="setFacHistMetric('cret')" style="font-size:10px;padding:2px 7px" title="Cumulative Factor Return — DERIVED: simple sum of per-week factor returns. True compounded cumulative requires FactSet full_period_imp (geometric link), shipped only for the 'Full' period. Simple sum can under-report by ~25% on high-volatility factors over long windows. See LESSONS_LEARNED Anti-Pattern 1.">Cum Return<span style="color:var(--warn);font-size:9px;margin-left:2px" aria-label="derived">ᵉ</span></button>
         </div>
       </div>
       ${tileChromeStrip({
@@ -7956,6 +7956,7 @@ function rRisk(){
     </div>
     <div id="facExpToggles" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">${facToggleHtml}</div>
     <div id="riskExpHistDiv" class="chart-h-md"></div>
+    <div id="facHistFooterCap" style="font-size:10px;color:var(--textDim);padding:6px 4px 0;border-top:1px solid var(--grid);margin-top:4px"></div>
   </div>
 
   <!-- Factor Correlation Matrix. 2026-04-30 (audit, item #5): promoted to
@@ -7987,6 +7988,11 @@ function rRisk(){
     </div>
     <div id="corrMatrixWrap" style="overflow-x:auto;max-width:100%"><div style="display:flex;align-items:center;justify-content:center;height:80px;color:var(--txt);font-size:11px">Computing correlation…</div></div>
     <div id="corrInsights" style="margin-top:8px;font-size:11px"></div>
+    <!-- D3 fix (audit 2026-05-04, cardCorr): universe-invariance disclosure.
+         setAggMode() correctly excludes cardCorr from re-render because active
+         exposures are universe-invariant by construction. Surface that to the
+         user so they don't expect the universe pill to affect this tile. -->
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--grid);font-size:10px;color:var(--textDim)">Active-exposure correlations are universe-invariant — flipping the Universe pill (Port-Held / In Bench / All) does not change this matrix.</div>
   </div>`;
 
   $('tab-risk').innerHTML=html;
@@ -8104,13 +8110,27 @@ function exportTEStackedCsv(){
 
 function rMultiBeta(s){
   let hist=s.hist.sum;
-  if(!hist.length)return;
+  // F3 (audit 2026-05-04): empty-state message instead of silent return — peer
+  // tiles like cardTEStacked surface a message; we now match that contract.
+  let div=document.getElementById('riskBetaMultiDiv');
+  let cap=document.getElementById('betaHistFooterCap');
+  if(!hist||!hist.length){
+    if(div)div.innerHTML='<div class="empty-state">No predicted-beta history for this strategy.<br><span style="font-size:11px;color:var(--textDim)">Source: cs.hist.sum[].beta is empty.</span></div>';
+    if(cap)cap.textContent='';
+    return;
+  }
   let dates=hist.map(h=>isoDate(h.d));
   let betaVals=hist.map(h=>h.beta);
+  // D1 (audit 2026-05-04): resolve CSS tokens up-front (Plotly requires literal
+  // hex). Theme-flip parity restored. Pattern from _teStackColors / rRiskFacBarsMode.
+  let cssRoot=getComputedStyle(document.documentElement);
+  let cBeta=(cssRoot.getPropertyValue('--pri')||'#6366f1').trim();
+  let cPredicted=(cssRoot.getPropertyValue('--pos')||'#10b981').trim();
+  let cMpt=(cssRoot.getPropertyValue('--acc')||'#8b5cf6').trim();
   // Main line: realized beta time series (solid, thick)
   let traces=[
     {x:dates,y:betaVals,name:'Beta',type:'scatter',mode:'lines',
-      line:{color:'#6366f1',width:2.5},
+      line:{color:cBeta,width:2.5},
       hovertemplate:'%{x|%b %Y}<br>Beta: %{y:.3f}<extra></extra>'}
   ];
   // Reference lines from betas object (thin, dotted/dashed)
@@ -8119,7 +8139,7 @@ function rMultiBeta(s){
   if(betas.predicted!=null){
     traces.push({x:[d0,dN],y:[betas.predicted,betas.predicted],
       name:'Predicted ('+f2(betas.predicted,3)+')',type:'scatter',mode:'lines',
-      line:{color:'#10b981',width:1.5,dash:'dot'},
+      line:{color:cPredicted,width:1.5,dash:'dot'},
       hovertemplate:'Predicted: '+f2(betas.predicted,3)+'<extra></extra>'});
   }
   if(betas.historical!=null){
@@ -8131,13 +8151,13 @@ function rMultiBeta(s){
   if(betas.mpt!=null){
     traces.push({x:[d0,dN],y:[betas.mpt,betas.mpt],
       name:'MPT ('+f2(betas.mpt,3)+')',type:'scatter',mode:'lines',
-      line:{color:'#8b5cf6',width:1.5,dash:'dashdot'},
+      line:{color:cMpt,width:1.5,dash:'dashdot'},
       hovertemplate:'MPT: '+f2(betas.mpt,3)+'<extra></extra>'});
   }
   let betaAnnotations=[];
-  if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:'#10b981'},xanchor:'left',xshift:6});
+  if(betas.predicted!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.predicted,yref:'y',text:'Predicted',showarrow:false,font:{size:9,color:cPredicted},xanchor:'left',xshift:6});
   if(betas.historical!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.historical,yref:'y',text:'Hist Avg',showarrow:false,font:{size:9,color:THEME().tick},xanchor:'left',xshift:6});
-  if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:'#8b5cf6'},xanchor:'left',xshift:6});
+  if(betas.mpt!=null)betaAnnotations.push({x:1,xref:'paper',y:betas.mpt,yref:'y',text:'MPT',showarrow:false,font:{size:9,color:cMpt},xanchor:'left',xshift:6});
   Plotly.newPlot('riskBetaMultiDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:'Beta'},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:6},
@@ -8145,6 +8165,12 @@ function rMultiBeta(s){
     annotations:betaAnnotations,
     margin:{...plotBg.margin,r:70}
   },plotCfg);
+  // D5 (audit 2026-05-04): footer caption "· N wk · since YYYY-MM" — peer
+  // cardTEStacked has equivalent. Restores design consistency.
+  if(cap){
+    let firstD=isoDate(hist[0].d);
+    cap.textContent='· '+hist.length+' wk · since '+firstD;
+  }
 }
 
 function rRiskFacBarsMode(){
@@ -8232,13 +8258,29 @@ function rRiskFacBarsMode(){
   Plotly.newPlot('riskFacBarDiv',traces,layout,plotCfg);
   if(fcbEl.on){fcbEl.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrFRisk==='function')oDrFRisk(n);});}
 
-  // Profitability alert: check if active exposure decreased vs previous period
+  // Profitability alert: check if active exposure decreased vs previous period.
+  // D5 fix (audit 2026-05-04, cardFacContribBars): cs.hist.fac is empty in
+  // current samples (acknowledged at L7875). Fall back to snap_attrib hist
+  // (per-week exp / bench_exp) — same source updateFacExpChart uses at L8334.
+  // Without this fallback, the alert silently never fires (false-negative
+  // monitor) — exactly the kind of "looks healthy, isn't" anti-pattern the
+  // April 2026 crisis taught us to surface.
   let profAlert=document.getElementById('profAlert');
   if(profAlert){
     let profHist=cs?.hist?.fac?.['Profitability']||cs?.hist?.fac?.['profitability']||[];
+    // Build active-exposure series — prefer hist.fac, fall back to snap_attrib.
+    let series=null;
     if(profHist.length>=2){
-      let prev=profHist[profHist.length-2];let curr=profHist[profHist.length-1];
-      let pe=prev.a??prev.e??0;let ce=curr.a??curr.e??0;
+      series=profHist.map(h=>({a:h.a??(h.bm!=null?(h.e||0)-(h.bm||0):(h.e||0))}));
+    } else {
+      let sa=cs?.snap_attrib?.['Profitability']||cs?.snap_attrib?.['profitability'];
+      if(sa?.hist?.length>=2){
+        series=sa.hist.map(h=>({a:(h.exp||0)-(h.bench_exp||0)}));
+      }
+    }
+    if(series&&series.length>=2){
+      let prev=series[series.length-2];let curr=series[series.length-1];
+      let pe=prev.a??0;let ce=curr.a??0;
       profAlert.style.display=(ce<pe-0.05)?'block':'none';
     } else {profAlert.style.display='none';}
   }
@@ -8398,7 +8440,21 @@ function updateFacExpChart(){
     el.innerHTML='<p style="color:var(--txt);font-size:12px;padding:20px;text-align:center">No factors selected</p>';
     return;
   }
-  const yTitle=metric==='ret'?'Factor Return (%, weekly)':metric==='cret'?'Cumulative Factor Return (%)':'Active Exposure (σ)';
+  // D1 RED fix (audit 2026-05-04, cardFacHist): Cum Return is a simple sum of
+  // weekly factor returns — DERIVED, not the FactSet-authoritative compounded
+  // value. yTitle now flags the approximation. The pill carries an ᵉ marker
+  // and tooltip pointing at the under-report magnitude. Pattern from
+  // cardFacContribBars L4811. Anti-fabrication policy compliance.
+  const yTitle=metric==='ret'?'Factor Return (%, weekly)':metric==='cret'?'Cumulative Factor Return (%) — Σ weekly (approx)ᵉ':'Active Exposure (σ)';
+  // Footer caveat (D1 + T2): metric-aware honest note when Cum Return is on.
+  let footerCap=document.getElementById('facHistFooterCap');
+  if(footerCap){
+    if(metric==='cret'){
+      footerCap.innerHTML='<span style="color:var(--warn)">ᵉ</span> Cum Return is Σ of weekly factor returns (simple sum). True compounded value requires FactSet full_period_imp; under-reports ~25% on high-vol factors over long windows.';
+    } else {
+      footerCap.textContent='';
+    }
+  }
   Plotly.newPlot('riskExpHistDiv',traces,{...plotBg,
     yaxis:{...plotBg.yaxis,title:yTitle,zeroline:true,zerolinecolor:THEME().zero,zerolinewidth:2},
     xaxis:{...plotBg.xaxis,tickformat:'%b %Y',nticks:8},

@@ -155,6 +155,26 @@ Aggregation helper: `aggregateHoldingsBy(holds, groupKeyFn, factorList, opts)` (
 
 (See cardRiskHistTrends, cardTEStacked, cardRiskFacTbl, cardFacContribBars sections in `tile-specs/*.md`. Most read directly from `cs.factors[]` / `cs.hist.sum` / `cs.snap_attrib` — sourced. cardTEStacked has a known math issue per B96 where `pct_specific`/`pct_factor` are interpreted as TE-shares but per CSV spec they're "% of Total Risk".)
 
+### F18 contamination map (2026-05-04) — which tiles aggregate per-holding %T
+
+F18 is the open inquiry on per-holding `%T` summing to 94→134% across strategies (vs. CLAUDE.md-stated ~100%). When tracing a "wacky number," use this map to know if a tile is on the contaminated side or the L2-verified side.
+
+| Tile / View | Aggregates per-holding %T? | Path | Contaminated by F18? | Defensive UI? |
+|---|---|---|---|---|
+| **cardRiskByDim** | YES — Σ h.tr by Country / Currency / Industry, totals row visible | per-holding | **YES** | YES — footer shows Σ %T = X% with F18 link (L8520) |
+| **cardSectors / cardCountry / cardGroups / cardRegions** | NO — per-row only, no totals row visible | per-bucket (sector/country/etc.) | NO — per-row values are L2-verified (Σ section %TE = 100% on 3,082/3,082 weeks per `verify_section_aggregates.py`) | n/a — no Σ shown |
+| **cardTEStacked** | NO — sits on portfolio-level pct_specific/pct_factor (not per-holding) | section-aggregate via F12(a) tier-2 / source-direct via F19 tier-1 | NO | YES — three-tier provenance footer |
+| **cardFacContribBars** | NO — reads `cs.factors[].c` (factor MCR) | factor-aggregate | NO | YES — disclosure footer (visible/total + Σ \|c\| explained) |
+| **cardFacHist** | NO — per-factor exposure / return | factor-aggregate / snap_attrib | NO | YES — ᵉ marker on Cum Return + snap_attrib fallback |
+| **cardCorr** | NO — pairwise factor correlations | factor-aggregate | NO | YES — universe-invariance disclosure |
+| **cardBetaHist** | NO — single per-week β scalar | portfolio-level | NO | n/a |
+| **cardRanks / cardRankDist** | YES at quintile level — Σ h.tr per rank quintile | per-holding | **YES at quintile-Σ level** | not yet — candidate for footer disclosure |
+| **cardHoldRisk** | NO — per-holding scatter (each dot is one h.tr) | per-row | YES — but each dot is a single value, not a Σ | n/a |
+| **cardTreemap (TE size mode)** | YES — sums h.tr per leaf | per-holding | **YES** | TBD — pending audit |
+| **cardUnowned** | per-row only | per-holding | per-row clean | TBD — pending audit |
+
+Rule: **any tile that displays a sum of per-holding %T values needs an F18 disclosure footer.** Per-row displays are clean. Section-aggregate displays are clean (L2-verified). Per-strategy total of per-holding %T is the F18 finding.
+
 ### cardTEStacked — per-week Idio/Factor split (F12(a) + F19, 2026-05-04)
 
 The Idio/Factor decomposition over time uses a three-tier provenance resolution. Every per-week point on the chart now carries one of these three sources, surfaced in the chart footer caveat:

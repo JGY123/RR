@@ -8040,6 +8040,28 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   if(el.on){el.on('plotly_click',function(){if(typeof oDrMetric==='function')oDrMetric('te');});}
 }
 
+// 2026-05-04 (cardHoldRisk audit F1): CSV export for the holdings risk
+// quadrant. Emits the full holding row including weights so users can
+// rebuild any view from the CSV.
+function exportHoldRiskCsv(){
+  if(!cs||!cs.hold)return;
+  const eq=(cs.hold||[]).filter(h=>!isCash(h)&&isFinite(h.a)&&isFinite(h.tr));
+  if(!eq.length)return;
+  // Sort by |TE contrib| desc — most-impactful holdings first
+  const sorted=[...eq].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
+  const rows=[['Ticker','Name','Sector','Country','Port %','Bench %','Active %','TE Contrib %','MCR (idio)']];
+  sorted.forEach(h=>{
+    rows.push([
+      h.t||'', h.n||'', h.sec||'', h.co||'',
+      h.p!=null?h.p:'', h.b!=null?h.b:'', h.a!=null?h.a:'',
+      h.tr!=null?h.tr:'', h.mcr!=null?h.mcr:''
+    ]);
+  });
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hold_risk_'+(cs.id||'')+'.csv';a.click();
+}
+
 function exportTEStackedCsv(){
   if(!cs||!cs.hist||!cs.hist.sum)return;
   let hist=cs.hist.sum;
@@ -8975,10 +8997,10 @@ function renderHoldTab(){
     <div class="card" id="cardHoldRisk" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:6px">
         <div style="display:flex;align-items:baseline;gap:10px">
-          <div class="card-title tip" data-tip="Per-holding quadrant — sibling of Factor Risk Snapshot. X = active weight (UW ← → OW). Y = TE contribution (signed). Bubble size = stock-specific TE (|MCR|, the idio component). Click any bubble for the holding drill." oncontextmenu="showNotePopup(event,'cardHoldRisk');return false">Holdings Risk Snapshot</div>
-          <span style="font-size:10px;color:var(--textDim);font-weight:400">active wt × risk contrib · bubble = idio (|MCR|)</span>
+          <div class="card-title tip" data-tip="Per-holding quadrant — sibling of Factor Risk Snapshot. X = active weight (UW ← → OW). Y = TE contribution (signed). Bubble size = stock-specific TE (|MCR|, the idio component). Click any bubble for the holding drill. NOTE: Universe pill does not filter this tile — TE/MCR are universe-invariant by FactSet definition (B116)." oncontextmenu="showNotePopup(event,'cardHoldRisk');return false">Holdings Risk Snapshot</div>
+          <span style="font-size:10px;color:var(--textDim);font-weight:400">active wt × risk contrib · bubble = idio (|MCR|)${_selectedWeek?` <span style="color:var(--warn);margin-left:6px">· data is latest only — week banner above shows your selection</span>`:''}</span>
         </div>
-        ${tileChromeStrip({id:'cardHoldRisk',about:true,resetZoom:'holdRiskDiv',fullscreen:"openTileFullscreen('cardHoldRisk')",resetView:true,hide:true})}
+        ${tileChromeStrip({id:'cardHoldRisk',about:true,resetZoom:'holdRiskDiv',csv:'exportHoldRiskCsv()',fullscreen:"openTileFullscreen('cardHoldRisk')",resetView:true,hide:true})}
       </div>
       <div id="holdRiskDiv" class="chart-h-lg"></div>
       <div id="holdRiskLegend" style="display:flex;gap:18px;justify-content:center;align-items:center;margin-top:6px;padding:6px 12px;font-size:10px;color:var(--txt);flex-wrap:wrap;border-top:1px solid var(--grid)"></div>

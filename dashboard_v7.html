@@ -1181,18 +1181,18 @@ const _ABOUT_REG={
   cardUnowned:{
     title:'Unowned Risk Contributors',
     what:'Benchmark holdings the portfolio does NOT own, ranked by their tracking-error contribution if owned. Each represents an active short position the portfolio has by omission.',
-    how:'Filter cs.hold[] for h.b > 0 AND (h.p == null || h.p < 0.01). Sort descending by |%T|. Implicit active wt = -h.b.',
-    source:'cs.hold[] (FactSet Security section, materially-large BM-only holdings, b > 0.5% or |tr| > 1%).',
-    caveats:'Materiality threshold may hide small BM holdings. Click for stock detail; sector aggregate version in cardBenchOnlySec.',
-    related:'cardBenchOnlySec · cardHoldings'
+    how:'Filter cs.hold[] for (h.p ?? h.w) <= 0 AND (h.b ?? h.bw) > 0. Sort descending by |tr|. Cap at top 10. Implicit active wt = -(bench wt).',
+    source:'cs.hold[] (FactSet Security section + Raw Factors long-tail bench constituents). Per-holding %T (tr) shipped only for the slim Security section, ~196 of 819 bench-only entries on EM — the rest carry tr=null per FactSet inquiry F12.',
+    caveats:'~76% of bench-only holdings (623 of 819 on EM) lack per-holding %T (FactSet does not ship %T_implied for Raw Factors long-tail — see F12). The displayed top-10 is correct (real-value entries float to top), but the bench-only universe count includes the long-tail. Tile is universe-defining (does NOT respond to Universe pill — that is intentional). Click for stock detail; sector aggregate version in cardBenchOnlySec.',
+    related:'cardBenchOnlySec · cardHoldings · F12 inquiry · F18 contamination map (SOURCES.md)'
   },
   cardTreemap:{
     title:'Holdings Treemap',
-    what:'Visual map of holdings sized by your chosen metric, colored by another, grouped into your chosen taxonomy. Three pill toggles: group-by, size, color.',
-    how:'Plotly treemap. Group-by = sector / region / industry / group. Size = port wt / bench wt / |TE| / |MCR|. Color = active wt (red→green) / TE contrib (signed) / spotlight rank (Q1→Q5).',
-    source:'cs.hold[]. Group taxonomy attribute lookup based on selected pill.',
-    caveats:'Cash and bench-only holdings hidden by default. Click any rectangle for the holding drill.',
-    related:'cardSectors · cardGroups · cardHoldings'
+    what:'Visual map of holdings — three pill toggles: dimension (Sector / Country / Group / Rank), size (Weight / TE / Count), color (Active / Rank). Click any rectangle for the holding drill.',
+    how:'Plotly treemap. Dimension toggle picks the grouping attribute (h.sec / h.co / h.subg / h[_rnkBy]). Size pill picks the area metric (h.p portfolio weight / |h.tr| TE contribution / h count). Color pill picks the heat (h.a active weight signed: red OW → green UW; or h[_rnkBy] quintile: Q1=best Q5=worst).',
+    source:'cs.hold[] — read directly. Dimension attribute via h[dim_key]; size via h.p / h.tr / count; color via h.a / h[rank_key]. F18 contamination: when Size=TE, leaf areas are |h.tr| (per-holding %T sums to 94→134% across portfolio, not 100% — but per-leaf values are correct). The tile does not show a Σ; F18 deviation surfaces only if user mentally totals the leaves.',
+    caveats:'Cash holdings hidden. Bench-only holdings included only when their portfolio weight crosses zero (unowned). Universe pill (Port-Held / In-Bench / All) does NOT yet filter the treemap (peer cardSectors/Country/Groups do — pending P2 from audit). When viewing a historical week (_selectedWeek), the treemap shows latest-week data — per-week routing not yet wired.',
+    related:'cardSectors · cardGroups · cardHoldings · cardUnowned · F18 inquiry · cardRiskByDim (peer with F18 footer)'
   },
   cardAttrib:{
     title:'Factor Attribution',
@@ -1869,13 +1869,31 @@ function normalize(raw){
     if(!st.groups)st.groups=[];
     if(!st.unowned)st.unowned=[];
     // FINDING 4: v2 holdings field name mapping (w/bw/aw/pct_s/pct_t/over → p/b/a/mcr/tr/r)
+    // ────────────────────────────────────────────────────────────────────────
+    // Anti-fabrication fix (2026-05-04, cardUnowned audit T1.1 RED).
+    // The previous `?? 0` fallback on `tr` and `mcr` fabricated zeros for any
+    // holding where the source CSV doesn't ship per-holding %T (the long-tail
+    // bench-only universe — 76% of bench-only entries on EM, per audit probe).
+    // This is the SAME pattern that produced the April 2026 crisis (LESSONS
+    // anti-pattern #1). Per CLAUDE.md hard rule #2: null in source stays null
+    // in normalize().
+    //
+    // For `p` / `b` / `a` we keep the `?? 0` because port-weight-null means
+    // "not in portfolio" (semantically zero) and bench-weight-null means
+    // "not in benchmark" (semantically zero). For risk-contribution fields
+    // (`tr`, `mcr`) null means "FactSet didn't ship %T for this holding" —
+    // semantically MISSING, not zero. Downstream sites already handle null:
+    // f2()/fp() render '—'; (h.tr || 0) sums treat null as 0; isFinite(h.tr)
+    // filters exclude null (correctly, since fabricated zeros shouldn't have
+    // been counted as real values).
+    // ────────────────────────────────────────────────────────────────────────
     st.hold=st.hold.map(h=>{
       let hn={...h};
       hn.p=hn.p??hn.w??0;
       hn.b=hn.b??hn.bw??0;
       hn.a=hn.a??hn.aw??(hn.p-hn.b);
-      hn.mcr=hn.mcr??hn.pct_s??0;
-      hn.tr=hn.tr??hn.pct_t??0;
+      hn.mcr=hn.mcr??hn.pct_s??null;   // was `?? 0` — fabrication. Now: null preserved.
+      hn.tr=hn.tr??hn.pct_t??null;     // was `?? 0` — fabrication. Now: null preserved.
       if(hn.r==null&&hn.over!=null)hn.r=Math.round(Math.min(5,Math.max(1,hn.over)));
       return hn;
     });
@@ -3243,6 +3261,15 @@ function rExp(){
       </div>
       <div id="treeBreadcrumb" style="display:none;gap:8px;align-items:center;font-size:11px;margin-bottom:4px"></div>
       <div id="treeDiv" style="height:360px"></div>
+      <!-- F1.1 footer (audit cardTreemap-2026-05-04): F18 disclosure when
+           Size=TE. Per the SOURCES.md F18 contamination map, treemap leaves
+           sized by |h.tr| sit on the F18-contaminated path (per-portfolio
+           Σ |%T| = 94→134%). Per-leaf values are correct; total mismatch is
+           the F18 finding. Audit P3 PM-gate: keep current per-leaf-clean
+           framing + footer disclosure. -->
+      <div id="treeF18Footer" style="font-size:10px;color:var(--textDim);padding:6px 4px 0;border-top:1px solid var(--grid);margin-top:6px;display:none">
+        <span style="color:var(--warn)">ᵉ</span> Size=TE: leaf areas are |h.tr| (FactSet per-holding %T). Individual values are correct, but Σ leaves does not equal 100% — per-portfolio Σ |%T| ranges 94→134% across the 6 strategies (vs CLAUDE.md ~100% expectation; see <span style="color:var(--warn)">FACTSET_FEEDBACK F18</span>). When viewing a historical week, the treemap currently shows latest-week data (per-week routing pending).
+      </div>
     </div>
   </div>
 
@@ -5584,26 +5611,47 @@ function _unownedFromHold(s){
 }
 
 function rUnowned(unowned){
-  if(!unowned||!unowned.length)return'<p style="color:var(--txt);font-size:12px">No unowned risk data</p>';
-  let sorted=[...unowned].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
+  // T3.1 fix (audit 2026-05-04, cardUnowned): canonical .empty-state class
+  // (was inline <p>). Per ARCHITECTURE.md \u00a74.3 \u2014 10 canonical CSS classes.
+  if(!unowned||!unowned.length)return'<div class="empty-state">No unowned risk data<div class="empty-state-hint">All benchmark holdings are also held in the portfolio (or no benchmark loaded).</div></div>';
+  // Provenance counts for footer disclosure (T3.2): how many bench-only
+  // holdings have REAL pct_t shipped from FactSet vs how many are long-tail
+  // bench constituents from Raw Factors that ship without %T (now null after
+  // the T1.1 anti-fab fix in normalize). The user sees the truth: top 10 is
+  // ranked by real values, but the bench-only universe is larger.
+  const totalCount=unowned.length;
+  const realCount=unowned.filter(u=>u.tr!=null).length;
+  const sorted=[...unowned].sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0));
   const top=sorted.slice(0,10);  // cap to top 10 (or fewer if shorter)
   let rows=top.map(u=>{
     let tEsc=(u.t||'').replace(/'/g,"\\'");
+    let nameEsc=(u.n||'').replace(/"/g,'&quot;');
     let bVal=u.b!=null?u.b:(u.bw!=null?u.bw:null);
     let trVal=u.tr!=null?u.tr:(u.pct_t!=null?u.pct_t:null);
     const sec=u.sec||'\u2014';
     const co=u.co||u.country||'\u2014';
     const lblTicker=tk(u);
+    // T3.7 fix: TE Contrib color follows sign \u2014 positive (absence adds risk)
+    // is red/--neg, negative (absence diversifies) is green/--pos. The hard-
+    // coded --neg was wrong for the diversifying minority.
+    const trColor=trVal==null?'var(--textDim)':trVal>=0?'var(--neg)':'var(--pos)';
     return `<tr class="clickable" onclick="oDrUnowned('${tEsc}')">
       <td data-col="t" data-sv="${u.t||''}" style="color:var(--txth);font-weight:600">${lblTicker}</td>
-      <td data-col="n" data-sv="${(u.n||'').toLowerCase()}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.n||''}</td>
+      <td data-col="n" data-sv="${(u.n||'').toLowerCase()}" title="${nameEsc}" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${u.n||''}</td>
       <td data-col="sec" data-sv="${sec}" style="font-size:11px;color:var(--txt)">${sec}</td>
       <td data-col="co" data-sv="${co}" style="font-size:11px;color:var(--txt)">${co}</td>
       <td class="r" data-col="bw" data-sv="${bVal??''}">${bVal!=null?f2(bVal,2)+'%':'\u2014'}</td>
-      <td class="r" data-col="tr" data-sv="${trVal??''}" style="color:var(--neg);font-weight:600">${trVal!=null?fp(trVal,2)+'%':'\u2014'}</td>
+      <td class="r" data-col="tr" data-sv="${trVal??''}" style="color:${trColor};font-weight:600">${trVal!=null?fp(trVal,2)+'%':'\u2014'}</td>
     </tr>`;
   }).join('');
-  const moreNote=sorted.length>10?`<p style="font-size:9px;color:var(--textDim);margin:6px 0 0">Showing top 10 of ${sorted.length} unowned BM-only holdings by |TE| contribution.</p>`:'';
+  // T3.2 fix (audit 2026-05-04): hairline footer discloses the provenance
+  // truth. Was: silent "Showing top 10 of N" implied a fully-ranked universe;
+  // now: explicit "ranked by |TE| over the M with shipped values" so the user
+  // sees the F12 limit. Same posture as cardTEStacked / cardRiskByDim
+  // honest-math footers.
+  const footerLine = realCount < totalCount
+    ? `<div style="font-size:10px;color:var(--textDim);margin:6px 0 0;padding-top:6px;border-top:1px solid var(--grid)">Bench-only universe: ${totalCount} holdings \u00b7 ${realCount} carry per-holding %T from FactSet Security section \u00b7 ${totalCount-realCount} are long-tail bench constituents shipped without %T (FactSet inquiry F12 \u2014 pending). Top 10 ranked by |%T| over the ${realCount} with real values; remaining ${totalCount-realCount} render '\u2014'.</div>`
+    : `<div style="font-size:10px;color:var(--textDim);margin:6px 0 0;padding-top:6px;border-top:1px solid var(--grid)">All ${totalCount} bench-only holdings carry per-holding %T. Top 10 ranked by |%T|.</div>`;
   return`<table id="tbl-unowned">
     <thead><tr>
       <th data-col="t" onclick="sortTbl('tbl-unowned',0)">Ticker</th>
@@ -5611,10 +5659,10 @@ function rUnowned(unowned){
       <th data-col="sec" onclick="sortTbl('tbl-unowned',2)">Sector</th>
       <th data-col="co" onclick="sortTbl('tbl-unowned',3)">Country</th>
       <th data-col="bw" class="r tip" data-tip="Benchmark weight of this unowned stock (% of benchmark). Implied active position is the negative of this." onclick="sortTbl('tbl-unowned',4)">Bench Wt</th>
-      <th data-col="tr" class="r tip" data-tip="Contribution of this unowned stock to tracking error (% of TE). Positive = the absence of this name adds risk to the portfolio." onclick="sortTbl('tbl-unowned',5)">TE Contrib</th>
+      <th data-col="tr" class="r tip" data-tip="Contribution of this unowned stock to tracking error (% of TE). Positive (red) = the absence of this name adds risk; negative (green) = its absence diversifies. Source: FactSet Security %T column. Long-tail bench constituents render '\u2014' (FactSet does not ship %T for those \u2014 see F12)." onclick="sortTbl('tbl-unowned',5)">TE Contrib</th>
     </tr></thead>
     <tbody>${rows}</tbody>
-  </table>${moreNote}`;
+  </table>${footerLine}`;
 }
 
 
@@ -7321,6 +7369,11 @@ function _refreshTreeToolbar(){
   document.querySelectorAll('#treeDimWrap [data-dim]').forEach(b=>b.classList.toggle('active',b.dataset.dim===_treeDim));
   document.querySelectorAll('#treeSizeWrap [data-sz]').forEach(b=>b.classList.toggle('active',b.dataset.sz===_treeSize));
   document.querySelectorAll('#treeColorWrap [data-cl]').forEach(b=>b.classList.toggle('active',b.dataset.cl===_treeColor));
+  // F1.1 footer visibility (audit cardTreemap-2026-05-04): show the F18
+  // disclosure only when Size=TE (the contaminated path). Hidden on Weight
+  // / Count modes which use h.p / count (clean).
+  const f18Foot=document.getElementById('treeF18Footer');
+  if(f18Foot)f18Foot.style.display=_treeSize==='te'?'block':'none';
 }
 function rTree(s){
   if(!s||!s.hold||!s.hold.length){let el=document.getElementById('treeDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings to visualize</p>';return;}
@@ -7525,15 +7578,28 @@ function riskDecompTree(s,factorRisk,idioRisk){
     );
     return mkNode('dt_g_'+grp,grpLabels[grp]||grp,f2(grpC,1)+'%',grpC,'#6366f1',kids);
   });
-  let topH=[...s.hold].filter(h=>!isCash(h)).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0)).slice(0,7);
-  let idioKids=topH.map((h,i)=>
-    mkNode('dt_h_'+i,(h.t||'?')+' \u2014 '+(h.n||'').slice(0,25),f2(h.tr,2)+'%',Math.min(Math.abs(h.tr||0)*10,100),'#f59e0b',null)
-  );
+  // D1 fix (audit 2026-05-04, cardRiskDecomp T1 RED) \u2014 top-7 idio holdings'
+  // %T values are F18-contaminated (per-holding %T sums 94\u2192134%, NOT 100%
+  // as CLAUDE.md says). Mark each leaf with \u1d49 + add tooltip pointing at F18.
+  // The leaves were previously labeled "X%" with no marker, falsely framing
+  // them as a clean share of TE. Anti-fab compliance.
+  // PM-gate (audit D8): proper remediation is to swap idio sub-tree to
+  // sector-MCR breakdown (L2-verified). Footer disclosure ships now;
+  // remediation queued.
+  let topH=[...s.hold].filter(h=>!isCash(h)&&h.tr!=null).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0)).slice(0,7);
+  let idioSumTop7=topH.reduce((acc,h)=>acc+Math.abs(h.tr||0),0);
+  let idioKids=topH.map((h,i)=>{
+    const lbl=(h.t||'?')+' \u2014 '+(h.n||'').slice(0,25);
+    const valTxt=f2(h.tr,2)+'%<sup style="color:var(--warn);font-size:9px" title="Per-holding %T from FactSet \u2014 F18-contaminated (sum across portfolio = 94\u2192134% across the 6 strategies, not 100% per CLAUDE.md). Per-row value is correct; the contamination shows up only when summed.">\u1d49</sup>';
+    return mkNode('dt_h_'+i,lbl,valTxt,Math.min(Math.abs(h.tr||0)*10,100),'#f59e0b',null);
+  });
+  // F18 disclosure: how much of the idio total do the top 7 explain?
+  let idioCoverage=idioRisk>0?+(100*idioSumTop7/idioRisk).toFixed(0):0;
   let factorNode=mkNode('dt_factor','Factor Risk',f2(factorRisk,2)+'%',facPct,'#06b6d4',facKids);
   let idioNode=mkNode('dt_idio','Stock-Specific Risk',f2(idioRisk,2)+'%',idioPct,'#f59e0b',idioKids);
   return'<div class="card" id="cardRiskDecomp" style="margin-bottom:16px">'+
     '<div class="flex-between" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px">'+
-    '<div class="card-title tip" style="margin:0" data-tip="Total TE decomposed into Factor Risk + Stock-Specific Risk, then drilled into the top contributors on each side. The percentages sum back to 100% of total tracking error." oncontextmenu="showNotePopup(event,\'cardRiskDecomp\');return false">Risk Decomposition Tree</div></div>'+
+    '<div class="card-title tip" style="margin:0" data-tip="Total TE decomposed into Factor Risk + Stock-Specific Risk, then drilled into the top contributors on each side. Factor side: leaves are factor MCR contributions (clean). Idio side: leaves are top per-holding %T values \u2014 individually correct but per-portfolio \u03a3 is F18-contaminated (94\u2192134%); see footer." oncontextmenu="showNotePopup(event,\'cardRiskDecomp\');return false">Risk Decomposition Tree</div></div>'+
     tileChromeStrip({id:'cardRiskDecomp',about:true,fullscreen:"openTileFullscreen('cardRiskDecomp')",resetView:true,hide:true})+
     '</div>'+
     '<div style="padding:4px 0">'+
@@ -7542,6 +7608,12 @@ function riskDecompTree(s,factorRisk,idioRisk){
         '<span style="font-size:20px;font-weight:700;color:'+(te>7?'var(--neg)':te>5?'var(--warn)':'var(--txth)')+'">'+f2(te,2)+'%</span>'+
       '</div>'+
       factorNode+idioNode+
+    '</div>'+
+    // D1 footer disclosure (audit 2026-05-04). Top-7 idio %T values often
+    // SUM to more than the parent (because per-holding %T is on the
+    // contaminated side of F18). Surface that explicitly.
+    '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--grid);font-size:10px;color:var(--textDim)">'+
+      '<span style="color:var(--warn)">\u1d49</span> Idio leaves: top-7 holdings carry FactSet per-holding %T (\u03a3 |top-7| = '+f2(idioSumTop7,1)+'% vs idio parent '+f2(idioRisk,2)+'%). Per-holding %T is on the F18-contaminated side (per-portfolio \u03a3 = 94\u2192134% across the 6 strategies vs CLAUDE.md ~100% expectation \u2014 see <span style="color:var(--warn)">FACTSET_FEEDBACK F18</span>). Each leaf value is individually correct; the parent/children sum mismatch is the F18 finding, not a tile bug. <em>PM-gate remediation: swap idio sub-tree to sector-MCR breakdown (L2-verified) \u2014 queued, see audit doc D8.</em>'+
     '</div>'+
   '</div>';
 }
@@ -12125,9 +12197,12 @@ function oDrUnowned(ticker){
   // NOT cs.unowned (which is parser orphan-bucket of detached cash/rights
   // with all numeric fields null). The drill-modal lookup must match —
   // previously: cs.unowned.find returned undefined → click did nothing.
+  // T2.3 fix (audit 2026-05-04): predicate now symmetric with
+  // _unownedFromHold (uses (x.p ?? x.w), not just x.w). Defensive against
+  // future parser paths that ship `p` instead of `w` on synth entries.
   let u = cs.hold.find(x =>
     x.t === ticker &&
-    !((x.w || 0) > 0) &&
+    !(((x.p ?? x.w) || 0) > 0) &&
     ((x.b || x.bw || 0) > 0)
   );
   if(!u) return;
@@ -12135,20 +12210,31 @@ function oDrUnowned(ticker){
   // and legacy (p/b/tr) shapes; prefer the new fields where present.
   const uB  = (u.b  != null ? u.b  : u.bw);
   const uTR = (u.tr != null ? u.tr : u.pct_t);
-  const uReg = u.reg || '—';
+  // T2.4 fix (audit 2026-05-04): when reg is null on synth bench-only entries
+  // (the majority), fall back to country (much higher coverage) so the
+  // "Region: —" / "Holdings in —" UX dead-ends don't appear. The drill scopes
+  // peer holdings by whichever attribute we landed on.
+  const uReg = u.reg || u.co || u.country || '—';
+  const peerKey = u.reg ? 'reg' : (u.co || u.country) ? 'co' : null;
   const uName = u.n || '';
   const uTkr = tk(u) || u.t;
-  let secHold=cs.hold.filter(h=>h.reg===u.reg && (h.w||h.p||0)>0);
+  // T2.3 follow-on: peer-holdings filter symmetric with the predicate.
+  // Also, only build the peer set if we have a non-'—' key to scope by.
+  let secHold = peerKey
+    ? cs.hold.filter(h => (h[peerKey] === u[peerKey]) && ((h.p ?? h.w) || 0) > 0)
+    : [];
+  // T3.7-on-drill: TE color follows sign on the drill stat-card too.
+  const trDrillColor = uTR == null ? 'var(--textDim)' : uTR >= 0 ? 'var(--neg)' : 'var(--pos)';
 
   $('unownedContent').innerHTML=`
     <h2>${uTkr} — ${uName}<button class="close" onclick="$('unownedModal').classList.remove('show')">&times;</button></h2>
     <div class="grid g3" style="margin-bottom:16px">
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${f2(uB)}%</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:var(--neg)">${fp(uTR)}</div></div>
-      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Region</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${uReg}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">Benchmark Weight</div><div style="font-size:20px;font-weight:700;color:var(--txth)">${uB!=null?f2(uB)+'%':'—'}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">TE Contribution</div><div style="font-size:20px;font-weight:700;color:${trDrillColor}">${uTR!=null?fp(uTR):'—'}</div></div>
+      <div class="card" style="text-align:center"><div class="label" style="font-size:10px;margin-bottom:4px">${peerKey==='co'?'Country':'Region'}</div><div style="font-size:14px;font-weight:600;color:var(--txth)">${uReg}</div></div>
     </div>
     <div class="card-title">Why This Stock Matters</div>
-    <p style="font-size:12px;color:var(--txt);margin-bottom:12px">${uB!=null?`This stock has a ${f2(uB)}% weight in the benchmark but is not held in the portfolio.`:'This stock is in the benchmark but not held in the portfolio.'} ${uTR!=null?`Its absence contributes ${fp(uTR)} to tracking error.`:''} Consider whether this is an intentional underweight based on your investment thesis.</p>
+    <p style="font-size:12px;color:var(--txt);margin-bottom:12px">${uB!=null?`This stock has a ${f2(uB)}% weight in the benchmark but is not held in the portfolio.`:'This stock is in the benchmark but not held in the portfolio.'} ${uTR!=null?`Its absence contributes ${fp(uTR)} to tracking error.`:'(FactSet does not ship per-holding %T for this constituent — see F12 inquiry.)'} Consider whether this is an intentional underweight based on your investment thesis.</p>
     ${secHold.length?`<div class="card-title" style="margin-top:16px">Your Holdings in ${uReg} (${secHold.length})</div>
     <div style="max-height:200px;overflow-y:auto"><table><thead><tr><th>Ticker</th><th>Name</th><th class="r">Port%</th><th class="r">Active</th></tr></thead><tbody>${secHold.slice(0,10).map(h=>`<tr><td style="color:var(--txth)">${tk(h)}</td><td>${h.n}</td><td class="r">${f2(h.p)}</td><td class="r ${activeStyle(h.a)}">${fp(h.a)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
   m.classList.add('show');

@@ -171,8 +171,10 @@ F18 is the open inquiry on per-holding `%T` summing to 94→134% across strategi
 | **cardRanks** (Spotlight rank table) | YES — Σ h.tr per quintile (TE Contrib column) | per-holding | **YES at quintile-Σ level** | YES — F18 footer shipped 2026-05-04 ✓ |
 | **cardRankDist** (port-weight histogram) | NO — bar heights are port weight only, not %T | per-quintile port weight | NO | n/a — universe-coverage only |
 | **cardHoldRisk** | NO — per-holding scatter (each dot is one h.tr) | per-row | YES — but each dot is a single value, not a Σ | n/a |
-| **cardTreemap (TE size mode)** | YES — sums h.tr per leaf | per-holding | **YES** | TBD — pending audit |
-| **cardUnowned** | per-row only | per-holding | per-row clean | TBD — pending audit |
+| **cardRiskDecomp** (idio sub-tree) | YES — top-7 idio leaves are h.tr values | per-holding | **YES at top-7-Σ level** (Σ |top-7| often > parent due to F18) | YES — F18 footer + leaf ᵉ markers shipped 2026-05-04 ✓ |
+| **cardTreemap (Size=TE mode)** | YES — leaf areas are |h.tr| | per-holding | **YES** at total-leaf level | YES — F18 footer (visible only when Size=TE) shipped 2026-05-04 ✓ |
+| **cardTreemap (Size=Weight or Count)** | NO — h.p portfolio weight or simple count | per-row | NO | n/a |
+| **cardUnowned** | per-row only (no aggregate) | per-holding | per-row clean (F12 long-tail = '—' now after T1.1 fix) | YES — provenance footer shipped 2026-05-04 ✓ (M of N has shipped %T disclosure) |
 
 Rule: **any tile that displays a sum of per-holding %T values needs an F18 disclosure footer.** Per-row displays are clean. Section-aggregate displays are clean (L2-verified). Per-strategy total of per-holding %T is the F18 finding.
 

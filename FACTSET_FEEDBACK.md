@@ -170,6 +170,40 @@
 
 ---
 
+### F18 — Per-holding %T does NOT sum to 100% (CLAUDE.md says it should)
+
+**Finding date:** 2026-05-04 (cardRiskByDim audit)
+**Severity:** RED — contradicts the documented invariant in CLAUDE.md line 108.
+
+CLAUDE.md states: `%T = Percentage of tracking error — each holding's % contribution to total portfolio TE (sums to ~100%)`. The audit measured Σ h.pct_t per strategy on 2026-05-04 latest week:
+
+| Strategy | cs.sum.te | Σ h.pct_t | Σ h.pct_s | N holdings | Comment |
+|---|---|---|---|---|---|
+| IDM | 6.47 | 115.9 | 62.6 | 775 | +15.9 over |
+| IOP | 7.11 | 134.4 | 52.6 | 1,703 | +34.4 over |
+| EM | 5.51 | 94.6 | 60.0 | 914 | -5.4 under |
+| ISC | 6.25 | 107.0 | 70.6 | 2,209 | +7.0 over |
+| ACWI | 6.65 | 125.3 | 56.2 | 2,048 | +25.3 over |
+| GSC | 6.98 | 109.8 | 68.7 | 1,002 | +9.8 over |
+
+Range: **94.6 → 134.4** — ±35% deviation from the claimed "~100%". Same direction-pattern hit cardSectors during the May 1 demo (holdings-sum 137% for ACWI Industrials, fixed by reading section-aggregate `cs.sectors[].tr` instead). cardSectors had a workaround because FactSet ships per-sector aggregate rows; **cardRiskByDim has no analogous workaround** because Country / Currency / Industry aggregates aren't shipped from FactSet — they're computed locally from per-holding `h.country / h.currency / h.industry` (security_ref enrichment).
+
+**Possible causes (any one or combination):**
+1. CLAUDE.md is aspirational, not actual — `%T` has been ±35% the whole time and we never noticed.
+2. `%T_Check` flag filters some rows; surviving %T values don't sum to 100%.
+3. `%T` is sampled (per-holding rows are emitted only above a coverage threshold, not the full universe).
+4. Negative `%T` (diversifying holdings) cancels differently than the doc implies.
+
+**Ask to FactSet team:**
+- Confirm whether `%T` per-holding **should** sum to ~100% per portfolio for every weekly snapshot, or whether the documented invariant is approximate.
+- If approximate: what's the expected tolerance? (Docs imply ~100%; we observe 94–134%.)
+- If exact: what's filtering / sampling on the per-holding rows?
+- Per-strategy variance (EM under, IOP heavily over) suggests not uniform sampling — likely related to bench universe size or %T_Check inclusion logic.
+
+**Workaround in cardRiskByDim (shipped 2026-05-04):** footer now reports `Σ %T` (signed) and `Σ |%T|` (absolute) explicitly so the deviation is visible to PMs rather than hidden behind a misleading "% of TE" label. About-registry caveat updated.
+
+---
+
 ## Closed / Resolved
 
 *(none yet)*

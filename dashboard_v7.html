@@ -1247,7 +1247,7 @@ const _ABOUT_REG={
     what:'TE contribution decomposed by Country / Currency / Industry. Each bar = sum of holdings\' %T in that bucket. Click any bar to drill into the contributing securities.',
     how:'Σ h.tr per bucket. Dimension toggle (3-state pill) switches the grouping attribute (h.co / h.ccy / h.ind). Sorted descending by |TE share|.',
     source:'cs.hold[] aggregated by dimension.',
-    caveats:'Different from cardSectors (GICS sector) — uses Country / Currency / Industry instead. Currency exposure includes the implicit FX risk of holding non-USD assets.',
+    caveats:'Different from cardSectors (GICS sector) — uses Country / Currency / Industry instead. Currency exposure includes the implicit FX risk of holding non-USD assets. Universe pill (Port-Held / In Bench / All) does NOT filter this tile — TE contributions are universe-invariant per B116. Σ %T does NOT sum to 100% across all 6 strategies (range 94→134 — see FACTSET_FEEDBACK F18). Footer reports Σ %T and Σ |%T| so the deviation is visible.',
     related:'cardSectors · cardCountry'
   },
   // 2026-04-30 (audit, item #1): cardRiskCtryFactor registry entry deleted as
@@ -8508,9 +8508,16 @@ function rRiskByDim(s){
   // Footer summary
   let footer=document.getElementById('rbdFooter');
   if(footer){
+    // 2026-05-04 (audit D1d + D2): label "total |TE|" honestly + show
+    // both signed and absolute totals. Per-holding %T does NOT sum to 100%
+    // upstream (varies 94-134 across strategies — see audit D1 for FactSet
+    // investigation). Footer now reports the actual sum so users can see
+    // the deviation rather than be surprised by it.
+    const sumSigned=agg.buckets.reduce((a,b)=>a+b.total_tr,0);
+    const sumAbs=agg.buckets.reduce((a,b)=>a+b.abs_tr,0);
     let parts=[
       `${agg.buckets.length} ${RBD_DIM_LABELS[_rbdDim].toLowerCase()} buckets`,
-      `total |TE| coverage = ${agg.buckets.reduce((a,b)=>a+b.abs_tr,0).toFixed(1)}%`,
+      `Σ %T = ${sumSigned.toFixed(1)} · Σ |%T| = ${sumAbs.toFixed(1)}`,
     ];
     if(hidden)parts.push(`${hidden} hidden below ${_rbdThresh.toFixed(1)}% (${hiddenSum.toFixed(1)}% combined)`);
     if(agg.unmappedCount)parts.push(`<span style="color:var(--warn)">⚠ ${agg.unmappedCount} unmapped holdings</span>`);
@@ -8656,7 +8663,10 @@ function exportRiskByDimCsv(){
   const rows=[[RBD_DIM_LABELS[_rbdDim],'Holdings count','Total TE contrib %','Unmapped']];
   agg.buckets.forEach(b=>rows.push([b.n,b.count,b.total_tr.toFixed(2),b.unmapped?'true':'false']));
   rows.push(['—','—','—','—']);
-  rows.push(['Total',cs.hold.length,agg.totalTr.toFixed(2),'']);
+  // 2026-05-04 (audit F2): exclude cash from Total row count to match the
+  // bucket aggregator (which also excludes cash). Was: cs.hold.length included cash.
+  const totalNonCash=(cs.hold||[]).filter(h=>!isCash(h)).length;
+  rows.push(['Total',totalNonCash,agg.totalTr.toFixed(2),'']);
   let csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   let blob=new Blob([csv],{type:'text/csv'});
   let a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='risk_by_'+_rbdDim+'_'+(cs.id||'strategy')+'.csv';a.click();

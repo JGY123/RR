@@ -454,3 +454,51 @@ Each layer feeds the next. An L2 anomaly becomes an L4 inquiry. A resolved L4 in
 - "Doing it right" framing replaced "ship fast" framing post-presentation. The dashboard is correct, the cadence compounds, the knowledge base grows.
 - Strategic review documented in `STRATEGIC_REVIEW.md` for periodic re-baselining.
 - Anti-fabrication discipline from April held: zero new fabrication patterns introduced in May despite 11 fixes + refactor sweep.
+
+---
+
+## Lesson 15 — `?? 0` in normalize() is the same anti-pattern as the April crisis (2026-05-04)
+
+**The bug:** `normalize()` at `dashboard_v7.html:1877-1878` had:
+```js
+hn.mcr = hn.mcr ?? hn.pct_s ?? 0;   // ← FABRICATION
+hn.tr  = hn.tr  ?? hn.pct_t ?? 0;   // ← FABRICATION
+```
+
+This silently set TE-contribution and idio-risk-contribution to **0** when the source CSV shipped null. **76% of bench-only holdings on EM** (623 of 819) were carrying fabricated `tr=0` after this normalize step. The cardUnowned tile then sorted them to the bottom of the rankings, making them indistinguishable from real-zero contributors.
+
+**Why it survived for so long:** the user-visible top-10 in cardUnowned ranked correctly — entries with REAL `pct_t` floated to the top via `Math.abs(b.tr || 0)` sort. The fabrication was buried in the rank-tail and the footer's "of N" count. The Lesson 6 (load-time integrity assertion) check at `_b115AssertIntegrity` only verifies sum-level fields, not per-holding `tr`. Silent for weeks.
+
+**Discovery:** cardUnowned audit (2026-05-04) probed the per-strategy split file directly, cross-referenced with parser source, and found the gap empirically.
+
+**The right discipline (CLAUDE.md hard rule #2 reaffirmed):** `normalize()` is rename-only. If a field is null in source, **leave it null**. Sites that need null-as-zero for arithmetic use `(h.tr || 0)` explicitly. Sites that display fall back to `'—'` via `f2()`/`fp()` (which already handle null).
+
+**Why some `?? 0` patterns are still OK:** for `p` (port weight), `b` (bench weight), `a` (active weight), `?? 0` is semantically correct — port-weight-null means "not in portfolio" (zero), bench-weight-null means "not in benchmark" (zero). For `tr` (TE contribution), `mcr` (idio risk contribution), `?? 0` is fabrication — null means "FactSet didn't ship %T for this holding" (MISSING, not zero). The semantic distinction is what matters; treat the two cases differently.
+
+**Generalization:** When a field's null state has semantic meaning ("missing", "not yet shipped", "not applicable"), preserve null. Default to zero only when null IS semantically zero.
+
+**The fix:** `?? 0` → `?? null` on the two risk-contribution fields. Verified backward-compat on all 69 downstream `h.tr` read sites:
+- `(h.tr || 0)` aggregations: null becomes 0 in sums (correct)
+- `f2(h.tr, 2)` / `fp(h.tr, 2)` displays: null renders as `'—'` (correct)
+- `isFinite(h.tr)` filters: null excluded (CORRECT — these were including fabricated zeros, now correctly exclude)
+
+**Codified in:** `data-integrity-specialist.md` agent (anti-pattern checklist) + `SOURCES.md` (the F18 contamination map cross-references this).
+
+---
+
+## Lesson 16 — F18 contamination map: surface what's clean vs contaminated (2026-05-04)
+
+When a finding can't be resolved unilaterally (F18 — per-holding %T sums to 94→134% across the 6 strategies, escalated to FactSet), the next-best move is to **map the blast radius** so every future "wacky number" investigation starts with the right priors.
+
+`SOURCES.md` now carries a "F18 contamination map" — a table of every Risk-tab and Holdings-tab tile, classified as:
+
+- **F18-contaminated AT SUM LEVEL**: cardRiskByDim · cardRanks (Q1..Q5 Σ) · cardRiskDecomp (top-7 idio Σ) · cardTreemap (Size=TE)
+- **F18-contaminated PER-ROW only** (no Σ shown): cardUnowned · cardHoldRisk
+- **CLEAN (factor-aggregate or section-aggregate, L2-verified)**: cardCorr · cardFacContribBars · cardFacHist · cardBetaHist · cardTEStacked (after F12(a))
+- **N/A (not on F18 path)**: cardSectors · cardCountry · cardGroups · cardRegions · cardRankDist
+
+**Discipline:** any tile that displays a Σ of per-holding %T values needs an F18 disclosure footer (matching the cardRiskByDim pattern: `Σ %T = X% (expected ~100%; see F18)`). Per-row displays are clean and need no disclosure. The audit cadence checks this explicitly.
+
+**Cycle 2026-05-04:** shipped disclosures on cardRanks, cardRiskDecomp, cardTreemap, cardUnowned. The map is now closed for known sites.
+
+**Generalization:** a contamination map is cheap to maintain and expensive to recompute under pressure. When you find an upstream issue that ripples through many tiles, write the map first, then fix.

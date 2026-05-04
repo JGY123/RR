@@ -236,6 +236,92 @@ class TestLegacyBehavior:
         assert len(it_holdings) > 0, "no holdings with sec='Information Technology' — GICS short-form regression?"
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# F19 fix (2026-05-04) — per-week pct_specific / pct_factor in hist.summary
+# Audit cardTEStacked T1-F1 surfaced that hist.summary entries lacked
+# pct_specific even though the parser DOES extract it per RiskM period.
+# Fix: _hist_entry now joins by date with a riskm_by_date map.
+# These tests are CSV-free — exercise the join directly.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class TestF19PerWeekPctSpecific:
+    """F19 — verify hist.summary[].pct_specific / .pct_factor."""
+
+    def _make_parser(self):
+        # _hist_entry is a method, but doesn't touch instance state. Construct
+        # cheaply via __new__ to skip CSV-loading __init__.
+        return FactSetParserV3.__new__(FactSetParserV3)
+
+    def _pc_row(self, d):
+        # Minimal pc_row shape that _hist_entry consumes.
+        return {
+            "d": d,
+            "_metrics": {
+                "Predicted Tracking Error (Std Dev)": {"p": 5.5},
+                "Axioma- Predicted Beta to Benchmark": {"p": 1.02},
+                "# of Securities": {"p": 320},
+                "Port. Ending Active Share": {"p": 75.0},
+            },
+        }
+
+    def test_f19_source_direct(self):
+        """When riskm_by_date carries pct_specific for the date, fields populate."""
+        p = self._make_parser()
+        riskm_by_date = {"20250430": {"pct_specific": 67.3, "pct_factor": 32.7}}
+        out = p._hist_entry(self._pc_row("20250430"), None, riskm_by_date)
+        assert out["pct_specific"] == 67.3
+        assert out["pct_factor"] == 32.7
+
+    def test_f19_missing_date_falls_to_none(self):
+        """When riskm_by_date has no entry for this date, fields are None (not fabricated)."""
+        p = self._make_parser()
+        riskm_by_date = {"20250430": {"pct_specific": 67.3, "pct_factor": 32.7}}
+        out = p._hist_entry(self._pc_row("20250423"), None, riskm_by_date)  # different date
+        assert out["pct_specific"] is None
+        assert out["pct_factor"] is None
+
+    def test_f19_no_riskm_arg_defaults_to_none(self):
+        """Backwards-compat: callers that don't pass riskm_by_date still work; fields are None."""
+        p = self._make_parser()
+        out = p._hist_entry(self._pc_row("20250430"))
+        assert out["pct_specific"] is None
+        assert out["pct_factor"] is None
+
+    def test_f19_partial_source_only_specific(self):
+        """If source provides pct_specific but not pct_factor, missing one is None."""
+        p = self._make_parser()
+        riskm_by_date = {"20250430": {"pct_specific": 67.3}}
+        out = p._hist_entry(self._pc_row("20250430"), None, riskm_by_date)
+        assert out["pct_specific"] == 67.3
+        assert out["pct_factor"] is None
+
+    def test_f19_riskm_dict_with_extra_fields_does_not_leak(self):
+        """riskm row carries many fields (exposures, total_risk, etc.). Only the two
+        we want should appear in hist.summary — no leakage."""
+        p = self._make_parser()
+        riskm_by_date = {"20250430": {
+            "pct_specific": 67.3, "pct_factor": 32.7,
+            "total_risk": 12.5, "bm_risk": 11.0,
+            "exposures": {"Volatility": {"c": 0.5}},
+        }}
+        out = p._hist_entry(self._pc_row("20250430"), None, riskm_by_date)
+        assert "exposures" not in out
+        assert "total_risk" not in out
+        # The expected hist.summary keys remain stable
+        assert set(out.keys()) == {"d", "te", "beta", "h", "as", "sr", "cash", "pct_specific", "pct_factor"}
+
+    def test_f19_format_version_bumped(self):
+        """FORMAT_VERSION reflects the additive change."""
+        # 4.3 means hist.summary carries pct_specific. Older consumers reading 4.2-shape
+        # would just see the new fields as null — but the version string is the audit trail.
+        assert fp.FORMAT_VERSION >= "4.3"
+
+    def test_f19_parser_version_bumped(self):
+        """PARSER_VERSION patch-bumped to mark the additive output change."""
+        assert fp.PARSER_VERSION >= "3.1.1"
+
+
 if __name__ == "__main__":
     import subprocess
     subprocess.run(["pytest", __file__, "-v", "--tb=short"])

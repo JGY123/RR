@@ -7839,6 +7839,7 @@ function rRisk(){
       ⚠ Profitability exposure declining — monitor for intended vs unintended reduction
     </div>
     <div id="riskFacBarDiv" style="height:${Math.max(200,facMCR.length*36+20)}px"></div>
+    <div id="facContribFooterCap" style="font-size:10px;color:var(--textDim);padding:6px 4px 0;border-top:1px solid var(--grid);margin-top:4px"></div>
   </div>
 
   <!-- Factor Exposures Table -->
@@ -8101,6 +8102,17 @@ function rTEStackedArea(s,factorRisk,idioRisk){
   // ᵉ-suffix in legend names when broadcast was used on any week — same
   // pattern as the sum-card ᵉ at L7724/L7729 (cardThisWeek/cardRiskHistTrends).
   let synthSfx=synthCount>0?' ᵉ':'';
+  // T2-F2 fix (audit 2026-05-04, cardTEStacked): vertical marker at the
+  // globally-selected week. Peer tiles (cardRiskHistTrends, cardBetaHist
+  // drill, factor drill) all highlight the picked week; cardTEStacked was
+  // the holdout. Now matches the per-tile contract.
+  let weekShapes=[];
+  let weekAnnos=[];
+  if(typeof _selectedWeek!=='undefined' && _selectedWeek){
+    const swISO=isoDate(_selectedWeek);
+    weekShapes.push({type:'line',xref:'x',yref:'paper',x0:swISO,x1:swISO,y0:0,y1:1,line:{color:THEME().tickH,width:1.5,dash:'dot'}});
+    weekAnnos.push({x:swISO,xref:'x',y:1.02,yref:'paper',text:'selected wk',showarrow:false,font:{size:9,color:THEME().tickH},xanchor:'center',bgcolor:'rgba(0,0,0,0)'});
+  }
   Plotly.newPlot('teStackedDiv',[
     {x:dates,y:idioVals,name:'Idiosyncratic (Stock-Specific)'+synthSfx,type:'scatter',mode:'lines',
       fill:'tozeroy',fillcolor:C.idioFill,line:{color:C.idioLine,width:1},
@@ -8115,7 +8127,9 @@ function rTEStackedArea(s,factorRisk,idioRisk){
     xaxis:{...plotBg.xaxis,rangeslider:{visible:true,bgcolor:THEME().card,bordercolor:C.rsBorder,borderwidth:1,thickness:0.04},tickformat:'%b %Y',nticks:8},
     yaxis:{...plotBg.yaxis,title:'TE (pp)',zeroline:false},
     legend:{orientation:'h',y:1.12,font:{size:11}},
-    hovermode:'x unified'
+    hovermode:'x unified',
+    shapes:weekShapes,
+    annotations:weekAnnos
   },{...plotCfg,scrollZoom:true});
   // Footer caveat block — F12(a) provenance breakdown per LESSONS 9-14.
   // Defensive UI: show the math, don't quietly normalize. The user sees at a
@@ -8441,6 +8455,37 @@ function rRiskFacBarsMode(){
   Plotly.newPlot('riskFacBarDiv',traces,layout,plotCfg);
   if(fcbEl.on){fcbEl.on('plotly_click',function(d){let n=d&&d.points&&d.points[0]&&d.points[0].y;if(n&&typeof oDrFRisk==='function')oDrFRisk(n);});}
 
+  // D3+X3 fix (audit 2026-05-04, cardFacContribBars): disclosure footer.
+  // When threshold/group filters hide bars, surface "X of Y factors shown ·
+  // Σ |c| explained: Z%" so the user can tell if the tail matters. Pattern
+  // mirrored from cardRiskByDim L8520. Domestic-model strategies (when SCG +
+  // Alger land) will see fewer factors in _wFactors() than FAC_PRIMARY —
+  // surface that delta too. Defensive UI per LESSONS 9-14.
+  let foot=document.getElementById('facContribFooterCap');
+  if(foot){
+    const totalFacs=allFacMCR.length;
+    const visibleFacs=facMCR.length;
+    const hiddenFacs=totalFacs-visibleFacs;
+    const totalAbsC=allFacMCR.reduce((acc,f)=>acc+Math.abs(f.c||0),0);
+    const visibleAbsC=facMCR.reduce((acc,f)=>acc+Math.abs(f.c||0),0);
+    const explainedPct=totalAbsC>0?+(100*visibleAbsC/totalAbsC).toFixed(1):100;
+    let parts=[];
+    if(hiddenFacs>0){
+      parts.push(`${visibleFacs}/${totalFacs} factors shown · ${explainedPct}% of |Σ TE-contrib| explained · ${(100-explainedPct).toFixed(1)}% in ${hiddenFacs} hidden bar(s) (below threshold or group filter).`);
+    } else {
+      parts.push(`All ${totalFacs} factors visible · 100% of |Σ TE-contrib| shown.`);
+    }
+    // Domestic-model graceful degrade: surface missing-from-model factors.
+    if(typeof FAC_PRIMARY!=='undefined' && FAC_PRIMARY){
+      const presentNames=new Set(allFacMCR.map(f=>f.n));
+      const missingPrimary=[...FAC_PRIMARY].filter(n=>!presentNames.has(n));
+      if(missingPrimary.length){
+        parts.push(`<span style="color:var(--textDim)">Factors missing from this model: ${missingPrimary.join(', ')} (likely domestic-model strategy — narrower factor set).</span>`);
+      }
+    }
+    foot.innerHTML=parts.join(' · ');
+  }
+
   // Profitability alert: check if active exposure decreased vs previous period.
   // D5 fix (audit 2026-05-04, cardFacContribBars): cs.hist.fac is empty in
   // current samples (acknowledged at L7875). Fall back to snap_attrib hist
@@ -8556,12 +8601,28 @@ function updateFacExpChart(){
     let col=facColors[colorIdx++%facColors.length];
     if(metric==='exp'){
       // Active Exposure: cs.hist.fac[name] → e - bm
+      // D2 fix (audit 2026-05-04, cardFacHist): when hist.fac is empty (the
+      // case in current samples), fall back to snap_attrib[name].hist using
+      // exp/bench_exp delta — same source the cardCorr peer tile uses
+      // (L5826-5838). Without this, every primary-factor checkbox is checked
+      // but no traces render → user sees "No factors selected" implying their
+      // selection is wrong, when actually the data path silently failed.
+      // Defensive UI per LESSONS 9-14: surface missing data, not pretend
+      // user error.
       let hist=facHist[f.n];
+      let _fallback=false;
+      if(!hist||!hist.length){
+        const sa=snap[f.n];
+        if(sa&&sa.hist&&sa.hist.length){
+          hist=sa.hist.map(p=>({d:p.d,e:p.exp,bm:p.bench_exp}));
+          _fallback=true;
+        }
+      }
       if(!hist||!hist.length)return;
       traces.push({
-        x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n,
+        x:hist.map(h=>isoDate(h.d)),y:hist.map(h=>h.bm!=null?+(h.e-h.bm).toFixed(4):(h.e||0)),name:f.n+(_fallback?' ᵉ':''),
         line:{color:col,width:2},
-        hovertemplate:f.n+'<br>%{x|%b %Y}<br>Active Exposure: %{y:.3f}<extra></extra>'
+        hovertemplate:f.n+(_fallback?' (snap_attrib fallback)':'')+'<br>%{x|%b %Y}<br>Active Exposure: %{y:.3f}<extra></extra>'
       });
     }else if(metric==='ret'||metric==='cret'){
       // Factor Return / Cum Return: cs.snap_attrib[name].hist[].ret

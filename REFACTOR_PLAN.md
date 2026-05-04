@@ -90,6 +90,9 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 | 2026-05-01 19:00 | K.1-3 design tokens | — | `refactor.20260501.1900.phase-K1-design-tokens` | --space-*, --text-*, --w-*, --radius-*, washes, hairline, shadows added to :root. .tile-btn / .export-btn unified. 5 chrome helpers + tableColHide + tileChromeStrip swept to .tile-btn class. DESIGN_AUDIT.md from subagent. |
 | 2026-05-01 19:20 | K.4-5 empty + stat | — | `refactor.20260501.1920.phase-K-empty-stat` | .empty-state class swept across 9 inline empty-state strings. .stat-card class swept across 2 inline stat() helpers (sector full-page summary). |
 | 2026-05-01 19:35 | K.6 polish final | — | `refactor.20260501.1935.phase-K-final-polish` | .modal-close-btn (10 occurrences), .section-label (16 occurrences) swept. Phase K complete. |
+| 2026-05-03 09:00 | D-canary | — | `refactor.20260503.0900.phase-D-canary` | tileChromeStrip enhanced with `download` + `view` slots. cardSectors migrated as canary. Bug caught: backticks in HTML comments close parent template literal — fixed. |
+| 2026-05-03 09:30 | D-tier1-sweep | — | `refactor.20260503.0930.phase-D-tier1-sweep` | cardGroups + cardRegions + cardCountry + cardAttrib migrated to tileChromeStrip. ~140 lines of inline chrome → ~50 lines declarative config. |
+| 2026-05-03 09:45 | design color sweep | — | `refactor.20260503.0945.design-color-sweep` | 17 HTML-context `color:#94a3b8` → `color:var(--textDim)`. Plotly traces left untouched (separate refactor). |
 
 ## Status summary (post-2026-05-01 session)
 
@@ -111,9 +114,9 @@ Each tile registers `{ preserveCurrentView, richFeatures }`. Country gets Map / 
 - Item #4 Factor Performance y-axis — SHIPPED 2026-05-01 18:20.
 
 **Next session priorities (ordered by leverage):**
-1. **tileChromeStrip migration sweep** — start with Tier-1 tiles (cardSectors / cardCountry / cardWeekOverWeek). Each migration verifies the helper handles the tile's chrome shape.
+1. **Continue tileChromeStrip migration** — remaining Tier-1: cardThisWeek (no view toggle, simpler), cardWeekOverWeek, cardFacRisk (Risk-tab Tier-1), cardChars, cardFacDetail, cardRiskFacTbl. Defer cardHoldings (most complex — dedicated commit).
 2. **Per-tile audit cadence resume** — pick 2-3 Tier-2 tiles for a `tile-audit` subagent sweep.
-3. **Plotly THEME() color cleanup** — DESIGN_AUDIT.md flagged hardcoded `#94a3b8` greys scattered across Plotly chart code. Replace with `getComputedStyle(document.body).getPropertyValue('--textDim')` so charts re-theme correctly.
+3. **Plotly THEME() per-trace cleanup** — 5 remaining `color:'#94a3b8'` Plotly object-literal occurrences. Replace with `THEME().tick` accessor for full theme-flip support.
 4. **Spacing scale adoption** — sweep remaining hardcoded `padding: Xpx` / `gap: Xpx` to `var(--space-*)` tokens.
 5. **Per-tile design pass** — apply `.stat-card` / `.empty-state` / `.section-label` to remaining inline-styled patterns (cardThisWeek bullets, cardWeekOverWeek headers, drill modals).
 

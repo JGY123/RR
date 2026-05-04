@@ -1,7 +1,46 @@
 ---
 name: RR Session State
 purpose: Live "where are we right now" file. Updated at every meaningful checkpoint. If a thread ends suddenly, this is how the next thread picks up mid-stride.
-last_updated: 2026-05-01 19:35 (post-presentation refactor sweep + Phase K design polish — 13 phase tags, design system shipped, 11 of 11 phases done)
+last_updated: 2026-05-03 09:45 (Phase D Tier-1 migration sweep + design color cleanup — 5 tiles migrated, 17 hardcoded greys swept)
+---
+
+## 2026-05-03 09:00–09:45 — Phase D Tier-1 migration sweep + design color cleanup
+
+User said "lets keep going" after a couple days off. Picked up from
+SESSION_GUIDE.md — verified state, then continued from REFACTOR_PLAN's
+"Next session priorities" #1: tileChromeStrip migration sweep.
+
+**3 commits, 3 tags this session:**
+- `refactor.20260503.0900.phase-D-canary` — Enhanced tileChromeStrip helper
+  with `download` (PNG+CSV dropdown) and `view` (Map/Chart/Table toggle)
+  slots. cardSectors migrated as canary.
+- `refactor.20260503.0930.phase-D-tier1-sweep` — cardGroups + cardRegions
+  + cardCountry + cardAttrib migrated. ~140 lines inline chrome → ~50
+  lines declarative config.
+- `refactor.20260503.0945.design-color-sweep` — 17 HTML-context
+  `color:#94a3b8` → `color:var(--textDim)`. Plotly trace configs
+  preserved (object-literal syntax `color:'#94a3b8'`).
+
+**Tier-1 migration status:**
+  ✓ cardSectors (canary)
+  ✓ cardGroups
+  ✓ cardRegions
+  ✓ cardCountry (Map/Chart/Table + map-specific extras)
+  ✓ cardAttrib (Period pills + selects in extra slot)
+  ☐ cardThisWeek (next — no view toggle)
+  ☐ cardWeekOverWeek
+  ☐ cardFacRisk (Risk-tab Tier-1)
+  ☐ cardChars
+  ☐ cardFacDetail
+  ☐ cardRiskFacTbl
+  ☐ cardHoldings (most complex — dedicated commit)
+
+**Bug caught + memorialized:**
+HTML comments inside the parent template literal CANNOT contain literal
+backticks ` — they close the parent template and cause "Unexpected
+identifier" parse fail. Affected both cardSectors and cardCountry comments.
+Lesson: comment text near tileChromeStrip migrations must avoid backticks.
+
 ---
 
 ## 2026-05-01 19:00–19:35 — Phase K design polish (the final hour)

@@ -1164,10 +1164,10 @@ const _ABOUT_REG={
   cardTop10:{
     title:'Top 10 Holdings',
     what:'Top 10 portfolio holdings sorted by port weight. Bar text shows port wt + active wt. Color: green if active OW, red if active UW. Click any bar to open the holding drill modal.',
-    how:'Sorted by h.w (port weight) descending, sliced to top 10 from cs.hold[] (excluding cash). Active wt computed from h.a or h.aw. Display ticker via tk(h) — TKR-REGION when SEDOL→Raw Factors merge succeeded, else SEDOL.',
-    source:'cs.hold[] (FactSet "Security" section + Raw Factors merge for tkr_region).',
-    caveats:'Latest snapshot only — no period dimension. Top-10 by weight, not by TE contribution (sister tile cardHoldRisk shows the TE quadrant). No drill modal access from this tile alone — click a bar.',
-    related:'cardHoldRisk · cardHoldings · TE drill modal'
+    how:'Sorted by h.p (port weight) descending, sliced to top 10 from cs.hold[] (excluding cash). Active wt computed from h.a. Display ticker via tk(h) — TKR-REGION when SEDOL→Raw Factors merge succeeded, else SEDOL.',
+    source:'cs.hold[] (FactSet Security section + Raw Factors merge for tkr_region). F18-clean: per-row port weight only, no Σ %T aggregation on this tile.',
+    caveats:'Latest snapshot only — week selector has no effect on this tile (holdings detail layer is latest-only per ARCHITECTURE §3.4). Universe pill (Port-Held / In-Bench / All) does NOT filter — by definition the tile shows portfolio top-10 by port weight, so the Port-Held universe is the only one that makes sense; the pill is intentionally inert here. Top-10 by weight, not by TE contribution (sister tile cardHoldRisk shows the TE quadrant).',
+    related:'cardHoldRisk · cardHoldings · TE drill modal · F18 contamination map (SOURCES.md)'
   },
   // 2026-05-01 (R2-Q3 user override → B): Rank Distribution restored as first-class.
   cardRankDist:{
@@ -3377,10 +3377,10 @@ function rExp(){
       <div class="flex-between" style="margin-bottom:6px;flex-wrap:wrap;gap:8px">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           <div class="card-title tip" data-tip="Cash weight % over time, with 0–5% target band. Source: cs.hist.sum[].cash extracted per period from the [Cash] sector row." oncontextmenu="showNotePopup(event,'cardCashHist');return false">Cash Weight Over Time</div>
-          ${aboutBtn('cardCashHist')}
           <span style="font-size:11px;color:var(--txth);font-weight:600">current ${isHistWeek?'—':f2(cur,1)+'%'}</span>
           ${alertHtml}
         </div>
+        ${tileChromeStrip({id:'cardCashHist',about:true,download:{csv:'exportCashHistCsv()'},fullscreen:"openTileFullscreen('cardCashHist')",resetView:true,hide:true})}
       </div>
       <div id="cashHistDiv" style="height:160px"></div>
     </div>`;
@@ -6141,11 +6141,21 @@ function rCashHist(s){
   const dates=hist.map(h=>isoDate(h.d));
   const cash=hist.map(h=>h.cash);
   const valid=cash.filter(v=>v!=null&&isFinite(v));
+  // D2 fix (audit cardCashHist 2026-05-04): canonical .empty-state class.
   if(!valid.length){
-    div.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:160px;color:var(--txt);font-size:11px">No cash history shipped (FactSet weekly export does not always include % Cash).</div>';
+    div.innerHTML='<div class="empty-state">No cash history shipped<div class="empty-state-hint">FactSet weekly export does not always include % Cash. Source: cs.hist.sum[].cash extracted from [Cash] sector row per period (FORMAT 4.2+).</div></div>';
     return;
   }
   const T=THEME();
+  // D1 fix (audit cardCashHist 2026-05-04): resolve CSS tokens up-front (Plotly
+  // requires literal hex). Lessons-Learned anti-pattern #4-3 compliance —
+  // theme-flip parity now works. Pattern from rMultiBeta / _teStackColors.
+  const cssRoot=getComputedStyle(document.documentElement);
+  const cWarn=(cssRoot.getPropertyValue('--warn')||'#f59e0b').trim();
+  const cPos=(cssRoot.getPropertyValue('--pos')||'#10b981').trim();
+  const cNeg=(cssRoot.getPropertyValue('--neg')||'#ef4444').trim();
+  // Convert hex to rgba for shaded zones — same pattern as _h2rgba in cardFacContribBars.
+  const _h2rgba=(hex,a)=>{let h=hex.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return `rgba(${r},${g},${b},${a})`;};
   // 2026-04-30 v3: 0-5% target band per user direction. Inside band = green
   // shaded strip (in target). Outside band = red shaded strips above 5%
   // and below 0%. The line itself is amber so it pops against either band.
@@ -6154,7 +6164,7 @@ function rCashHist(s){
   const yMinData=Math.min(...valid,0);
   Plotly.newPlot('cashHistDiv',[{
     x:dates,y:cash,type:'scatter',mode:'lines',name:'Cash %',
-    line:{color:'#f59e0b',width:2.4},
+    line:{color:cWarn,width:2.4},
     hovertemplate:'%{x|%b %d %Y}<br>Cash: %{y:.2f}%<extra></extra>',
     hoverlabel:HOVERLABEL_THEME,
     connectgaps:false
@@ -6169,21 +6179,21 @@ function rCashHist(s){
     yaxis:{...plotBg.yaxis,tickformat:'.1f',ticksuffix:'%',title:{text:'Cash %',font:{size:10,color:T.tick}},range:[Math.min(yMinData,-0.5),yMaxData]},
     shapes:[
       // Target band (0-5%) — faint green shaded strip
-      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:TARGET_LO,y1:TARGET_HI,fillcolor:'rgba(16,185,129,0.06)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:TARGET_LO,y1:TARGET_HI,fillcolor:_h2rgba(cPos,0.06),line:{width:0},layer:'below'},
       // Above-target alert zone (>5%) — red strip
-      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:TARGET_HI,y1:yMaxData,fillcolor:'rgba(239,68,68,0.07)',line:{width:0},layer:'below'},
+      {type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:TARGET_HI,y1:yMaxData,fillcolor:_h2rgba(cNeg,0.07),line:{width:0},layer:'below'},
       // Below-target alert zone (<0%) — red strip (cash should not be negative)
-      yMinData<0?{type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:Math.min(yMinData,-0.5),y1:0,fillcolor:'rgba(239,68,68,0.07)',line:{width:0},layer:'below'}:null,
-      // Target boundaries (dashed slate)
-      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_LO,y1:TARGET_LO,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}},
-      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_HI,y1:TARGET_HI,line:{color:'rgba(148,163,184,0.4)',dash:'dash',width:1}},
+      yMinData<0?{type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:Math.min(yMinData,-0.5),y1:0,fillcolor:_h2rgba(cNeg,0.07),line:{width:0},layer:'below'}:null,
+      // Target boundaries (dashed slate) — uses tick color so theme-aware.
+      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_LO,y1:TARGET_LO,line:{color:T.tick,dash:'dash',width:1}},
+      {type:'line',xref:'paper',x0:0,x1:1,y0:TARGET_HI,y1:TARGET_HI,line:{color:T.tick,dash:'dash',width:1}},
       // Week-marker (cross-tile sweep 2026-05-04) — vertical line at the
       // globally-selected week. Same pattern as cardTEStacked / cardBetaHist.
       (typeof _selectedWeek!=='undefined' && _selectedWeek)?{type:'line',xref:'x',yref:'paper',x0:isoDate(_selectedWeek),x1:isoDate(_selectedWeek),y0:0,y1:1,line:{color:T.tickH,width:1.5,dash:'dot'}}:null
     ].filter(Boolean),
     annotations:[
-      {x:1,xref:'paper',y:TARGET_HI,yref:'y',text:'5% target',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'},
-      {x:1,xref:'paper',y:TARGET_LO,yref:'y',text:'0%',showarrow:false,font:{size:9,color:'rgba(148,163,184,0.85)'},xanchor:'left',xshift:4,yanchor:'middle'},
+      {x:1,xref:'paper',y:TARGET_HI,yref:'y',text:'5% target',showarrow:false,font:{size:9,color:T.tick},xanchor:'left',xshift:4,yanchor:'middle'},
+      {x:1,xref:'paper',y:TARGET_LO,yref:'y',text:'0%',showarrow:false,font:{size:9,color:T.tick},xanchor:'left',xshift:4,yanchor:'middle'},
       ...((typeof _selectedWeek!=='undefined' && _selectedWeek)?[{x:isoDate(_selectedWeek),xref:'x',y:1.04,yref:'paper',text:'selected wk',showarrow:false,font:{size:9,color:T.tickH},xanchor:'center'}]:[])
     ]
   },modalPlotCfg);
@@ -8257,6 +8267,19 @@ function exportHoldRiskCsv(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='hold_risk_'+(cs.id||'')+'.csv';a.click();
 }
 
+// cardCashHist CSV export (audit cardCashHist 2026-05-04 F1, supports the new
+// tileChromeStrip download dropdown). Emits per-week cash weight from
+// cs.hist.sum[].cash (parser-extracted from [Cash] sector row, FORMAT 4.2+).
+function exportCashHistCsv(){
+  if(!cs||!cs.hist||!cs.hist.sum)return;
+  const hist=cs.hist.sum;
+  const rows=[['Date','Cash %']];
+  hist.forEach(h=>rows.push([h.d, h.cash!=null?h.cash:'']));
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='cash_hist_'+(cs.id||'')+'.csv';a.click();
+}
+
 function exportTEStackedCsv(){
   if(!cs||!cs.hist||!cs.hist.sum)return;
   let hist=cs.hist.sum;
@@ -9682,6 +9705,17 @@ function rRankDist(){
     margin: { l: 50, r: 20, t: 14, b: 30 },
     yaxis: { ...plotBg.yaxis, title: { text: 'Portfolio Weight %', font: { size: 10, color: THEME().tick } }, ticksuffix: '%', rangemode: 'tozero' }
   }, plotCfg);
+  // T2 RED fix (audit cardRankDist 2026-05-04): tooltip says "Click a bar
+  // to filter the holdings table by that quintile" but the handler was never
+  // wired. Now wired — same pattern as cardRanks row click → filterByRank().
+  const el=document.getElementById('rankDistDiv');
+  if(el && el.on){
+    el.removeAllListeners&&el.removeAllListeners('plotly_click');
+    el.on('plotly_click', function(d){
+      const cd=d&&d.points&&d.points[0]&&d.points[0].customdata;
+      if(cd&&cd[0]!=null && typeof filterByRank==='function')filterByRank(+cd[0]);
+    });
+  }
 }
 
 function rHoldConc(){
@@ -9698,7 +9732,7 @@ function rHoldConc(){
     y:labels,x:vals,type:'bar',orientation:'h',
     marker:{color:colors,line:{color:'rgba(255,255,255,0.12)',width:1}},
     text:txt,textposition:'inside',insidetextanchor:'start',
-    textfont:{size:11,color:'#fff',family:'Inter'},
+    textfont:{size:11,color:'#fff',family:'DM Sans, system-ui'},
     customdata:cd,
     hovertemplate:'<b>%{customdata[1]}</b><br>Ticker: %{customdata[0]}<br>Weight: %{x:.2f}%<br>Active: %{customdata[3]:+.2f}<br>Sector: %{customdata[2]}<br>MCR: %{customdata[4]:.2f}<extra></extra>'
   }],{

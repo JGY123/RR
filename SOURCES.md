@@ -171,6 +171,9 @@ F18 is the open inquiry on per-holding `%T` summing to 94→134% across strategi
 | **cardRanks** (Spotlight rank table) | YES — Σ h.tr per quintile (TE Contrib column) | per-holding | **YES at quintile-Σ level** | YES — F18 footer shipped 2026-05-04 ✓ |
 | **cardRankDist** (port-weight histogram) | NO — bar heights are port weight only, not %T | per-quintile port weight | NO | n/a — universe-coverage only |
 | **cardHoldRisk** | NO — per-holding scatter (each dot is one h.tr) | per-row | YES — but each dot is a single value, not a Σ | n/a |
+| **cardWatchlist** | NO — per-row port/active only, localStorage stores STATE (categories) not DATA | per-row | NO | n/a — F18-clean by design, no aggregate |
+| **cardCashHist** | NO — cash weight time-series, single scalar per week | per-week (cs.hist.sum[].cash) | NO | n/a — sourced from [Cash] sector row directly |
+| **cardTop10** | NO — port weight bar chart, no aggregate | per-row | NO | n/a — F18-clean by design |
 | **cardRiskDecomp** (idio sub-tree) | YES — top-7 idio leaves are h.tr values | per-holding | **YES at top-7-Σ level** (Σ |top-7| often > parent due to F18) | YES — F18 footer + leaf ᵉ markers shipped 2026-05-04 ✓ |
 | **cardTreemap (Size=TE mode)** | YES — leaf areas are |h.tr| | per-holding | **YES** at total-leaf level | YES — F18 footer (visible only when Size=TE) shipped 2026-05-04 ✓ |
 | **cardTreemap (Size=Weight or Count)** | NO — h.p portfolio weight or simple count | per-row | NO | n/a |

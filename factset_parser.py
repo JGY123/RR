@@ -1745,6 +1745,168 @@ class FactSetParserV3:
         return [strategies, issues, report_date, self.stats]
 
 
+# ── B114: Cumulative-history merge (append-only) ──────────────────────────────
+# 2026-05-04 — implements the append-only architecture from HISTORY_PERSISTENCE.md.
+# Per-strategy `data/strategies/<ID>.json` IS the cumulative format. This module
+# provides the merge primitives so each new ingest UNIONs into the existing file
+# rather than replacing it. Conflict policy: new-wins on overlapping dates.
+# See `merge_cumulative.py` for the CLI entry point + `load_multi_account.sh
+# --merge` flag for the integrated workflow.
+import datetime as _dt
+
+
+def _now_iso():
+    return _dt.datetime.now().replace(microsecond=0).isoformat() + "Z"
+
+
+def _merge_date_keyed_list(existing_list, new_list):
+    """
+    Merge two lists of {d, ...} entries. Conflict policy: new-wins.
+    Returns sorted by d ascending. Drops entries with no `d`.
+    """
+    merged_by_d = {}
+    for entry in (existing_list or []):
+        d = (entry or {}).get("d")
+        if d:
+            merged_by_d[d] = entry
+    for entry in (new_list or []):
+        d = (entry or {}).get("d")
+        if d:
+            merged_by_d[d] = entry  # new-wins
+    return sorted(merged_by_d.values(), key=lambda x: x.get("d") or "")
+
+
+def _merge_named_date_keyed_dict(existing_dict, new_dict):
+    """
+    Merge {name: [{d,...}]} dicts. Each name's list is merged via
+    `_merge_date_keyed_list`. Names from new are added; existing-only
+    names are preserved (their history doesn't disappear when a future
+    ingest doesn't include them — e.g., a stock dropped from the universe).
+    """
+    merged = dict(existing_dict or {})
+    for name, entries in (new_dict or {}).items():
+        merged[name] = _merge_date_keyed_list((existing_dict or {}).get(name, []), entries)
+    return merged
+
+
+# Top-level "current" keys — always replaced from new ingest (no merge).
+# These represent "this week's snapshot" data; new ingest is by definition more
+# recent. The TIME-KEYED `hist.*` carries the historical depth.
+_CURRENT_REPLACE_KEYS = (
+    "sum", "sectors", "countries", "industries", "regions", "groups",
+    "hold", "hold_prev", "ranks", "snap_attrib", "factors", "chars",
+    "unowned", "raw_fac", "raw_fac_labels", "current_date",
+    "name", "benchmark", "security_ref_version",
+    "parser_version", "format_version",
+)
+
+
+def merge_strategy_into_existing(new_strategy, existing_strategy=None, source_csv=None):
+    """
+    Merge a fresh parser ingest of one strategy into the existing cumulative state.
+
+    Args:
+        new_strategy: dict — output of FactSetParserV3.parse() for one strategy ID.
+        existing_strategy: dict | None — the prior cumulative state, or None for first ingest.
+        source_csv: str | None — path of the source CSV (recorded in merge_history audit trail).
+
+    Returns:
+        dict — the merged strategy, ready to write to `data/strategies/<ID>.json`.
+
+    Conflict policy (new-wins):
+        - On the same date in both `existing.hist.*` and `new.hist.*`, the new
+          ingest's value replaces the existing one.
+        - Top-level "current" keys (sum, sectors, hold, factors, etc.) are
+          always replaced from new ingest (they represent the latest snapshot).
+        - Time-keyed history (hist.summary, hist.fac, hist.sec, etc.) is union
+          by date — existing-only dates preserved, new-only dates added.
+
+    Audit trail:
+        Each merge appends an entry to `merged.merge_history[]` capturing
+        timestamp, source CSV, parser/format versions, weeks added, weeks
+        overwritten. First ingest stamps the initial entry.
+
+    Idempotency:
+        Merging the same ingest twice produces identical output (every entry
+        from new replaces itself; merge_history records both attempts but the
+        weeks_added/overwritten counts reflect the actual change).
+    """
+    if not isinstance(new_strategy, dict):
+        raise TypeError("new_strategy must be a dict")
+
+    new_dates = set(new_strategy.get("available_dates", []) or [])
+
+    # First-ingest path: no existing → just stamp merge_history and return a copy.
+    if existing_strategy is None:
+        merged = dict(new_strategy)
+        merged["merge_history"] = [{
+            "ts": _now_iso(),
+            "source_csv": source_csv,
+            "parser_version": new_strategy.get("parser_version"),
+            "format_version": new_strategy.get("format_version"),
+            "weeks_added": len(new_dates),
+            "weeks_overwritten": 0,
+            "date_range": [
+                min(new_dates) if new_dates else None,
+                max(new_dates) if new_dates else None,
+            ],
+        }]
+        return merged
+
+    if not isinstance(existing_strategy, dict):
+        raise TypeError("existing_strategy must be a dict or None")
+
+    merged = dict(existing_strategy)
+
+    # Top-level "current" — always replace from new ingest.
+    for k in _CURRENT_REPLACE_KEYS:
+        if k in new_strategy:
+            merged[k] = new_strategy[k]
+
+    # Time-keyed history — union by date, new-wins on conflict.
+    new_hist = (new_strategy.get("hist") or {})
+    existing_hist = (existing_strategy.get("hist") or {})
+    merged_hist = dict(existing_hist)
+
+    if "summary" in new_hist:
+        merged_hist["summary"] = _merge_date_keyed_list(
+            existing_hist.get("summary", []), new_hist["summary"]
+        )
+
+    for hist_dim in ("fac", "sec", "ctry", "ind", "reg", "grp", "chars"):
+        if hist_dim in new_hist:
+            merged_hist[hist_dim] = _merge_named_date_keyed_dict(
+                existing_hist.get(hist_dim, {}), new_hist[hist_dim]
+            )
+
+    merged["hist"] = merged_hist
+
+    # available_dates as union; current_date stays as new ingest's value (latest snapshot).
+    existing_dates = set(existing_strategy.get("available_dates", []) or [])
+    merged["available_dates"] = sorted(existing_dates | new_dates)
+
+    # Audit trail entry — count weeks_added (in new but not existing) vs
+    # weeks_overwritten (in both — new value won).
+    weeks_added_set = new_dates - existing_dates
+    weeks_overwritten_set = new_dates & existing_dates
+    history = list(existing_strategy.get("merge_history", []) or [])
+    history.append({
+        "ts": _now_iso(),
+        "source_csv": source_csv,
+        "parser_version": new_strategy.get("parser_version"),
+        "format_version": new_strategy.get("format_version"),
+        "weeks_added": len(weeks_added_set),
+        "weeks_overwritten": len(weeks_overwritten_set),
+        "date_range": [
+            min(weeks_added_set) if weeks_added_set else None,
+            max(weeks_added_set) if weeks_added_set else None,
+        ],
+    })
+    merged["merge_history"] = history
+
+    return merged
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main():

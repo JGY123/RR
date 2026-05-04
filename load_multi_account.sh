@@ -12,19 +12,48 @@
 #        weekly history), OR
 #      - Add EM from backup if multi-account file doesn't include EM, OR
 #      - Leave new file as-is (if multi-account file has equal/better EM)
+#   5. NEW (B114, 2026-05-04): If `--merge` is passed, also runs
+#      merge_cumulative.py to UNION new ingest into per-strategy split files
+#      at data/strategies/<ID>.json — append-only architecture, never replaces
+#      historical depth. Writes merge_history[] audit trail. The dashboard
+#      reads from data/strategies/* so this is what builds the cumulative
+#      state going forward.
 #
 # USAGE:
 #   ./load_multi_account.sh ~/Downloads/risk_reports_sample.csv
 #   ./load_multi_account.sh ~/Downloads/file.xlsx
+#   ./load_multi_account.sh --merge ~/Downloads/file.csv          # B114 path
+#   ./load_multi_account.sh --merge --dry-run ~/Downloads/file.csv  # preview
 #
 # OUTPUT:
 #   Writes latest_data.json with the multi-account file's data + EM full
-#   history preserved. Opens the dashboard in Chrome at the end.
+#   history preserved. With --merge, ALSO merges into data/strategies/<ID>.json
+#   per-strategy cumulative files. Opens the dashboard in Chrome at the end.
 
 set -e
 
-if [ -z "$1" ]; then
-  echo "Usage: ./load_multi_account.sh <file.csv|file.xlsx>"
+# Parse flags before positional. --merge enables B114 cumulative-merge step;
+# --dry-run prints what would change without writing per-strategy files.
+MERGE_MODE=0
+DRY_RUN=0
+while [[ "$1" == --* ]]; do
+  case "$1" in
+    --merge) MERGE_MODE=1; shift ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --help|-h)
+      sed -n '1,40p' "$0"; exit 0 ;;
+    *)
+      echo "Unknown flag: $1"; exit 1 ;;
+  esac
+done
+
+if [ -z "${1-}" ]; then
+  echo "Usage: ./load_multi_account.sh [--merge] [--dry-run] <file.csv|file.xlsx>"
+  echo ""
+  echo "Flags:"
+  echo "  --merge     B114: union new ingest into data/strategies/<ID>.json"
+  echo "              cumulative files (append-only, preserves historical depth)."
+  echo "  --dry-run   With --merge: print what would change without writing."
   echo ""
   echo "Recent CSV/xlsx files in ~/Downloads/:"
   ls -lt ~/Downloads/ 2>/dev/null | grep -E '\.(csv|xlsx)$' | head -8 | awk '{printf "  %s  %s  %s %s %s\n", $5, $9, $6, $7, $8}'
@@ -103,9 +132,30 @@ echo "────────────────────────�
 # Step 4: merge EM full history if needed
 python3 "$SCRIPT_DIR/merge_em_history.py"
 
+# Step 5 (B114, 2026-05-04): cumulative-merge into per-strategy split files.
+# Runs only when --merge was passed. Appends new weeks to existing
+# data/strategies/<ID>.json (or creates them on first ingest), with
+# new-wins conflict policy on overlapping dates. Stamps merge_history[]
+# audit trail. Rebuilds data/strategies/index.json on success.
+if [ "$MERGE_MODE" -eq 1 ]; then
+  echo ""
+  echo "──────────────────────────────────────────────────────────────────────"
+  echo " STEP 5 — B114 CUMULATIVE MERGE (append-only into data/strategies/*)"
+  echo "──────────────────────────────────────────────────────────────────────"
+  MERGE_ARGS=("--new" "$LATEST" "--source-csv" "$FILE")
+  if [ "$DRY_RUN" -eq 1 ]; then
+    MERGE_ARGS+=("--dry-run")
+    echo "  (dry-run: no files written)"
+  fi
+  python3 "$SCRIPT_DIR/merge_cumulative.py" "${MERGE_ARGS[@]}"
+fi
+
 echo ""
 echo "──────────────────────────────────────────────────────────────────────"
 echo " DONE — latest_data.json is ready"
+if [ "$MERGE_MODE" -eq 1 ] && [ "$DRY_RUN" -eq 0 ]; then
+  echo "       (B114 cumulative merge applied to data/strategies/*.json)"
+fi
 echo "──────────────────────────────────────────────────────────────────────"
 echo ""
 echo "Next: hard-refresh the dashboard (Cmd+Shift+R)."

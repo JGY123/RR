@@ -719,10 +719,10 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
        make the semantics explicit. -->
   <div id="aggModeWrap" title="Universe: which holdings the count / weight / ORVQ-average columns aggregate across. TE / MCR / factor_contr columns are universe-INVARIANT (B116) — they show the same value regardless of pill choice." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
     <span class="section-label" style="margin-right:2px">Universe</span>
-    <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" title="Port-Held: only holdings with h.p > 0 (portfolio positions). Excludes bench-only constituents." style="font-size:10px;padding:2px 7px">Port-Held</button>
-    <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" title="In Benchmark: every constituent of the benchmark (h.b > 0). INCLUDES the portfolio overlap. For pure bench-not-port, see the cardUnowned tile." style="font-size:10px;padding:2px 7px">In Bench</button>
-    <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" title="All Holdings: union of Port-Held + In Benchmark = every non-cash row in cs.hold[]. No double-counting (each holding counted exactly once)." style="font-size:10px;padding:2px 7px">All</button>
-    <span id="universeStatus" style="font-size:9px;color:var(--textDim);margin-left:8px;padding-left:8px;border-left:1px solid var(--grid)" title="Current count of holdings included by the Universe filter. Click to refresh."></span>
+    <button class="pill" id="agg-pill-portfolio" onclick="setAggMode('portfolio')" title="Port-Held: holdings the portfolio actually owns (port weight > 0). Excludes bench-only constituents and zero-weight long-tail names." style="font-size:10px;padding:2px 7px">Port-Held</button>
+    <button class="pill" id="agg-pill-benchmark" onclick="setAggMode('benchmark')" title="In Benchmark: constituents with a material bench weight (bench weight > 0 after rounding). INCLUDES the portfolio overlap. For pure bench-not-port, see cardUnowned." style="font-size:10px;padding:2px 7px">In Bench</button>
+    <button class="pill" id="agg-pill-both" onclick="setAggMode('both')" title="All Holdings: every non-cash row in cs.hold[]. Includes (a) port-held names, (b) bench-held names with material weight, AND (c) long-tail benchmark constituents whose bench weight rounds to 0 but whose factor exposures still inform the strategy's positioning (FactSet ships these via Raw Factors block). On ACWI/IOP this can be 100s more names than 'In Bench'. Useful when you want the full universe-level factor view; for trading decisions stick with Port-Held or In Bench." style="font-size:10px;padding:2px 7px">All</button>
+    <span id="universeStatus" style="font-size:9px;color:var(--textDim);margin-left:8px;padding-left:8px;border-left:1px solid var(--grid)" title="Live count of holdings under the active Universe filter. The breakdown (port-held / bench-only / long-tail) helps explain count gaps between modes."></span>
   </div>
   <!-- Global avg-method pill — controls ORVQ rank averaging method. Sums and counts use the Universe pill alone. -->
   <div id="avgModeWrap" title="ORVQ rank averaging: Wtd = holding-weight-weighted (port-weight under Port/Both, bench-weight under Bench). Avg = simple mean across the active universe." style="display:flex;align-items:center;gap:3px;background:var(--surf);border:1px solid var(--grid);border-radius:8px;padding:3px 6px">
@@ -5045,23 +5045,48 @@ function setAggMode(m){
 // 2026-05-01 (Phase F UX combo E): persistent status strip showing how many
 // holdings the current universe filter includes. Educates users on what
 // "Port-Held / In Bench / All" actually mean numerically.
+//
+// 2026-05-04 (user feedback, pre-showing): expanded the count strip to show
+// the count for the CURRENT mode + (if non-trivial) the count of the
+// next-most-permissive mode in parentheses. Long-tail bench constituents
+// shipped via Raw Factors with bench weight rounded to 0 are the dominant
+// reason "All" exceeds "In Bench" — surface that in the title text so PMs
+// don't have to ask "what are the extras?". Pattern matches the F18
+// honest-disclosure footer on cardRiskByDim / cardUnowned.
 function _updateUniverseStatusStrip(){
   const el=document.getElementById('universeStatus');
   if(!el||!cs)return;
   const holds=cs.hold||[];
-  const port=holds.filter(h=>!isCash(h)&&((+h.p||+h.w||0)>0)).length;
-  const bench=holds.filter(h=>!isCash(h)&&((+h.b||+h.bw||0)>0)).length;
-  const all=holds.filter(h=>!isCash(h)).length;
-  const overlap=holds.filter(h=>!isCash(h)&&((+h.p||+h.w||0)>0)&&((+h.b||+h.bw||0)>0)).length;
+  const nonCash=holds.filter(h=>!isCash(h));
+  const port=nonCash.filter(h=>((+h.p||+h.w||0)>0)).length;
+  const bench=nonCash.filter(h=>((+h.b||+h.bw||0)>0)).length;
+  const all=nonCash.length;
+  const overlap=nonCash.filter(h=>((+h.p||+h.w||0)>0)&&((+h.b||+h.bw||0)>0)).length;
+  // "Long-tail" = in cs.hold[] but neither port-held nor materially bench-weighted.
+  // These are FactSet Raw Factors entries whose bench weight rounds to 0 but whose
+  // factor exposures still inform the strategy's positioning.
+  const longTail=all-bench-(port-overlap);
   let now=port,label='Port-Held';
   if(_aggMode==='benchmark'){now=bench;label='In Bench';}
   else if(_aggMode==='both'){now=all;label='All';}
-  el.textContent=`${label} = ${now.toLocaleString()} names`;
+  // Inline strip — show current count + the contextual gap to the next mode if material.
+  let inlineHint='';
+  if(_aggMode==='benchmark' && all>bench){
+    inlineHint=` <span style="color:var(--textDim)">· All = ${all.toLocaleString()} (+${(all-bench).toLocaleString()} long-tail)</span>`;
+  } else if(_aggMode==='both' && longTail>0){
+    inlineHint=` <span style="color:var(--textDim)">· ${longTail.toLocaleString()} long-tail (bw≈0, factor-only)</span>`;
+  } else if(_aggMode==='portfolio' && bench>port){
+    inlineHint=` <span style="color:var(--textDim)">· In Bench = ${bench.toLocaleString()}</span>`;
+  }
+  el.innerHTML=`${label} = ${now.toLocaleString()} names${inlineHint}`;
   el.title=`Universe counts (${cs.id||cs.name||'current'}):\n` +
-    `  Port-Held = ${port.toLocaleString()} (h.p > 0)\n` +
-    `  In Bench  = ${bench.toLocaleString()} (h.b > 0; INCLUDES the ${overlap.toLocaleString()} port↔bench overlap)\n` +
-    `  All       = ${all.toLocaleString()} (union — every non-cash holding)\n\n` +
-    `Note: TE / MCR / factor_contr columns are universe-INVARIANT (B116 fix). ` +
+    `  Port-Held = ${port.toLocaleString()}  (port weight > 0)\n` +
+    `  In Bench  = ${bench.toLocaleString()}  (bench weight > 0; INCLUDES the ${overlap.toLocaleString()} port-bench overlap)\n` +
+    `  All       = ${all.toLocaleString()}  (every non-cash row in cs.hold[])\n` +
+    `\n` +
+    `Why "All" exceeds "In Bench": ${longTail.toLocaleString()} long-tail benchmark constituents ship from FactSet's Raw Factors block with bench weight rounded to 0 (below their materiality threshold) but with factor exposures populated. They're real members of the benchmark universe — just below the size cutoff for the Security section.\n` +
+    `\n` +
+    `Note: TE / MCR / factor_contr columns are universe-INVARIANT (B116). ` +
     `Only count, port wt, bench wt, active wt, and ORVQ rank averages flip with the pill.`;
 }
 
@@ -6374,9 +6399,16 @@ function rFacButt(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    xaxis:{title:{text:`${isSnap?'Active Exposure':'Avg Active Exposure'} (σ, ${yLab}) — UW ← → OW`,font:{size:10,color:T.tick}},
+    // 2026-05-04 (user feedback, pre-showing): axis labels were "screwy" —
+    // x-title duplicated the σ unit (already on ticksuffix), parenthetical
+    // (σ, 1Y) read as if σ was time-windowed; y-title used a mid-dot before
+    // the period which read awkwardly. Cleaned up: σ unit lives only on the
+    // tick suffix; period qualifier is `(avg over N)` only when non-snap;
+    // y-title now reads "Period Impact (N) — Paying off ↑" with the period
+    // in parens and the unit "%" on the tick suffix.
+    xaxis:{title:{text:`${isSnap?'Active Exposure':`Active Exposure (avg over ${yLab})`} — Underweight ← → Overweight`,font:{size:10,color:T.tick}},
       range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,ticksuffix:'σ',nticks:7},
-    yaxis:{title:{text:`Active-return contribution · ${yLab} — paying off ↑`,font:{size:10,color:T.tick}},
+    yaxis:{title:{text:`Period Impact (${yLab}) — Paying off ↑`,font:{size:10,color:T.tick}},
       range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,ticksuffix:'%',nticks:7},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
@@ -6486,8 +6518,12 @@ function rFacRisk(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    xaxis:{title:{text:'Active Exposure (σ, latest) — UW ← → OW',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick}},
-    yaxis:{title:{text:'Risk Contribution (% TE) — adds ↑ / diversifies ↓',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f'},
+    // 2026-05-04 (user feedback, pre-showing): axis labels cleaned up to
+    // match cardFacButt convention. Unit (σ) lives on the tick suffix; title
+    // carries metric name + direction hint only. y-axis title kept simple
+    // since "% TE" is already in the title (no tickformat suffix needed).
+    xaxis:{title:{text:'Active Exposure — Underweight ← → Overweight',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},ticksuffix:'σ'},
+    yaxis:{title:{text:'Risk Contribution (% of TE) — Adds ↑ / Diversifies ↓',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',ticksuffix:'%'},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(div&&div.on){div.on('plotly_click',function(d){

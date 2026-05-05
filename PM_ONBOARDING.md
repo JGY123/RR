@@ -172,6 +172,15 @@ That's the F12(a) provenance disclosure. For tiles like cardTEStacked, the per-w
 **Q: Why does the Universe pill not change cardCorr / cardTEStacked / cardFacContribBars?**
 These tiles read from the risk model (Axioma factor exposures, factor MCRs, portfolio-level pct_specific) which are universe-invariant by design. The Universe pill filters the holdings universe; risk-model columns don't change with holdings universe selection. Each affected tile has a small footer caveat noting this.
 
+**Q: Why does "All" show way more names than "In Bench"? They used to be similar.**
+The "All" pill is the union of every non-cash row in `cs.hold[]` — including a long-tail of benchmark constituents that FactSet's Raw Factors block ships with **bench weight rounded to exactly 0** (below their materiality cutoff for the Security section). These names have factor exposures populated (so they inform the strategy's factor positioning) but no material weight. Concretely:
+- ACWI: All = 2,048 names · In Bench = 1,676 · **the 367 "extras" are long-tail with bw≈0**
+- IOP: All = 1,703 · In Bench = 1,538 · 160 long-tail
+- EM: All = 914 · In Bench = 846 · 55 long-tail
+- IDM and ISC: minimal long-tail (universes are tighter)
+
+The Universe pill's "All" tooltip + the count strip beside it now spell this out explicitly. **For trading decisions, stick with Port-Held or In Bench**; "All" is for when you want the full universe-level factor view.
+
 **Q: Where do the Spotlight ranks come from?**
 The Spotlight rank columns (Overall / Revision / Value / Quality / Momentum / Stability) are weighted-average quintile ranks (1=best, 5=worst) shipped per-holding by FactSet. Q1 holdings are top-ranked; Q5 are bottom. The portfolio is typically tilted toward Q1 by design.
 

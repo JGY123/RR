@@ -720,8 +720,21 @@ body.alger-theme .config-panel{background:#ffffff;border-left-color:var(--cardBo
 body.alger-theme .header{background:#ffffff;border-bottom:2px solid var(--txth)}
 /* Alger logo: navy native — REMOVE the dark-theme white-invert filter */
 body.alger-theme .header img[src*="alger.png"]{filter:none !important;opacity:1}
-/* Redwood SVG: white native, NEEDS to flip to navy on white background */
-body.alger-theme .header img[src*="redwood"]{filter:invert(13%) sepia(75%) saturate(2293%) hue-rotate(196deg) brightness(91%) contrast(101%)}
+/* Redwood SVG: white-fill native; in Alger theme render in forest green
+   (Alger brand green #41834F — also reads as "redwood/forest" tone).
+   Filter chain converts white to #41834F (approximate, visually correct).
+   `!important` overrides the dark-theme navy filter set elsewhere. */
+body.alger-theme .header img[src*="redwood"]{filter:brightness(0) saturate(100%) invert(43%) sepia(22%) saturate(1153%) hue-rotate(85deg) brightness(94%) contrast(85%) !important}
+/* Stat cards: in dark theme they have faint --pri-wash / --acc-wash /
+   --pos-wash etc. tints which read correctly. On white background those
+   alpha-tints render as visible "shading" — the user flagged this. Force
+   stat-cards to off-white panel surf in Alger; the per-card sign signal
+   already lives in the value color + bottom-border accent, no need for
+   background tint. !important required because the wash colors are
+   applied via inline style="background:var(--*-wash)" which would
+   otherwise win over a plain selector. */
+body.alger-theme .stat-card{background:var(--surf) !important;border-color:var(--cardBorder)}
+body.alger-theme .stat-card.clickable:hover{background:rgba(19,108,175,0.06) !important;border-color:var(--pri)}
 /* Presentation mode */
 body.presentation-mode .header,body.presentation-mode #tabBar,body.presentation-mode #validPanel{display:none!important}
 body.presentation-mode #content{padding-top:8px}
@@ -857,10 +870,11 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div id="prefPinnedWrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>
 <div class="config-field"><label>Theme</label>
 <div style="display:flex;gap:6px;margin-top:4px">
-  <button class="toggle-btn active" id="themeDark" onclick="setThemePref('dark')" title="Dark theme — bloomberg-terminal vibe, dense work / late nights">Dark</button>
-  <button class="toggle-btn" id="themeLight" onclick="setThemePref('light')" title="Light theme — neutral light/gray">Light</button>
-  <button class="toggle-btn" id="themeAlger" onclick="setThemePref('alger')" title="Alger theme — firm-issued look (navy/blue/Benton-Sans-fallback). Recommended for client demos + screenshots in decks.">Alger</button>
-</div></div>
+  <button class="toggle-btn active" id="themeDark" onclick="setThemePref('dark')" title="Dark theme — Bloomberg-terminal vibe, dense work / late nights">Dark</button>
+  <button class="toggle-btn" id="themeAlger" onclick="setThemePref('alger')" title="Alger theme — firm-issued look (white/navy/blue, sub-advisor green for Redwood). Recommended for client demos + screenshots in decks.">Alger</button>
+</div>
+<div style="font-size:9px;color:var(--textDim);margin-top:6px">Choose Dark for daily PM work; Alger for client-facing screenshots.</div>
+</div>
 <div class="config-field"><label>Number Precision</label>
 <div style="display:flex;gap:6px;margin-top:4px">
   <button class="toggle-btn active" id="precStd" onclick="setPrecisionPref('standard')">Standard (1dp)</button>
@@ -11289,16 +11303,20 @@ function resetThresholds(){
   if(typeof cs!=='undefined'&&cs&&typeof rExp==='function')rExp();
 }
 function applyPrefs(){
-  // 2026-05-05: 3-way theme — dark (default) / light / alger.
+  // 2026-05-05: 2-way theme — dark (default) / alger. The legacy "light"
+  // theme is migrated to "alger" on load (alger is already light-themed +
+  // brand-aligned; no value in keeping a separate generic light option).
+  if(_prefs.theme==='light'){_prefs.theme='alger';savePrefs();}
   // CSS handles all token swapping via body class. Plotly traces re-render
   // via upd() at the bottom so they pick up the new palette.
+  // Keep light-theme class application so any user who manually re-sets
+  // _prefs.theme='light' via console gets a sensible result.
   document.body.classList.toggle('light-theme',_prefs.theme==='light');
   document.body.classList.toggle('alger-theme',_prefs.theme==='alger');
   document.body.classList.toggle('presentation-mode',!!_prefs.presentationMode);
   plotBg=buildPlotBg();
-  let td=$('themeDark'),tl=$('themeLight'),ta=$('themeAlger');
+  let td=$('themeDark'),ta=$('themeAlger');
   if(td)td.classList.toggle('active',_prefs.theme==='dark'||(!_prefs.theme));
-  if(tl)tl.classList.toggle('active',_prefs.theme==='light');
   if(ta)ta.classList.toggle('active',_prefs.theme==='alger');
   let ps=$('precStd'),pf=$('precFull');
   if(ps&&pf){ps.classList.toggle('active',_prefs.precision!=='full');pf.classList.toggle('active',_prefs.precision==='full')}

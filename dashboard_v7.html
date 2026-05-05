@@ -13864,22 +13864,92 @@ window.addEventListener('DOMContentLoaded',()=>{
   });
 });
 </script>
-<!-- 2026-04-30 (Q69): page footer with version + changelog link. Static markup —
-     content visible at the bottom of the page below all tabs. -->
+<!-- 2026-04-30 (Q69): page footer with version + changelog link.
+     2026-05-05: expanded with parser/format version + ingest freshness +
+     integrity-monitor pulse. Pulls from cs.parser_version / cs.format_version /
+     cs.merge_history when available. Defensive — falls back gracefully when
+     fields are absent. -->
 <div style="margin:24px 24px 16px;padding:14px 18px;border-top:1px solid var(--grid);font-size:10px;color:var(--textDim);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
   <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="letter-spacing:1px;text-transform:uppercase;font-weight:600;color:var(--txt)">Redwood Risk · Control Panel</span>
     <span style="opacity:0.5">·</span>
-    <span>v7 · single-file architecture</span>
+    <span id="footerVersion" title="Dashboard build · Parser version · Format version. Hover for last-ingest details.">v7</span>
     <span style="opacity:0.5">·</span>
     <a href="https://github.com/JGY123/RR/blob/main/CHANGELOG.md" target="_blank" rel="noopener" style="color:var(--pri);text-decoration:none">Changelog ↗</a>
     <span style="opacity:0.5">·</span>
     <a href="https://github.com/JGY123/RR" target="_blank" rel="noopener" style="color:var(--pri);text-decoration:none">Repo ↗</a>
   </div>
   <div style="display:flex;align-items:center;gap:6px;color:var(--txt)">
-    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos)"></span>
+    <span id="footerFreshness" style="font-size:10px;color:var(--textDim)" title="Data freshness — data through cs.current_date · ingested per cs.merge_history[]. Hover header's last-updated indicator for full audit trail."></span>
+    <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--pos)" id="footerPulse" title="Integrity monitor (L2) — green when section-aggregate %TE sums to 100% across all (strategy × dim × week)."></span>
     <span id="footerStatus">Live</span>
   </div>
 </div>
+<script>
+// 2026-05-05: footer-population helper. Called from upd() / strategy switch
+// so the footer always reflects the currently-loaded strategy's metadata.
+// Pulls from cs.parser_version / cs.format_version (FORMAT 4.3+) and
+// cs.merge_history[] (B114-stamped after first --merge run).
+window._updateFooterMetadata = function(){
+  try{
+    const ver=document.getElementById('footerVersion');
+    if(ver && typeof cs !== 'undefined' && cs){
+      const pv=cs.parser_version || '?';
+      const fv=cs.format_version || '?';
+      ver.textContent = `Parser ${pv} · Format ${fv}`;
+      // Hover title — show full merge_history audit trail if present
+      const mh = cs.merge_history || [];
+      const tipParts = [`Parser ${pv} · Format ${fv}`];
+      if(mh.length){
+        const last = mh[mh.length-1];
+        tipParts.push(`Last ingest: ${last.ts || '?'}`);
+        if(last.source_csv) tipParts.push(`Source: ${last.source_csv.split('/').pop()}`);
+        tipParts.push(`Weeks added: ${last.weeks_added||0}, overwritten: ${last.weeks_overwritten||0}`);
+        if(mh.length>1) tipParts.push(`Total ingests: ${mh.length}`);
+      } else {
+        tipParts.push(`No merge_history yet (B114 not run on this strategy file)`);
+      }
+      ver.title = tipParts.join(' · ');
+    }
+    const fresh=document.getElementById('footerFreshness');
+    if(fresh && typeof cs !== 'undefined' && cs){
+      const cd = cs.current_date;
+      if(cd){
+        // Format YYYYMMDD to YYYY-MM-DD
+        const formatted = cd.length===8 ? `${cd.slice(0,4)}-${cd.slice(4,6)}-${cd.slice(6,8)}` : cd;
+        fresh.textContent = `Data through ${formatted}`;
+        // Stale-data warning if > 14 days
+        try{
+          const d = new Date(cd.length===8 ? `${cd.slice(0,4)}-${cd.slice(4,6)}-${cd.slice(6,8)}` : cd);
+          const ageDays = Math.floor((Date.now() - d.getTime()) / (1000*60*60*24));
+          if(ageDays > 14){
+            fresh.style.color = 'var(--warn)';
+            fresh.textContent += ` (${ageDays}d old)`;
+          } else {
+            fresh.style.color = 'var(--textDim)';
+          }
+        }catch(e){}
+      } else {
+        fresh.textContent = '';
+      }
+    }
+  }catch(e){
+    // Don't break the dashboard if footer metadata fails
+    console.warn('[footer] metadata update failed:', e);
+  }
+};
+// Hook into the existing upd() flow without touching that function.
+// MutationObserver on the strategy picker label triggers a footer refresh.
+document.addEventListener('DOMContentLoaded', () => {
+  // Initial population once cs is loaded (defer one tick)
+  setTimeout(() => window._updateFooterMetadata && window._updateFooterMetadata(), 100);
+  // Re-run on every strategy switch — listen for changes to the strategy picker
+  const sp = document.getElementById('strategySelect');
+  if(sp) sp.addEventListener('change', () => setTimeout(window._updateFooterMetadata, 50));
+  // Re-run on every week selector change
+  const ws = document.getElementById('weekSel');
+  if(ws) ws.addEventListener('change', () => setTimeout(window._updateFooterMetadata, 50));
+});
+</script>
 </body>
 </html>

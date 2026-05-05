@@ -11,6 +11,9 @@
 |---|---|
 | `CLAUDE.md` | Project instructions (cwd-rooted; Claude Code reads this on every session) |
 | `ROADMAP.md` | **NEW 2026-05-05.** The big-picture plan — software vs HTML question, scale plan (6→25 accounts, 1.6 GB→5 GB), weekly update pipeline, organizational track (PM training, desk briefings, presentations, reading materials). 10 sections + open questions. Read after STRATEGIC_REVIEW. |
+| `ALGER_DEPLOYMENT.md` | **NEW 2026-05-05.** The directive doc the user hands to Alger's tech team — VM specs, ingest pipeline contract, backup strategy, access control, monitoring, day-zero deployment checklist, open questions for Alger IT. Companion to ROADMAP. |
+| `DESIGN_TOUCH_UP.md` | **NEW 2026-05-05.** Design plan for taking RR from "internal-tools polish" to "professional-grade." Alger brand alignment (navy #002B54, blue #136CAF, Benton Sans), typography polish, header revamp, footer, print stylesheet, theme picker. 4-phase plan ~15 hr. |
+| `GAMMA_PROMPT.md` | **NEW 2026-05-05.** Reusable Gamma (gamma.app) prompt for generating professional, on-brand decks. Master prompt + 4 variant prompts (PM walkthrough, leadership update, FactSet quant team, multi-strategy showcase) + slide-by-slide hand-craft fallback. |
 | `ARCHITECTURE.md` | **NEW 2026-05-04.** Contributor-facing intro to RR — data flow, tile contract, design system, integrity model, the 5 operational loops. Read this before your first edit. |
 | `STRATEGIC_REVIEW.md` | **NEW 2026-05-04.** Bird's-eye view: what we're building, where we are, what's NOT in good shape, priorities by leverage. Periodic re-baselining. |
 | `STRATEGIC_REVIEW_NEXT.md` | **NEW 2026-05-04.** Tier A/B/C priorities for the next 1-2 weeks. Companion to STRATEGIC_REVIEW. |

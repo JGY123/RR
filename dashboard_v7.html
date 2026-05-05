@@ -9492,8 +9492,13 @@ function renderOneHoldCard(h){
   let portBar=portPct>0?Math.min(portPct/maxWt*100,100).toFixed(1):0;
   let benchBar=benchPct>0?Math.min(benchPct/maxWt*100,100).toFixed(1):0;
   let actCol=active>=0?'var(--pos)':'var(--neg)';
-  let te=+(h.tr||0),pctS=+(h.mcr||0);
-  let rbe=(h.p>0&&Math.abs(h.tr||0)>0.001)?+(Math.abs(h.a||0)/Math.abs(h.tr)).toFixed(2):null;
+  // 2026-05-05 (Holdings audit): h.tr / h.mcr can be null (post-normalize fix).
+  // Pass through to f2() which renders '—' for null. Don't coerce to 0.
+  // TE color: positive = adds risk = red (sign-aware, matches the table view).
+  let te=h.tr;
+  let pctS=h.mcr;
+  let teCol=te==null?'var(--textDim)':te>=0?'var(--neg)':'var(--pos)';
+  let rbe=(h.p>0&&h.tr!=null&&Math.abs(h.tr)>0.001)?+(Math.abs(h.a||0)/Math.abs(h.tr)).toFixed(2):null;
   let rbeCol=rbe==null?'var(--txt)':rbe>1.5?'var(--pos)':rbe>=0.8?'var(--warn)':'var(--neg)';
   let shortName=(h.n||h.t).length>36?(h.n||h.t).slice(0,35)+'\u2026':(h.n||h.t);
   let rankCellsInline='';
@@ -9540,7 +9545,7 @@ function renderOneHoldCard(h){
       </div>
     </div>
     <div style="display:flex;gap:10px;font-size:10px;padding:5px 0;border-top:1px solid var(--grid);border-bottom:1px solid var(--grid);margin:6px 0">
-      <div><span style="color:var(--txt)">TE</span> <span style="color:var(--txth);font-weight:600">${f2(te,2)}%</span></div>
+      <div><span style="color:var(--txt)">TE</span> <span style="color:${teCol};font-weight:600">${te==null?'\u2014':fp(te,2)+'%'}</span></div>
       <div><span style="color:var(--txt)">%S</span> <span style="color:var(--txth);font-weight:600">${f2(pctS,2)}</span></div>
       <div><span style="color:var(--txt)">RBE</span> <span style="color:${rbeCol};font-weight:600">${rbe==null?'\u2014':rbe.toFixed(2)}</span></div>
     </div>
@@ -9721,17 +9726,33 @@ function renderHoldTab(){
 function renderHoldRows(){
   let start=(hp-1)*PPG;
   let page=fh.slice(start,start+PPG);
-  // Max %T for bar scaling
-  let maxTR=Math.max(...fh.map(h=>Math.abs(h.tr||0)),0.01);
+  // Max %T for bar scaling — only over real-valued entries (post-May-4
+  // normalize fix, h.tr can be null where FactSet didn't ship %T).
+  let maxTR=Math.max(...fh.filter(h=>h.tr!=null).map(h=>Math.abs(h.tr)),0.01);
   return page.map(h=>{
     let cls=activeStyle(h.a);
-    let trVal=h.tr!=null?h.tr:0;
-    let trBarW=Math.min(Math.abs(trVal)/maxTR*50,50).toFixed(0);
-    let trCell=`<td class="r" style="white-space:nowrap">
-      <div style="display:inline-flex;align-items:center;gap:3px;justify-content:flex-end">
-        <span style="font-size:11px;${trVal>=0?'color:var(--pos)':'color:var(--neg)'}">${fp(trVal,1)}</span>
-        <div style="width:${trBarW}px;height:5px;background:${trVal>=0?'var(--pos)':'var(--neg)'};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
-      </div></td>`;
+    // 2026-05-05 (Holdings audit, cardHoldings T1 RED): two bugs in TE Contrib cell.
+    //   (1) Was: `trVal=h.tr!=null?h.tr:0` — fabricates null→0, displaying
+    //       missing data as "+0.0%" with green coloring. Same anti-pattern
+    //       Lesson 15 prohibits. Now: render '—' (textDim) when null.
+    //   (2) Color was backwards: `trVal>=0?'var(--pos)':'var(--neg)'` colored
+    //       positive TE green. Convention (per cardUnowned T3.7 + cardRiskByDim
+    //       footer + LESSONS): positive %T = adds risk = RED; negative =
+    //       diversifies = GREEN. Now matches.
+    let trCell;
+    if(h.tr==null){
+      trCell=`<td class="r" data-col="te_contrib" data-sv="" style="color:var(--textDim);text-align:right" title="No per-holding %T shipped from FactSet for this row (long-tail bench-only constituent — see F12).">—</td>`;
+    } else {
+      let trVal=h.tr;
+      let trBarW=Math.min(Math.abs(trVal)/maxTR*50,50).toFixed(0);
+      // sign-aware color (positive TE = adds risk = neg; negative TE = diversifies = pos)
+      let teColor=trVal>=0?'var(--neg)':'var(--pos)';
+      trCell=`<td class="r" data-col="te_contrib" data-sv="${trVal}" style="white-space:nowrap">
+        <div style="display:inline-flex;align-items:center;gap:3px;justify-content:flex-end">
+          <span style="font-size:11px;color:${teColor}">${fp(trVal,1)}</span>
+          <div style="width:${trBarW}px;height:5px;background:${teColor};border-radius:2px;opacity:0.5;flex-shrink:0"></div>
+        </div></td>`;
+    }
     // RBE
     let rbeVal=(h.p>0&&Math.abs(h.tr||0)>0.001)?+(Math.abs(h.a||0)/Math.abs(h.tr)).toFixed(2):null;
     h._rbe=rbeVal;

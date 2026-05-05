@@ -29,14 +29,39 @@ Per-holding `%T` column in the Security section sums to **94.6% to 134.4%** acro
 
 ### My best explanation (without FactSet's confirmation)
 
-Pattern 3 is the key: **per-holding `%T` is signed.** In active-risk decomposition math, individual holdings can be net diversifiers (negative %T) or net additives (positive %T). The unsigned sum can exceed 100% because positives + |negatives| > 100% of TE when contributions partially cancel.
+**Confidence calibration: low.** I do not have a confident explanation. Below is honest reasoning about what the data does and doesn't tell us.
 
-If that's right, the documented invariant `Σ %T = 100%` was always either:
-- (a) Approximate / aspirational ("close to 100" rather than exact)
-- (b) Specifically about **portfolio + benchmark together** under some weighting we're not applying
-- (c) A misreading of FactSet's documentation that we inherited
+**What the per-strategy decomposition shows** (re-probed 2026-05-05):
 
-The fix in any case is **update our docs**, not fix our parser. The data is correctly extracted.
+| Strategy | Σ pos | Σ neg | Σ signed | Σ \|abs\| | n_pos | n_neg | n_zero |
+|---|---|---|---|---|---|---|---|
+| EM | +95.7 | −1.10 | 94.6 | 96.8 | 63 | 8 | 220 |
+| ISC | +108.8 | −1.80 | 107.0 | 110.6 | 46 | 14 | 404 |
+| GSC | +110.8 | −1.00 | 109.8 | 111.8 | 52 | 10 | 940 |
+| IDM | +133.4 | −17.50 | 115.9 | 150.9 | 64 | 61 | 89 |
+| ACWI | +139.5 | −14.20 | 125.3 | 153.7 | 49 | 50 | 602 |
+| IOP | +156.7 | −22.30 | 134.4 | 179.0 | 45 | 69 | 346 |
+
+The 94→134% range is **signed sum (Σ pct_t)** — NOT absolute. So:
+
+**A clean "signed-decomposition that nets to 100% of TE" theory predicts:**
+- Σ pos + Σ neg ≈ 100 across all strategies
+- Variance comes mostly from positives (with negatives roughly offsetting cleanly)
+
+**That's NOT what we see:**
+- Σ signed varies 94 → 134
+- Σ pos varies 96 → 157 (already wider than 100)
+- Σ neg varies −1 → −22 (much wider than "rounding")
+- Strategies with bigger universes have BOTH more negatives AND more positives AND higher signed sums — like the column scales with universe structure
+
+So I was overconfident when I framed this as "clean signed semantics, doc was simplified." The data has a pattern I don't fully understand. It could be any of:
+
+- (a) The per-holding column might use a different denominator than total portfolio TE
+- (b) There could be uncaptured cross-terms / covariance / Euler residuals in the math (FactSet's methodology likely has a "residual" allocation rule)
+- (c) The 100% claim in our docs might have been misremembered or always approximate
+- (d) Something specific about how %T is computed for bench-only or specific row classes (the high `n_zero` rate suggests a materiality threshold; the `n_neg` increasing with universe size suggests bench-only rows behave differently)
+
+**The dashboard is still correct** — we extract per-row values faithfully, section aggregates verify clean, defensive UI footers honestly disclose. But I shouldn't have claimed I knew the explanation. **I don't.**
 
 ### Why I was harping on F18
 
@@ -71,19 +96,32 @@ None of these are happening today. So F18 is parked.
 
 ## How you (the user) should approach asking FactSet about it (when you eventually do)
 
-If you want to understand "why doesn't %T sum to 100" without making a formal inquiry letter, the cleanest path is:
+**Two-step approach** (revised after the data re-probe — see above; I was initially overconfident about the casual-ask path):
 
-1. **One question, one paragraph, sent to your account manager:** *"In our PA exports, the per-holding `%T` column sums to a range of 94-134% per portfolio per week across our 6 strategies. Is this expected behavior — i.e., is the column signed and the sum-to-100 invariant just a documentation simplification — or is there a methodological note on this we should be reading?"*
-2. They will route to a quant. The quant will either say "yes, signed; here's the reference" (probability: ~70%) or "let me look — that should sum closer to 100, can you share an example" (~30%).
-3. If the answer is the first → update CLAUDE.md, close F18, no work needed.
-4. If the answer is the second → they'll dig in; the formal letter (`FACTSET_INQUIRY_F18.md`) is then the cleaner artifact to share.
+### Step 1: Ask for the methodology doc
 
-The formal letter I drafted is over-prepared for a 70%-probability "documentation fix" outcome. Send it only if a casual ask doesn't get a clean answer.
+Casual one-paragraph email to your Alger account manager: *"For the Portfolio Attribution Security-section `%T` column, can you share the methodology doc that explains how it's computed (the denominator, any inclusion/exclusion rules, any cross-term / residual handling)? In our exports we see the column behave differently than our internal docs assumed, and we'd rather read the right doc than reverse-engineer from data."*
 
-**Recommended action:** when you next have a check-in with your Alger account manager (already scheduled or routine), drop the one-paragraph ask. Don't make it a Big Letter Event.
+This is asking for the **methodology**, not for a specific answer. ~50% chance the doc immediately explains the pattern; ~30% chance the doc is general and we still need a follow-up; ~20% chance there's no clean doc and we need a quant call.
+
+### Step 2: If methodology doc doesn't fully explain it, send the formal letter
+
+The formal letter (`FACTSET_INQUIRY_F18.md`) is the right artifact for that case. It's over-prepared for the 50% case where the doc immediately answers, but it's correctly-scoped for the 30-50% case where it doesn't.
+
+**Recommended action:** drop the methodology-request ask whenever convenient. If the doc you receive answers it cleanly → close F18 with the doc citation. If it doesn't → escalate via the formal letter.
+
+### What I would NOT do
+
+- **Don't** wait to send the formal letter until you fully understand the math yourself. The letter IS asking them to teach us; the empirical patterns we've gathered are sufficient context.
+- **Don't** rescale the displayed values to make them sum to 100% in the dashboard — that would be silent fabrication. The footers handle disclosure correctly.
+- **Don't** treat the per-strategy variance as a parser bug — we've ruled that out via spot-checks and re-parses.
 
 ---
 
 ## Closing
 
-I will stop bringing this up unless a verification flags a real issue. The defensive footers do their job, the contamination map is closed, and the dashboard is honest about what it shows. F18 is now a "casual question to ask FactSet sometime" — not a workstream.
+The dashboard is correct + honest. The math underneath FactSet's column is more complex than I claimed when I wrote "signed semantics fully explains it." I'm walking that overconfidence back.
+
+**Calibration for the next 30 days:** F18 is not a daily workstream. It's "request the methodology doc next time you talk to FactSet, and escalate to the formal letter if the doc doesn't answer." I'll stop listing it in next-priority sections, but I shouldn't have framed it as "obvious doc gap" — it's "we have empirical patterns we haven't yet matched to a methodology."
+
+The defensive footers stay. The dashboard is fine for showings. The understanding gap is real but bounded.

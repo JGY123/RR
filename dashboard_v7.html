@@ -654,6 +654,74 @@ body.light-theme tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td
 body.light-theme .config-panel{background:#fff;border-left-color:#e2e8f0}
 body.light-theme .modal{background:#fff;border-color:#e2e8f0}
 body.light-theme .card{background:#fff;border-color:#e2e8f0}
+
+/* ──────────────────────────────────────────────────────────────────────
+   2026-05-05: Alger theme — firm-issued look. White/navy/blue palette
+   sourced from alger.com brand discovery. Built on the existing
+   light-theme infrastructure: every color CSS variable in :root is
+   overridden by body.alger-theme. Plotly THEME() reads from these
+   tokens so charts pick up automatically. Switching themes does NOT
+   require re-rendering tile DOM (CSS-only switch); Plotly traces ARE
+   re-rendered via upd() (called from applyPrefs).
+   ────────────────────────────────────────────────────────────────────── */
+body.alger-theme{
+  /* core palette */
+  --bg:#ffffff;
+  --card:#ffffff;
+  --cardBorder:#e5e8ec;
+  --surf:#f9f9f9;
+  --grid:#e5e8ec;
+  --text:#2a3441;
+  --txt:#4a5568;
+  --textDim:#717073;
+  --textBright:#002b54;
+  --txth:#002b54;
+  /* primary navy / blue / accent (Alger brand) */
+  --pri:#136caf;
+  --accent:#4fa3df;
+  --accentDim:#0d4d80;
+  --univ:#136caf;
+  --acc:#712f7e;        /* purple accent for idio */
+  --cyan:#4fa3df;
+  /* sign colors — Alger green / red */
+  --pos:#41834f;        --posBg:#41834f1c;
+  --neg:#a32f2f;        --negBg:#a32f2f1c;
+  --warn:#c64c31;       --warnBg:#c64c311c;
+  --prof:#c64c31;       /* profitability accent — Alger orange */
+  --upload:#712f7e;     --uploadBg:#712f7e20;
+  --zero:#e5e8ec;
+  /* faint factor-bar tints */
+  --fac-bar-pos:rgba(19,108,175,.18);
+  --fac-bar-neg:rgba(198,76,49,.18);
+  /* rank colors (Q1..Q5) — Alger-tonal */
+  --r1:#41834f; --r2:#7aa282; --r3:#c4a13d; --r4:#c64c31; --r5:#a32f2f;
+  /* washes */
+  --pri-wash:rgba(19,108,175,0.06);
+  --pri-wash-strong:rgba(19,108,175,0.12);
+  --pri-border:rgba(19,108,175,0.30);
+  --acc-wash:rgba(113,47,126,0.06);
+  --acc-border:rgba(113,47,126,0.30);
+  --pos-wash:rgba(65,131,79,0.10);
+  --neg-wash:rgba(163,47,47,0.10);
+  --warn-wash:rgba(198,76,49,0.10);
+  /* hairlines + shadows softer for white background */
+  --hairline:1px solid var(--cardBorder);
+  --hairline-soft:1px solid rgba(229,232,236,0.6);
+  --shadow-sm:0 1px 2px rgba(0,43,84,0.06);
+  --shadow-md:0 2px 8px rgba(0,43,84,0.08);
+  --shadow-lg:0 8px 24px rgba(0,43,84,0.12);
+}
+body.alger-theme thead th{background:#f9f9f9}
+body.alger-theme tr:hover td,body.alger-theme tr.clickable:hover td{background:rgba(19,108,175,0.04)}
+body.alger-theme tbody tr:nth-child(odd):not(.thresh-warn):not(.thresh-alert) td{background:rgba(249,249,249,0.5)}
+body.alger-theme .card{background:#ffffff;border-color:var(--cardBorder);box-shadow:var(--shadow-sm)}
+body.alger-theme .modal{background:#ffffff;border-color:var(--cardBorder)}
+body.alger-theme .config-panel{background:#ffffff;border-left-color:var(--cardBorder)}
+body.alger-theme .header{background:#ffffff;border-bottom:2px solid var(--txth)}
+/* Alger logo: navy native — REMOVE the dark-theme white-invert filter */
+body.alger-theme .header img[src*="alger.png"]{filter:none !important;opacity:1}
+/* Redwood SVG: white native, NEEDS to flip to navy on white background */
+body.alger-theme .header img[src*="redwood"]{filter:invert(13%) sepia(75%) saturate(2293%) hue-rotate(196deg) brightness(91%) contrast(101%)}
 /* Presentation mode */
 body.presentation-mode .header,body.presentation-mode #tabBar,body.presentation-mode #validPanel{display:none!important}
 body.presentation-mode #content{padding-top:8px}
@@ -789,8 +857,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 <div id="prefPinnedWrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>
 <div class="config-field"><label>Theme</label>
 <div style="display:flex;gap:6px;margin-top:4px">
-  <button class="toggle-btn active" id="themeDark" onclick="setThemePref('dark')">Dark</button>
-  <button class="toggle-btn" id="themeLight" onclick="setThemePref('light')">Light</button>
+  <button class="toggle-btn active" id="themeDark" onclick="setThemePref('dark')" title="Dark theme — bloomberg-terminal vibe, dense work / late nights">Dark</button>
+  <button class="toggle-btn" id="themeLight" onclick="setThemePref('light')" title="Light theme — neutral light/gray">Light</button>
+  <button class="toggle-btn" id="themeAlger" onclick="setThemePref('alger')" title="Alger theme — firm-issued look (navy/blue/Benton-Sans-fallback). Recommended for client demos + screenshots in decks.">Alger</button>
 </div></div>
 <div class="config-field"><label>Number Precision</label>
 <div style="display:flex;gap:6px;margin-top:4px">
@@ -6053,16 +6122,21 @@ function exportCorrCsv(){
 
 // ===== CHART RENDERERS =====
 function THEME(){
+  // 2026-05-05: 3-way theme aware. Reads CSS vars first; falls back to
+  // body-class detection for the 4 colors that aren't first-class tokens
+  // (zero / land / ocean / heatMid — these are derived from theme context,
+  // not in the brand palette directly). Future: promote to CSS vars too.
   let c=getComputedStyle(document.body),g=k=>(c.getPropertyValue(k)||'').trim();
+  let alger=document.body.classList.contains('alger-theme');
   let light=document.body.classList.contains('light-theme');
   return {
     grid:g('--grid')||'#334155',
     tick:g('--txt')||'#94a3b8',
     tickH:g('--txth')||'#e2e8f0',
-    zero:light?'#94a3b8':'#475569',
-    land:light?'#e2e8f0':'#1e293b',
-    ocean:light?'#f1f5f9':'#080e1e',
-    heatMid:light?'#f1f5f9':'#12151e',
+    zero: alger?'#717073':light?'#94a3b8':'#475569',
+    land: alger?'#e5e8ec':light?'#e2e8f0':'#1e293b',
+    ocean: alger?'#f9f9f9':light?'#f1f5f9':'#080e1e',
+    heatMid: alger?'#ffffff':light?'#f1f5f9':'#12151e',
     card:g('--card')||'#0f172a',
     bg:g('--bg')||'#080e1e',
     pos:g('--pos')||'#10b981',
@@ -11215,11 +11289,17 @@ function resetThresholds(){
   if(typeof cs!=='undefined'&&cs&&typeof rExp==='function')rExp();
 }
 function applyPrefs(){
+  // 2026-05-05: 3-way theme — dark (default) / light / alger.
+  // CSS handles all token swapping via body class. Plotly traces re-render
+  // via upd() at the bottom so they pick up the new palette.
   document.body.classList.toggle('light-theme',_prefs.theme==='light');
+  document.body.classList.toggle('alger-theme',_prefs.theme==='alger');
   document.body.classList.toggle('presentation-mode',!!_prefs.presentationMode);
   plotBg=buildPlotBg();
-  let td=$('themeDark'),tl=$('themeLight');
-  if(td&&tl){td.classList.toggle('active',_prefs.theme!=='light');tl.classList.toggle('active',_prefs.theme==='light')}
+  let td=$('themeDark'),tl=$('themeLight'),ta=$('themeAlger');
+  if(td)td.classList.toggle('active',_prefs.theme==='dark'||(!_prefs.theme));
+  if(tl)tl.classList.toggle('active',_prefs.theme==='light');
+  if(ta)ta.classList.toggle('active',_prefs.theme==='alger');
   let ps=$('precStd'),pf=$('precFull');
   if(ps&&pf){ps.classList.toggle('active',_prefs.precision!=='full');pf.classList.toggle('active',_prefs.precision==='full')}
   let pm=$('presModeStatus');if(pm)pm.textContent=_prefs.presentationMode?'ON':'';

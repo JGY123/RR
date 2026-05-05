@@ -1,76 +1,67 @@
 # Letter to FactSet — Inquiry F18
 
-**Subject candidates** (pick whichever lands best with their team):
-- _Question on per-holding %T summing behavior in PA exports_
-- _Help us understand: %T per-holding vs portfolio total in Portfolio Attribution_
-- _Per-holding %T sums 94→134% across our strategies — guidance requested_
+**Subject (recommended):** _Per-holding %T sum behavior in PA exports — guidance requested across 6 strategies_
+
+Alternates if the team prefers a softer subject:
+- _Question on per-holding %T aggregation in Portfolio Attribution_
+- _Help interpreting `%T` summing across our portfolio universe_
 
 ---
 
 ## Recipient
 
-`<insert FactSet PA contact name>` — ideally a **Portfolio Attribution / quant analyst** at FactSet, not a generic support rep. A subject-matter expert who knows the math and the data layer.
-
-If you don't have a named contact: ask your FactSet account manager to route to "the quantitative attribution team — we have a specific question about how %T values aggregate."
+`<insert FactSet PA contact name>` — Portfolio Attribution quant lead, ideally someone who can speak to the methodology rather than a generic support rep. If no named contact: ask your FactSet account manager to route to "the PA quantitative team — specific question about per-holding %T aggregation behavior."
 
 ---
 
-## Letter draft
+## Letter draft (high-ops tightened version, 2026-05-04)
 
 > Hi [name],
 >
-> We're building an internal portfolio risk dashboard called Redwood Risk, sourced entirely from FactSet Portfolio Attribution CSV exports across 6 strategies (ACWI, ACWIXUS / IOP, EM, IDM, ISC, GSC), with weekly history going back as far as 2014 (~3,000 weekly snapshots in total). The dashboard is built around a strict no-fabrication policy: every numeric cell traces back to a documented source path, and we'd rather show "missing" than guess. That's the lens behind this question.
+> **Bottom line:** across 6 of our strategies, the per-holding `%T` column in your Security-section export sums per portfolio to a range of **94.6% to 134.4%** (snapshot 2026-04-30). Our internal docs have long assumed `Σ %T ≈ 100%`. We've ruled out parser bugs on our side. Before we update our docs, we'd like your team's interpretation: is the documented invariant wrong, or is the data path doing something we don't yet understand? The cross-strategy table below isolates the question; six numbered questions follow.
 >
-> Our internal documentation has long stated that **`%T` (the per-holding "Percentage of tracking error" column in the Security section) sums to ~100% per portfolio per week** — i.e., that each holding's %T value is its share of total portfolio TE, and the column normalizes across the universe.
+> ### Cross-strategy reconciliation, latest snapshot (2026-04-30)
 >
-> We've now run a full reconciliation across all 6 strategies on the latest weekly snapshot (2026-04-30) and observed the following:
+> | Strategy | TE | **Σ h.%T** | Σ h.%S | N holdings | N with non-null %T | Δ vs 100% |
+> |---|---|---|---|---|---|---|
+> | EM | 5.51 | **94.6** | 60.0 | 914 | 291 (32%) | −5.4 |
+> | ISC | 6.25 | 107.0 | 70.6 | 2,209 | 464 (21%) | +7.0 |
+> | GSC | 6.98 | 109.8 | 68.7 | 1,002 | **1,002 (100%)** | +9.8 |
+> | IDM | 6.47 | 115.9 | 62.6 | 775 | 214 (28%) | +15.9 |
+> | ACWI | 6.65 | 125.3 | 56.2 | 2,048 | 701 (34%) | +25.3 |
+> | IOP | 7.11 | **134.4** | 52.6 | 1,703 | 460 (27%) | +34.4 |
 >
-> | Strategy | `cs.sum.te` | **Σ h.%T** | Σ h.%S | N holdings | Deviation |
-> |---|---|---|---|---|---|
-> | EM | 5.51 | **94.6** | 60.0 | 914 | −5.4 |
-> | ISC | 6.25 | 107.0 | 70.6 | 2,209 | +7.0 |
-> | GSC | 6.98 | 109.8 | 68.7 | 1,002 | +9.8 |
-> | IDM | 6.47 | 115.9 | 62.6 | 775 | +15.9 |
-> | ACWI | 6.65 | 125.3 | 56.2 | 2,048 | +25.3 |
-> | IOP | 7.11 | **134.4** | 52.6 | 1,703 | +34.4 |
+> Three patterns we can't yet reconcile:
+> 1. **Non-uniform deviation across strategies** — argues against rounding or uniform sampling. Points at something portfolio- or universe-specific.
+> 2. **GSC has 100% non-null `%T` coverage and still sums to 109.8%** — rules out "long-tail bench-only constituents missing `%T`" as the sole driver. Even when every holding ships a `%T` value, the per-portfolio sum is not 100%.
+> 3. **Per-holding `%T` is signed and mostly zero.** Across all 6 strategies, the non-null `%T` distribution shows: ~70–95% of holdings carry exactly `%T = 0`; the non-zero rows split between positive and negative values; a small set of large positive contributors drives the bulk of the sum. EM example: 291 non-null rows = 220 zeros + 63 positives (max +10.0) + 8 negatives (min −0.3). This signed structure is consistent with a tracking-error decomposition where individual holdings can be net diversifiers, but our internal docs treat `Σ %T = 100%` as the invariant — those don't reconcile.
 >
-> Range: **94.6 → 134.4** — a ±35% deviation from the documented "~100%" claim. The deviation is non-uniform across strategies, which suggests it's not a uniform sampling issue but something portfolio- or universe-specific.
+> ### What we've already verified on our side
 >
-> **What's clean and reassuring:** the **section-aggregate** rows (Sector Weights / Country / Region / Group) DO sum to ~100% — we verified 3,082 of 3,082 sector-weeks across all 6 strategies fall within ±5% of 100%, with averages dead-on 100%. We've now baked this into a Layer-2 automated monitor (`verify_section_aggregates.py`, wired into our pre-flight smoke test) so any drift would be caught immediately. So at the section-aggregate level the math holds; the deviation appears specifically in the per-holding Security-section `%T` column.
+> - **Section-aggregate sums are clean.** Σ %TE across Sector / Country / Region / Group rows = ~100% on 3,082 of 3,082 strategy-weeks (avg dead-on 100%, all within ±5%). We've automated this as a continuous monitor (`verify_section_aggregates.py`) so any future drift is caught immediately.
+> - **Parser hygiene checked.** We found and fixed one parser-side bug while preparing this question — per-week `pct_specific`/`pct_factor` were extracted but not written through to history. Fixed (FORMAT_VERSION 4.3). The deviation in the table above is independent of that fix; observed both before and after.
+> - The dashboard now carries a defensive footer wherever per-holding `%T` is aggregated — we'd rather disclose the deviation than rescale to 100% and hide it. We'll close that footer once F18 is resolved.
 >
-> **What we've already disciplined ourselves on:** to make sure this isn't a parser bug on our side, we audited the parser for related issues. We did find one — per-week `pct_specific` / `pct_factor` in the historical summary was being silently dropped; the parser DID extract them per RiskM period but never wrote them through to `hist.summary[]`. Fixed (FORMAT_VERSION 4.3, May 2026). We mention this so you know we've cleaned our own house before bringing this to you.
+> ### Questions
 >
-> Could you help us understand:
+> 1. **What is the intended invariant on `Σ h.%T` per portfolio per week?** Specifically: is the sum of *signed* per-holding `%T` values supposed to equal 100% of TE, or is it the sum of `|%T|`, or neither? Our internal docs assumed the former; the data shows neither holds. The signed structure (per pattern 3 above) suggests the column may carry net contributions in a way we've been misreading.
+> 2. **What's the expected tolerance / range?** ±5% reads as rounding; ±35% reads as structural. If the column is signed and nets to TE under some weighting, what's the canonical aggregation formula?
+> 3. **Does `%T_Check` (Security-section inclusion flag) gate which rows enter the export?** We see the flag but its semantics aren't documented in materials we have. As a related observation: 76% of bench-only constituents on EM (623 of 819) ship `%T = null` — they reach us via Raw Factors without `%T_implied`. We're tracking that separately as a long-tail-coverage question, but note that GSC's 109.8% sum on a 100%-coverage universe shows the deviation isn't entirely about missing rows.
+> 4. **Does the per-strategy variance suggest a known cause?** EM under-reports (94.6%); IOP / ACWI heavily over (125-134%). The `% with non-null %T` column shows wide variance (21% on ISC to 100% on GSC) but **does not correlate cleanly with the deviation direction**. Is there a relationship between bench universe size, weighting scheme, or the `%T` derivation pipeline that explains both?
+> 5. **Are there Security-section columns we should be reading that aggregate differently or that would inform this?** We currently consume `%T`, `%S`, `OVER_WAvg`, `REV_WAvg`, `VAL_WAvg`, `QUAL_WAvg`, `MOM_WAvg`, `STAB_WAvg`, plus Raw Factor Exposures.
+> 6. **Methodology white paper.** If FactSet has documentation on `%T` derivation, inclusion logic, and aggregation conventions, we'd value a copy for our internal reference.
 >
-> 1. **Is `%T` per-holding intended to sum to ~100% per portfolio per week?**
->    Our docs say yes; observed data says no. Which is correct?
+> ### Supporting materials
 >
-> 2. **If approximate (not exact 100%), what's the expected tolerance?**
->    A ±5% range we'd accept as rounding; ±35% suggests something structural.
+> - Reproducer script (`verify_section_aggregates.py`) — produces the table above on any FactSet PA CSV export. Attached / available on request.
+> - One representative CSV slice (e.g., EM 2026-04-30 Security section, ~914 rows) for line-by-line comparison against your reference values. Attached / available on request.
 >
-> 3. **Is `%T_Check` (the inclusion flag in the Security section) filtering some rows from the export?**
->    We see this flag in your output but don't fully understand its semantics. Could it be filtering bench-only or below-materiality rows in a way that affects the sum?
+> Happy to walk through this on a 30-minute call if useful. Otherwise written reply works fine — we're not blocked, just looking to align our docs with the data layer.
 >
->    Related observation that may be a clue: on a recent audit of bench-only holdings, we found that **76% of bench-only constituents on EM** ship `%T = null` (623 of 819 bench-only holdings). Only the 196 with shipped `%T` are slim-Security entries; the 623 long-tail constituents come through Raw Factors with no `%T_implied`. If `%T_Check` is the gate that decides which BM-only rows make the Security section, that filter behavior may also explain part of the per-portfolio deviation. (We're tracking this separately as inquiry F12 — an enhancement request to ship `%T_implied` on the long-tail; it's a related but distinct conversation.)
->
-> 4. **Does the per-strategy variance hint at a known cause?**
->    EM under-reports (94.6%); IOP / ACWI heavily over (125-134%). Both ACWI and IOP have very large bench universes (~2,000+ names). Is there a relationship between universe size or %T_Check inclusion logic and the sum behavior?
->
-> 5. **Are there other Security-section columns we should be aware of that aggregate differently or might inform this?**
->    We use `%T`, `%S`, `OVER_WAvg`, `REV_WAvg`, `VAL_WAvg`, `QUAL_WAvg`, `MOM_WAvg`, `STAB_WAvg`, plus the Raw Factor Exposure block. We'd love to understand if any other columns (compounded factor return, hit rate, etc.) would deepen our risk attribution.
->
-> 6. **Documentation request:** if there's a quantitative methodology white paper for Portfolio Attribution that explains `%T` derivation, the inclusion logic, and the aggregation conventions, we'd love a copy for internal training.
->
-> We're happy to share:
-> - A python notebook / script that reproduces the table above on our data so you can verify the observation (or point out an error in our aggregation).
-> - The exact CSV slice from one strategy + week (e.g., EM 2026-04-30) so you can compare to your reference values.
-> - A 30-minute video call to walk through what we're seeing.
->
-> This is part of an internal effort to build deep expertise on the metrics we depend on — we'd rather understand the math than work around the symptom. Any time you can spare to teach us about the underlying mechanics is appreciated.
->
-> Thanks,
+> Best,
 > [Your name]
-> [Title / context]
+> [Title]
+> [Firm]
 
 ---
 

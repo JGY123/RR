@@ -8,14 +8,28 @@
 
 ## Hypotheses to test
 
-From FACTSET_FEEDBACK F18 + cardRiskByDim audit:
+From FACTSET_FEEDBACK F18 + cardRiskByDim audit + cross-strategy probe (2026-05-04):
 
 1. **H1: CSV-export ≠ PA-display** — the column we read in the CSV (`%T`) shows a different value than what PA shows on screen for the same holding.
 2. **H2: `%T_Check` filters rows** — some holdings in PA aren't emitted to the CSV; the surviving ones don't sum to 100%.
-3. **H3: Bench-only %T behaves differently** — port-held holdings sum cleanly; bench-only contribute the deviation.
+3. **H3: Bench-only %T behaves differently** — port-held holdings sum cleanly; bench-only contribute the deviation. **PARTIALLY RULED OUT (2026-05-04 probe)** — GSC has 100% non-null %T coverage (1,002 of 1,002 holdings) AND still sums to 109.8%. Even with no missing rows, the deviation persists. So H3 can't be the *sole* cause; at most a contributor on universes with bench-only nulls.
 4. **H4: Universe / threshold parameter** — PA has a "minimum %T to include" parameter that's been set to a value other than 0; surviving rows don't normalize.
 5. **H5: Period-handling artifact** — `%T` for a single weekly period vs cumulative across periods aggregates differently than we assume.
-6. **H6: `%T` is intentionally non-normalizing** — the documented "~100%" is just wrong; %T was never meant to sum to 100%.
+6. **H6: `%T` is intentionally non-normalizing** — the documented "~100%" is just wrong; %T was never meant to sum to 100%. **PROMOTED to leading hypothesis (2026-05-04)** — given GSC's full-coverage 109.8% sum, the most parsimonious explanation is that `%T` was never meant to sum to 100%. The "documented invariant" in our internal CLAUDE.md may be a misreading of FactSet semantics from a prior decade.
+7. **H7 (NEW, 2026-05-04): Per-holding `%T` is signed and the sum can exceed 100% by design.** Active-risk decompositions can have positive AND negative contributions; if `%T` includes diversifying contributions as positive (rather than netting), the magnitude can exceed 100%. Test: do per-holding `%T` values include negative numbers? If yes, what fraction?
+
+**Cross-strategy data point added 2026-05-04:**
+
+| Strategy | Σ %T | N holdings | N with non-null %T | Coverage |
+|---|---|---|---|---|
+| EM | 94.6 | 914 | 291 | 32% |
+| ISC | 107.0 | 2,209 | 464 | 21% |
+| **GSC** | **109.8** | **1,002** | **1,002** | **100%** ← key data point |
+| IDM | 115.9 | 775 | 214 | 28% |
+| ACWI | 125.3 | 2,048 | 701 | 34% |
+| IOP | 134.4 | 1,703 | 460 | 27% |
+
+GSC's full-coverage non-100% sum reorders the hypothesis priority below.
 
 ---
 
@@ -118,18 +132,39 @@ This is a parser-side check too. The 30%-threshold multi-month detection in `fac
 
 ---
 
-## How to execute these tests organized
+### Test 8 — Sign of per-holding `%T` (3 min, NEW 2026-05-04)
 
-Pick a **single 1-hour PA session**. Do tests in this order:
+**Why:** test H7 directly. If per-holding `%T` includes negative values (diversifying contributions), the unsigned sum exceeding 100% has a clean explanation.
 
-1. Test 7 first (docs) — sets context.
-2. Test 1 (one strategy on-screen vs CSV) — the cheapest test that could rule out everything.
-3. Test 4 (port vs bench) — likeliest to surface the cause.
-4. Test 3 (`%T_Check`) — semantic.
-5. Test 2 + 5 (PA's own sum) — confirms or denies H6.
-6. Test 6 (period) — last; only relevant if other tests didn't conclude.
+1. In PA, open EM 2026-04-30 Security section.
+2. Sort the `%T` column ascending.
+3. **Are there negative values?** Note the count + the magnitude of the most negative.
+4. If yes → H7 supported. The sum > 100% on universes where positive contributions dominate (e.g., concentrated portfolios with tracking-positive bets) is consistent with active-risk math.
+5. If no → all `%T` values are positive; the >100% sum is genuinely unexplained without H6 or another cause.
 
-After each test, add a short results section here. Even a single negative finding ("Test 1: PA matches CSV") is valuable — it eliminates a hypothesis.
+**Document:** count of negative `%T` values + min/max range. Spot-check one negative-`%T` holding with a colleague: does the sign make sense given the holding's role in the portfolio?
+
+**Cross-check from CSV:** our parser exposes raw `pct_t` per holding. A 30-second probe in `data/strategies/EM.json` would confirm in parallel:
+```bash
+python3 -c "import json; d=json.load(open('data/strategies/EM.json')); v=[h.get('pct_t') for h in d['hold'] if h.get('pct_t') is not None]; print(f'min={min(v)} max={max(v)} negative={sum(1 for x in v if x<0)}')"
+```
+
+---
+
+## How to execute these tests — order updated 2026-05-04
+
+Pick a **single 1-hour PA session**. Order revised based on the GSC 100%-coverage finding:
+
+1. **Test 2 first** (PA's own sum on EM 2026-04-30) — given GSC, the leading hypothesis is now H6 (doc wrong). PA's own footer is the fastest way to confirm. **5 min.**
+2. **Test 7** (docs) — pull any methodology white paper on `%T` derivation. Likely answers H6/H7 directly. **15 min, can run parallel to Test 2.**
+3. **NEW Test 8** (sign of per-holding `%T`) — open the Security section, look for negative `%T` values. Even one negative value confirms H7 (signed semantics). **3 min.**
+4. **Test 1** (CSV vs PA single-row sanity) — rule out export/parser drift. **15 min.**
+5. **Test 3** (`%T_Check` semantic) — even if H6 holds, we need this for our docs. **15 min.**
+6. **Test 5** (cross-strategy uniformity inside PA) — confirms the variance is not a per-strategy export artifact. **10 min.**
+7. **Test 4 (port vs bench split)** — DEPRIORITIZED. GSC ruled out H3 as sole cause; this test is now confirmation-only. **10 min, only if time.**
+8. **Test 6** (period handling) — DEPRIORITIZED for now; revisit only if other tests don't conclude. **5 min, only if time.**
+
+After each test, add a short results section here. Even a single negative finding ("Test 1: PA matches CSV") eliminates a hypothesis and tightens the FactSet conversation.
 
 ---
 

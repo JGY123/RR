@@ -5310,7 +5310,7 @@ function rChr(chars){
     // JSON files (pre-2026-04-30) still get dots on TE/Beta/AS.
     const hasChartHist=(cs?.hist?.chars&&cs.hist.chars[c.m]&&cs.hist.chars[c.m].length>0)||meta.histKey;
     const histDot=hasChartHist?' <span style="color:var(--pos);font-size:9px;margin-left:3px" title="Per-week history shipped — drill plots a chart">●</span>':'';
-    return`<tr class="clickable" onclick="oDrChar('${mEsc}')"><td${docAttr}>${c.m}${invMark}${histDot}</td><td class="r" data-sv="${c.p??''}">${formatChar(c.m,c.p)}</td><td class="r" data-sv="${c.b??''}">${bCell}</td><td class="r ${cls}" data-sv="${diff??''}">${formatCharDiff(c.m,diff)}</td></tr>`;
+    return`<tr class="clickable" onclick="oDrChar('${mEsc}')"><td data-col="metric"${docAttr}>${c.m}${invMark}${histDot}</td><td class="r" data-col="p" data-sv="${c.p??''}">${formatChar(c.m,c.p)}</td><td class="r" data-col="b" data-sv="${c.b??''}">${bCell}</td><td class="r ${cls}" data-col="diff" data-sv="${diff??''}">${formatCharDiff(c.m,diff)}</td></tr>`;
   };
   // 2026-04-30 (cardChars F4): group rows by CHAR_META.group. Group headers
   // are tiny uppercase mini-cap dividers (matches AUDIT_LEARNINGS.md design
@@ -5328,7 +5328,14 @@ function rChr(chars){
     const hdr=`<tr class="grp-hdr" style="background:rgba(99,102,241,0.04)"><td colspan="4" style="padding:6px 8px 4px;font-size:9px;color:var(--textDim);text-transform:uppercase;letter-spacing:0.6px;font-weight:700;border-top:1px solid var(--grid)">${g} <span style="color:var(--textDim);font-weight:500;letter-spacing:0.2px;text-transform:none;margin-left:6px">${list.length} metric${list.length>1?'s':''}</span></td></tr>`;
     return hdr+list.map(rowHtml).join('');
   }).join('');
-  return`<table id="tbl-chr"><thead><tr><th onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r tip" data-tip="Portfolio value (units shown — % for ratios, x for multiples, $B for size)" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r tip" data-tip="Benchmark value (— if FactSet did not provide it; portfolio-only metrics like TE are NA on the BM side)" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r tip" data-tip="Portfolio − Benchmark. Color reflects whether higher is good (green) or lower is good (red — flagged with ↓ on the metric name)." onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${sectionRows}</tbody></table>`;
+  // 2026-05-05 (audit cardChars critical-bug): added data-col attrs on every
+  // <th> + <td> so tableColHidePanelHtml('tbl-chr') can introspect column
+  // names. Chrome strip references cols:'tbl-chr' but rChr was emitting
+  // zero data-col attrs → ⚙ Cols panel was non-functional. Per ARCHITECTURE
+  // §4.2, every renderer that opts into the column-hide framework must emit
+  // data-col on both <th> and <td>. Canonical keys (per COL_LABELS L1580):
+  // metric / p / b / diff.
+  return`<table id="tbl-chr"><thead><tr><th data-col="metric" onclick="sortTbl('tbl-chr',0)">Metric</th><th class="r tip" data-col="p" data-tip="Portfolio value (units shown — % for ratios, x for multiples, $B for size)" onclick="sortTbl('tbl-chr',1)">Portfolio</th><th class="r tip" data-col="b" data-tip="Benchmark value (— if FactSet did not provide it; portfolio-only metrics like TE are NA on the BM side)" onclick="sortTbl('tbl-chr',2)">Benchmark</th><th class="r tip" data-col="diff" data-tip="Portfolio − Benchmark. Color reflects whether higher is good (green) or lower is good (red — flagged with ↓ on the metric name)." onclick="sortTbl('tbl-chr',3)">Diff</th></tr></thead><tbody>${sectionRows}</tbody></table>`;
 }
 
 function rCountryTable(countries,hold){

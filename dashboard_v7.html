@@ -11594,7 +11594,7 @@ function oDrMetric(metric,range){
           ${rORVQCells(h)}
         </tr>`).join('')}</tbody></table>`
       : `<table style="font-size:11px;width:100%"><thead><tr><th>Sector</th><th class="r">MCR</th><th class="r">Share of Idio</th><th class="r">Active Wt</th></tr></thead>
-        <tbody>${top.map(s=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDr('sec','${(s.n||'').replace(/'/g,'\\\'')}','All')">
+        <tbody>${top.map(s=>`<tr class="clickable" onclick="$('metricModal').classList.remove('show');oDr('sec','${(s.n||'').replace(/'/g,'&apos;')}','All')">
           <td style="color:var(--txth);font-weight:600">${s.n}</td>
           <td class="r" style="font-weight:700;color:var(--acc)">${f2(s.mcr,1)}</td>
           <td class="r">${totalContribMCR>0?f2(s.mcr/totalContribMCR*100,1)+'%':'—'}</td>

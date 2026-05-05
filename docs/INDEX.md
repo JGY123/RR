@@ -1,6 +1,6 @@
 # RR Documentation Index
 
-**Updated:** 2026-05-04 (ARCHITECTURE.md + STRATEGIC_REVIEW.md added)
+**Updated:** 2026-05-05 (LAUNCH_PLAN + FACTSET_CLAUDE_INTEGRATION + cron template added)
 **Purpose:** Single navigator for all RR documentation. Anything not listed here is in `docs/archive/`.
 
 ---
@@ -10,8 +10,10 @@
 | File | What it is |
 |---|---|
 | `CLAUDE.md` | Project instructions (cwd-rooted; Claude Code reads this on every session) |
+| `LAUNCH_PLAN.md` | **NEW 2026-05-05.** The actionable two-part launch plan — Part 1 (PM Access, Steps A-E) and Part 2 (Weekly Automation, Steps F-I). Sequenced "do this then that" checklist. ~7-9 hr split between user + Alger eng over 2-3 weeks calendar. Companion to ALGER_DEPLOYMENT.md. **Read this after CLAUDE.md if launching.** |
+| `FACTSET_CLAUDE_INTEGRATION.md` | **NEW 2026-05-05.** Strategic watch on FactSet integrating Claude into FDS (June 2026). Two-track strategy: complete Alger VM v1 now (Track A), monitor for v2 (Track B). 5 deployment scenarios, 8 questions for FactSet, decision triggers for when to pivot. NOT pivoting current plan. |
 | `ROADMAP.md` | **NEW 2026-05-05.** The big-picture plan — software vs HTML question, scale plan (6→25 accounts, 1.6 GB→5 GB), weekly update pipeline, organizational track (PM training, desk briefings, presentations, reading materials). 10 sections + open questions. Read after STRATEGIC_REVIEW. |
-| `ALGER_DEPLOYMENT.md` | **NEW 2026-05-05.** The directive doc the user hands to Alger's tech team — VM specs, ingest pipeline contract, backup strategy, access control, monitoring, day-zero deployment checklist, open questions for Alger IT. Companion to ROADMAP. |
+| `ALGER_DEPLOYMENT.md` | **NEW 2026-05-05.** The directive doc the user hands to Alger's tech team — VM specs, ingest pipeline contract, backup strategy, access control, monitoring, day-zero deployment checklist, open questions for Alger IT. Companion to LAUNCH_PLAN + ROADMAP. |
 | `DESIGN_TOUCH_UP.md` | **NEW 2026-05-05.** Design plan for taking RR from "internal-tools polish" to "professional-grade." Alger brand alignment (navy #002B54, blue #136CAF, Benton Sans), typography polish, header revamp, footer, print stylesheet, theme picker. 4-phase plan ~15 hr. |
 | `GAMMA_PROMPT.md` | **NEW 2026-05-05.** Reusable Gamma (gamma.app) prompt for generating professional, on-brand decks. Master prompt + 4 variant prompts (PM walkthrough, leadership update, FactSet quant team, multi-strategy showcase) + slide-by-slide hand-craft fallback. |
 | `ARCHITECTURE.md` | **NEW 2026-05-04.** Contributor-facing intro to RR — data flow, tile contract, design system, integrity model, the 5 operational loops. Read this before your first edit. |
@@ -117,6 +119,7 @@ If you need any archived doc, it's still in git history + `docs/archive/`.
 | File | What it is |
 |---|---|
 | `docs/templates/tile_audit_template.md` | Skeleton for `tile-audit` subagent output. |
+| `tools/cron_weekly_ingest.py.template` | **NEW 2026-05-05.** Production-ready Python script Alger eng adapts to wire weekly ingest into firm cron / scheduler. Includes: file lock, pre-ingest tag rollback, dry-run gate, gzip archive of CSV + JSON, L2 monitor, success notification with per-strategy diff. 4 [TODO] markers for Alger eng (config paths, notification channel, distribution list, dashboard URL). Companion to LAUNCH_PLAN.md §2. |
 
 ---
 

@@ -1,0 +1,549 @@
+#!/usr/bin/env python3
+"""
+RR Weekly Ingest — Cron Template
+================================
+
+Drops a fresh FactSet CSV into RR's pipeline and notifies on completion.
+
+Companion docs:
+  - ../ALGER_DEPLOYMENT.md  (architecture + folder layout)
+  - ../LAUNCH_PLAN.md       (Part 2 — Weekly Automation; Steps F-I)
+
+Audience: Alger DevOps engineer wiring this into firm cron / scheduler.
+
+What this script does (in order):
+  1. Acquire a lock so two cron runs can't collide
+  2. Find new CSVs in INBOX
+  3. Tag a `pre-ingest.YYYY-MM-DD` git tag (rollback safety)
+  4. For each CSV:
+       a. Run load_data.sh (parse + verify_factset)
+       b. Run merge_cumulative.py --dry-run (sanity check)
+       c. If clean: run real merge
+       d. If anything fails: roll back via git reset, send alert, abort
+       e. Archive CSV (gzip → archive/csv/)
+       f. Archive parser output (gzip → archive/json/)
+       g. Run verify_section_aggregates.py --latest (L2 monitor)
+       h. Move processed CSV out of inbox
+  5. Tag `post-ingest.YYYY-MM-DD`
+  6. Send "ingest complete" notification with diff summary
+  7. Release lock
+
+Exit codes:
+  0 = success or nothing to do
+  1 = ingest failed (notification sent, lock released)
+  2 = lock contention (another cron is running)
+  3 = config / environment error (RR_HOME missing, etc.)
+
+Usage (manual test):
+  python3 cron_weekly_ingest.py
+  python3 cron_weekly_ingest.py --dry-run   # parse + dry-merge, no real merge or archive
+  python3 cron_weekly_ingest.py --csv /path/to/specific.csv   # override inbox
+
+Cron line (example, Mondays 6 AM):
+  0 6 * * MON /usr/bin/python3 /srv/rr/tools/cron_weekly_ingest.py >> /var/log/rr_cron.log 2>&1
+
+DO NOT run as root. Run as the rr-svc service account that owns /srv/rr.
+
+----------
+TEMPLATE NOTES — replace the marked sections before deploying:
+
+  [TODO 1] CONFIG block — adjust paths to match your VM
+  [TODO 2] notify_success / notify_alert — wire to Alger's email / Slack / Teams
+  [TODO 3] DIST_LIST — distribution for alerts
+  [TODO 4] Anything else flagged with [TODO]
+
+After customizing, rename to `cron_weekly_ingest.py` (drop the .template suffix)
+and `chmod +x cron_weekly_ingest.py`.
+"""
+
+import argparse
+import datetime as dt
+import fcntl
+import glob
+import gzip
+import json
+import logging
+import os
+import shutil
+import socket
+import subprocess
+import sys
+import traceback
+from pathlib import Path
+
+# =============================================================================
+# [TODO 1] CONFIG — adjust to your VM
+# =============================================================================
+RR_HOME       = "/srv/rr"                          # repo root on the VM
+INBOX         = f"{RR_HOME}/inbox"                  # FactSet drops CSVs here
+PROCESSED     = f"{RR_HOME}/processed"              # successful CSVs move here briefly
+ARCHIVE_CSV   = f"{RR_HOME}/archive/csv"            # gzipped CSV archive (canonical)
+ARCHIVE_JSON  = f"{RR_HOME}/archive/json"           # gzipped parser-output archive
+LOGS          = f"{RR_HOME}/logs"                   # cron log destination
+LOCK_FILE     = f"{RR_HOME}/.cron.lock"             # mutex
+INDEX_PATH    = f"{RR_HOME}/data/strategies/index.json"  # for diff summary
+
+# Python interpreter to use for the parser + merger.
+# The pipeline only uses stdlib, so the system python3 is fine.
+PYTHON        = "/usr/bin/python3"
+
+# How many recent pre-ingest tags to keep before pruning (None = keep all)
+TAG_RETENTION = 26                                  # ~6 months of weekly tags
+
+# =============================================================================
+# [TODO 2] NOTIFICATION CHANNEL — uncomment the one Alger uses
+# =============================================================================
+# Channel A: SMTP email (requires localhost MTA or smtplib)
+NOTIFY_CHANNEL = "email"        # "email" | "slack" | "teams" | "stdout"
+
+# [TODO 3] DIST_LIST — who gets pinged
+DIST_LIST = [
+    "yuda@example.com",         # the user (product owner)
+    # "analyst@alger.com",      # uncomment as needed
+    # "devops@alger.com",
+]
+
+# Slack / Teams webhook URL (only used if NOTIFY_CHANNEL is set accordingly)
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/REPLACE/ME"
+TEAMS_WEBHOOK_URL = "https://outlook.office.com/webhook/REPLACE/ME"
+
+# Sender for email notifications
+EMAIL_FROM = "rr-cron@alger.internal"
+
+# =============================================================================
+# Logging setup — every line gets a timestamp; cron captures stdout to log file
+# =============================================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+log = logging.getLogger("rr-cron")
+
+
+# =============================================================================
+# Notifications — adapt to Alger's channel of choice
+# =============================================================================
+def _notify(level: str, title: str, body: str) -> None:
+    """
+    Centralized notification. Adapt to Alger's stack.
+
+    `level` is "success" or "alert". The default impl picks NOTIFY_CHANNEL.
+    Always logs to stdout regardless so the cron log captures it.
+    """
+    full_title = f"[RR-{level.upper()}] {title}"
+    log.info("NOTIFY %s: %s", full_title, body[:200].replace("\n", " | "))
+
+    try:
+        if NOTIFY_CHANNEL == "email":
+            _notify_email(full_title, body)
+        elif NOTIFY_CHANNEL == "slack":
+            _notify_slack(full_title, body)
+        elif NOTIFY_CHANNEL == "teams":
+            _notify_teams(full_title, body)
+        elif NOTIFY_CHANNEL == "stdout":
+            print(f"\n=== {full_title} ===\n{body}\n", flush=True)
+        else:
+            log.warning("Unknown NOTIFY_CHANNEL=%s; falling back to stdout", NOTIFY_CHANNEL)
+            print(f"\n=== {full_title} ===\n{body}\n", flush=True)
+    except Exception as e:
+        # Never let notification failures abort the ingest
+        log.error("Notification failed: %s", e)
+
+
+def notify_success(title: str, body: str) -> None:
+    _notify("success", title, body)
+
+
+def notify_alert(title: str, body: str) -> None:
+    _notify("alert", title, body)
+
+
+def _notify_email(title: str, body: str) -> None:
+    """Stdlib SMTP. Requires localhost MTA (postfix / sendmail) on the VM."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(body)
+    msg["Subject"] = title
+    msg["From"]    = EMAIL_FROM
+    msg["To"]      = ", ".join(DIST_LIST)
+
+    with smtplib.SMTP("localhost") as s:
+        s.send_message(msg)
+
+
+def _notify_slack(title: str, body: str) -> None:
+    """Slack incoming webhook. Requires `requests` or use stdlib."""
+    import urllib.request
+
+    payload = json.dumps({"text": f"*{title}*\n```{body}```"}).encode()
+    req = urllib.request.Request(
+        SLACK_WEBHOOK_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req, timeout=10)
+
+
+def _notify_teams(title: str, body: str) -> None:
+    """MS Teams incoming webhook. Same shape as Slack basically."""
+    import urllib.request
+
+    payload = json.dumps({"text": f"**{title}**\n\n```\n{body}\n```"}).encode()
+    req = urllib.request.Request(
+        TEAMS_WEBHOOK_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    urllib.request.urlopen(req, timeout=10)
+
+
+# =============================================================================
+# Lock — prevent two cron runs colliding
+# =============================================================================
+class CronLock:
+    def __init__(self, path: str):
+        self.path = path
+        self.fh = None
+
+    def __enter__(self):
+        self.fh = open(self.path, "w")
+        try:
+            fcntl.flock(self.fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            log.warning("Lock already held at %s; another cron run is in progress. Aborting.", self.path)
+            sys.exit(2)
+        self.fh.write(f"{os.getpid()}\n{socket.gethostname()}\n{dt.datetime.now().isoformat()}\n")
+        self.fh.flush()
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            fcntl.flock(self.fh.fileno(), fcntl.LOCK_UN)
+            self.fh.close()
+            os.unlink(self.path)
+        except Exception:
+            pass
+
+
+# =============================================================================
+# Subprocess helpers
+# =============================================================================
+def run(cmd, cwd=RR_HOME, check=True, env=None) -> subprocess.CompletedProcess:
+    """Run a subprocess; log + capture; raise on nonzero if check=True."""
+    log.info("RUN: %s", " ".join(str(c) for c in cmd))
+    result = subprocess.run(
+        cmd, cwd=cwd, capture_output=True, text=True, env=env or os.environ.copy()
+    )
+    # Tail of stdout + stderr in the cron log for forensics
+    if result.stdout.strip():
+        log.info("STDOUT (tail): %s", result.stdout[-500:].strip())
+    if result.stderr.strip():
+        log.info("STDERR (tail): %s", result.stderr[-500:].strip())
+    if check and result.returncode != 0:
+        raise subprocess.CalledProcessError(
+            result.returncode, cmd, result.stdout, result.stderr
+        )
+    return result
+
+
+def git(*args) -> subprocess.CompletedProcess:
+    """Convenience wrapper for git ops in RR_HOME."""
+    return run(["git", "-C", RR_HOME, *args], check=False)
+
+
+# =============================================================================
+# Diff summary — what changed between pre- and post-ingest
+# =============================================================================
+def snapshot_index() -> dict:
+    """Capture index.json's per-strategy summary as a dict for before/after diff."""
+    try:
+        with open(INDEX_PATH) as f:
+            idx = json.load(f)
+    except Exception as e:
+        log.warning("Could not read %s for diff: %s", INDEX_PATH, e)
+        return {}
+
+    snap = {}
+    # index.json shape: {"strategies": [{"id": "ACWI", "current_date": ..., "te":..., "as":..., "beta":..., "h":...}, ...]}
+    for s in idx.get("strategies", []):
+        snap[s.get("id", "?")] = {
+            "current_date": s.get("current_date"),
+            "te":   s.get("te"),
+            "as":   s.get("as"),
+            "beta": s.get("beta"),
+            "h":    s.get("h"),
+        }
+    return snap
+
+
+def format_diff(before: dict, after: dict) -> str:
+    """Human-readable per-strategy diff for the success notification body."""
+    if not before and not after:
+        return "(no index snapshot available)"
+
+    lines = []
+    keys = sorted(set(before) | set(after))
+    for k in keys:
+        b = before.get(k, {})
+        a = after.get(k, {})
+        bd = b.get("current_date") or "—"
+        ad = a.get("current_date") or "—"
+        date_change = f"{bd} → {ad}" if bd != ad else f"{ad} (unchanged)"
+
+        def delta(field, fmt="{:+.2f}"):
+            bv, av = b.get(field), a.get(field)
+            if bv is None and av is None:
+                return ""
+            if bv is None:
+                return f"  {field}: NEW={av}"
+            if av is None:
+                return f"  {field}: REMOVED (was {bv})"
+            try:
+                d = av - bv
+                if abs(d) < 0.005:
+                    return ""
+                return f"  {field}: {fmt.format(d)} ({bv:.2f} → {av:.2f})"
+            except (TypeError, ValueError):
+                return ""
+
+        body = " ".join(filter(None, [delta("te"), delta("as"), delta("beta"),
+                                       delta("h", fmt="{:+.0f}")]))
+        lines.append(f"{k:6} {date_change}{('  ' + body) if body.strip() else ''}")
+
+    return "\n".join(lines) if lines else "(no changes detected)"
+
+
+# =============================================================================
+# Ingest pipeline — one CSV at a time
+# =============================================================================
+def process_csv(csv_path: str, dry_run: bool = False) -> bool:
+    """
+    Run the full pipeline for one CSV. Returns True on success, False on failure.
+    On failure: alert is sent and a git rollback is attempted.
+    """
+    csv_basename = os.path.basename(csv_path)
+    today = dt.date.today().isoformat()
+    pre_tag = f"pre-ingest.{today}"
+    log.info("=== Processing %s ===", csv_basename)
+
+    # 1. Tag pre-ingest baseline (idempotent — git tag fails silently if exists)
+    git("tag", "-f", pre_tag)
+    log.info("Tagged pre-ingest baseline: %s", pre_tag)
+
+    # 2. Snapshot index BEFORE for diff
+    before_snapshot = snapshot_index()
+
+    # 3. load_data.sh — parse + verify_factset
+    try:
+        run([f"{RR_HOME}/load_data.sh", csv_path])
+    except subprocess.CalledProcessError as e:
+        notify_alert(
+            f"PARSE FAILED on {csv_basename}",
+            f"load_data.sh returned {e.returncode}.\n\nSTDERR:\n{e.stderr[-2000:]}\n\n"
+            f"Run manually for full diagnosis:\n  cd {RR_HOME} && ./load_data.sh {csv_path}",
+        )
+        return False
+
+    # 4. Merge dry-run (sanity check before mutating state)
+    try:
+        dry = run([
+            PYTHON, f"{RR_HOME}/merge_cumulative.py",
+            "--new", f"{RR_HOME}/latest_data.json",
+            "--source-csv", csv_path,
+            "--dry-run",
+        ])
+    except subprocess.CalledProcessError as e:
+        notify_alert(
+            f"MERGE DRY-RUN FAILED on {csv_basename}",
+            f"merge_cumulative.py --dry-run returned {e.returncode}.\n\nSTDOUT:\n{e.stdout[-1500:]}\n\nSTDERR:\n{e.stderr[-1500:]}",
+        )
+        return False
+
+    if "ERROR" in dry.stdout.upper():
+        notify_alert(
+            f"MERGE DRY-RUN FLAGGED on {csv_basename}",
+            f"Dry-run output contains ERROR:\n\n{dry.stdout[-2000:]}",
+        )
+        return False
+
+    if dry_run:
+        log.info("DRY-RUN MODE — skipping real merge + archive for %s", csv_basename)
+        return True
+
+    # 5. Real merge
+    try:
+        run([
+            PYTHON, f"{RR_HOME}/merge_cumulative.py",
+            "--new", f"{RR_HOME}/latest_data.json",
+            "--source-csv", csv_path,
+        ])
+    except subprocess.CalledProcessError as e:
+        notify_alert(
+            f"MERGE FAILED on {csv_basename} — ROLLING BACK",
+            f"merge_cumulative.py returned {e.returncode}.\n\nSTDERR:\n{e.stderr[-2000:]}\n\n"
+            f"Auto-rolling back via: git reset --hard {pre_tag}",
+        )
+        # Hard rollback to pre-ingest state
+        git("reset", "--hard", pre_tag)
+        return False
+
+    # 6. Archive CSV (gzipped) — canonical record
+    archive_csv_path = f"{ARCHIVE_CSV}/{today}_{csv_basename}.gz"
+    os.makedirs(ARCHIVE_CSV, exist_ok=True)
+    with open(csv_path, "rb") as f_in, gzip.open(archive_csv_path, "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+    log.info("Archived CSV → %s (%.1f MB)", archive_csv_path,
+             os.path.getsize(archive_csv_path) / 1024 / 1024)
+
+    # 7. Archive parsed JSON (gzipped) — fast restore on disaster recovery
+    archive_json_path = f"{ARCHIVE_JSON}/{today}_latest_data.json.gz"
+    os.makedirs(ARCHIVE_JSON, exist_ok=True)
+    with open(f"{RR_HOME}/latest_data.json", "rb") as f_in, gzip.open(archive_json_path, "wb") as f_out:
+        shutil.copyfileobj(f_in, f_out)
+    log.info("Archived parser output → %s (%.1f MB)", archive_json_path,
+             os.path.getsize(archive_json_path) / 1024 / 1024)
+
+    # 8. L2 monitor (verify_section_aggregates) — informational; alert on RED
+    try:
+        monitor = run([
+            PYTHON, f"{RR_HOME}/verify_section_aggregates.py", "--latest",
+        ], check=False)
+        if "RED" in monitor.stdout.upper() or monitor.returncode != 0:
+            notify_alert(
+                f"L2 MONITOR FLAGGED on {csv_basename}",
+                f"verify_section_aggregates flagged RED. Investigate before relying on the new data.\n\n"
+                f"OUTPUT:\n{monitor.stdout[-2000:]}",
+            )
+            # Do NOT fail the ingest — flagged is a warning, not a hard fail.
+    except Exception as e:
+        log.warning("L2 monitor failed to run: %s", e)
+
+    # 9. Move CSV from inbox to processed/ (or delete — Alger preference)
+    os.makedirs(PROCESSED, exist_ok=True)
+    dest = f"{PROCESSED}/{today}_{csv_basename}"
+    shutil.move(csv_path, dest)
+    log.info("Moved processed CSV → %s", dest)
+
+    # 10. Snapshot AFTER for diff
+    after_snapshot = snapshot_index()
+    diff = format_diff(before_snapshot, after_snapshot)
+
+    # 11. Tag post-ingest
+    post_tag = f"post-ingest.{today}"
+    git("tag", "-f", post_tag)
+
+    # 12. Success notification with diff
+    notify_success(
+        f"Ingest complete: {csv_basename}",
+        (
+            f"Pipeline succeeded; dashboard reflects new data on next refresh.\n\n"
+            f"CSV:           {csv_basename}\n"
+            f"CSV archive:   {archive_csv_path}\n"
+            f"JSON archive:  {archive_json_path}\n"
+            f"Pre-ingest:    {pre_tag}\n"
+            f"Post-ingest:   {post_tag}\n\n"
+            f"PER-STRATEGY DIFF:\n{diff}\n\n"
+            f"Dashboard URL: https://rr.alger.internal:3099/dashboard_v7.html  [TODO 4: update URL]"
+        ),
+    )
+    return True
+
+
+# =============================================================================
+# Tag retention — prune old pre-ingest tags so `git tag -l` stays manageable
+# =============================================================================
+def prune_old_tags() -> None:
+    if TAG_RETENTION is None:
+        return
+    try:
+        out = git("tag", "-l", "pre-ingest.*").stdout.splitlines()
+        out.sort()                       # ISO dates sort lexically
+        to_delete = out[:-TAG_RETENTION] if len(out) > TAG_RETENTION else []
+        for tag in to_delete:
+            git("tag", "-d", tag.strip())
+        if to_delete:
+            log.info("Pruned %d old pre-ingest tag(s).", len(to_delete))
+    except Exception as e:
+        log.warning("Tag pruning failed (non-fatal): %s", e)
+
+
+# =============================================================================
+# Main
+# =============================================================================
+def main():
+    parser = argparse.ArgumentParser(description="RR weekly ingest cron job")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Run parse + merge dry-run only; skip real merge + archive")
+    parser.add_argument("--csv", default=None,
+                        help="Process a specific CSV instead of scanning INBOX")
+    args = parser.parse_args()
+
+    # Sanity check — RR_HOME exists?
+    if not os.path.isdir(RR_HOME):
+        log.error("RR_HOME does not exist: %s", RR_HOME)
+        sys.exit(3)
+    if not os.path.isfile(f"{RR_HOME}/load_data.sh"):
+        log.error("load_data.sh not found at %s; is RR_HOME correct?", RR_HOME)
+        sys.exit(3)
+
+    # Acquire lock + run
+    with CronLock(LOCK_FILE):
+        log.info("=== RR cron run started ===")
+        log.info("Host: %s, RR_HOME: %s, dry_run: %s", socket.gethostname(), RR_HOME, args.dry_run)
+
+        # Find work
+        if args.csv:
+            csvs = [args.csv]
+        else:
+            os.makedirs(INBOX, exist_ok=True)
+            csvs = sorted(glob.glob(f"{INBOX}/*.csv"))
+
+        if not csvs:
+            log.info("No new CSVs in %s; nothing to do.", INBOX)
+            log.info("=== RR cron run complete (no-op) ===")
+            return
+
+        log.info("Found %d CSV(s) to process: %s",
+                 len(csvs), [os.path.basename(c) for c in csvs])
+
+        # Process each
+        succeeded, failed = [], []
+        for csv in csvs:
+            try:
+                ok = process_csv(csv, dry_run=args.dry_run)
+                (succeeded if ok else failed).append(csv)
+            except Exception:
+                # Belt + suspenders — never let an unexpected exception abort cron silently
+                tb = traceback.format_exc()
+                log.error("Unexpected exception processing %s:\n%s", csv, tb)
+                notify_alert(
+                    f"UNEXPECTED EXCEPTION on {os.path.basename(csv)}",
+                    f"Cron crashed mid-pipeline. Manual intervention required.\n\nTRACEBACK:\n{tb[-2500:]}",
+                )
+                failed.append(csv)
+
+        # Cleanup
+        prune_old_tags()
+
+        # Summary log
+        log.info("=== RR cron run complete: %d succeeded, %d failed ===",
+                 len(succeeded), len(failed))
+
+        if failed:
+            sys.exit(1)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception:
+        # Last-resort error path — outside the lock
+        tb = traceback.format_exc()
+        log.error("Fatal error:\n%s", tb)
+        notify_alert("CRON FATAL ERROR", tb[-2500:])
+        sys.exit(1)

@@ -683,19 +683,24 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;heigh
 </head>
 <body>
 <div class="header">
-<!-- Left: branding (2026-05-01 polish — ALGER parent firm + REDWOOD RISK product wordmark) -->
-<div style="min-width:230px;flex-shrink:0;display:flex;align-items:center;gap:14px">
-  <!-- Alger parent-firm mark -->
-  <div style="display:flex;flex-direction:column;align-items:center;line-height:1;padding-right:14px;border-right:1px solid var(--grid)" title="Fred Alger Management — parent firm">
-    <div style="font-size:13px;font-weight:800;letter-spacing:4px;color:var(--textBright);line-height:1;font-family:'DM Sans','Inter',system-ui,sans-serif">ALGER</div>
-    <div style="font-size:6px;font-weight:600;letter-spacing:2.5px;color:var(--textDim);margin-top:3px;text-transform:uppercase">Management</div>
-  </div>
-  <!-- Redwood gradient bar + wordmark -->
+<!-- Left: branding (2026-05-01 text wordmarks → 2026-05-05 actual logo images
+     — Alger PNG (304×53 navy) + Redwood Investments SVG (354.9×72.3 white).
+     CSS filter on Alger inverts navy → white for legibility on dark theme.
+     Both assets live in ./assets/logos/ — sourced from alger.com and
+     redwoodinv.com respectively. Heights matched at 24px for visual parity. -->
+<div style="min-width:280px;flex-shrink:0;display:flex;align-items:center;gap:14px">
+  <!-- Alger parent-firm logo -->
+  <a href="https://www.alger.com" target="_blank" rel="noopener" style="display:flex;align-items:center;padding-right:14px;border-right:1px solid var(--grid);text-decoration:none" title="Fred Alger Management — parent firm">
+    <img src="assets/logos/alger.png" alt="Alger" style="height:22px;width:auto;filter:brightness(0) invert(1) opacity(0.92);display:block">
+  </a>
+  <!-- Redwood gradient bar + Redwood Investments wordmark + "Control Panel" subtitle -->
   <div style="display:flex;align-items:center;gap:10px">
     <div style="width:4px;height:30px;border-radius:2px;background:linear-gradient(180deg,var(--accent),var(--pri))"></div>
-    <div style="line-height:1;display:flex;flex-direction:column;gap:3px" title="Redwood Risk Control Panel — portfolio risk + factor analytics for the Redwood PM team">
-      <h1 style="font-size:14px;font-weight:700;letter-spacing:2.5px;color:var(--textBright);line-height:1;margin:0">REDWOOD <span style="color:var(--accent)">RISK</span></h1>
-      <div style="font-size:8px;font-weight:600;letter-spacing:3px;color:var(--textDim);line-height:1;text-transform:uppercase">Control Panel</div>
+    <div style="line-height:1;display:flex;flex-direction:column;gap:3px" title="Redwood Risk Control Panel — portfolio risk + factor analytics for the Redwood team (Alger International Growth Equity)">
+      <a href="https://www.redwoodinv.com" target="_blank" rel="noopener" style="display:flex;align-items:center;text-decoration:none">
+        <img src="assets/logos/redwood-investments.svg" alt="Redwood Investments" style="height:22px;width:auto;display:block;opacity:0.94">
+      </a>
+      <div style="font-size:8px;font-weight:600;letter-spacing:3px;color:var(--textDim);line-height:1;text-transform:uppercase;padding-left:1px">Risk Control Panel</div>
     </div>
   </div>
 </div>

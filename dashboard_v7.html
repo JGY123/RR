@@ -7429,8 +7429,12 @@ function _refreshTreeToolbar(){
   if(f18Foot)f18Foot.style.display=_treeSize==='te'?'block':'none';
 }
 function rTree(s){
-  if(!s||!s.hold||!s.hold.length){let el=document.getElementById('treeDiv');if(el)el.innerHTML='<p style="color:var(--txt);font-size:12px;text-align:center;padding:60px">No holdings to visualize</p>';return;}
+  if(!s||!s.hold||!s.hold.length){let el=document.getElementById('treeDiv');if(el)el.innerHTML='<div class="empty-state">No holdings to visualize</div>';return;}
   _refreshTreeToolbar();
+  // T6 fix (audit cardTreemap 2026-05-04): esc wrap on h.n / h.t / bucket key
+  // before concatenation into hovertemplate HTML. Defensive against any future
+  // FactSet export carrying chars that would break Plotly's HTML rendering.
+  const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   let keyFn={
     sec:h=>h.sec,
     co:h=>h.co,
@@ -7472,7 +7476,7 @@ function rTree(s){
       if(val<=0)return;
       let cc=_treeColor==='rank'&&h.over!=null?_treeRankColor(h.over):(h.a||0)>=0?'#10b981':'#ef4444';
       labels.push(h.t);parents.push(_treeDrill);values.push(+val.toFixed(4));colors.push(cc);
-      cds.push(`<b>${h.n||tk(h)}</b> (${tk(h)})<br>Weight: ${f2(h.p,2)}%<br>Active: ${fp(h.a,2)}<br>TE: ${f2(Math.abs(h.tr||0),2)}%<br>Rank: ${h.over!=null?'Q'+Math.round(h.over):'\u2014'}`);
+      cds.push(`<b>${_esc(h.n||tk(h))}</b> (${_esc(tk(h))})<br>Weight: ${f2(h.p,2)}%<br>Active: ${fp(h.a,2)}<br>TE: ${f2(Math.abs(h.tr||0),2)}%<br>Rank: ${h.over!=null?'Q'+Math.round(h.over):'\u2014'}`);
     });
   }else{
     labels.push('Portfolio');parents.push('');values.push(0);colors.push(T.card);cds.push('Portfolio');
@@ -7481,7 +7485,7 @@ function rTree(s){
       let val=Math.max(sizeOf(b),0.01);
       labels.push(k);parents.push('Portfolio');values.push(+val.toFixed(2));colors.push(bucketColor(b));
       let avgQ=b.rankN>0?(b.rankSum/b.rankN).toFixed(1):'\u2014';
-      cds.push(`<b>${k}</b><br>Holdings: ${b.count}<br>Weight: ${f2(b.wt,1)}%<br>Active: ${fp(b.active,1)}<br>TE: ${f2(b.te,1)}%<br>Avg Rank: ${avgQ}<br><i>Click to drill</i>`);
+      cds.push(`<b>${_esc(k)}</b><br>Holdings: ${b.count}<br>Weight: ${f2(b.wt,1)}%<br>Active: ${fp(b.active,1)}<br>TE: ${f2(b.te,1)}%<br>Avg Rank: ${avgQ}<br><i>Click to drill</i>`);
     });
   }
   // 2026-04-30 (user reported "Holdings Treemap is blank"): with
@@ -7624,12 +7628,16 @@ function riskDecompTree(s,factorRisk,idioRisk){
   });
   if(other.length)grpMap.other=other;
   let grpLabels={valGrowth:'Value / Growth',mktBehavior:'Market Behavior',profitability:'Profitability',secondary:'Secondary',other:'Other'};
+  // Same _escHtml pattern as the idio leaves below (F6 fix). Factor names
+  // are FactSet-controlled so unlikely to contain HTML chars, but defense in
+  // depth — the cost is one function call per leaf.
+  const _escFac = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   let facKids=Object.entries(grpMap).filter(([,facs])=>facs.length).map(([grp,facs])=>{
     let grpC=facs.reduce((a,f)=>a+Math.abs(f.c||0),0);
     let kids=facs.sort((a,b)=>Math.abs(b.c||0)-Math.abs(a.c||0)).map((f,i)=>
-      mkNode('dt_f_'+grp+'_'+i,f.n,fp(f.a,2)+' exp',Math.abs(f.c||0),'#818cf8',null)
+      mkNode('dt_f_'+grp+'_'+i,_escFac(f.n),fp(f.a,2)+' exp',Math.abs(f.c||0),'#818cf8',null)
     );
-    return mkNode('dt_g_'+grp,grpLabels[grp]||grp,f2(grpC,1)+'%',grpC,'#6366f1',kids);
+    return mkNode('dt_g_'+grp,_escFac(grpLabels[grp]||grp),f2(grpC,1)+'%',grpC,'#6366f1',kids);
   });
   // D1 fix (audit 2026-05-04, cardRiskDecomp T1 RED) \u2014 top-7 idio holdings'
   // %T values are F18-contaminated (per-holding %T sums 94\u2192134%, NOT 100%
@@ -7639,10 +7647,15 @@ function riskDecompTree(s,factorRisk,idioRisk){
   // PM-gate (audit D8): proper remediation is to swap idio sub-tree to
   // sector-MCR breakdown (L2-verified). Footer disclosure ships now;
   // remediation queued.
+  // F6 fix (audit cardRiskDecomp 2026-05-04): esc wrap on h.n + h.t before
+  // concatenation into HTML. Holding names from FactSet rarely contain HTML
+  // chars but it's a real injection vector if a future export ever does.
+  // Defensive 4-char-replace pattern (same as the apos-escape used elsewhere).
+  const _escHtml = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   let topH=[...s.hold].filter(h=>!isCash(h)&&h.tr!=null).sort((a,b)=>Math.abs(b.tr||0)-Math.abs(a.tr||0)).slice(0,7);
   let idioSumTop7=topH.reduce((acc,h)=>acc+Math.abs(h.tr||0),0);
   let idioKids=topH.map((h,i)=>{
-    const lbl=(h.t||'?')+' \u2014 '+(h.n||'').slice(0,25);
+    const lbl=_escHtml(h.t||'?')+' \u2014 '+_escHtml((h.n||'').slice(0,25));
     const valTxt=f2(h.tr,2)+'%<sup style="color:var(--warn);font-size:9px" title="Per-holding %T from FactSet \u2014 F18-contaminated (sum across portfolio = 94\u2192134% across the 6 strategies, not 100% per CLAUDE.md). Per-row value is correct; the contamination shows up only when summed.">\u1d49</sup>';
     return mkNode('dt_h_'+i,lbl,valTxt,Math.min(Math.abs(h.tr||0)*10,100),'#f59e0b',null);
   });

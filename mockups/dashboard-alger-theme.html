@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RR — Alger Theme Preview (mockup)</title>
+<meta name="description" content="Static mockup of how the Redwood Risk Control Panel would look in Alger's brand palette. Not connected to live data — sample numbers throughout.">
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<style>
+:root{
+  /* ── Alger brand tokens (extracted from alger.com on 2026-05-05) ── */
+  --navy: #002B54;          /* Primary — headers, axis labels, brand */
+  --blue: #136CAF;          /* Primary CTA / link / chart series 1 */
+  --light-blue: #4FA3DF;    /* Accent / chart series 2 / hover */
+  --green: #41834F;         /* Positive / gain */
+  --red: #A32F2F;           /* Negative / loss */
+  --orange: #C64C31;        /* Accent (alerts, factor warmth) */
+  --purple: #712F7E;        /* Accent (factor cool side) */
+  --bg: #FFFFFF;
+  --panel: #F9F9F9;
+  --panel-border: #E5E8EC;
+  --text: #2A3441;          /* Slightly softer than Alger's #333 for screens */
+  --text-muted: #717073;
+  --text-subtle: #94A3B8;
+  --grid: rgba(148,163,184,0.16);
+  --tile-shadow: 0 1px 3px rgba(0,43,84,0.06), 0 4px 16px rgba(0,43,84,0.04);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family: "Benton Sans", "Helvetica Neue", "Helvetica", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern" 1, "liga" 1, "tnum" 1;
+}
+.mockup-banner{
+  background: linear-gradient(135deg, #FFF7E6 0%, #FFEDC2 100%);
+  color: #92560E;
+  padding: 8px 18px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-align: center;
+  border-bottom: 1px solid #E5C97D;
+}
+.mockup-banner b{color: #5C3A0A}
+
+/* ── Header ── */
+.header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding: 14px 24px;
+  background: var(--bg);
+  border-bottom: 2px solid var(--navy);
+}
+.brand{
+  display:flex;
+  align-items:center;
+  gap: 16px;
+}
+.brand-logo-alger{
+  height: 26px;
+  width: auto;
+  /* native navy displays cleanly on white */
+}
+.brand-divider{
+  width: 1px;
+  height: 32px;
+  background: var(--panel-border);
+}
+.brand-redwood-wrap{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.brand-redwood-bar{
+  width: 4px;
+  height: 30px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--blue), var(--light-blue));
+}
+.brand-redwood-stack{
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+  line-height:1;
+}
+.brand-redwood-logo{
+  height: 24px;
+  width: auto;
+  /* SVG is white-fill; need to invert to navy for white background */
+  filter: invert(13%) sepia(75%) saturate(2293%) hue-rotate(196deg) brightness(91%) contrast(101%);
+}
+.brand-tagline{
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 2.4px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.header-controls{
+  display:flex;
+  align-items:center;
+  gap: 16px;
+}
+.strategy-pill{
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--navy);
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  cursor: pointer;
+}
+.strategy-pill::after{
+  content: "▾";
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.universe-group{
+  display:flex;
+  align-items:center;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 4px;
+}
+.universe-label{
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  margin: 0 6px 0 4px;
+}
+.universe-pill{
+  background: transparent;
+  border: 0;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.universe-pill.active{
+  background: var(--blue);
+  color: white;
+}
+.week-selector{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.week-selector .chev{
+  cursor:pointer;
+  padding: 2px 6px;
+  color: var(--blue);
+  font-weight: 700;
+}
+.week-selector .date{
+  color: var(--navy);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Layout ── */
+.container{padding: 20px 24px}
+.tab-strip{
+  display:flex;
+  gap: 0;
+  border-bottom: 1px solid var(--panel-border);
+  margin-bottom: 18px;
+}
+.tab{
+  padding: 10px 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  letter-spacing: 0.3px;
+}
+.tab.active{
+  color: var(--navy);
+  border-bottom-color: var(--blue);
+}
+.tab .count{
+  font-size: 10px;
+  color: var(--text-subtle);
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* ── Tile chrome ── */
+.tile-row{
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.tile-row.cols-3{grid-template-columns: 1.4fr 1fr 1fr}
+.tile-row.cols-2{grid-template-columns: 2fr 1fr}
+.tile{
+  background: var(--bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  box-shadow: var(--tile-shadow);
+}
+.tile-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  margin-bottom: 10px;
+  gap: 10px;
+}
+.tile-title{
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: 0.2px;
+  margin: 0;
+}
+.tile-subtitle{
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-weight: 500;
+}
+.tile-actions{
+  display:flex;
+  gap: 4px;
+}
+.tile-btn{
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 4px;
+  padding: 3px 7px;
+  font-size: 10px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-weight: 600;
+}
+.tile-btn:hover{
+  background: var(--panel);
+  color: var(--navy);
+  border-color: var(--blue);
+}
+
+/* ── KPI strip (cardThisWeek-style) ── */
+.kpi-strip{
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.kpi-card{
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  border-bottom: 3px solid var(--blue);
+}
+.kpi-card.idio{border-bottom-color: var(--purple)}
+.kpi-card.beta{border-bottom-color: var(--orange)}
+.kpi-card.holdings{border-bottom-color: var(--text-muted)}
+.kpi-label{
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.kpi-value{
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--navy);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.kpi-delta{
+  font-size: 11px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.kpi-delta.up{color: var(--red)}     /* TE going up = bad for risk */
+.kpi-delta.down{color: var(--green)} /* TE going down = good */
+.kpi-delta.neutral{color: var(--text-muted)}
+
+/* ── Tables (cardTop10-style) ── */
+.tbl{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.tbl th{
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 2px solid var(--panel-border);
+  background: var(--panel);
+}
+.tbl th.r{text-align: right}
+.tbl td{
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--panel-border);
+  color: var(--text);
+}
+.tbl td.r{text-align: right; font-variant-numeric: tabular-nums; font-family: "Roboto Mono", "JetBrains Mono", "Menlo", monospace; font-size: 11.5px}
+.tbl tr:hover{background: rgba(19,108,175,0.04)}
+.tbl tr:last-child td{border-bottom: 0}
+.ticker{
+  font-family: "Roboto Mono", "JetBrains Mono", "Menlo", monospace;
+  color: var(--navy);
+  font-weight: 700;
+  font-size: 11px;
+}
+.pos{color: var(--green)}
+.neg{color: var(--red)}
+
+/* ── Footer ── */
+.footer{
+  margin: 30px 24px 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--panel-border);
+  font-size: 10px;
+  color: var(--text-muted);
+  display:flex;
+  justify-content: space-between;
+  align-items:center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.footer-brand{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.footer-brand .name{
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--navy);
+}
+.footer-brand .sep{opacity: 0.5}
+.footer-brand a{
+  color: var(--blue);
+  text-decoration: none;
+  font-weight: 600;
+}
+.footer-status{
+  display:flex;
+  align-items:center;
+  gap: 6px;
+  color: var(--text);
+}
+.footer-pulse{
+  display:inline-block;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  background: var(--green);
+}
+.footer-tagline{
+  font-style: italic;
+  color: var(--text-subtle);
+  font-size: 10px;
+  margin-top: 4px;
+}
+
+/* ── Disclosure footers (the F18 pattern in Alger styling) ── */
+.disclosure{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--panel-border);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.disclosure .marker{color: var(--orange); font-weight: 700}
+
+/* Series legend dot */
+.dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align: middle}
+.dot.blue{background: var(--blue)}
+.dot.lightblue{background: var(--light-blue)}
+.dot.green{background: var(--green)}
+.dot.gray{background: var(--text-muted)}
+.dot.orange{background: var(--orange)}
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">
+  <b>MOCKUP — Alger theme preview.</b>
+  Sample data, not live. Compare side-by-side with the real dashboard at
+  <a href="../dashboard_v7.html" style="color:#5C3A0A;font-weight:700">dashboard_v7.html</a> (dark theme).
+</div>
+
+<!-- ── Header ── -->
+<div class="header">
+  <div class="brand">
+    <a href="https://www.alger.com" target="_blank" rel="noopener" title="Fred Alger Management — parent firm">
+      <img class="brand-logo-alger" src="../assets/logos/alger.png" alt="Alger">
+    </a>
+    <div class="brand-divider"></div>
+    <div class="brand-redwood-wrap">
+      <div class="brand-redwood-bar"></div>
+      <div class="brand-redwood-stack">
+        <a href="https://www.redwoodinv.com" target="_blank" rel="noopener" title="Redwood Investments — sub-advisor for Alger international growth equity">
+          <img class="brand-redwood-logo" src="../assets/logos/redwood-investments.svg" alt="Redwood Investments">
+        </a>
+        <span class="brand-tagline">Risk Control Panel</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="header-controls">
+    <div class="week-selector" title="Week selector">
+      <span class="chev">‹</span>
+      <span class="date">2026-04-30</span>
+      <span class="chev">›</span>
+    </div>
+    <div class="universe-group">
+      <span class="universe-label">Universe</span>
+      <button class="universe-pill active">Port-Held</button>
+      <button class="universe-pill">In Bench</button>
+      <button class="universe-pill">All</button>
+    </div>
+    <div class="strategy-pill">
+      GSC <span style="color:var(--text-subtle); font-weight:500;font-size:10px">· Global Small Cap</span>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ── Tab strip ── -->
+  <div class="tab-strip">
+    <div class="tab active">Overview</div>
+    <div class="tab">Exposures</div>
+    <div class="tab">Risk</div>
+    <div class="tab">Holdings <span class="count">1,002</span></div>
+  </div>
+
+  <!-- ── Row 1: KPI strip ── -->
+  <div class="tile" style="margin-bottom:14px">
+    <div class="tile-header">
+      <div>
+        <h3 class="tile-title">This Week</h3>
+        <div class="tile-subtitle">Latest weekly snapshot · 2026-04-30</div>
+      </div>
+      <div class="tile-actions">
+        <button class="tile-btn">ⓘ About</button>
+        <button class="tile-btn">⬇ Export</button>
+        <button class="tile-btn">⛶ Full</button>
+      </div>
+    </div>
+    <div class="kpi-strip">
+      <div class="kpi-card">
+        <div class="kpi-label">Tracking Error</div>
+        <div class="kpi-value">6.98<span style="font-size:14px;color:var(--text-muted)">%</span></div>
+        <div class="kpi-delta up">▲ +0.18 vs prior week</div>
+      </div>
+      <div class="kpi-card idio">
+        <div class="kpi-label">Active Share</div>
+        <div class="kpi-value">98.0<span style="font-size:14px;color:var(--text-muted)">%</span></div>
+        <div class="kpi-delta neutral">— flat</div>
+      </div>
+      <div class="kpi-card beta">
+        <div class="kpi-label">Predicted Beta</div>
+        <div class="kpi-value">1.02</div>
+        <div class="kpi-delta down">▼ −0.01 vs prior</div>
+      </div>
+      <div class="kpi-card holdings">
+        <div class="kpi-label">Holdings</div>
+        <div class="kpi-value">48</div>
+        <div class="kpi-delta neutral">— stable</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Row 2: TE decomposition (chart) + factor contributions ── -->
+  <div class="tile-row cols-2">
+    <div class="tile">
+      <div class="tile-header">
+        <div>
+          <h3 class="tile-title">Tracking Error — Decomposition Over Time</h3>
+          <div class="tile-subtitle">Stock-Specific (light blue) + Factor (navy) = Total TE · 526 wk · since 2016-04-08</div>
+        </div>
+        <div class="tile-actions">
+          <button class="tile-btn">⬇</button>
+          <button class="tile-btn">⛶</button>
+        </div>
+      </div>
+      <div id="teStackedDiv" style="height: 280px;"></div>
+      <div class="disclosure">
+        Universe pill does not affect this tile (TE is portfolio-level, universe-invariant) ·
+        <span class="marker">●</span> 526 wks MCR-derived <span class="marker" title="ᵉ marker — derived value">ᵉ</span> · per-week pct_specific from sector-MCR aggregation (L2-verified).
+      </div>
+    </div>
+
+    <div class="tile">
+      <div class="tile-header">
+        <div>
+          <h3 class="tile-title">Factor Contributions</h3>
+          <div class="tile-subtitle">Top per-factor TE contribution · ranked by |%|</div>
+        </div>
+        <div class="tile-actions">
+          <button class="tile-btn">⬇</button>
+        </div>
+      </div>
+      <div id="facBarsDiv" style="height: 280px;"></div>
+    </div>
+  </div>
+
+  <!-- ── Row 3: Top 10 holdings + correlation heatmap ── -->
+  <div class="tile-row cols-2">
+    <div class="tile">
+      <div class="tile-header">
+        <div>
+          <h3 class="tile-title">Top 10 Holdings</h3>
+          <div class="tile-subtitle">By portfolio weight · click to drill</div>
+        </div>
+        <div class="tile-actions">
+          <button class="tile-btn">⬇ CSV</button>
+        </div>
+      </div>
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Name</th>
+            <th>Sector</th>
+            <th class="r">Port %</th>
+            <th class="r">Active</th>
+            <th class="r">TE Contrib</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="ticker">2057-HK</span></td><td>ZTO Express</td><td>Industrials</td><td class="r">3.84</td><td class="r pos">+3.75</td><td class="r">+10.00</td></tr>
+          <tr><td><span class="ticker">SHOP</span></td><td>Shopify Class A</td><td>Info Technology</td><td class="r">3.62</td><td class="r pos">+3.49</td><td class="r">+8.40</td></tr>
+          <tr><td><span class="ticker">NVDA</span></td><td>NVIDIA Corporation</td><td>Info Technology</td><td class="r">3.41</td><td class="r pos">+1.85</td><td class="r">+5.20</td></tr>
+          <tr><td><span class="ticker">CRWD</span></td><td>CrowdStrike Holdings A</td><td>Info Technology</td><td class="r">3.17</td><td class="r pos">+3.00</td><td class="r">+4.10</td></tr>
+          <tr><td><span class="ticker">SNOW</span></td><td>Snowflake Class A</td><td>Info Technology</td><td class="r">2.94</td><td class="r pos">+2.71</td><td class="r">+3.85</td></tr>
+          <tr><td><span class="ticker">MELI</span></td><td>MercadoLibre</td><td>Cons Discretionary</td><td class="r">2.81</td><td class="r pos">+2.69</td><td class="r">+3.20</td></tr>
+          <tr><td><span class="ticker">FERG</span></td><td>Ferguson Enterprises</td><td>Industrials</td><td class="r">2.69</td><td class="r pos">+2.40</td><td class="r">+2.40</td></tr>
+          <tr><td><span class="ticker">DECK</span></td><td>Deckers Outdoor</td><td>Cons Discretionary</td><td class="r">2.55</td><td class="r pos">+2.45</td><td class="r">+1.95</td></tr>
+          <tr><td><span class="ticker">ANET</span></td><td>Arista Networks</td><td>Info Technology</td><td class="r">2.42</td><td class="r pos">+1.20</td><td class="r">+1.60</td></tr>
+          <tr><td><span class="ticker">PYPL</span></td><td>PayPal Holdings</td><td>Financials</td><td class="r">2.31</td><td class="r neg">−0.40</td><td class="r neg">−0.30</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="tile">
+      <div class="tile-header">
+        <div>
+          <h3 class="tile-title">Factor Correlation Matrix</h3>
+          <div class="tile-subtitle">Pearson · 1Y · monthly · 12 buckets</div>
+        </div>
+        <div class="tile-actions">
+          <select style="background:var(--panel);border:1px solid var(--panel-border);font-size:10px;padding:3px 6px;border-radius:4px;color:var(--navy);font-weight:600">
+            <option>1Y</option><option>3Y</option><option>All</option>
+          </select>
+        </div>
+      </div>
+      <div id="corrHeatDiv" style="height: 280px"></div>
+      <div class="disclosure">
+        Active-exposure correlations are universe-invariant — flipping the Universe pill does not change this matrix.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Footer ── -->
+<div class="footer">
+  <div class="footer-brand">
+    <span class="name">Redwood Risk · Control Panel</span>
+    <span class="sep">·</span>
+    <span>Parser 3.1.1 · Format 4.3</span>
+    <span class="sep">·</span>
+    <a href="#">Changelog ↗</a>
+    <span class="sep">·</span>
+    <a href="#">PM onboarding ↗</a>
+  </div>
+  <div class="footer-status">
+    <span style="color:var(--text-muted)">Data through 2026-04-30 · ingested 2026-05-05</span>
+    <span class="footer-pulse" title="Layer-2 integrity monitor: green"></span>
+    <span style="font-weight:600">Live</span>
+  </div>
+</div>
+<div style="text-align:center;font-size:10px;color:var(--text-subtle);font-style:italic;padding:0 24px 24px">
+  Sub-advised by Redwood Investments · Inspired by Change. Driven by Growth.
+</div>
+
+<script>
+// ── Plotly charts in Alger palette ──
+const ALGER = {
+  navy: '#002B54',
+  blue: '#136CAF',
+  lightBlue: '#4FA3DF',
+  green: '#41834F',
+  red: '#A32F2F',
+  orange: '#C64C31',
+  purple: '#712F7E',
+  gray: '#717073',
+  bg: '#FFFFFF',
+  panel: '#F9F9F9',
+  text: '#2A3441',
+  textMuted: '#717073',
+  grid: 'rgba(148,163,184,0.16)'
+};
+
+const algerLayout = {
+  paper_bgcolor: ALGER.bg,
+  plot_bgcolor: ALGER.bg,
+  font: {family: '"Benton Sans", "Helvetica Neue", Arial, sans-serif', color: ALGER.text, size: 11},
+  margin: {l: 50, r: 18, t: 8, b: 36},
+  showlegend: false,
+  xaxis: {
+    gridcolor: ALGER.grid,
+    zeroline: false,
+    tickfont: {size: 10, color: ALGER.textMuted},
+    tickformat: '%b %y'
+  },
+  yaxis: {
+    gridcolor: ALGER.grid,
+    zeroline: true, zerolinecolor: ALGER.gray, zerolinewidth: 1,
+    tickfont: {size: 10, color: ALGER.textMuted},
+    title: {text: 'TE (pp)', font: {size: 10, color: ALGER.navy}}
+  }
+};
+
+// Generate sample TE history (526 weeks of GSC-like data)
+function teHistorySample(){
+  const n = 526;
+  const dates = [];
+  const idio = [];
+  const factor = [];
+  const total = [];
+  const start = new Date('2016-04-08');
+  let baseTE = 5.5;
+  let idioFrac = 0.7;
+  for(let i = 0; i < n; i++){
+    const d = new Date(start.getTime() + i * 7 * 24 * 60 * 60 * 1000);
+    dates.push(d.toISOString().slice(0,10));
+    // Drift TE around 5-7 with noise + a 2020-era spike
+    const ageY = i / 52;
+    const t = 5.5 + Math.sin(ageY * 0.8) * 0.6 + (Math.random() - 0.5) * 0.4;
+    const spike = Math.exp(-((i - 200) ** 2) / 600) * 1.5;
+    const te = Math.max(3, t + spike);
+    const idioPct = 0.6 + Math.sin(ageY * 0.5) * 0.1 + (Math.random() - 0.5) * 0.05;
+    idio.push(+(te * idioPct).toFixed(2));
+    factor.push(+(te * (1 - idioPct)).toFixed(2));
+    total.push(+te.toFixed(2));
+  }
+  return {dates, idio, factor, total};
+}
+
+const sample = teHistorySample();
+Plotly.newPlot('teStackedDiv', [
+  {x: sample.dates, y: sample.idio, name: 'Stock-Specific', type: 'scatter', mode: 'lines',
+    fill: 'tozeroy', fillcolor: 'rgba(79, 163, 223, 0.32)', line: {color: ALGER.lightBlue, width: 1},
+    stackgroup: 'te', hovertemplate: 'Stock-Specific: %{y:.2f} pp<extra></extra>'},
+  {x: sample.dates, y: sample.factor, name: 'Factor', type: 'scatter', mode: 'lines',
+    fill: 'tonexty', fillcolor: 'rgba(0, 43, 84, 0.32)', line: {color: ALGER.navy, width: 1},
+    stackgroup: 'te', hovertemplate: 'Factor: %{y:.2f} pp<extra></extra>'},
+  {x: sample.dates, y: sample.total, name: 'Total TE', type: 'scatter', mode: 'lines',
+    line: {color: ALGER.blue, width: 2.5}, fill: 'none',
+    hovertemplate: '%{x|%b %d %Y} — Total TE: %{y:.2f} pp<extra></extra>'}
+], {
+  ...algerLayout,
+  xaxis: {...algerLayout.xaxis, rangeslider: {visible: true, bgcolor: ALGER.panel, bordercolor: ALGER.blue, borderwidth: 1, thickness: 0.06}, nticks: 8},
+  hovermode: 'x unified',
+  showlegend: true,
+  legend: {orientation: 'h', y: 1.08, font: {size: 10, color: ALGER.text}}
+}, {displayModeBar: false, responsive: true});
+
+// ── Factor bars ──
+const facData = [
+  {n: 'Volatility', c: 4.2, dir: 'pos'},
+  {n: 'Growth', c: 3.4, dir: 'pos'},
+  {n: 'Momentum', c: 2.1, dir: 'pos'},
+  {n: 'Value', c: 1.6, dir: 'pos'},
+  {n: 'Earnings Yield', c: 0.9, dir: 'pos'},
+  {n: 'Size', c: 0.7, dir: 'pos'},
+  {n: 'Liquidity', c: 0.5, dir: 'pos'},
+  {n: 'Profitability', c: -0.4, dir: 'neg'},
+  {n: 'Leverage', c: -0.6, dir: 'neg'},
+  {n: 'Dividend Yield', c: -1.1, dir: 'neg'}
+].sort((a,b) => b.c - a.c);
+
+const facColors = facData.map(f => f.dir === 'pos' ? ALGER.blue : ALGER.green);
+
+Plotly.newPlot('facBarsDiv', [{
+  type: 'bar', orientation: 'h',
+  x: facData.map(f => f.c), y: facData.map(f => f.n),
+  marker: {color: facColors, line: {color: ALGER.bg, width: 1}},
+  text: facData.map(f => (f.c >= 0 ? '+' : '') + f.c.toFixed(1) + '%'),
+  textposition: 'outside',
+  textfont: {size: 10, color: ALGER.navy, family: '"Benton Sans", Helvetica, sans-serif'},
+  hovertemplate: '%{y}: %{x:.1f}% of TE<extra></extra>'
+}], {
+  ...algerLayout,
+  margin: {l: 130, r: 60, t: 8, b: 30},
+  xaxis: {...algerLayout.xaxis, ticksuffix: '%', tickformat: '+.1f', title: null},
+  yaxis: {...algerLayout.yaxis, autorange: 'reversed', title: null}
+}, {displayModeBar: false, responsive: true});
+
+// ── Correlation heatmap ──
+const facShort = ['Mom','Val','Gro','Prof','Size','Vol','DivY','EarnY','Lev','Liq','MktSens','FXSens'];
+// Generate a plausible correlation matrix (symmetric, ones on diagonal, values in [-0.6, 0.85])
+function corrMatrix(n){
+  const m = [];
+  // Seeded pseudo-random for reproducibility
+  let seed = 1;
+  const rand = () => {seed = (seed * 9301 + 49297) % 233280; return seed / 233280;};
+  for(let i = 0; i < n; i++){
+    const row = [];
+    for(let j = 0; j < n; j++){
+      if(i === j) row.push(1.0);
+      else if(j > i){
+        const v = +(rand() * 1.4 - 0.6).toFixed(2); // [-0.6, 0.8]
+        row.push(v);
+      } else row.push(m[j][i]);
+    }
+    m.push(row);
+  }
+  return m;
+}
+const cm = corrMatrix(facShort.length);
+// Custom colorscale using Alger reds and blues, white at zero
+const algerCorrScale = [
+  [0.0, ALGER.red],
+  [0.3, '#D88787'],
+  [0.5, '#FFFFFF'],
+  [0.7, ALGER.lightBlue],
+  [1.0, ALGER.navy]
+];
+Plotly.newPlot('corrHeatDiv', [{
+  type: 'heatmap',
+  z: cm, x: facShort, y: facShort,
+  colorscale: algerCorrScale,
+  zmin: -0.6, zmax: 0.85,
+  showscale: false,
+  hovertemplate: '%{y} × %{x}: %{z:.2f}<extra></extra>',
+  xgap: 1, ygap: 1
+}], {
+  ...algerLayout,
+  margin: {l: 60, r: 8, t: 8, b: 60},
+  xaxis: {...algerLayout.xaxis, tickfont: {size: 9, color: ALGER.textMuted}, tickangle: -45},
+  yaxis: {...algerLayout.yaxis, autorange: 'reversed', tickfont: {size: 9, color: ALGER.textMuted}, title: null}
+}, {displayModeBar: false, responsive: true});
+</script>
+
+</body>
+</html>

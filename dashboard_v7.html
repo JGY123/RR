@@ -1292,9 +1292,9 @@ const _ABOUT_REG={
     title:'Holdings Risk Snapshot',
     what:'Per-holding sibling of the Factor Risk Snapshot. Quadrant scatter — every equity holding placed by active weight (x) vs TE contribution (y), bubble sized by stock-specific TE (|MCR|, the idio component). Color = adds risk vs diversifies. Top-right cluster = high-conviction OW bets that drive risk; bottom-right = OW positions that paradoxically diversify (good); top-left = UW where the absence still costs you (the unowned-risk story).',
     how:'x = h.a (active weight = port − bench). y = h.tr (FactSet %T, total TE contribution, signed). Bubble area ∝ |h.mcr| (FactSet %S, the stock-specific component of that holding\'s TE). Color = sign of h.tr (red = adds risk, green = diversifies).',
-    source:'cs.hold[] (FactSet "Security" section). All four encodings — x/y/size/color — come from primitive FactSet fields, no derived values.',
-    caveats:'Latest snapshot only — no period dimension at the holding level (B114 backlog). Bench-only holdings show with negative active weight; if their TE contribution is also small, they cluster near the origin. Bubble size is per-holding idio TE — different from cardFacRisk where bubble is per-factor σ.',
-    related:'cardFacRisk (per-factor sibling) · cardHoldings · TE drill modal'
+    source:'cs.hold[] (FactSet Security section). All four encodings — x/y/size/color — come from primitive FactSet fields, no derived values. F18-clean per-row: each dot is one h.tr; no Σ shown on this tile (cardRiskByDim is the per-bucket aggregator with the F18 footer).',
+    caveats:'Latest snapshot only — no period dimension at the holding level (B114 backlog). When viewing a historical week via the global selector, this tile continues to show the latest-week scatter (holdings detail layer is latest-only per ARCHITECTURE §3.4). Universe pill (Port-Held / In Bench / All) does NOT filter this tile — by construction the scatter is the union (port-held shows positive active, bench-only shows negative active; both meaningful). Bubble size is per-holding idio TE — different from cardFacRisk where bubble is per-factor σ.',
+    related:'cardFacRisk (per-factor sibling) · cardHoldings · cardRiskByDim (the F18-aware per-bucket aggregator) · TE drill modal'
   },
   cardCashHist:{
     title:'Cash Weight Over Time',
@@ -7618,6 +7618,10 @@ function riskDecompTree(s,factorRisk,idioRisk){
       '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--grid);margin-bottom:8px">'+
         '<span style="font-size:13px;font-weight:700;color:var(--txth)">Total Risk (TE)</span>'+
         '<span style="font-size:20px;font-weight:700;color:'+(te>7?'var(--neg)':te>5?'var(--warn)':'var(--txth)')+'">'+f2(te,2)+'%</span>'+
+        // F1 fix (audit cardRiskDecomp 2026-05-04): count badge surfacing
+        // tree breadth. Shows N factors decomposed + M idio holdings shown so
+        // user knows what's covered without expanding every node.
+        '<span style="font-size:10px;color:var(--textDim);margin-left:auto">'+s.factors.length+' factors · top '+topH.length+' idio holdings</span>'+
       '</div>'+
       factorNode+idioNode+
     '</div>'+

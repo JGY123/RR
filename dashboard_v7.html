@@ -609,6 +609,10 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
 #weekSelWrap select option{background:var(--card);color:var(--txth)}
 /* 2026-05-01 polish: cleaner historical-week banner with subtle gradient */
 .week-hist-banner{background:linear-gradient(180deg,rgba(245,158,11,.10),rgba(245,158,11,.05));border:1px solid rgba(245,158,11,.22);border-radius:8px;padding:8px 14px;font-size:11px;color:var(--warn);display:flex;align-items:center;gap:10px;margin-bottom:14px;font-weight:500}
+/* 2026-05-06 (WEEK_SELECTOR_AUDIT.md fix): per-tile pill on Category B tiles
+   that cannot legitimately follow the week selector. Reuses the amber palette
+   so it visually pairs with the week-hist-banner. */
+.latest-only-pill{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;padding:2px 7px;border-radius:999px;background:rgba(245,158,11,.12);color:var(--warn);border:1px solid rgba(245,158,11,.30);margin-left:8px;cursor:help;white-space:nowrap}
 /* Range buttons for time series charts — 2026-05-01 polish: tighter pill group */
 .range-btns{display:inline-flex;gap:0;margin-bottom:8px;background:var(--bg);border:1px solid var(--cardBorder);border-radius:6px;padding:2px;overflow:hidden}
 .range-btn{padding:3px 10px;background:transparent;border:none;color:var(--textDim);border-radius:4px;cursor:pointer;font-size:11px;font-family:inherit;font-weight:500;transition:all .15s;letter-spacing:0.3px}
@@ -2545,6 +2549,18 @@ function weekBannerHtml(){
   return`<div class="week-hist-banner">&#9432;&nbsp; Viewing week of <strong>${label}</strong> — summary metrics only. <a href="#" style="color:var(--warn);margin-left:4px" onclick="event.preventDefault();jumpToLatest()">Jump to latest</a> for full detail.</div>`;
 }
 
+// 2026-05-06 (WEEK_SELECTOR_AUDIT.md fix): per-tile signal that this tile's
+// values can NOT follow the week selector (per-holding factor_contr / tr /
+// ranks live latest-only by data architecture — see CLAUDE.md §"Two-Layer
+// History Architecture"). Rendered next to tile titles in Category B tiles
+// (cardHoldings, cardRiskByDim, cardScat, cardTreemap, cardTop10, cardRanks,
+// cardRankDist, cardHoldConc, cardUnowned, cardHoldRisk, cardWatchlist).
+// Shows nothing on latest week — only fires when _selectedWeek is set.
+function latestOnlyPill(){
+  if(!_selectedWeek)return'';
+  return`<span class="latest-only-pill" title="This tile shows latest holdings — historical per-holding data is not shipped (the dashboard's two-layer architecture keeps holdings detail latest-only to avoid 50GB+ JSONs). Sectors / regions / countries / factors / TE / etc. above DO follow the week selector.">Latest holdings</span>`;
+}
+
 // ===== TAB BADGES =====
 function updateTabBadges(){
   let s=cs;
@@ -3311,7 +3327,7 @@ function rExp(){
   <div class="card" id="cardRanks" style="margin-bottom:16px">
     <div class="flex-between" style="flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio / Benchmark / Both with the global Universe pill in the header. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>
+        <div class="card-title tip" data-tip="Holdings bucketed by quintile (1=best, 5=worst). Switch the active rank with the pill toggle (Overall/Rev/Val/Qual). Per-quintile factor-contribution columns sum from h.factor_contr. Toggle Portfolio / Benchmark / Both with the global Universe pill in the header. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRanks');return false">Spotlight <span id="rnkByLabel" style="font-size:10px;color:var(--textDim);font-weight:400;margin-left:8px"></span></div>${latestOnlyPill()}
         ${aboutBtn('cardRanks')}
         <span class="section-label" style="margin-left:8px">Rank</span>
         <button class="pill" id="rnk-pill-over" onclick="setRanksBy('over')">Overall</button>
@@ -3344,7 +3360,7 @@ function rExp(){
   <!-- Row 7: Treemap (full width) -->
   <div>
     <div class="card" id="cardTreemap">
-      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div></div>${tileChromeStrip({id:'cardTreemap',about:true,fullscreen:"openTileFullscreen('cardTreemap')",resetView:true,hide:true})}</div>
+      <div class="flex-between" style="flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Treemap of holdings. Group-by changes the bucket. Size changes the rectangle sizing metric. Color changes the fill semantic. Click a bucket to drill into its holdings." oncontextmenu="showNotePopup(event,'cardTreemap');return false">Holdings Treemap</div>${latestOnlyPill()}</div>${tileChromeStrip({id:'cardTreemap',about:true,fullscreen:"openTileFullscreen('cardTreemap')",resetView:true,hide:true})}</div>
       <div id="treeToolbar" style="display:flex;flex-wrap:wrap;gap:10px;margin:2px 0 8px;font-size:10px;align-items:center">
         <div style="display:flex;align-items:center;gap:4px"><span style="color:var(--txt);text-transform:uppercase;letter-spacing:0.3px">Group</span>
           <div class="toggle-wrap" style="margin:0" id="treeDimWrap"><button class="toggle-btn active" data-dim="sec" onclick="setTreeDim('sec')" style="padding:1px 6px;font-size:9px">Sector</button><button class="toggle-btn" data-dim="co" onclick="setTreeDim('co')" style="padding:1px 6px;font-size:9px">Country</button><button class="toggle-btn" data-dim="grp" onclick="setTreeDim('grp')" style="padding:1px 6px;font-size:9px">Group</button><button class="toggle-btn" data-dim="rank" onclick="setTreeDim('rank')" style="padding:1px 6px;font-size:9px">Rank</button></div></div>
@@ -3382,7 +3398,7 @@ function rExp(){
 
   <!-- Row 10: Unowned Risk Contributors -->
   <div class="card" id="cardUnowned">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div></div>${tileChromeStrip({id:'cardUnowned',about:true,csv:"exportCSV('#cardUnowned table','unowned_risk')",fullscreen:"openTileFullscreen('cardUnowned')",resetView:true,hide:true})}</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Benchmark stocks not held that contribute most to tracking error. Click for detail. Right-click for notes." oncontextmenu="showNotePopup(event,'cardUnowned');return false">Unowned Risk Contributors</div>${latestOnlyPill()}</div>${tileChromeStrip({id:'cardUnowned',about:true,csv:"exportCSV('#cardUnowned table','unowned_risk')",fullscreen:"openTileFullscreen('cardUnowned')",resetView:true,hide:true})}</div>
     ${rUnowned(_unownedFromHold(s))}
   </div>
 
@@ -8165,7 +8181,7 @@ function rRisk(){
   <div class="card" id="cardRiskByDim" style="margin-bottom:16px">
     <div class="flex-between" style="margin-bottom:6px;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-        <div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension</div>
+        <div class="card-title tip" data-tip="Tracking error contribution decomposed by Country / Currency / Industry. Each bar is the sum of holdings' %T in that bucket. Click a bar to drill into the contributing securities. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRiskByDim');return false" style="margin:0">Risk by Dimension</div>${latestOnlyPill()}
         ${aboutBtn('cardRiskByDim')}
         <span id="riskByDimLabel" style="font-size:10px;color:var(--textDim);font-weight:400"></span>
       </div>
@@ -9441,7 +9457,7 @@ function watchlistCardHtml(s){
     return `<div style="margin-top:8px"><div class="section-label" style="color:${col};margin-bottom:2px;padding:0 6px">${icon} ${g.label} (${arr.length})</div><table id="${tblId}" style="width:100%;font-size:11px;border-collapse:collapse"><thead><tr><th data-col="flag" style="width:22px"></th><th data-col="t" class="tip" data-tip="Ticker symbol" onclick="sortTbl('${tblId}',1)">Ticker</th><th data-col="n" class="tip" data-tip="Security name" onclick="sortTbl('${tblId}',2)">Name</th><th data-col="p" class="r tip" data-tip="Portfolio weight %" onclick="sortTbl('${tblId}',3)">Port %</th><th data-col="a" class="r tip" data-tip="Active weight vs benchmark %" onclick="sortTbl('${tblId}',4)">Active %</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   }).join('');
   return `<div class="card" id="cardWatchlist" style="margin-bottom:16px">
-    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div></div>${tileChromeStrip({id:'cardWatchlist',about:true,csv:`exportWatchlistCsv('${s.id}')`,fullscreen:"openTileFullscreen('cardWatchlist')",resetView:true,hide:true})}</div>
+    <div class="flex-between"><div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="User-curated watchlist. Click \u2691 on any holding row to cycle Watch/Reduce/Add. Rows grey out if the PM has exited the position since you flagged it. Right-click for notes." oncontextmenu="showNotePopup(event,'cardWatchlist');return false">My Watchlist (${total})</div>${latestOnlyPill()}</div>${tileChromeStrip({id:'cardWatchlist',about:true,csv:`exportWatchlistCsv('${s.id}')`,fullscreen:"openTileFullscreen('cardWatchlist')",resetView:true,hide:true})}</div>
     ${sections}
     <!-- T1-A footer (audit 2026-05-04, cardWatchlist): explicit "no \u03a3 shown"
          caveat. Per the F18 contamination map, this tile is F18-clean BY DESIGN
@@ -9684,7 +9700,7 @@ function renderHoldTab(){
     <div class="card" id="cardHoldRisk" style="margin-bottom:16px">
       <div class="flex-between" style="margin-bottom:6px">
         <div style="display:flex;align-items:baseline;gap:10px">
-          <div class="card-title tip" data-tip="Per-holding quadrant — sibling of Factor Risk Snapshot. X = active weight (UW ← → OW). Y = TE contribution (signed). Bubble size = stock-specific TE (|MCR|, the idio component). Click any bubble for the holding drill. NOTE: Universe pill does not filter this tile — TE/MCR are universe-invariant by FactSet definition (B116)." oncontextmenu="showNotePopup(event,'cardHoldRisk');return false">Holdings Risk Snapshot</div>
+          <div class="card-title tip" data-tip="Per-holding quadrant — sibling of Factor Risk Snapshot. X = active weight (UW ← → OW). Y = TE contribution (signed). Bubble size = stock-specific TE (|MCR|, the idio component). Click any bubble for the holding drill. NOTE: Universe pill does not filter this tile — TE/MCR are universe-invariant by FactSet definition (B116)." oncontextmenu="showNotePopup(event,'cardHoldRisk');return false">Holdings Risk Snapshot</div>${latestOnlyPill()}
           <span style="font-size:10px;color:var(--textDim);font-weight:400">active wt × risk contrib · bubble = idio (|MCR|)${_selectedWeek?` <span style="color:var(--warn);margin-left:6px">· data is latest only — week banner above shows your selection</span>`:''}</span>
         </div>
         ${tileChromeStrip({id:'cardHoldRisk',about:true,resetZoom:'holdRiskDiv',csv:'exportHoldRiskCsv()',fullscreen:"openTileFullscreen('cardHoldRisk')",resetView:true,hide:true})}
@@ -9708,7 +9724,7 @@ function renderHoldTab(){
           if(benchOnly>0)parts.push(`${benchOnly} bench-only seen${trueBench?` of ${Math.round(trueBench).toLocaleString()}`:''}`);
           if(cashCount>0)parts.push(`${cashCount} cash`);
           return '· '+parts.join(' · ');
-        })()}</span></div>${aboutBtn('cardHoldings')}${_concPill}</div>
+        })()}</span></div>${aboutBtn('cardHoldings')}${_concPill}${latestOnlyPill()}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           ${tileChromeStrip({
             id:'cardHoldings',
@@ -9772,7 +9788,7 @@ function renderHoldTab(){
     <div class="grid g2">
       <div class="card" id="cardRankDist" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
-          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Portfolio weight distribution across the 5 quintiles (Q1=best to Q5=worst). PMs typically concentrate in Q1-Q2; Q3-Q5 weight signals deliberate exceptions or risk pockets. Click a bar to filter the holdings table by that quintile. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRankDist');return false" style="margin:0">Rank Distribution</div>${aboutBtn('cardRankDist')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · Q1=best</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Portfolio weight distribution across the 5 quintiles (Q1=best to Q5=worst). PMs typically concentrate in Q1-Q2; Q3-Q5 weight signals deliberate exceptions or risk pockets. Click a bar to filter the holdings table by that quintile. Right-click for notes." oncontextmenu="showNotePopup(event,'cardRankDist');return false" style="margin:0">Rank Distribution</div>${aboutBtn('cardRankDist')}${latestOnlyPill()}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · Q1=best</span></div>
           ${tileChromeStrip({id:'cardRankDist',resetZoom:'rankDistDiv',fullscreen:"openTileFullscreen('cardRankDist')",resetView:true,hide:true})}
         </div>
         <div id="rankDistDiv" class="chart-h-sm"></div>
@@ -9781,7 +9797,7 @@ function renderHoldTab(){
            first-class — id="cardTop10", ⓘ About entry, click-to-drill. -->
       <div class="card" id="cardTop10" style="margin-bottom:16px">
         <div class="flex-between" style="margin-bottom:6px">
-          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="card-title tip" data-tip="Top 10 portfolio holdings sorted by weight. Bar text shows port wt + active wt. Click a bar to open the holding drill modal. Right-click for notes." oncontextmenu="showNotePopup(event,'cardTop10');return false" style="margin:0">Top 10 Holdings</div>${aboutBtn('cardTop10')}${latestOnlyPill()}<span style="font-size:10px;color:var(--textDim);font-weight:400">by port weight · click bar to drill</span></div>
           ${tileChromeStrip({id:'cardTop10',resetZoom:'holdConcDiv',csv:'exportTop10Csv()',fullscreen:"openTileFullscreen('cardTop10')",resetView:true,hide:true})}
         </div>
         <div id="holdConcDiv" class="chart-h-md"></div>

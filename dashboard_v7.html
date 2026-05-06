@@ -6468,21 +6468,29 @@ function rFacButt(s){
     const short=f.n.replace('Medium-Term ','M-T ').replace('Exchange Rate Sensitivity','FX Sens').replace('Market Sensitivity','Mkt Sens').replace('Dividend Yield','Div Yld').replace('Earnings Yield','Earn Yld');
     return short.length>14?short.slice(0,13)+'…':short;
   });
-  const xMax=Math.max(0.3,...xVals.map(Math.abs))*1.18;
-  const yMax=Math.max(0.05,...yVals.map(Math.abs))*1.4;
-  // 2026-05-01 (item #4 — y-axis cleanup): pick decimals based on the
-  // actual y range. Two decimals (+.2f) was over-precise for 5%+ values
-  // and wasted vertical space. Plus add explicit "%" tick-suffix so the
-  // ticks align with the axis title's "(%)" unit.
+  // 2026-05-06 v5 (user feedback "long decimal numbers labels"): the v4 fix
+  // gave 6-char tick labels like "+0.51%" because tickformat='+.2f' on a
+  // %-axis is over-precise for the typical 3M impact range (~0.5%). Two
+  // changes:
+  //   (1) Units move from tick suffix → title parenthetical. Ticks render
+  //       as "+0.5" instead of "+0.50%" — 4 chars vs 6.
+  //   (2) When |impact| range is small (<1%), switch unit to BASIS POINTS
+  //       (1% = 100 bp). PMs read "20bp" faster than "+0.20%". For larger
+  //       ranges (1Y / All), keep %.
+  // The X-axis (σ) gets the same simpler treatment — '+.1f' format,
+  // unit "(σ)" in the title.
   const _yRangeAbs = Math.max(...yVals.map(Math.abs), 0.001);
-  const yTickFmt =
-    _yRangeAbs >= 5  ? '+.0f'      // large %: no decimals (e.g. +12)
-    : _yRangeAbs >= 1 ? '+.1f'     // mid: one decimal (e.g. +2.5)
-    : '+.2f';                       // small: two decimals (e.g. +0.05)
+  const yUseBps    = _yRangeAbs < 1;                          // small impact → bps
+  const yScale     = yUseBps ? 100 : 1;
+  const yUnit      = yUseBps ? 'bp' : '%';
+  const yTickFmt   = yUseBps ? '+,d'                          // integer bps
+                   : (_yRangeAbs >= 5 ? '+.0f' : '+.1f');     // % with 0 or 1 dec
+  // Apply scale to data + max
+  const yValsScaled = yVals.map(v => v * yScale);
+  const xMax = Math.max(0.3, ...xVals.map(Math.abs)) * 1.18;
+  const yMax = Math.max(0.05 * yScale, ...yValsScaled.map(Math.abs)) * 1.4;
   const _xRangeAbs = Math.max(...xVals.map(Math.abs), 0.01);
-  const xTickFmt =
-    _xRangeAbs >= 1   ? '+.1f'
-    : '+.2f';
+  const xTickFmt   = _xRangeAbs >= 1 ? '+.1f' : '+.1f';       // always 1 decimal — clean
   const shapes=[
     {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
     {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},
@@ -6498,9 +6506,13 @@ function rFacButt(s){
     {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · dodged',xanchor:'left',yanchor:'bottom',font:{size:9,color:'rgba(99,102,241,0.7)'},showarrow:false}
   ];
   if(el)el.style.height='480px';
+  // v5 — title carries the unit, ticks are bare numbers. Y data is scaled
+  // (×100 → bps) when the impact range is sub-1% so tick labels stay short.
+  const xTitle = isSnap ? 'Active Exposure (σ)' : `Active Exposure (avg ${yLab}, σ)`;
+  const yTitle = `Impact (${yLab}, ${yUnit})`;
   Plotly.newPlot('facButtDiv',[{
     type:'scatter',mode:'markers+text',
-    x:xVals,y:yVals,text:labels,textposition:'top center',
+    x:xVals,y:yValsScaled,text:labels,textposition:'top center',
     textfont:{size:10,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},
     marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},
     hovertext:hovertext,hoverinfo:'text',
@@ -6509,17 +6521,10 @@ function rFacButt(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    // 2026-05-06 (user feedback round 3 — "labels still screwy after multiple
-    // fixes"): the previous title carried 3 things in one line — metric +
-    // period qualifier + directional hint + em-dashes. Plotly renders axis
-    // titles small; reads as cluttered noise. Quadrant annotations already
-    // say UW/OW + working/missed/etc, so the directional hints are redundant.
-    // Final clean form: metric name + period (when relevant). σ and % units
-    // live on the tick suffix only.
-    xaxis:{title:{text:isSnap?'Active Exposure':`Active Exposure (avg ${yLab})`,font:{size:10,color:T.tick}},
-      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,ticksuffix:'σ',nticks:5},
-    yaxis:{title:{text:`Impact (${yLab})`,font:{size:10,color:T.tick}},
-      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,ticksuffix:'%',nticks:5},
+    xaxis:{title:{text:xTitle,font:{size:10,color:T.tick}},
+      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,nticks:5},
+    yaxis:{title:{text:yTitle,font:{size:10,color:T.tick}},
+      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,nticks:5},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(el&&el.on){el.on('plotly_click',function(d){
@@ -6628,12 +6633,11 @@ function rFacRisk(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    // 2026-05-06 (consistency with cardFacButt v3 cleanup): drop directional
-    // hints + em-dashes; quadrant annotations already convey direction. Unit
-    // suffix (σ / %) on ticks only. tickformat enforced on BOTH axes so
-    // Plotly can't auto-pick weird long-decimal positions like "0.4571σ".
-    xaxis:{title:{text:'Active Exposure',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.2f',ticksuffix:'σ',nticks:5},
-    yaxis:{title:{text:'Risk Contribution',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',ticksuffix:'%',nticks:5},
+    // 2026-05-06 v5 (consistency with cardFacButt): unit lives in the title
+    // parenthetical, ticks are bare numbers — same pattern across both
+    // Factor Performance tiles for visual consistency.
+    xaxis:{title:{text:'Active Exposure (σ)',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',nticks:5},
+    yaxis:{title:{text:'Risk Contribution (% of TE)',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',nticks:5},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(div&&div.on){div.on('plotly_click',function(d){
@@ -6734,11 +6738,8 @@ function openFacRiskFullscreen(){
       {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW hedge',xanchor:'right',yanchor:'bottom',font:{size:10,color:'rgba(99,102,241,0.8)'},showarrow:false},
       {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · risk-off bet',xanchor:'left',yanchor:'bottom',font:{size:10,color:'rgba(34,197,94,0.8)'},showarrow:false}
     ];
-    // 2026-05-06 (v4 — fullscreen variant was still leaking old titles + no
-    // tickformat → Plotly auto-picked long-decimal tick positions like
-    // "0.4571σ"). Match the inline cardFacRisk cleanup: short titles, units
-    // on tick suffix, explicit tickformat to prevent auto-decimal noise.
-    Plotly.newPlot('facRiskFsDiv',[{type:'scatter',mode:'markers+text',x:xVals,y:yVals,text:labels,textposition:'top center',textfont:{size:11,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},hovertext:hovertext,hoverinfo:'text',hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}}],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:T.tick,size:10},margin:{l:60,r:30,t:30,b:50},xaxis:{title:{text:'Active Exposure',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f',ticksuffix:'σ',nticks:7},yaxis:{title:{text:'Risk Contribution',font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f',ticksuffix:'%',nticks:7},shapes,annotations,showlegend:false},{displayModeBar:false,responsive:true});
+    // 2026-05-06 v5 — same convention as inline: units in title.
+    Plotly.newPlot('facRiskFsDiv',[{type:'scatter',mode:'markers+text',x:xVals,y:yVals,text:labels,textposition:'top center',textfont:{size:11,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},hovertext:hovertext,hoverinfo:'text',hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}}],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:T.tick,size:10},margin:{l:60,r:30,t:30,b:50},xaxis:{title:{text:'Active Exposure (σ)',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f',nticks:7},yaxis:{title:{text:'Risk Contribution (% of TE)',font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f',nticks:7},shapes,annotations,showlegend:false},{displayModeBar:false,responsive:true});
     const qel=document.getElementById('facRiskFsDiv');
     if(qel&&qel.on){qel.on('plotly_click',function(d){if(d&&d.points&&d.points[0]){const idx=d.points[0].pointIndex;const f=facs[idx];if(f){closeSecFullscreen();oDrF(f.n);}}});}
   },80);
@@ -6881,10 +6882,9 @@ function openFacButtFullscreen(){
       paper_bgcolor:'transparent',plot_bgcolor:'transparent',
       font:{family:'DM Sans, system-ui',color:T.tick,size:10},
       margin:{l:60,r:30,t:30,b:50},
-      // 2026-05-06 (v4 — fullscreen variant was still leaking old titles + no
-      // X-tickformat). Match inline cardFacButt cleanup.
-      xaxis:{title:{text:isSnapFS?'Active Exposure':`Active Exposure (avg ${yLab})`,font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f',ticksuffix:'σ',nticks:7},
-      yaxis:{title:{text:`Impact (${yLab})`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f',ticksuffix:'%',nticks:7},
+      // 2026-05-06 v5 — match inline cardFacButt convention (units in title).
+      xaxis:{title:{text:isSnapFS?'Active Exposure (σ)':`Active Exposure (avg ${yLab}, σ)`,font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f',nticks:7},
+      yaxis:{title:{text:`Impact (${yLab}, %)`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f',nticks:7},
       shapes,annotations,showlegend:false
     },{displayModeBar:false,responsive:true});
     const qel=document.getElementById('facFsQuadDiv');

@@ -562,7 +562,13 @@ input[type=range].thresh-sl::-webkit-slider-thumb{-webkit-appearance:none;width:
 .conn-dot.off{background:var(--neg)}
 
 /* Config panel */
-.config-panel{position:fixed;right:-400px;top:0;bottom:0;width:380px;background:var(--card);border-left:1px solid var(--grid);z-index:250;transition:right .3s;padding:24px;overflow-y:auto}
+/* 2026-05-06 (user-reported "settings box is out of the page"): on viewports
+   narrower than ~400px (zoomed-in browser, side-by-side windows) the 380px
+   panel + 24px padding overflowed. max-width:95vw clamps to viewport so the
+   panel stays accessible at any zoom. Also: when closed the panel sits at
+   `right: -100%` (was -400px which was wrong on viewports >400px wide and
+   could leave a sliver visible on certain zoom levels). */
+.config-panel{position:fixed;right:-100%;top:0;bottom:0;width:380px;max-width:95vw;background:var(--card);border-left:1px solid var(--grid);z-index:250;transition:right .3s;padding:24px;overflow-y:auto;box-shadow:-8px 0 24px rgba(0,0,0,.35)}
 .config-panel.open{right:0}
 .config-panel h3{color:var(--txth);font-size:14px;margin-bottom:16px}
 .config-field{margin-bottom:14px}
@@ -5613,7 +5619,14 @@ function rGroupTable(groups,hold){
   // 2026-05-01 (CRITICAL FIX): section aggregate is source of truth.
   const aggTr=(name)=>{const g=displayGroups.find(x=>x.n===name); if(g?.tr!=null)return g.tr; const v=factorAgg[name]?.tr; return (v!=null&&Math.abs(v)>0.01)?v:0;};
   const aggMcr=(name)=>{const g=displayGroups.find(x=>x.n===name); if(g?.mcr!=null)return g.mcr; const v=factorAgg[name]?.mcr; return (v!=null&&Math.abs(v)>0.01)?v:0;};
-  const hasTE=isHistMode||(aggHold&&aggHold.some(h=>h.tr!=null||h.mcr!=null));
+  // 2026-05-06 (user-reported "TE Contribution empty on Groups tile"): the
+  // prior hasTE check required `aggHold.some(h=>h.tr!=null)` — but cs.hold[]
+  // ships .tr as null in current data (section-aggregate is the only TE
+  // source). Fall back to checking the displayGroups entries themselves,
+  // which DO carry .tr / .mcr from the parser's group-level aggregate row.
+  const hasTE = isHistMode
+              || (aggHold && aggHold.some(h => h.tr!=null || h.mcr!=null))
+              || displayGroups.some(g => g.tr!=null || g.mcr!=null);
   const maxTE=hasTE?Math.max(...displayGroups.map(g=>Math.abs(aggTr(g.n))),0.01):1;
   let rows=displayGroups.map(g=>{
     let cls=activeStyle(g.a);
@@ -6503,14 +6516,18 @@ function rFacButt(s){
   const yUseBps    = _yRangeAbs < 1;                          // small impact → bps
   const yScale     = yUseBps ? 100 : 1;
   const yUnit      = yUseBps ? 'bp' : '%';
-  const yTickFmt   = yUseBps ? '+,d'                          // integer bps
-                   : (_yRangeAbs >= 5 ? '+.0f' : '+.1f');     // % with 0 or 1 dec
-  // Apply scale to data + max
-  const yValsScaled = yVals.map(v => v * yScale);
+  // 2026-05-06 v6 fix: '+,d' format may not redraw cleanly on Plotly relayout
+  // when period selector flips bps↔% mode (user reported chart "blinks but
+  // doesn't change"). Use '+d' (no thousands sep — bp values stay <1000 anyway)
+  // and round yValsScaled to integers so Plotly cleanly snaps tick positions.
+  const yTickFmt   = yUseBps ? '+d'
+                   : (_yRangeAbs >= 5 ? '+.0f' : '+.1f');
+  // Apply scale to data + max. Round in bps mode for clean integer ticks.
+  const yValsScaled = yVals.map(v => yUseBps ? Math.round(v * yScale) : v * yScale);
   const xMax = Math.max(0.3, ...xVals.map(Math.abs)) * 1.18;
   const yMax = Math.max(0.05 * yScale, ...yValsScaled.map(Math.abs)) * 1.4;
   const _xRangeAbs = Math.max(...xVals.map(Math.abs), 0.01);
-  const xTickFmt   = _xRangeAbs >= 1 ? '+.1f' : '+.1f';       // always 1 decimal — clean
+  const xTickFmt   = '+.1f';                                  // always 1 decimal — clean
   const shapes=[
     {type:'rect',xref:'x',yref:'y',x0:0,x1:xMax,y0:0,y1:yMax,fillcolor:'rgba(34,197,94,0.04)',line:{width:0},layer:'below'},
     {type:'rect',xref:'x',yref:'y',x0:-xMax,x1:0,y0:0,y1:yMax,fillcolor:'rgba(245,158,11,0.03)',line:{width:0},layer:'below'},

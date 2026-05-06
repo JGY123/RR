@@ -6517,9 +6517,9 @@ function rFacButt(s){
     // Final clean form: metric name + period (when relevant). σ and % units
     // live on the tick suffix only.
     xaxis:{title:{text:isSnap?'Active Exposure':`Active Exposure (avg ${yLab})`,font:{size:10,color:T.tick}},
-      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,ticksuffix:'σ',nticks:7},
+      range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,ticksuffix:'σ',nticks:5},
     yaxis:{title:{text:`Impact (${yLab})`,font:{size:10,color:T.tick}},
-      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,ticksuffix:'%',nticks:7},
+      range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,ticksuffix:'%',nticks:5},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(el&&el.on){el.on('plotly_click',function(d){
@@ -6630,9 +6630,10 @@ function rFacRisk(s){
     margin:{l:60,r:20,t:30,b:50},
     // 2026-05-06 (consistency with cardFacButt v3 cleanup): drop directional
     // hints + em-dashes; quadrant annotations already convey direction. Unit
-    // suffix (σ / %) on ticks only.
-    xaxis:{title:{text:'Active Exposure',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},ticksuffix:'σ'},
-    yaxis:{title:{text:'Risk Contribution',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',ticksuffix:'%'},
+    // suffix (σ / %) on ticks only. tickformat enforced on BOTH axes so
+    // Plotly can't auto-pick weird long-decimal positions like "0.4571σ".
+    xaxis:{title:{text:'Active Exposure',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.2f',ticksuffix:'σ',nticks:5},
+    yaxis:{title:{text:'Risk Contribution',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',ticksuffix:'%',nticks:5},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(div&&div.on){div.on('plotly_click',function(d){
@@ -6733,7 +6734,11 @@ function openFacRiskFullscreen(){
       {x:xMax,y:-yMax,xref:'x',yref:'y',text:'OW hedge',xanchor:'right',yanchor:'bottom',font:{size:10,color:'rgba(99,102,241,0.8)'},showarrow:false},
       {x:-xMax,y:-yMax,xref:'x',yref:'y',text:'UW · risk-off bet',xanchor:'left',yanchor:'bottom',font:{size:10,color:'rgba(34,197,94,0.8)'},showarrow:false}
     ];
-    Plotly.newPlot('facRiskFsDiv',[{type:'scatter',mode:'markers+text',x:xVals,y:yVals,text:labels,textposition:'top center',textfont:{size:11,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},hovertext:hovertext,hoverinfo:'text',hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}}],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:T.tick,size:10},margin:{l:60,r:30,t:30,b:50},xaxis:{title:{text:'Active Exposure (σ, latest) — UW ← → OW',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},yaxis:{title:{text:'Risk Contribution (% TE) — adds ↑ / diversifies ↓',font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f'},shapes,annotations,showlegend:false},{displayModeBar:false,responsive:true});
+    // 2026-05-06 (v4 — fullscreen variant was still leaking old titles + no
+    // tickformat → Plotly auto-picked long-decimal tick positions like
+    // "0.4571σ"). Match the inline cardFacRisk cleanup: short titles, units
+    // on tick suffix, explicit tickformat to prevent auto-decimal noise.
+    Plotly.newPlot('facRiskFsDiv',[{type:'scatter',mode:'markers+text',x:xVals,y:yVals,text:labels,textposition:'top center',textfont:{size:11,color:T.tickH||'#cbd5e1',family:'DM Sans, system-ui'},marker:{size:sizes,sizemode:'diameter',color:colors,line:{color:'rgba(15,23,42,0.7)',width:1}},hovertext:hovertext,hoverinfo:'text',hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:'#475569',font:{color:'#f1f5f9',size:11,family:'DM Sans'}}}],{paper_bgcolor:'transparent',plot_bgcolor:'transparent',font:{family:'DM Sans, system-ui',color:T.tick,size:10},margin:{l:60,r:30,t:30,b:50},xaxis:{title:{text:'Active Exposure',font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f',ticksuffix:'σ',nticks:7},yaxis:{title:{text:'Risk Contribution',font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.1f',ticksuffix:'%',nticks:7},shapes,annotations,showlegend:false},{displayModeBar:false,responsive:true});
     const qel=document.getElementById('facRiskFsDiv');
     if(qel&&qel.on){qel.on('plotly_click',function(d){if(d&&d.points&&d.points[0]){const idx=d.points[0].pointIndex;const f=facs[idx];if(f){closeSecFullscreen();oDrF(f.n);}}});}
   },80);
@@ -6876,8 +6881,10 @@ function openFacButtFullscreen(){
       paper_bgcolor:'transparent',plot_bgcolor:'transparent',
       font:{family:'DM Sans, system-ui',color:T.tick,size:10},
       margin:{l:60,r:30,t:30,b:50},
-      xaxis:{title:{text:`${isSnapFS?'Active Exposure':'Avg Active Exposure'} (σ, ${yLab}) — UW ← → OW`,font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick}},
-      yaxis:{title:{text:`Active-return contribution · ${yLab} (%) — paying off ↑`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f'},
+      // 2026-05-06 (v4 — fullscreen variant was still leaking old titles + no
+      // X-tickformat). Match inline cardFacButt cleanup.
+      xaxis:{title:{text:isSnapFS?'Active Exposure':`Active Exposure (avg ${yLab})`,font:{size:11,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f',ticksuffix:'σ',nticks:7},
+      yaxis:{title:{text:`Impact (${yLab})`,font:{size:11,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:10,color:T.tick},tickformat:'+.2f',ticksuffix:'%',nticks:7},
       shapes,annotations,showlegend:false
     },{displayModeBar:false,responsive:true});
     const qel=document.getElementById('facFsQuadDiv');
@@ -9974,7 +9981,7 @@ function rHoldConc(){
     ...plotBg,
     margin:{l:150,r:40,t:10,b:40},
     yaxis:{...plotBg.yaxis,autorange:'reversed',type:'category'},
-    xaxis:{...plotBg.xaxis,type:'linear',title:'Weight %',ticksuffix:'%',rangemode:'tozero'}
+    xaxis:{...plotBg.xaxis,type:'linear',title:'Weight %',tickformat:'.1f',ticksuffix:'%',rangemode:'tozero'}
   },plotCfg);
   // Wire bar click → holding drill modal (audit item #8 — was missing).
   // customdata[5] is h.t (SEDOL) — use that for the lookup, not the display ticker.

@@ -6509,16 +6509,16 @@ function rFacButt(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    // 2026-05-04 (user feedback, pre-showing): axis labels were "screwy" —
-    // x-title duplicated the σ unit (already on ticksuffix), parenthetical
-    // (σ, 1Y) read as if σ was time-windowed; y-title used a mid-dot before
-    // the period which read awkwardly. Cleaned up: σ unit lives only on the
-    // tick suffix; period qualifier is `(avg over N)` only when non-snap;
-    // y-title now reads "Period Impact (N) — Paying off ↑" with the period
-    // in parens and the unit "%" on the tick suffix.
-    xaxis:{title:{text:`${isSnap?'Active Exposure':`Active Exposure (avg over ${yLab})`} — Underweight ← → Overweight`,font:{size:10,color:T.tick}},
+    // 2026-05-06 (user feedback round 3 — "labels still screwy after multiple
+    // fixes"): the previous title carried 3 things in one line — metric +
+    // period qualifier + directional hint + em-dashes. Plotly renders axis
+    // titles small; reads as cluttered noise. Quadrant annotations already
+    // say UW/OW + working/missed/etc, so the directional hints are redundant.
+    // Final clean form: metric name + period (when relevant). σ and % units
+    // live on the tick suffix only.
+    xaxis:{title:{text:isSnap?'Active Exposure':`Active Exposure (avg ${yLab})`,font:{size:10,color:T.tick}},
       range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:xTickFmt,ticksuffix:'σ',nticks:7},
-    yaxis:{title:{text:`Period Impact (${yLab}) — Paying off ↑`,font:{size:10,color:T.tick}},
+    yaxis:{title:{text:`Impact (${yLab})`,font:{size:10,color:T.tick}},
       range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:yTickFmt,ticksuffix:'%',nticks:7},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
@@ -6628,12 +6628,11 @@ function rFacRisk(s){
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{family:'DM Sans, system-ui',color:T.tick,size:10},
     margin:{l:60,r:20,t:30,b:50},
-    // 2026-05-04 (user feedback, pre-showing): axis labels cleaned up to
-    // match cardFacButt convention. Unit (σ) lives on the tick suffix; title
-    // carries metric name + direction hint only. y-axis title kept simple
-    // since "% TE" is already in the title (no tickformat suffix needed).
-    xaxis:{title:{text:'Active Exposure — Underweight ← → Overweight',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},ticksuffix:'σ'},
-    yaxis:{title:{text:'Risk Contribution (% of TE) — Adds ↑ / Diversifies ↓',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',ticksuffix:'%'},
+    // 2026-05-06 (consistency with cardFacButt v3 cleanup): drop directional
+    // hints + em-dashes; quadrant annotations already convey direction. Unit
+    // suffix (σ / %) on ticks only.
+    xaxis:{title:{text:'Active Exposure',font:{size:10,color:T.tick}},range:[-xMax,xMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},ticksuffix:'σ'},
+    yaxis:{title:{text:'Risk Contribution',font:{size:10,color:T.tick}},range:[-yMax,yMax],zeroline:false,gridcolor:'rgba(148,163,184,0.06)',tickfont:{size:9,color:T.tick},tickformat:'+.1f',ticksuffix:'%'},
     shapes,annotations,showlegend:false
   },{displayModeBar:false,responsive:true});
   if(div&&div.on){div.on('plotly_click',function(d){
@@ -7359,22 +7358,21 @@ function rGroupChart(s,divId){
       colorbar:{title:{text:'Active<br>Wt %',font:{size:9,color:T.tick}},thickness:10,len:0.6,tickfont:{color:T.tick,size:9}}
     },
     textinfo:'label+value',
-    // 2026-04-30 v3 (user re-flagged labels still not visible): Plotly
-    // applies textfont to leaf cells but parent-cell headers (CYCLICALS,
-    // GROWTH, etc.) need outsidetextfont. Both forced to bright white;
-    // size bumped 11→12. Also: textfont.weight gets passed through to
-    // the SVG via family weight — bumping size + bolding via texttemplate's
-    // <b> wrap was the previous attempt but Plotly doesn't always honor
-    // <b> on outside text. Set fonts explicitly.
+    // 2026-05-06 (user feedback re-flag — "labels still not visible, they
+    // show but dark"): root cause was hardcoded #ffffff text. On Alger/light
+    // theme heatMid='#ffffff' AND paper_bgcolor inherits white page bg, so
+    // white text on white cells/page = invisible. Use theme-aware T.tickH
+    // which adapts: dark navy on Alger, slate-100 on dark theme. Both work
+    // against red/green/neutral cell colors AND against the page background.
     texttemplate:'<b>%{label}</b><br>%{value:.1f}% port  ·  %{customdata[4]:+.1f} act<br>TE %{customdata[6]:+.1f}',
-    textfont:{color:'#ffffff',family:'DM Sans, system-ui',size:12},
-    insidetextfont:{color:'#ffffff',family:'DM Sans, system-ui',size:12},
-    outsidetextfont:{color:'#ffffff',family:'DM Sans, system-ui',size:13},
+    textfont:{color:T.tickH,family:'DM Sans, system-ui',size:12},
+    insidetextfont:{color:T.tickH,family:'DM Sans, system-ui',size:12},
+    outsidetextfont:{color:T.tickH,family:'DM Sans, system-ui',size:13},
     textposition:'middle center',
     customdata:customdata,
     hovertemplate:'<b>%{customdata[0]}</b> (%{customdata[1]})<br>Port: %{customdata[2]:.1f}%<br>Bench: %{customdata[3]:.1f}%<br>Active: %{customdata[4]:+.1f}%<br>TE Contrib: %{customdata[6]:+.1f}%<extra></extra>',
     hoverlabel:HOVERLABEL_THEME,
-    pathbar:{visible:true,thickness:24,textfont:{color:'#ffffff',family:'DM Sans, system-ui',size:13}}
+    pathbar:{visible:true,thickness:24,textfont:{color:T.tickH,family:'DM Sans, system-ui',size:13}}
   }],{
     paper_bgcolor:'transparent',plot_bgcolor:'transparent',
     font:{color:T.tick,family:'DM Sans, system-ui',size:10},

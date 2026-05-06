@@ -450,7 +450,11 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 .tip{position:relative;cursor:help;border-bottom:1px dotted var(--grid)}
 td.tip-cell{position:relative;cursor:help}
 .tip.pinned{outline:1px solid var(--pri);outline-offset:2px;border-radius:3px}
-#tip-portal{position:fixed;background:#0f1623;color:var(--txth);padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;hyphens:auto;opacity:0;pointer-events:none;transition:opacity .15s;z-index:10000;border:1px solid var(--grid);text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left;display:none}
+/* 2026-05-06 (HOVER_LABEL_AUDIT.md fix): bg + fg both hardcoded so the popup
+   stays dark with light text regardless of theme. Was color:var(--txth) which
+   resolved to navy on Alger theme → invisible navy-on-dark for ALL 111
+   data-tip tooltips. Border also hardcoded to slate so it's legible. */
+#tip-portal{position:fixed;background:#0f1623;color:#f1f5f9;padding:10px 14px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.55;white-space:normal;min-width:180px;max-width:340px;word-break:normal;overflow-wrap:break-word;hyphens:auto;opacity:0;pointer-events:none;transition:opacity .15s;z-index:10000;border:1px solid #475569;text-transform:none;letter-spacing:0.1px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-family:'DM Sans',system-ui,sans-serif;text-align:left;display:none}
 #tip-portal.shown{opacity:1;display:block}
 #tip-portal.pinned{pointer-events:auto}
 #tip-portal::before{content:'';position:absolute;width:0;height:0;border:5px solid transparent}
@@ -6392,7 +6396,7 @@ function rRegChart(s,divId){
     zmin:-absMax,zmid:0,zmax:absMax,
     customdata:customdata,
     hovertemplate:'<b>%{customdata[0]}</b><br>Factor: <b>%{customdata[1]}</b><br>TE Contribution: %{customdata[2]}%<extra></extra>',
-    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
+    hoverlabel:HOVERLABEL_THEME,
     colorbar:{title:{text:'TE Contrib<br>(%)',font:{size:9,color:T.tick}},thickness:10,len:0.7,tickfont:{color:T.tick,size:9}},
     xgap:1,ygap:1
   }],{
@@ -7050,7 +7054,7 @@ function rCountryMap(s){
     marker:{line:{color:T.grid,width:0.5}},
     customdata:customdata,
     hovertemplate:richHover,
-    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11},align:'left'}
+    hoverlabel:HOVERLABEL_THEME
   }],{
     geo:{
       bgcolor:'transparent',showframe:false,
@@ -7269,7 +7273,7 @@ function rCountryChart(s,divId){
     zmin:-absMax,zmid:0,zmax:absMax,
     customdata:customdata,
     hovertemplate:'<b>%{customdata[0]}</b><br>Factor: <b>%{customdata[1]}</b><br>TE Contribution: %{customdata[2]}%<extra></extra>',
-    hoverlabel:{bgcolor:'rgba(15,23,42,0.96)',bordercolor:T.grid,font:{color:T.txth,family:'DM Sans, system-ui',size:11}},
+    hoverlabel:HOVERLABEL_THEME,
     colorbar:{title:{text:'TE Contrib<br>(%)',font:{size:9,color:T.tick}},thickness:10,len:0.7,tickfont:{color:T.tick,size:9}},
     xgap:1,ygap:1
   }],{
@@ -7623,7 +7627,9 @@ function rTree(s){
   Plotly.purge('treeDiv');
   Plotly.newPlot('treeDiv',[{type:'treemap',labels,parents,values,
     marker:{colors,line:{width:1,color:T.grid}},
-    textfont:{size:11,color:'#ffffff',family:'DM Sans, system-ui'},
+    // 2026-05-06 (HOVER_LABEL_AUDIT.md): theme-aware text — was hardcoded white,
+    // invisible on Alger theme (white-on-white when cell color = heatMid).
+    textfont:{size:11,color:T.tickH,family:'DM Sans, system-ui'},
     textinfo:'label+value',
     customdata:cds,hovertemplate:'%{customdata}<extra></extra>',
     hoverlabel:HOVERLABEL_THEME
@@ -7892,7 +7898,7 @@ function rRiskHistMinis(s){
     Plotly.newPlot(sp.id,[{
       x:dates,y:sp.vals,type:'scatter',mode:'lines',
       line:{color:sp.color,width:1.5},fill:'tozeroy',fillcolor:sp.fill,
-      hovertemplate:sp.hover
+      hovertemplate:sp.hover,hoverlabel:HOVERLABEL_THEME
     }],{
       paper_bgcolor:'transparent',plot_bgcolor:'transparent',
       margin:{l:0,r:0,t:2,b:2},
@@ -11821,7 +11827,7 @@ function oDrMetric(metric,range){
           hovertemplate:'%{x|%b %d %Y}<br>TE: %{y:.2f}%<extra></extra>'},
         {x:dates,y:idioSeries,type:'scatter',mode:'lines',name:'Idio MCR',
           line:{color:'#a78bfa',width:2.2},fill:'tozeroy',fillcolor:'rgba(168,85,247,0.18)',
-          hovertemplate:'%{x|%b %d %Y}<br>Idio MCR: %{y:.2f}%<extra></extra>'}
+          hovertemplate:'%{x|%b %d %Y}<br>Idio MCR: %{y:.2f}<extra></extra>'}
       ],{
         paper_bgcolor:'transparent',plot_bgcolor:'transparent',
         font:{family:'DM Sans',color:T.tick,size:10},
@@ -13016,7 +13022,7 @@ function renderFsScatter(s){
     marker:{size:sz,color:colors,opacity:0.8,line:{color:'rgba(255,255,255,0.15)',width:1}},
     text:hold.map(function(h){return h.n||h.t;}),
     customdata:hold.map(function(h){return[h.t,h.sec||'',h.r,h.tr,h.p];}),
-    hovertemplate:'<b>%{text}</b> (%{customdata[0]})<br>MCR: %{x:.3f}%<br>TE Contrib: %{y:.1f}%<br>Port: %{customdata[4]:.2f}%<extra></extra>'
+    hovertemplate:'<b>%{text}</b> (%{customdata[0]})<br>MCR: %{x:.3f}<br>TE Contrib: %{y:.1f}%<br>Port: %{customdata[4]:.2f}%<extra></extra>'
   }],Object.assign({},plotBg,{
     xaxis:Object.assign({},plotBg.xaxis,{title:'MCR (Stock-Specific TE)'}),
     yaxis:Object.assign({},plotBg.yaxis,{title:'Total TE Contribution %'}),
